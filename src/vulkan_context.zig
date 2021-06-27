@@ -18,10 +18,10 @@ const VulkanContextError = error {
 const Base = struct {
     dispatch: BaseDispatch,
 
-    const BaseDispatch = vk.BaseWrapper([_]vk.BaseCommand {
-        .create_instance,
-        .enumerate_instance_layer_properties,
-        .enumerate_instance_extension_properties,
+    const BaseDispatch = vk.BaseWrapper(.{
+        .CreateInstance,
+        .EnumerateInstanceLayerProperties,
+        .EnumerateInstanceExtensionProperties,
     });
 
     fn new() !Base {
@@ -118,34 +118,52 @@ const Base = struct {
 };
 
 const instance_cmds = [_]vk.InstanceCommand {
-    .destroy_instance,
-    .destroy_surface_khr,
-    .enumerate_physical_devices,
-    .enumerate_device_extension_properties,
-    .get_physical_device_surface_present_modes_khr,
-    .get_physical_device_surface_formats_khr,
-    .get_physical_device_queue_family_properties,
-    .get_physical_device_surface_support_khr,
-    .get_device_proc_addr,
-    .create_device,
-    .get_physical_device_surface_capabilities_khr,
+    .DestroyInstance,
+    .DestroySurfaceKHR,
+    .EnumeratePhysicalDevices,
+    .EnumerateDeviceExtensionProperties,
+    .GetPhysicalDeviceSurfacePresentModesKHR,
+    .GetPhysicalDeviceSurfaceFormatsKHR,
+    .GetPhysicalDeviceQueueFamilyProperties,
+    .GetPhysicalDeviceSurfaceSupportKHR,
+    .GetDeviceProcAddr,
+    .CreateDevice,
+    .GetPhysicalDeviceSurfaceCapabilitiesKHR,
+    .GetPhysicalDeviceMemoryProperties,
 };
 
 const debug_instance_cmds = instance_cmds ++ [_]vk.InstanceCommand {
-    .create_debug_utils_messenger_ext,
-    .destroy_debug_utils_messenger_ext,
+    .CreateDebugUtilsMessengerEXT,
+    .DestroyDebugUtilsMessengerEXT,
 };
 
 const Instance = vk.InstanceWrapper(if (validate) debug_instance_cmds else instance_cmds);
 
-const Device = vk.DeviceWrapper(&[_]vk.DeviceCommand {
-    .get_device_queue,
-    .get_swapchain_images_khr,
-    .create_swapchain_khr,
-    .create_image_view,
-    .destroy_device,
-    .destroy_swapchain_khr,
-    .destroy_image_view,
+const Device = vk.DeviceWrapper(.{
+    .GetDeviceQueue,
+    .GetSwapchainImagesKHR,
+    .CreateSwapchainKHR,
+    .CreateImageView,
+    .DestroyDevice,
+    .DestroySwapchainKHR,
+    .DestroyImageView,
+    .CreateBuffer,
+    .GetBufferMemoryRequirements,
+    .AllocateMemory,
+    .BindBufferMemory,
+    .DestroyBuffer,
+    .FreeMemory,
+    .MapMemory,
+    .UnmapMemory,
+    .CreateCommandPool,
+    .DestroyCommandPool,
+    .AllocateCommandBuffers,
+    .FreeCommandBuffers,
+    .BeginCommandBuffer,
+    .CmdCopyBuffer,
+    .EndCommandBuffer,
+    .QueueSubmit,
+    .QueueWaitIdle,
 });
 
 fn debugCallback(
@@ -195,9 +213,6 @@ pub const VulkanContext = struct {
 
     debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
-    compute_queue: vk.Queue,
-    present_queue: vk.Queue,
-
     pub fn create(allocator: *std.mem.Allocator, window: *c.GLFWwindow) !VulkanContext {
         const base = try Base.new();
 
@@ -214,9 +229,6 @@ pub const VulkanContext = struct {
         const device = try physical_device.createLogicalDevice(instance);
         errdefer device.destroyDevice(null);
 
-        const compute_queue = device.getDeviceQueue(physical_device.queue_families.compute, 0);
-        const present_queue = device.getDeviceQueue(physical_device.queue_families.present, 0);
-
         return VulkanContext {
             .base = base,
             .instance = instance,
@@ -224,8 +236,6 @@ pub const VulkanContext = struct {
             .surface = surface,
             .device = device,
             .physical_device = physical_device,
-            .compute_queue = compute_queue,
-            .present_queue = present_queue,
         };
     }
 
@@ -242,6 +252,7 @@ pub const VulkanContext = struct {
     const PhysicalDevice = struct {
         handle: vk.PhysicalDevice,
         queue_families: QueueFamilies,
+        mem_properties: vk.PhysicalDeviceMemoryProperties,
 
         const QueueFamilies = struct {
             compute: u32,
@@ -287,9 +298,11 @@ pub const VulkanContext = struct {
             return for (devices) |device| {
                 if (try PhysicalDevice.isDeviceSuitable(instance, device, allocator, surface)) {
                     if (QueueFamilies.find(instance, device, allocator, surface)) |queue_families| {
+                        const mem_properties = instance.getPhysicalDeviceMemoryProperties(device);
                         break PhysicalDevice {
                             .handle = device,
                             .queue_families = queue_families,
+                            .mem_properties = mem_properties,
                         };
                     } else |err| return err;
                 }

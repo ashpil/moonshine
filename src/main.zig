@@ -2,9 +2,17 @@ const std = @import("std");
 const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
 const Window = @import("./window.zig").Window;
 const Swapchain = @import("./swapchain.zig").Swapchain;
+const Model = @import("./model.zig").Model;
+const Commands = @import("./commands.zig").Commands;
 
 const initial_width = 800;
 const initial_height = 600;
+
+const vertices = [_]f32 {
+    0.0, -0.5,
+    0.5, 0.5,
+    -0.5, 0.5,
+};
 
 pub fn main() !void {
     var window = try Window.create(initial_width, initial_height);
@@ -19,6 +27,12 @@ pub fn main() !void {
     var swapchain = try Swapchain.create(&context, &gpa.allocator, .{ .width = initial_width, .height = initial_height });
     defer swapchain.destroy(&context, &gpa.allocator);
 
+    var commands = try Commands.create(&context);
+    defer commands.destroy(&context);
+
+    const vertices_bytes = @bitCast([24]u8, vertices);
+    var model = try Model.create(&context, &commands, &vertices_bytes);
+    defer model.destroy(&context);
 
     std.log.info("Program completed!.", .{});
 }

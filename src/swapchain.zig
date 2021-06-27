@@ -45,7 +45,6 @@ pub const Swapchain = struct {
         var images = try allocator.alloc(vk.Image, image_count);
         defer allocator.free(images);
         _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, images.ptr);
-
         
         var swap_images = try allocator.alloc(SwapImage, image_count);
         errdefer allocator.free(swap_images);
@@ -58,6 +57,8 @@ pub const Swapchain = struct {
             .swap_images = swap_images,
         };
     }
+
+    fn assert() void {}
 
     pub fn destroy(self: *Swapchain, vc: *VulkanContext, allocator: *std.mem.Allocator) void {
         for (self.swap_images) |image| {
