@@ -164,6 +164,8 @@ const Device = vk.DeviceWrapper(.{
     .EndCommandBuffer,
     .QueueSubmit,
     .QueueWaitIdle,
+    .CreateRayTracingPipelinesKHR,
+    .DestroyPipeline,
 });
 
 fn debugCallback(
@@ -247,7 +249,12 @@ pub const VulkanContext = struct {
         self.instance.destroyInstance(null);
     }
 
-    const device_extensions = [_][*:0]const u8{ vk.extension_info.khr_swapchain.name };
+    const device_extensions = [_][*:0]const u8{
+        vk.extension_info.khr_swapchain.name,
+        vk.extension_info.khr_deferred_host_operations.name,
+        vk.extension_info.khr_acceleration_structure.name,
+        vk.extension_info.khr_ray_tracing_pipeline.name,
+    };
 
     const PhysicalDevice = struct {
         handle: vk.PhysicalDevice,
@@ -373,6 +380,13 @@ pub const VulkanContext = struct {
                     }
                 }
             );
+            const ray_tracing_pipeline_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {
+                .ray_tracing_pipeline = vk.TRUE,
+                .ray_tracing_pipeline_shader_group_handle_capture_replay = vk.FALSE,
+                .ray_tracing_pipeline_shader_group_handle_capture_replay_mixed = vk.FALSE,
+                .ray_tracing_pipeline_trace_rays_indirect = vk.FALSE,
+                .ray_traversal_primitive_culling = vk.FALSE,
+            };
             return try instance.createDevice(
                 Device,
                 instance.dispatch.vkGetDeviceProcAddr,
@@ -386,6 +400,7 @@ pub const VulkanContext = struct {
                     .pp_enabled_extension_names = &device_extensions,
                     .p_enabled_features = null,
                     .flags = .{},
+                    .p_next = @ptrCast(*const c_void, &ray_tracing_pipeline_features),
                 },
                 null,
             );

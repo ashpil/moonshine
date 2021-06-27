@@ -4,6 +4,7 @@ const Window = @import("./window.zig").Window;
 const Swapchain = @import("./swapchain.zig").Swapchain;
 const Model = @import("./model.zig").Model;
 const Commands = @import("./commands.zig").Commands;
+const Pipeline = @import("./pipeline.zig").RaytracingPipeline;
 
 const initial_width = 800;
 const initial_height = 600;
@@ -33,6 +34,9 @@ pub fn main() !void {
     const vertices_bytes = @bitCast([24]u8, vertices);
     var model = try Model.create(&context, &commands, &vertices_bytes);
     defer model.destroy(&context);
+
+    var pipeline = try Pipeline.create(&context);
+    defer pipeline.destroy(&context);
 
     std.log.info("Program completed!.", .{});
 }
