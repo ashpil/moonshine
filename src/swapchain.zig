@@ -8,8 +8,10 @@ const SwapchainError = error {
 };
 
 pub const Swapchain = struct {
+    allocator: *std.mem.Allocator,
+
     handle: vk.SwapchainKHR,
-    swap_images: []SwapImage,
+    images: []SwapImage,
 
     pub fn create(vc: *VulkanContext, allocator: *std.mem.Allocator, extent: vk.Extent2D) !Swapchain {
 
@@ -53,18 +55,20 @@ pub const Swapchain = struct {
         }
 
         return Swapchain {
+            .allocator = allocator,
+
             .handle = handle,
-            .swap_images = swap_images,
+            .images = swap_images,
         };
     }
 
     fn assert() void {}
 
-    pub fn destroy(self: *Swapchain, vc: *VulkanContext, allocator: *std.mem.Allocator) void {
-        for (self.swap_images) |image| {
+    pub fn destroy(self: *Swapchain, vc: *VulkanContext) void {
+        for (self.images) |image| {
             image.destroy(vc);
         }
-        allocator.free(self.swap_images);
+        self.allocator.free(self.images);
         vc.device.destroySwapchainKHR(self.handle, null);
     }
 };

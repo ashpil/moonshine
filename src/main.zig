@@ -3,8 +3,12 @@ const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
 const Window = @import("./window.zig").Window;
 const Swapchain = @import("./swapchain.zig").Swapchain;
 const Model = @import("./model.zig").Model;
-const Commands = @import("./commands.zig").Commands;
 const Pipeline = @import("./pipeline.zig").RaytracingPipeline;
+
+const commands = @import("./commands.zig");
+
+const TransferCommands = commands.TransferCommands;
+const RenderCommands = commands.RenderCommands;
 
 const initial_width = 800;
 const initial_height = 600;
@@ -26,17 +30,22 @@ pub fn main() !void {
     defer context.destroy();
 
     var swapchain = try Swapchain.create(&context, &gpa.allocator, .{ .width = initial_width, .height = initial_height });
-    defer swapchain.destroy(&context, &gpa.allocator);
+    defer swapchain.destroy(&context);
 
-    var commands = try Commands.create(&context);
-    defer commands.destroy(&context);
+    var transfer_commands = try TransferCommands.create(&context);
+    defer transfer_commands.destroy(&context);
 
-    const vertices_bytes = @bitCast([24]u8, vertices);
-    var model = try Model.create(&context, &commands, &vertices_bytes);
-    defer model.destroy(&context);
-
+    const compute_queue = context.device.getDeviceQueue(context.physical_device.queue_families.compute, 0);
+    
     var pipeline = try Pipeline.create(&context);
     defer pipeline.destroy(&context);
+
+    var render_commands = try RenderCommands.create(&context, &gpa.allocator, &pipeline, swapchain.images.len);
+    defer render_commands.destroy(&context);
+
+    const vertices_bytes = @bitCast([24]u8, vertices);
+    var model = try Model.create(&context, &transfer_commands, compute_queue, &vertices_bytes);
+    defer model.destroy(&context);
 
     std.log.info("Program completed!.", .{});
 }

@@ -2,7 +2,7 @@ const vk = @import("vulkan");
 const std = @import("std");
 
 const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
-const Commands = @import("./commands.zig").Commands;
+const Commands = @import("./commands.zig").TransferCommands;
 
 const ModelError = error {
     UnavailbleMemoryType,
@@ -12,7 +12,7 @@ pub const Model = struct {
     vertex_buffer: vk.Buffer,
     vertex_buffer_memory: vk.DeviceMemory,
 
-    pub fn create(vc: *VulkanContext, commands: *Commands, vertices: []const u8) !Model {
+    pub fn create(vc: *VulkanContext, commands: *Commands, copy_queue: vk.Queue, vertices: []const u8) !Model {
         var staging_buffer: vk.Buffer = undefined;
         var staging_buffer_memory: vk.DeviceMemory = undefined;
         try createBuffer(vc, vertices.len, .{ .transfer_src_bit = true }, .{ .host_visible_bit = true, .host_coherent_bit = true}, &staging_buffer, &staging_buffer_memory);
@@ -29,7 +29,7 @@ pub const Model = struct {
         errdefer vc.device.destroyBuffer(vertex_buffer, null);
         errdefer vc.device.freeMemory(vertex_buffer_memory, null);
 
-        try commands.copyBuffer(vc, staging_buffer, vertex_buffer, vertices.len);
+        try commands.copyBuffer(vc, copy_queue, staging_buffer, vertex_buffer, vertices.len);
 
         return Model {
             .vertex_buffer = vertex_buffer,

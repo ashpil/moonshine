@@ -2,4 +2,5 @@
 
 ### Build dependencies:
 * Zig
-* GLFW 
+* GLFW
+* glslangValidator on your path

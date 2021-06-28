@@ -166,6 +166,14 @@ const Device = vk.DeviceWrapper(.{
     .QueueWaitIdle,
     .CreateRayTracingPipelinesKHR,
     .DestroyPipeline,
+    .CreatePipelineLayout,
+    .DestroyPipelineLayout,
+    .CreateShaderModule,
+    .DestroyShaderModule,
+    .CreateDescriptorSetLayout,
+    .DestroyDescriptorSetLayout,
+    .CmdBindPipeline,
+    .CmdBindDescriptorSets,
 });
 
 fn debugCallback(
