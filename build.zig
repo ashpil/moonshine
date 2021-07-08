@@ -25,12 +25,17 @@ pub fn build(b: *std.build.Builder) void {
     exe.linkLibC();
     exe.linkSystemLibrary("glfw");
 
+    // compile shaders
+    const dir_cmd = b.addSystemCommand(&[_][]const u8 {
+        "mkdir", "-p", "zig-cache/shaders"
+    });
     const shader_cmd = b.addSystemCommand(&[_][]const u8 {
         "glslangValidator", "src/shaders/shader.rgen",
         "--target-env", "vulkan1.2",
         "-o", "zig-cache/shaders/rgen.spv",
         "--quiet"
     });
+    exe.step.dependOn(&dir_cmd.step);
     exe.step.dependOn(&shader_cmd.step);
 
     const run_cmd = exe.run();

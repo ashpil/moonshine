@@ -8,7 +8,6 @@ const GlfwError = error {
 
 pub const Window = struct {
     handle: *c.GLFWwindow,
-    surface: vk.SurfaceKHR = undefined,
 
     pub fn create(width: u32, height: u32) GlfwError!Window {
         if (c.glfwInit() != c.GLFW_TRUE) return GlfwError.InitFail;

@@ -7,71 +7,76 @@ const SwapchainError = error {
     InvalidSurfaceDimensions,
 };
 
-pub const Swapchain = struct {
-    allocator: *std.mem.Allocator,
+pub fn Swapchain(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
 
-    handle: vk.SwapchainKHR,
-    images: []SwapImage,
+    return struct {
 
-    pub fn create(vc: *VulkanContext, allocator: *std.mem.Allocator, extent: vk.Extent2D) !Swapchain {
+        handle: vk.SwapchainKHR,
+        images: []SwapImage,
 
-        const settings = try SwapSettings.find(vc, allocator, extent);
+        const Self = @This();
 
-        const queue_family_indices = if (settings.image_sharing_mode == .exclusive)
-            (&[_]u32{ vc.physical_device.queue_families.compute })
-        else
-            (&[_]u32{ vc.physical_device.queue_families.compute, vc.physical_device.queue_families.present });
+        const vc = comp_vc;
+        const allocator = comp_allocator;
 
-        const handle = try vc.device.createSwapchainKHR(.{
-            .flags = .{},
-            .surface = vc.surface,
-            .min_image_count = settings.image_count,
-            .image_format = settings.format.format,
-            .image_color_space = settings.format.color_space,
-            .image_extent = settings.extent,
-            .image_array_layers = 1,
-            .image_usage = .{ .color_attachment_bit = true },
-            .image_sharing_mode = settings.image_sharing_mode,
-            .queue_family_index_count = @intCast(u32, queue_family_indices.len),
-            .p_queue_family_indices = queue_family_indices.ptr,
-            .pre_transform = settings.pre_transform,
-            .composite_alpha = .{ .opaque_bit_khr = true },
-            .present_mode = settings.present_mode,
-            .clipped = vk.TRUE,
-            .old_swapchain = .null_handle,
-        }, null);
-        errdefer vc.device.destroySwapchainKHR(handle, null);
+        pub fn create(extent: vk.Extent2D) !Self {
 
-        var image_count: u32 = 0;
-        _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, null);
-        var images = try allocator.alloc(vk.Image, image_count);
-        defer allocator.free(images);
-        _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, images.ptr);
-        
-        var swap_images = try allocator.alloc(SwapImage, image_count);
-        errdefer allocator.free(swap_images);
-        for (images) |image, i| {
-            swap_images[i] = try SwapImage.create(vc, image, settings.format.format);
+            const settings = try SwapSettings.find(vc, allocator, extent);
+
+            const queue_family_indices = if (settings.image_sharing_mode == .exclusive)
+                (&[_]u32{ vc.physical_device.queue_families.compute })
+            else
+                (&[_]u32{ vc.physical_device.queue_families.compute, vc.physical_device.queue_families.present });
+
+            const handle = try vc.device.createSwapchainKHR(.{
+                .flags = .{},
+                .surface = vc.surface,
+                .min_image_count = settings.image_count,
+                .image_format = settings.format.format,
+                .image_color_space = settings.format.color_space,
+                .image_extent = settings.extent,
+                .image_array_layers = 1,
+                .image_usage = .{ .color_attachment_bit = true },
+                .image_sharing_mode = settings.image_sharing_mode,
+                .queue_family_index_count = @intCast(u32, queue_family_indices.len),
+                .p_queue_family_indices = queue_family_indices.ptr,
+                .pre_transform = settings.pre_transform,
+                .composite_alpha = .{ .opaque_bit_khr = true },
+                .present_mode = settings.present_mode,
+                .clipped = vk.TRUE,
+                .old_swapchain = .null_handle,
+            }, null);
+            errdefer vc.device.destroySwapchainKHR(handle, null);
+
+            var image_count: u32 = 0;
+            _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, null);
+            var images = try allocator.alloc(vk.Image, image_count);
+            defer allocator.free(images);
+            _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, images.ptr);
+            
+            var swap_images = try allocator.alloc(SwapImage, image_count);
+            errdefer allocator.free(swap_images);
+            for (images) |image, i| {
+                swap_images[i] = try SwapImage.create(vc, image, settings.format.format);
+            }
+
+            return Self {
+                .handle = handle,
+                .images = swap_images,
+            };
         }
 
-        return Swapchain {
-            .allocator = allocator,
+        fn assert() void {}
 
-            .handle = handle,
-            .images = swap_images,
-        };
-    }
-
-    fn assert() void {}
-
-    pub fn destroy(self: *Swapchain, vc: *VulkanContext) void {
-        for (self.images) |image| {
-            image.destroy(vc);
+        pub fn destroy(self: *Self) void {
+            for (self.images) |image| {
+                image.destroy(vc);
+            }
+            allocator.free(self.images);
+            vc.device.destroySwapchainKHR(self.handle, null);
         }
-        self.allocator.free(self.images);
-        vc.device.destroySwapchainKHR(self.handle, null);
-    }
-};
+    };
+}
 
 const SwapImage = struct {
     image: vk.Image,
