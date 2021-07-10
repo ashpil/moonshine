@@ -15,6 +15,9 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
     return struct {
         storage: BottomLevelAccelStorage,
 
+        instances: vk.Buffer,
+        instances_memory: vk.DeviceMemory,
+
         const Self = @This();
 
         const vc = comp_vc;
@@ -86,12 +89,24 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
             }
 
             try commands.createAccelStructs(queue, geometry_infos, build_infos);
-            return Self {
+
+            var instances: vk.Buffer = undefined;
+            var instances_memory: vk.DeviceMemory = undefined;
+            try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * storage.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, &instances, &instances_memory);
+
+            var self = Self {
                 .storage = storage,
+                .instances = instances,
+                .instances_memory = instances_memory,
             };
+
+            try self.updateInstanceBuffer(commands, queue);
+
+            return self;
         }
 
-        pub fn getInstanceBuffer(self: *Self, commands: *Commands, queue: vk.Queue, buffer: *vk.Buffer, memory: *vk.DeviceMemory) !void {
+        // this should take in matrix inputs later
+        pub fn updateInstanceBuffer(self: *Self, commands: *Commands, queue: vk.Queue) !void {
             const instances = try allocator.alloc(vk.AccelerationStructureInstanceKHR, self.storage.len);
             defer allocator.free(instances);
 
@@ -117,12 +132,13 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
                 };
             }
 
-            try utils.createBuffer(vc, @sizeOf(@TypeOf(instances[0])) * instances.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, buffer, memory);
-
-            try commands.uploadData(queue, buffer.*, @bitCast([]u8, handles)); // a bit weird but works I think? line above as well
+            try commands.uploadData(queue, self.instances, @bitCast([]u8, handles)); // a bit weird but works I think?
         }
 
         pub fn destroy(self: *Self) void {
+            vc.device.destroyBuffer(self.instances, null);
+            vc.device.freeMemory(self.instances_memory, null);
+
             const slice = self.storage.slice();
             for (slice.items(.handle)) |handle| {
                 vc.device.destroyAccelerationStructureKHR(handle, null);
@@ -150,12 +166,6 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime BLASes: type, co
         const vc = comp_vc;
 
         pub fn create(commands: *Commands, queue: vk.Queue, blases: *BLASes) !Self {
-            var instance_buffer: vk.Buffer = undefined;
-            var instance_memory: vk.DeviceMemory = undefined;
-            defer vc.device.destroyBuffer(instance_buffer, null);
-            defer vc.device.freeMemory(instance_memory, null);
-            try blases.getInstanceBuffer(commands, queue, &instance_buffer, &instance_memory);
-
             const geometry = vk.AccelerationStructureGeometryKHR {
                 .geometry_type = .instances_khr,
                 .flags = .{ .opaque_bit_khr = true },
@@ -164,7 +174,7 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime BLASes: type, co
                         .array_of_pointers = vk.FALSE,
                         .data = .{
                             .device_address = vc.device.getBufferDeviceAddress(.{
-                                .buffer = instance_buffer,
+                                .buffer = blases.instances,
                             }),
                         }
                     }
