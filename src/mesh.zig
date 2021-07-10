@@ -1,9 +1,10 @@
 const vk = @import("vulkan");
 const std = @import("std");
 const utils = @import("./utils.zig");
+const TransferCommands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
 
-pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator, TransferCommands: type) type {
+pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
 
     const MeshStorage = std.MultiArrayList(struct {
         vertices: vk.Buffer,
@@ -20,7 +21,7 @@ pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.me
         const allocator = comp_allocator;
         const vc = comp_vc;
 
-        pub fn createOne(commands: *TransferCommands, copy_queue: vk.Queue, vertices: []const u8) !Self {
+        pub fn createOne(commands: *TransferCommands(comp_vc), copy_queue: vk.Queue, vertices: []const u8) !Self {
             var vertex_buffer: vk.Buffer = undefined;
             var vertex_buffer_memory: vk.DeviceMemory = undefined;
             try utils.createBuffer(vc, vertices.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, &vertex_buffer, &vertex_buffer_memory);

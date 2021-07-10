@@ -1,10 +1,12 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const Meshes = @import("./mesh.zig").Meshes;
+const Commands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
 const utils = @import("./utils.zig");
 
 // currently, one geometry per BLAS
-pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator, comptime Meshes: type, comptime Commands: type) type {
+pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
 
     const BottomLevelAccelStorage = std.MultiArrayList(struct {
         handle: vk.AccelerationStructureKHR,
@@ -23,7 +25,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(commands: *Commands, queue: vk.Queue, meshes: Meshes) !Self {
+        pub fn create(commands: *Commands(comp_vc), queue: vk.Queue, meshes: Meshes(comp_vc, comp_allocator)) !Self {
             const num_accels = meshes.storage.len;
 
             var storage = BottomLevelAccelStorage {};
@@ -106,7 +108,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
         }
 
         // this should take in matrix inputs later
-        pub fn updateInstanceBuffer(self: *Self, commands: *Commands, queue: vk.Queue) !void {
+        pub fn updateInstanceBuffer(self: *Self, commands: *Commands(comp_vc), queue: vk.Queue) !void {
             const instances = try allocator.alloc(vk.AccelerationStructureInstanceKHR, self.storage.len);
             defer allocator.free(instances);
 
@@ -154,8 +156,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
     };
 }
 
-pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime BLASes: type, comptime Commands: type) type {
-    
+pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
     return struct {
         handle: vk.AccelerationStructureKHR,
         buffer: vk.Buffer,
@@ -165,7 +166,7 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime BLASes: type, co
 
         const vc = comp_vc;
 
-        pub fn create(commands: *Commands, queue: vk.Queue, blases: *BLASes) !Self {
+        pub fn create(commands: *Commands(comp_vc), queue: vk.Queue, blases: *BottomLevelAccels(comp_vc, comp_allocator)) !Self {
             const geometry = vk.AccelerationStructureGeometryKHR {
                 .geometry_type = .instances_khr,
                 .flags = .{ .opaque_bit_khr = true },

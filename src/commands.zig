@@ -1,9 +1,10 @@
 const std = @import("std");
 const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const Pipeline = @import("./pipeline.zig").RaytracingPipeline;
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");
 
-pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator, comptime Pipeline: type) type {
+pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
     return struct {
         allocator: *std.mem.Allocator,
 
@@ -15,7 +16,7 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(pipeline: *Pipeline, num_buffers: usize) !Self {
+        pub fn create(pipeline: *Pipeline(comp_vc), num_buffers: usize) !Self {
             const pool = try vc.device.createCommandPool(.{
                 .queue_family_index = vc.physical_device.queue_families.compute,
                 .flags = .{},
