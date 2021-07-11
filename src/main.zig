@@ -38,25 +38,23 @@ pub fn main() !void {
     var swapchain = try Swapchain(&context, allocator).create(.{ .width = initial_width, .height = initial_height });
     defer swapchain.destroy();
 
-    var transfer_commands = try ComputeCommands(&context).create();
+    var transfer_commands = try ComputeCommands(&context).create(0);
     defer transfer_commands.destroy();
-
-    const compute_queue = context.device.getDeviceQueue(context.physical_device.queue_families.compute, 0);
     
     var pipeline = try RaytracingPipeline(&context).create();
     defer pipeline.destroy();
 
-    var render_commands = try RenderCommands(&context, allocator).create(&pipeline, swapchain.images.len);
+    var render_commands = try RenderCommands(&context, allocator).create(&pipeline, swapchain.images.len, 0);
     defer render_commands.destroy();
 
     const vertices_bytes = @bitCast([24]u8, vertices);
-    var meshes = try Meshes(&context, allocator).createOne(&transfer_commands, compute_queue, &vertices_bytes);
+    var meshes = try Meshes(&context, allocator).createOne(&transfer_commands, &vertices_bytes);
     defer meshes.destroy();
 
-    var blases = try BottomLevelAccels(&context, allocator).create(&transfer_commands, compute_queue, meshes);
+    var blases = try BottomLevelAccels(&context, allocator).create(&transfer_commands, meshes);
     defer blases.destroy();
 
-    var tlas = try TopLevelAccel(&context, allocator).create(&transfer_commands, compute_queue, &blases);
+    var tlas = try TopLevelAccel(&context, allocator).create(&transfer_commands, &blases);
     defer tlas.destroy();
 
     std.log.info("Program completed!.", .{});

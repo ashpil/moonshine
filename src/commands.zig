@@ -10,13 +10,14 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
 
         pool: vk.CommandPool,
         buffers: []vk.CommandBuffer,
+        queue: vk.Queue,
 
         const Self = @This();
 
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(pipeline: *Pipeline(comp_vc), num_buffers: usize) !Self {
+        pub fn create(pipeline: *Pipeline(comp_vc), num_buffers: usize, queue_index: u32) !Self {
             const pool = try vc.device.createCommandPool(.{
                 .queue_family_index = vc.physical_device.queue_families.compute,
                 .flags = .{},
@@ -40,11 +41,14 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
                 //vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 0, undefined, 0, undefined);
             }
 
+            const queue = vc.device.getDeviceQueue(vc.physical_device.queue_families.compute, queue_index);
+
             return Self {
                 .allocator = allocator,
 
                 .pool = pool,
                 .buffers = buffers,
+                .queue = queue,
             };
         }
 
@@ -60,12 +64,13 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
     return struct {
         pool: vk.CommandPool,
         buffer: vk.CommandBuffer,
+        queue: vk.Queue,
 
         const Self = @This();
 
         const vc = comp_vc;
 
-        pub fn create() !Self {
+        pub fn create(queue_index: u32) !Self {
             const pool = try vc.device.createCommandPool(.{
                 .queue_family_index = vc.physical_device.queue_families.compute,
                 .flags = .{},
@@ -79,9 +84,12 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
                 .command_buffer_count = 1,
             }, @ptrCast([*]vk.CommandBuffer, &buffer));
 
+            const queue = vc.device.getDeviceQueue(vc.physical_device.queue_families.compute, queue_index);
+
             return Self {
                 .pool = pool,
                 .buffer = buffer,
+                .queue = queue,
             };
         }
 
@@ -90,7 +98,7 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
             vc.device.destroyCommandPool(self.pool, null);
         }
 
-        pub fn createAccelStructs(self: *Self, queue: vk.Queue, geometry_info: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []*const vk.AccelerationStructureBuildRangeInfoKHR) !void {
+        pub fn createAccelStructs(self: *Self, geometry_info: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []*const vk.AccelerationStructureBuildRangeInfoKHR) !void {
             try vc.device.beginCommandBuffer(self.buffer, .{
                 .flags = .{},
                 .p_inheritance_info = null,
@@ -110,12 +118,12 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
                 .p_wait_dst_stage_mask = undefined,
             };
 
-            try vc.device.queueSubmit(queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
-            try vc.device.queueWaitIdle(queue);
+            try vc.device.queueSubmit(self.queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+            try vc.device.queueWaitIdle(self.queue);
             try vc.device.resetCommandPool(self.pool, .{});
         }
         
-        pub fn uploadData(self: *Self, queue: vk.Queue, dst_buffer: vk.Buffer, data: []const u8) !void {
+        pub fn uploadData(self: *Self, dst_buffer: vk.Buffer, data: []const u8) !void {
 
             var staging_buffer: vk.Buffer = undefined;
             var staging_buffer_memory: vk.DeviceMemory = undefined;
@@ -152,8 +160,8 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
                 .p_wait_dst_stage_mask = undefined,
             };
 
-            try vc.device.queueSubmit(queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
-            try vc.device.queueWaitIdle(queue);
+            try vc.device.queueSubmit(self.queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+            try vc.device.queueWaitIdle(self.queue);
             try vc.device.resetCommandPool(self.pool, .{});
         }
     };

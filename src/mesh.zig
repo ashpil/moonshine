@@ -21,14 +21,14 @@ pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.me
         const allocator = comp_allocator;
         const vc = comp_vc;
 
-        pub fn createOne(commands: *TransferCommands(comp_vc), copy_queue: vk.Queue, vertices: []const u8) !Self {
+        pub fn createOne(commands: *TransferCommands(comp_vc), vertices: []const u8) !Self {
             var vertex_buffer: vk.Buffer = undefined;
             var vertex_buffer_memory: vk.DeviceMemory = undefined;
             try utils.createBuffer(vc, vertices.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, &vertex_buffer, &vertex_buffer_memory);
             errdefer vc.device.destroyBuffer(vertex_buffer, null);
             errdefer vc.device.freeMemory(vertex_buffer_memory, null);
 
-            try commands.uploadData(copy_queue, vertex_buffer, vertices);
+            try commands.uploadData(vertex_buffer, vertices);
 
             // this is hardcoded for triangle, fix once we have actual model loading
             const geometry = vk.AccelerationStructureGeometryKHR {

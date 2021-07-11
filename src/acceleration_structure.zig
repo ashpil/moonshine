@@ -25,7 +25,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(commands: *Commands(comp_vc), queue: vk.Queue, meshes: Meshes(comp_vc, comp_allocator)) !Self {
+        pub fn create(commands: *Commands(comp_vc), meshes: Meshes(comp_vc, comp_allocator)) !Self {
             const num_accels = meshes.storage.len;
 
             var storage = BottomLevelAccelStorage {};
@@ -90,7 +90,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
                 });
             }
 
-            try commands.createAccelStructs(queue, geometry_infos, build_infos);
+            try commands.createAccelStructs(geometry_infos, build_infos);
 
             var instances: vk.Buffer = undefined;
             var instances_memory: vk.DeviceMemory = undefined;
@@ -102,13 +102,13 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
                 .instances_memory = instances_memory,
             };
 
-            try self.updateInstanceBuffer(commands, queue);
+            try self.updateInstanceBuffer(commands);
 
             return self;
         }
 
         // this should take in matrix inputs later
-        pub fn updateInstanceBuffer(self: *Self, commands: *Commands(comp_vc), queue: vk.Queue) !void {
+        pub fn updateInstanceBuffer(self: *Self, commands: *Commands(comp_vc)) !void {
             const instances = try allocator.alloc(vk.AccelerationStructureInstanceKHR, self.storage.len);
             defer allocator.free(instances);
 
@@ -134,7 +134,7 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
                 };
             }
 
-            try commands.uploadData(queue, self.instances, @bitCast([]u8, handles)); // a bit weird but works I think?
+            try commands.uploadData(self.instances, @bitCast([]u8, handles)); // a bit weird but works I think?
         }
 
         pub fn destroy(self: *Self) void {
@@ -166,7 +166,7 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime comp_allocator: 
 
         const vc = comp_vc;
 
-        pub fn create(commands: *Commands(comp_vc), queue: vk.Queue, blases: *BottomLevelAccels(comp_vc, comp_allocator)) !Self {
+        pub fn create(commands: *Commands(comp_vc), blases: *BottomLevelAccels(comp_vc, comp_allocator)) !Self {
             const geometry = vk.AccelerationStructureGeometryKHR {
                 .geometry_type = .instances_khr,
                 .flags = .{ .opaque_bit_khr = true },
@@ -226,7 +226,7 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime comp_allocator: 
                 .transform_offset = 0,
             };
 
-            try commands.createAccelStructs(queue, &.{ geometry_info }, &.{ &build_info });
+            try commands.createAccelStructs(&.{ geometry_info }, &.{ &build_info });
 
             return Self {
                 .handle = geometry_info.dst_acceleration_structure,
