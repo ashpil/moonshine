@@ -100,12 +100,14 @@ pub fn ComputeCommands(comptime comp_vc: *VulkanContext) type {
             vc.device.destroyCommandPool(self.pool, null);
         }
 
-        pub fn createAccelStructs(self: *Self, geometry_info: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []*const vk.AccelerationStructureBuildRangeInfoKHR) !void {
+        pub fn createAccelStructs(self: *Self, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
+            std.debug.assert(geometry_infos.len == build_infos.len);
+
             try vc.device.beginCommandBuffer(self.buffer, .{
                 .flags = .{},
                 .p_inheritance_info = null,
             });
-            vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_info.len), geometry_info.ptr, build_infos.ptr);
+            vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_infos.len), geometry_infos.ptr, build_infos.ptr);
             try vc.device.endCommandBuffer(self.buffer);
 
             // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet

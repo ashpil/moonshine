@@ -1,4 +1,5 @@
 const std = @import("std");
+const vk = @import("vulkan");
 
 const VulkanContext = @import("./vulkan_context.zig");
 
@@ -30,11 +31,25 @@ pub fn Scene(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem
         const Self = @This();
 
         const vc = comp_vc;
+        const allocator = comp_allocator;
 
         pub fn create(commands: *TransferCommands(comp_vc)) !Self {
 
-            const meshes = try Meshes.createOne(commands, &vertices);
-            const blases = try BottomLevelAccels.create(commands, meshes);
+            var meshes = try Meshes.createOne(commands, &vertices);
+
+            const geometry = try meshes.getGeometries(allocator, &.{ vertices.len });
+            defer allocator.free(geometry);
+
+            const build_infos = [_]*const vk.AccelerationStructureBuildRangeInfoKHR {
+                &.{
+                    .primitive_count = 1,
+                    .primitive_offset = 0,
+                    .transform_offset = 0,
+                    .first_vertex = 0,
+                },
+            };
+
+            const blases = try BottomLevelAccels.create(commands, geometry, &build_infos);
             const tlas = try TopLevelAccel.create(commands, &blases);
 
             return Self {

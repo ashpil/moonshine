@@ -11,8 +11,6 @@ pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.me
     const MeshStorage = std.MultiArrayList(struct {
         vertices: vk.Buffer,
         vertices_memory: vk.DeviceMemory,
-        geometry: vk.AccelerationStructureGeometryKHR,
-        build_info: *const vk.AccelerationStructureBuildRangeInfoKHR,
     });
 
     return struct {
@@ -35,49 +33,49 @@ pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.me
 
             try commands.uploadData(vertex_buffer, vertices_bytes);
 
-            const geometry = vk.AccelerationStructureGeometryKHR {
-                .geometry_type = .triangles_khr,
-                .flags = .{ .opaque_bit_khr = true },
-                .geometry = .{
-                    .triangles = .{
-                        .vertex_format = .r32g32b32_sfloat, 
-                        .vertex_data = .{
-                            .device_address = vc.device.getBufferDeviceAddress(.{
-                                .buffer = vertex_buffer,
-                            }),
-                        },
-                        .vertex_stride = @sizeOf(Vec3),
-                        .max_vertex = @intCast(u32, vertices.len - 1),
-                        .index_type = .none_khr,
-                        .index_data = .{
-                            .device_address = 0,
-                        },
-                        .transform_data = .{
-                            .device_address = 0,
-                        }
-                    }
-                }
-            };
-
-            const build_info = .{
-                .primitive_count = 1,
-                .primitive_offset = 0,
-                .transform_offset = 0,
-                .first_vertex = 0,
-            };
-
             var storage = MeshStorage {};
 
             try storage.append(allocator, .{
                 .vertices = vertex_buffer,
                 .vertices_memory = vertex_buffer_memory,
-                .geometry = geometry,
-                .build_info = &build_info,
             });
 
             return Self {
                 .storage = storage,
             };
+        }
+
+        // takes in allocator because it's not an operation that modifies existing storage, can use new allocator if want
+        pub fn getGeometries(self: *const Self, alloc: *std.mem.Allocator, vertices_sizes: []const u32) ![]vk.AccelerationStructureGeometryKHR {
+            std.debug.assert(vertices_sizes.len == self.storage.len);
+            const geometries = try alloc.alloc(vk.AccelerationStructureGeometryKHR, self.storage.len);
+            for (self.storage.items(.vertices)) |vertex_buffer, i| {
+                geometries[i] = vk.AccelerationStructureGeometryKHR {
+                    .geometry_type = .triangles_khr,
+                    .flags = .{ .opaque_bit_khr = true },
+                    .geometry = .{
+                        .triangles = .{
+                            .vertex_format = .r32g32b32_sfloat, 
+                            .vertex_data = .{
+                                .device_address = vc.device.getBufferDeviceAddress(.{
+                                    .buffer = vertex_buffer,
+                                }),
+                            },
+                            .vertex_stride = @sizeOf(Vec3),
+                            .max_vertex = @intCast(u32, vertices_sizes[i] - 1),
+                            .index_type = .none_khr,
+                            .index_data = .{
+                                .device_address = 0,
+                            },
+                            .transform_data = .{
+                                .device_address = 0,
+                            }
+                        }
+                    }
+                };
+            }
+
+            return geometries;
         }
 
         pub fn destroy(self: *Self) void {

@@ -1,6 +1,5 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const Meshes = @import("./mesh.zig").Meshes;
 const Commands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./vulkan_context.zig");
 const utils = @import("./utils.zig");
@@ -25,9 +24,10 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(commands: *Commands(comp_vc), meshes: Meshes(comp_vc, comp_allocator)) !Self {
-            const num_accels = meshes.storage.len;
-
+        pub fn create(commands: *Commands(comp_vc), geometries: []const vk.AccelerationStructureGeometryKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !Self {
+            std.debug.assert(geometries.len == build_infos.len);
+            const num_accels = geometries.len;
+            
             var storage = BottomLevelAccelStorage {};
             try storage.ensureTotalCapacity(allocator, num_accels);
 
@@ -44,10 +44,6 @@ pub fn BottomLevelAccels(comptime comp_vc: *VulkanContext, comptime comp_allocat
             };
 
             var i: usize = 0;
-
-            const slice = meshes.storage.slice();
-            const geometries = slice.items(.geometry);
-            const build_infos = slice.items(.build_info);
 
             while (i < num_accels) : (i += 1) {
                 geometry_infos[i] = .{
