@@ -8,8 +8,11 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
     return struct {
         allocator: *std.mem.Allocator,
 
-        pool: vk.CommandPool,
+        buffer_pool: vk.CommandPool,
         buffers: []vk.CommandBuffer,
+
+        descriptor_pool: vk.DescriptorPool,
+
         queue: vk.Queue,
 
         const Self = @This();
@@ -17,28 +20,62 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
         const vc = comp_vc;
         const allocator = comp_allocator;
 
-        pub fn create(pipeline: *Pipeline(comp_vc), num_buffers: usize, queue_index: u32) !Self {
-            const pool = try vc.device.createCommandPool(.{
+        pub fn create(pipeline: *const Pipeline(comp_vc), num_buffers: u32, queue_index: u32) !Self {
+
+            // allocate command buffers
+            const buffer_pool = try vc.device.createCommandPool(.{
                 .queue_family_index = vc.physical_device.queue_families.compute,
                 .flags = .{},
             }, null);
-            errdefer vc.device.destroyCommandPool(pool, null);
+            errdefer vc.device.destroyCommandPool(buffer_pool, null);
 
             var buffers = try allocator.alloc(vk.CommandBuffer, num_buffers);
             try vc.device.allocateCommandBuffers(.{
                 .level = vk.CommandBufferLevel.primary,
-                .command_pool = pool,
-                .command_buffer_count = @intCast(u32, buffers.len),
+                .command_pool = buffer_pool,
+                .command_buffer_count = num_buffers,
             }, buffers.ptr);
 
-            for (buffers) |buffer| {
+            // allocate descriptor sets
+            const descriptor_pool = try vc.device.createDescriptorPool(.{
+                .flags = .{},
+                .max_sets = num_buffers,
+                .pool_size_count = 2,
+                .p_pool_sizes = &[_]vk.DescriptorPoolSize {
+                    .{
+                        .type_ = .acceleration_structure_khr,
+                        .descriptor_count = 1,
+                    },
+                    .{
+                        .type_ = .storage_image,
+                        .descriptor_count = 1,
+                    },
+                },
+            }, null);
+
+            const descriptor_set_layouts = try allocator.alloc(vk.DescriptorSetLayout, num_buffers);
+            defer allocator.free(descriptor_set_layouts);
+
+            for (descriptor_set_layouts) |*layout| {
+                layout.* = pipeline.descriptor_set_layout;
+            }
+
+            var descriptor_sets = try allocator.alloc(vk.DescriptorSet, num_buffers);
+            defer allocator.free(descriptor_sets);
+            try vc.device.allocateDescriptorSets(.{
+                .descriptor_pool = descriptor_pool,
+                .descriptor_set_count = num_buffers,
+                .p_set_layouts = descriptor_set_layouts.ptr,
+            }, descriptor_sets.ptr);
+
+            for (buffers) |buffer, i| {
                 try vc.device.beginCommandBuffer(buffer, .{
                     .flags = .{},
                     .p_inheritance_info = null,
                 });
                 
                 vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
-                //vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 0, undefined, 0, undefined);
+                vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets[i]), 0, undefined);
 
                 try vc.device.endCommandBuffer(buffer);
             }
@@ -48,16 +85,20 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
             return Self {
                 .allocator = allocator,
 
-                .pool = pool,
+                .buffer_pool = buffer_pool,
                 .buffers = buffers,
                 .queue = queue,
+
+                .descriptor_pool = descriptor_pool,
             };
         }
 
         pub fn destroy(self: *Self) void {
-            vc.device.freeCommandBuffers(self.pool, @intCast(u32, self.buffers.len), self.buffers.ptr);
+            vc.device.freeCommandBuffers(self.buffer_pool, @intCast(u32, self.buffers.len), self.buffers.ptr);
             allocator.free(self.buffers);
-            vc.device.destroyCommandPool(self.pool, null);
+            vc.device.destroyCommandPool(self.buffer_pool, null);
+
+            vc.device.destroyDescriptorPool(self.descriptor_pool, null);
         }
     };
 }

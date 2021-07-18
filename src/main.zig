@@ -36,7 +36,7 @@ pub fn main() !void {
     var pipeline = try RaytracingPipeline(&context).create();
     defer pipeline.destroy();
 
-    var render_commands = try RenderCommands(&context, allocator).create(&pipeline, swapchain.images.len, 0);
+    var render_commands = try RenderCommands(&context, allocator).create(&pipeline, @intCast(u32, swapchain.images.len), 0);
     defer render_commands.destroy();
 
     var scene = try Scene(&context, allocator).create(&transfer_commands);

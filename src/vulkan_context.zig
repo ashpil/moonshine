@@ -185,6 +185,9 @@ const Device = vk.DeviceWrapper(.{
     .CreateSemaphore,
     .QueuePresentKHR,
     .DestroySemaphore,
+    .AllocateDescriptorSets,
+    .CreateDescriptorPool,
+    .DestroyDescriptorPool,
 });
 
 fn debugCallback(
