@@ -2,7 +2,7 @@ const vk = @import("vulkan");
 const std = @import("std");
 const utils = @import("./utils.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;
-const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const VulkanContext = @import("./vulkan_context.zig");
 
 pub fn Meshes(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std.mem.Allocator) type {
 

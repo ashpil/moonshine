@@ -1,4 +1,4 @@
-const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const VulkanContext = @import("./vulkan_context.zig");
 const vk = @import("vulkan");
 
 fn createStage(vc: *VulkanContext, stage: vk.ShaderStageFlags, comptime filepath: []const u8) !vk.PipelineShaderStageCreateInfo {

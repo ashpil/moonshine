@@ -1,7 +1,7 @@
 const vk = @import("vulkan");
 const std = @import("std");
 const c = @import("./c.zig");
-const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const VulkanContext = @import("./vulkan_context.zig");
 
 const SwapchainError = error {
     InvalidSurfaceDimensions,

@@ -1,5 +1,5 @@
 const std = @import("std");
-const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const VulkanContext = @import("./vulkan_context.zig");
 const Pipeline = @import("./pipeline.zig").RaytracingPipeline;
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");

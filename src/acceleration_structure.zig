@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Meshes = @import("./mesh.zig").Meshes;
 const Commands = @import("./commands.zig").ComputeCommands;
-const VulkanContext = @import("./vulkan_context.zig").VulkanContext;
+const VulkanContext = @import("./vulkan_context.zig");
 const utils = @import("./utils.zig");
 
 // currently, one geometry per BLAS
