@@ -14,6 +14,9 @@ pub fn Swapchain(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std
         handle: vk.SwapchainKHR,
         images: []SwapImage,
 
+        image_acquired_semaphore: vk.Semaphore,
+        render_finished_semaphore: vk.Semaphore,
+
         const Self = @This();
 
         const vc = comp_vc;
@@ -60,13 +63,48 @@ pub fn Swapchain(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std
                 swap_images[i] = try SwapImage.create(vc, image, settings.format.format);
             }
 
+            const image_acquired_semaphore = try vc.device.createSemaphore(.{
+                .flags = .{},
+            }, null);
+
+            const render_finished_semaphore = try vc.device.createSemaphore(.{
+                .flags = .{},
+            }, null);
+
             return Self {
                 .handle = handle,
                 .images = swap_images,
+
+                .image_acquired_semaphore = image_acquired_semaphore,
+                .render_finished_semaphore = render_finished_semaphore,
             };
         }
 
-        fn assert() void {}
+        // TODO: GPU-GPU sync done, do GPU-CPU with fences prob seems to be the way?
+        // TODO: handle suboptimal swapchain
+        pub fn present(self: *Self) !void {
+            const image_index = (try vc.device.acquireNextImageKHR(self.handle, std.math.maxInt(u64), self.image_acquired_semaphore, .null_handle)).image_index;
+            _ = image_index;
+
+            //try vc.device.queueSubmit(queue, 1, &[_]vk.SubmitInfo { .{
+            //    .wait_semaphore_count = 1,
+            //    .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &self.image_acquired_semaphore),
+            //    .p_wait_dst_stage_mask = &[_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }},
+            //    .command_buffer_count = 1,
+            //    .p_command_buffers = command_buffers[image_index],
+            //    .signal_semaphore_count = 1,
+            //    .p_signal_semaphores = @ptrCast([*]const vk.Semaphore, &self.render_finished_semaphore),
+            //}}, .null_handle);
+
+            //_ = try vc.device.queuePresentKHR(queue, .{
+            //    .wait_semaphore_count = 1,
+            //    .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &self.render_finished_semaphore),
+            //    .swapchain_count = 1,
+            //    .p_swapchains = @ptrCast([*]const vk.SwapchainKHR, &self.handle),
+            //    .p_image_indices = @ptrCast([*]const u32, &image_index),
+            //    .p_results = null,
+            //});
+        }
 
         pub fn destroy(self: *Self) void {
             for (self.images) |image| {

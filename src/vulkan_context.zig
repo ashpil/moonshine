@@ -180,7 +180,10 @@ const Device = vk.DeviceWrapper(.{
     .DestroyAccelerationStructureKHR,
     .CreateAccelerationStructureKHR,
     .GetAccelerationStructureBuildSizesKHR,
-    .GetAccelerationStructureDeviceAddressKHR
+    .GetAccelerationStructureDeviceAddressKHR,
+    .AcquireNextImageKHR,
+    .CreateSemaphore,
+    .QueuePresentKHR,
 });
 
 fn debugCallback(

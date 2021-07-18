@@ -243,7 +243,6 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime comp_allocator: 
     };
 }
 
-
 fn getBuildSizesInfo(vc: *VulkanContext, geometry_info: vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_counts: [*]const u32) vk.AccelerationStructureBuildSizesInfoKHR {
     var size_info: vk.AccelerationStructureBuildSizesInfoKHR = undefined;
     size_info.s_type = .acceleration_structure_build_sizes_info_khr;
@@ -251,3 +250,4 @@ fn getBuildSizesInfo(vc: *VulkanContext, geometry_info: vk.AccelerationStructure
     vc.device.getAccelerationStructureBuildSizesKHR(.device_khr, geometry_info, max_primitive_counts, &size_info);
     return size_info;
 }
+
