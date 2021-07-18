@@ -184,6 +184,7 @@ const Device = vk.DeviceWrapper(.{
     .AcquireNextImageKHR,
     .CreateSemaphore,
     .QueuePresentKHR,
+    .DestroySemaphore,
 });
 
 fn debugCallback(

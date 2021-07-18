@@ -166,7 +166,7 @@ pub fn TopLevelAccel(comptime comp_vc: *VulkanContext, comptime comp_allocator: 
 
         const vc = comp_vc;
 
-        pub fn create(commands: *Commands(comp_vc), blases: *BottomLevelAccels(comp_vc, comp_allocator)) !Self {
+        pub fn create(commands: *Commands(comp_vc), blases: *const BottomLevelAccels(comp_vc, comp_allocator)) !Self {
             const geometry = vk.AccelerationStructureGeometryKHR {
                 .geometry_type = .instances_khr,
                 .flags = .{ .opaque_bit_khr = true },

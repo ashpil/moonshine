@@ -2,10 +2,8 @@ const std = @import("std");
 const VulkanContext = @import("./vulkan_context.zig");
 const Window = @import("./window.zig").Window;
 const Swapchain = @import("./swapchain.zig").Swapchain;
-const Meshes = @import("./mesh.zig").Meshes;
 const RaytracingPipeline = @import("./pipeline.zig").RaytracingPipeline;
-const BottomLevelAccels = @import("./acceleration_structure.zig").BottomLevelAccels;
-const TopLevelAccel = @import("./acceleration_structure.zig").TopLevelAccel;
+const Scene = @import("./scene.zig").Scene;
 
 const commands = @import("./commands.zig");
 
@@ -14,12 +12,6 @@ const RenderCommands = commands.RenderCommands;
 
 const initial_width = 800;
 const initial_height = 600;
-
-const vertices = [_]f32 {
-    0.0, -0.5,
-    0.5, 0.5,
-    -0.5, 0.5,
-};
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 const allocator = &gpa.allocator;
@@ -47,15 +39,8 @@ pub fn main() !void {
     var render_commands = try RenderCommands(&context, allocator).create(&pipeline, swapchain.images.len, 0);
     defer render_commands.destroy();
 
-    const vertices_bytes = @bitCast([24]u8, vertices);
-    var meshes = try Meshes(&context, allocator).createOne(&transfer_commands, &vertices_bytes);
-    defer meshes.destroy();
-
-    var blases = try BottomLevelAccels(&context, allocator).create(&transfer_commands, meshes);
-    defer blases.destroy();
-
-    var tlas = try TopLevelAccel(&context, allocator).create(&transfer_commands, &blases);
-    defer tlas.destroy();
+    var scene = try Scene(&context, allocator).create(&transfer_commands);
+    defer scene.destroy();
 
     std.log.info("Program completed!.", .{});
 }

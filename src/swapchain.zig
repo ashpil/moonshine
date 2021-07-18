@@ -107,6 +107,8 @@ pub fn Swapchain(comptime comp_vc: *VulkanContext, comptime comp_allocator: *std
         }
 
         pub fn destroy(self: *Self) void {
+            vc.device.destroySemaphore(self.image_acquired_semaphore, null);
+            vc.device.destroySemaphore(self.render_finished_semaphore, null);
             for (self.images) |image| {
                 image.destroy(vc);
             }

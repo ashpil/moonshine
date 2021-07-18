@@ -39,6 +39,8 @@ pub fn RenderCommands(comptime comp_vc: *VulkanContext, comptime comp_allocator:
                 
                 vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
                 //vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 0, undefined, 0, undefined);
+
+                try vc.device.endCommandBuffer(buffer);
             }
 
             const queue = vc.device.getDeviceQueue(vc.physical_device.queue_families.compute, queue_index);
