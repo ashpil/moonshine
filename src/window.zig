@@ -6,26 +6,26 @@ const GlfwError = error {
     WindowCreateFail,
 };
 
-pub const Window = struct {
-    handle: *c.GLFWwindow,
+const Self = @This();
 
-    pub fn create(width: u32, height: u32) GlfwError!Window {
-        if (c.glfwInit() != c.GLFW_TRUE) return GlfwError.InitFail;
+handle: *c.GLFWwindow,
 
-        c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
+pub fn create(width: u32, height: u32) GlfwError!Self {
+    if (c.glfwInit() != c.GLFW_TRUE) return GlfwError.InitFail;
 
-        const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), "Chess RTX", null, null) orelse {
-            c.glfwTerminate();
-            return GlfwError.WindowCreateFail;
-        };
+    c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
-        return Window {
-            .handle = handle,
-        };
-    }
-
-    pub fn destroy(self: *Window) void {
-        c.glfwDestroyWindow(self.handle);
+    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), "Chess RTX", null, null) orelse {
         c.glfwTerminate();
-    }
-};
+        return GlfwError.WindowCreateFail;
+    };
+
+    return Self {
+        .handle = handle,
+    };
+}
+
+pub fn destroy(self: *Self) void {
+    c.glfwDestroyWindow(self.handle);
+    c.glfwTerminate();
+}

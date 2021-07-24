@@ -1,10 +1,11 @@
 const std = @import("std");
 const VulkanContext = @import("./vulkan_context.zig");
-const Window = @import("./window.zig").Window;
-const Swapchain = @import("./swapchain.zig").Swapchain;
-const RaytracingPipeline = @import("./pipeline.zig").RaytracingPipeline;
-const Scene = @import("./scene.zig").Scene;
-
+const Window = @import("./window.zig");
+const Swapchain = @import("./swapchain.zig");
+const RaytracingPipeline = @import("./pipeline.zig");
+const Scene = @import("./scene.zig");
+const DescriptorSet = @import("./descriptor_set.zig");
+const vk = @import("vulkan");
 const commands = @import("./commands.zig");
 
 const ComputeCommands = commands.ComputeCommands;
@@ -13,34 +14,45 @@ const RenderCommands = commands.RenderCommands;
 const initial_width = 800;
 const initial_height = 600;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
-const allocator = &gpa.allocator;
-var window: Window = undefined;
-var context: VulkanContext = undefined;
-
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
+    const allocator = &gpa.allocator;
 
-    window = try Window.create(initial_width, initial_height);
+    var window = try Window.create(initial_width, initial_height);
     defer window.destroy();
 
-    context = try VulkanContext.create(allocator, window.handle);
+    var context = try VulkanContext.create(allocator, window.handle);
     defer context.destroy();
 
-    var swapchain = try Swapchain(&context, allocator).create(.{ .width = initial_width, .height = initial_height });
-    defer swapchain.destroy();
+    var swapchain = try Swapchain.create(&context, allocator, .{ .width = initial_width, .height = initial_height });
+    defer swapchain.destroy(&context, allocator);
 
-    var transfer_commands = try ComputeCommands(&context).create(0);
-    defer transfer_commands.destroy();
+    var transfer_commands = try ComputeCommands.create(&context, 0);
+    defer transfer_commands.destroy(&context);
+
+    var scene = try Scene.create(&context, allocator, &transfer_commands);
+    defer scene.destroy(&context, allocator);
+
+    const image_info = vk.DescriptorImageInfo {
+        .sampler = .null_handle,
+        .image_view = .null_handle,
+        .image_layout = vk.ImageLayout.general,
+    };
+    var sets = try DescriptorSet.create(&context, allocator, .{
+        vk.ShaderStageFlags { .raygen_bit_khr = true },
+        vk.ShaderStageFlags { .raygen_bit_khr = true },
+    }, .{
+        image_info,
+        scene.tlas.handle,
+    }, @intCast(u32, swapchain.images.len));
+    defer sets.destroy(&context, allocator);
     
-    var pipeline = try RaytracingPipeline(&context).create();
-    defer pipeline.destroy();
+    var pipeline = try RaytracingPipeline.create(&context, &sets);
+    defer pipeline.destroy(&context);
 
-    var render_commands = try RenderCommands(&context, allocator).create(&pipeline, @intCast(u32, swapchain.images.len), 0);
-    defer render_commands.destroy();
-
-    var scene = try Scene(&context, allocator).create(&transfer_commands);
-    defer scene.destroy();
+    var render_commands = try RenderCommands.create(&context, allocator, &pipeline, &sets, @intCast(u32, swapchain.images.len), 0);
+    defer render_commands.destroy(&context, allocator);
 
     std.log.info("Program completed!.", .{});
 }

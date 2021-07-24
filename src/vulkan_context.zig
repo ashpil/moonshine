@@ -188,6 +188,7 @@ const Device = vk.DeviceWrapper(.{
     .AllocateDescriptorSets,
     .CreateDescriptorPool,
     .DestroyDescriptorPool,
+    .UpdateDescriptorSets,
 });
 
 fn debugCallback(
