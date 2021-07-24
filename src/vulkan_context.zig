@@ -189,6 +189,10 @@ const Device = vk.DeviceWrapper(.{
     .CreateDescriptorPool,
     .DestroyDescriptorPool,
     .UpdateDescriptorSets,
+    .CreateImage,
+    .DestroyImage,
+    .GetImageMemoryRequirements,
+    .BindImageMemory,
 });
 
 fn debugCallback(
@@ -313,8 +317,8 @@ const PhysicalDevice = struct {
             } else VulkanContextError.UnavailableQueues;
         }
 
-        pub fn isExclusive(self: *const QueueFamilies) bool {
-            return self.compute == self.present;
+        pub fn sharingMode(self: *const QueueFamilies) vk.SharingMode {
+            return if (self.compute == self.present) .exclusive else .concurrent;
         }
     };
 

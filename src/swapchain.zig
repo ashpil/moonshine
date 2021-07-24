@@ -162,7 +162,7 @@ const SwapSettings = struct {
             .present_mode = try findPresentMode(vc, allocator),
             .extent = try getExtent(extent, caps),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else std.math.min(caps.min_image_count + 1, caps.max_image_count),
-            .image_sharing_mode = if (vc.physical_device.queue_families.isExclusive()) vk.SharingMode.exclusive else vk.SharingMode.concurrent,
+            .image_sharing_mode = vc.physical_device.queue_families.sharingMode(),
             .pre_transform = caps.current_transform,
         };
     }

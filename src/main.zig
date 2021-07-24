@@ -1,31 +1,35 @@
 const std = @import("std");
+const vk = @import("vulkan");
+
 const VulkanContext = @import("./vulkan_context.zig");
 const Window = @import("./window.zig");
 const Swapchain = @import("./swapchain.zig");
 const RaytracingPipeline = @import("./pipeline.zig");
 const Scene = @import("./scene.zig");
 const DescriptorSet = @import("./descriptor_set.zig");
-const vk = @import("vulkan");
+const Image = @import("./image.zig");
 const commands = @import("./commands.zig");
 
 const ComputeCommands = commands.ComputeCommands;
 const RenderCommands = commands.RenderCommands;
 
-const initial_width = 800;
-const initial_height = 600;
+const window_size = vk.Extent2D {
+    .width = 800,
+    .height = 600,
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;
 
-    var window = try Window.create(initial_width, initial_height);
+    var window = try Window.create(window_size);
     defer window.destroy();
 
     var context = try VulkanContext.create(allocator, window.handle);
     defer context.destroy();
 
-    var swapchain = try Swapchain.create(&context, allocator, .{ .width = initial_width, .height = initial_height });
+    var swapchain = try Swapchain.create(&context, allocator, window_size);
     defer swapchain.destroy(&context, allocator);
 
     var transfer_commands = try ComputeCommands.create(&context, 0);
@@ -34,9 +38,12 @@ pub fn main() !void {
     var scene = try Scene.create(&context, allocator, &transfer_commands);
     defer scene.destroy(&context, allocator);
 
+    var image = try Image.create(&context, window_size, .{ .storage_bit = true });
+    defer image.destroy(&context);
+
     const image_info = vk.DescriptorImageInfo {
         .sampler = .null_handle,
-        .image_view = .null_handle,
+        .image_view = image.view,
         .image_layout = vk.ImageLayout.general,
     };
     var sets = try DescriptorSet.create(&context, allocator, .{

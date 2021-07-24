@@ -10,12 +10,12 @@ const Self = @This();
 
 handle: *c.GLFWwindow,
 
-pub fn create(width: u32, height: u32) GlfwError!Self {
+pub fn create(size: vk.Extent2D) GlfwError!Self {
     if (c.glfwInit() != c.GLFW_TRUE) return GlfwError.InitFail;
 
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
-    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), "Chess RTX", null, null) orelse {
+    const handle = c.glfwCreateWindow(@intCast(c_int, size.width), @intCast(c_int, size.height), "Chess RTX", null, null) orelse {
         c.glfwTerminate();
         return GlfwError.WindowCreateFail;
     };

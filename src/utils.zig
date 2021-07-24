@@ -34,7 +34,7 @@ pub fn createBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.Buf
     try vc.device.bindBufferMemory(buffer.*, buffer_memory.*, 0);
 }
 
-fn findMemoryType(vc: *const VulkanContext, type_filter: u32, properties: vk.MemoryPropertyFlags) Error!u32 {
+pub fn findMemoryType(vc: *const VulkanContext, type_filter: u32, properties: vk.MemoryPropertyFlags) Error!u32 {
     var i: u5 = 0;
     while (i < vc.physical_device.mem_properties.memory_type_count) : (i += 1) {
         if (type_filter & (@as(u32, 1) << i) != 0 and vc.physical_device.mem_properties.memory_types[i].property_flags.contains(properties)) {
