@@ -3,6 +3,7 @@ const VulkanContext = @import("./vulkan_context.zig");
 const Pipeline = @import("./pipeline.zig");
 const Swapchain = @import("./swapchain.zig");
 const Scene = @import("./scene.zig");
+const Image = @import("./image.zig");
 const DescriptorSet = @import("./descriptor_set.zig");
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");
@@ -13,7 +14,9 @@ pub const RenderCommands = struct {
 
     queue: vk.Queue,
 
-    pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: *const Pipeline, descriptor_sets: *const DescriptorSet, num_buffers: u32, queue_index: u32) !RenderCommands {
+    pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: *const Pipeline, image: *const Image, swapchain: *const Swapchain, descriptor_sets: *const DescriptorSet, queue_index: u32) !RenderCommands {
+        const num_buffers = @intCast(u32, swapchain.images.len);
+
         const buffer_pool = try vc.device.createCommandPool(.{
             .queue_family_index = vc.physical_device.queue_families.compute,
             .flags = .{},
@@ -35,6 +38,44 @@ pub const RenderCommands = struct {
             
             vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
             vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets.sets[i]), 0, undefined);
+
+            // const raygen_table = vk.StridedDeviceAddressRegionKHR {
+
+            // };
+            // const miss_table = vk.StridedDeviceAddressRegionKHR {
+
+            // };
+            // const hit_table = vk.StridedDeviceAddressRegionKHR {
+
+            // };
+            // const callable_table = vk.StridedDeviceAddressRegionKHR {
+
+            // };
+            // vc.device.cmdTraceRaysKHR(buffer, &raygen_table, &miss_table, &hit_table, &callable_table, swapchain.extent.width, swapchain.extent.height, 1);
+            _ = image;
+            // const subresource = vk.ImageSubresourceLayers {
+            //     .aspect_mask = .{ .color_bit = true },
+            //     .mip_level = 0,
+            //     .base_array_layer = 0,
+            //     .layer_count = 1,
+            // };
+            // const offset = vk.Offset3D {
+            //     .x = 0,
+            //     .y = 0,
+            //     .z = 0,
+            // };
+            // const region = vk.ImageCopy {
+            //     .src_subresource = subresource,
+            //     .src_offset = offset,
+            //     .dst_subresource = subresource,
+            //     .dst_offset = offset,
+            //     .extent = .{
+            //         .width = swapchain.extent.width,
+            //         .height = swapchain.extent.height,
+            //         .depth = 1,
+            //     },
+            // };
+            // vc.device.cmdCopyImage(buffer, image.handle, .transfer_src_optimal, swapchain.images[i].handle, .present_src_khr, 1, @ptrCast([*]const vk.ImageCopy, &region));
 
             try vc.device.endCommandBuffer(buffer);
         }

@@ -193,6 +193,7 @@ const Device = vk.DeviceWrapper(.{
     .DestroyImage,
     .GetImageMemoryRequirements,
     .BindImageMemory,
+    .CmdCopyImage,
 });
 
 fn debugCallback(

@@ -51,7 +51,7 @@ pub fn create(vc: *const VulkanContext, descriptor_set: *const DescriptorSet) !S
         .p_stages = &stages,
         .group_count = 0,
         .p_groups = undefined,
-        .max_pipeline_ray_recursion_depth = 0,
+        .max_pipeline_ray_recursion_depth = 1,
         .p_library_info = null,
         .p_library_interface = null,
         .p_dynamic_state = null,

@@ -13,6 +13,8 @@ images: []SwapImage,
 image_acquired_semaphore: vk.Semaphore,
 render_finished_semaphore: vk.Semaphore,
 
+extent: vk.Extent2D,
+
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: vk.Extent2D) !Self {
@@ -32,7 +34,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: v
         .image_color_space = settings.format.color_space,
         .image_extent = settings.extent,
         .image_array_layers = 1,
-        .image_usage = .{ .color_attachment_bit = true },
+        .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
         .queue_family_index_count = @intCast(u32, queue_family_indices.len),
         .p_queue_family_indices = queue_family_indices.ptr,
@@ -70,6 +72,8 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: v
 
         .image_acquired_semaphore = image_acquired_semaphore,
         .render_finished_semaphore = render_finished_semaphore,
+
+        .extent = settings.extent,
     };
 }
 
@@ -110,14 +114,14 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloca
 }
 
 const SwapImage = struct {
-    image: vk.Image,
+    handle: vk.Image,
     view: vk.ImageView,
 
-    fn create(vc: *const VulkanContext, image: vk.Image, format: vk.Format) !SwapImage {
+    fn create(vc: *const VulkanContext, handle: vk.Image, format: vk.Format) !SwapImage {
 
         const view = try vc.device.createImageView(.{
             .flags = .{},
-            .image = image,
+            .image = handle,
             .view_type = vk.ImageViewType.@"2d",
             .format = format,
             .components = .{
@@ -136,7 +140,7 @@ const SwapImage = struct {
         }, null);
 
         return SwapImage {
-            .image = image,
+            .handle = handle,
             .view = view,
         };
     }
