@@ -101,7 +101,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime 
     while (i < descriptor_write_count) : (i = i + stages.len) {
         inline for (descriptor_write) |write, j| {
             descriptor_writes[i+j] = write;
-            descriptor_writes[i+j].dst_set = descriptor_sets[i % stages.len];
+            descriptor_writes[i+j].dst_set = descriptor_sets[i / stages.len];
             if (@TypeOf(writes[j]) == vk.AccelerationStructureKHR) {
                 descriptor_writes[i+j].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                     .acceleration_structure_count = 1,

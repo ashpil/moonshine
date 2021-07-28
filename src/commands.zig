@@ -39,19 +39,12 @@ pub const RenderCommands = struct {
             vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
             vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets.sets[i]), 0, undefined);
 
-            // const raygen_table = vk.StridedDeviceAddressRegionKHR {
-
-            // };
-            // const miss_table = vk.StridedDeviceAddressRegionKHR {
-
-            // };
-            // const hit_table = vk.StridedDeviceAddressRegionKHR {
-
-            // };
-            // const callable_table = vk.StridedDeviceAddressRegionKHR {
-
-            // };
-            // vc.device.cmdTraceRaysKHR(buffer, &raygen_table, &miss_table, &hit_table, &callable_table, swapchain.extent.width, swapchain.extent.height, 1);
+            const callable_table = vk.StridedDeviceAddressRegionKHR {
+                .device_address = 0,
+                .stride = 0,
+                .size = 0,
+            };
+            vc.device.cmdTraceRaysKHR(buffer, pipeline.sbt.getRaygenSBT(vc), pipeline.sbt.getMissSBT(vc), pipeline.sbt.getRaygenSBT(vc), callable_table, swapchain.extent.width, swapchain.extent.height, 1);
             _ = image;
             // const subresource = vk.ImageSubresourceLayers {
             //     .aspect_mask = .{ .color_bit = true },

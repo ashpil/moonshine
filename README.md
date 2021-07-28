@@ -8,3 +8,8 @@
 ### Possible optimizations
 * Better memory/buffers
 * Create homebrew version of `std.MultiArrayList` that has len as a `u32`, as that's what a `DeviceSize` is
+
+# TODO:
+* display abstraction
+* better SBT
+* better build command for shaders

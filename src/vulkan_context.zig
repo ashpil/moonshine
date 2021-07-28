@@ -130,6 +130,7 @@ const instance_cmds = [_]vk.InstanceCommand {
     .CreateDevice,
     .GetPhysicalDeviceSurfaceCapabilitiesKHR,
     .GetPhysicalDeviceMemoryProperties,
+    .GetPhysicalDeviceProperties2,
 };
 
 const debug_instance_cmds = instance_cmds ++ [_]vk.InstanceCommand {
@@ -194,6 +195,8 @@ const Device = vk.DeviceWrapper(.{
     .GetImageMemoryRequirements,
     .BindImageMemory,
     .CmdCopyImage,
+    .GetRayTracingShaderGroupHandlesKHR,
+    .CmdTraceRaysKHR,
 });
 
 fn debugCallback(

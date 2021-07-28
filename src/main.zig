@@ -55,7 +55,7 @@ pub fn main() !void {
     }, @intCast(u32, swapchain.images.len));
     defer sets.destroy(&context, allocator);
     
-    var pipeline = try RaytracingPipeline.create(&context, &sets);
+    var pipeline = try RaytracingPipeline.create(&context, allocator, &transfer_commands, &sets);
     defer pipeline.destroy(&context);
 
     var render_commands = try RenderCommands.create(&context, allocator, &pipeline, &image, &swapchain, &sets, 0);

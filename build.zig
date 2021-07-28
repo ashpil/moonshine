@@ -29,14 +29,29 @@ pub fn build(b: *std.build.Builder) void {
     const dir_cmd = b.addSystemCommand(&[_][]const u8 {
         "mkdir", "-p", "zig-cache/shaders"
     });
-    const shader_cmd = b.addSystemCommand(&[_][]const u8 {
+    const shader_cmd0 = b.addSystemCommand(&[_][]const u8 {
         "glslangValidator", "src/shaders/shader.rgen",
         "--target-env", "vulkan1.2",
         "-o", "zig-cache/shaders/rgen.spv",
         "--quiet"
     });
+    const shader_cmd1 = b.addSystemCommand(&[_][]const u8 {
+        "glslangValidator", "src/shaders/shader.rchit",
+        "--target-env", "vulkan1.2",
+        "-o", "zig-cache/shaders/rchit.spv",
+        "--quiet"
+    });
+    const shader_cmd2 = b.addSystemCommand(&[_][]const u8 {
+        "glslangValidator", "src/shaders/shader.rmiss",
+        "--target-env", "vulkan1.2",
+        "-o", "zig-cache/shaders/rmiss.spv",
+        "--quiet"
+    });
+
     exe.step.dependOn(&dir_cmd.step);
-    exe.step.dependOn(&shader_cmd.step);
+    exe.step.dependOn(&shader_cmd0.step);
+    exe.step.dependOn(&shader_cmd1.step);
+    exe.step.dependOn(&shader_cmd2.step);
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());

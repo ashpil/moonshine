@@ -124,7 +124,7 @@ pub const BottomLevelAccels = struct {
             };
         }
 
-        try commands.uploadData(vc, self.instances, @bitCast([]u8, handles)); // a bit weird but works I think?
+        try commands.uploadData(vc, self.instances, @bitCast([]u8, instances)); // a bit weird but works I think?
     }
 
     pub fn destroy(self: *BottomLevelAccels, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
