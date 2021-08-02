@@ -24,6 +24,7 @@ pub const BottomLevelAccels = struct {
         
         var storage = BottomLevelAccelStorage {};
         try storage.ensureTotalCapacity(allocator, num_accels);
+        errdefer storage.deinit(allocator);
 
         const geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, num_accels);
         defer allocator.free(geometry_infos);
@@ -55,10 +56,14 @@ pub const BottomLevelAccels = struct {
             const size_info = getBuildSizesInfo(vc, geometry_infos[i], @ptrCast([*]const u32, &build_infos[i].primitive_count));
 
             try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true }, .{ .device_local_bit = true }, &scratch_buffers[i], &scratch_buffers_memory[i]);
+            errdefer vc.device.destroyBuffer(scratch_buffers[i], null);
+            errdefer vc.device.freeMemory(scratch_buffers_memory[i], null);
 
             var buffer: vk.Buffer = undefined;
             var memory: vk.DeviceMemory = undefined;
             try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffer, &memory);
+            errdefer vc.device.destroyBuffer(buffer, null);
+            errdefer vc.device.freeMemory(memory, null);
 
             geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
                 .create_flags = .{},
@@ -68,6 +73,7 @@ pub const BottomLevelAccels = struct {
                 .type_ = .bottom_level_khr,
                 .device_address = 0,
             }, null);
+            errdefer vc.device.destroyAccelerationStructureKHR(geometry_infos[i].dst_acceleration_structure, null);
 
             geometry_infos[i].scratch_data.device_address = vc.device.getBufferDeviceAddress(.{
                 .buffer = scratch_buffers[i],
@@ -85,6 +91,8 @@ pub const BottomLevelAccels = struct {
         var instances: vk.Buffer = undefined;
         var instances_memory: vk.DeviceMemory = undefined;
         try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * storage.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &instances, &instances_memory);
+        errdefer vc.device.destroyBuffer(instances, null);
+        errdefer vc.device.freeMemory(instances_memory, null);
 
         var self = BottomLevelAccels {
             .storage = storage,
@@ -182,13 +190,15 @@ pub const TopLevelAccel = struct {
 
         var scratch_buffer: vk.Buffer = undefined;
         var scratch_buffer_memory: vk.DeviceMemory = undefined;
+        try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
         defer vc.device.destroyBuffer(scratch_buffer, null);
         defer vc.device.freeMemory(scratch_buffer_memory, null);
-        try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
 
         var buffer: vk.Buffer = undefined;
         var memory: vk.DeviceMemory = undefined;
         try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffer, &memory);
+        errdefer vc.device.destroyBuffer(buffer, null);
+        errdefer vc.device.freeMemory(memory, null);
 
         geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
             .create_flags = .{},
@@ -198,6 +208,7 @@ pub const TopLevelAccel = struct {
             .type_ = .top_level_khr,
             .device_address = 0,
         }, null);
+        errdefer vc.device.destroyAccelerationStructureKHR(geometry_info.dst_acceleration_structure, null);
 
         geometry_info.scratch_data.device_address = vc.device.getBufferDeviceAddress(.{
             .buffer = scratch_buffer,

@@ -33,6 +33,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
         .p_queue_family_indices = undefined,
         .initial_layout = .@"undefined",
     }, null);
+    errdefer vc.device.destroyImage(handle, null);
 
     const mem_requirements = vc.device.getImageMemoryRequirements(handle);
 
@@ -40,6 +41,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
         .allocation_size = mem_requirements.size,
         .memory_type_index = try utils.findMemoryType(vc, mem_requirements.memory_type_bits, .{ .device_local_bit = true }),
     }, null);
+    errdefer vc.device.freeMemory(memory, null);
 
     try vc.device.bindImageMemory(handle, memory, 0);
 
@@ -62,6 +64,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
             .layer_count = 1,
         },
     }, null);
+    errdefer vc.device.destroyImageView(view, null);
 
     return Self {
         .memory = memory,

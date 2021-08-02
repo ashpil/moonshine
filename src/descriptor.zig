@@ -42,6 +42,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 .binding_count = bindings.len,
                 .p_bindings = &bindings,
             }, null);
+            errdefer vc.device.destroyDescriptorSetLayout(layout, null);
 
             // TODO: deduplicate
             const pool_sizes = comptime blk: {
@@ -61,6 +62,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 .pool_size_count = pool_sizes.len,
                 .p_pool_sizes = &pool_sizes,
             }, null);
+            errdefer vc.device.destroyDescriptorPool(pool, null);
 
             var descriptor_set_layouts: [set_count]vk.DescriptorSetLayout = undefined;
 

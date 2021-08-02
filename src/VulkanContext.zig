@@ -260,7 +260,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const surface = window.createSurface(instance.handle);
+    const surface = try window.createSurface(instance.handle);
     errdefer instance.destroySurfaceKHR(surface, null);
 
     const physical_device = try PhysicalDevice.pick(instance, allocator, surface);

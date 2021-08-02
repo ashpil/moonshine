@@ -20,8 +20,11 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, initial_extent: vk.Extent2D) !Self {
             var extent = initial_extent;
-            const swapchain = try Swapchain.create(vc, allocator, &extent);
-            const storage_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true });
+            var swapchain = try Swapchain.create(vc, allocator, &extent);
+            errdefer swapchain.destroy(vc, allocator);
+
+            var storage_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true });
+            errdefer storage_image.destroy(vc);
             
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
@@ -96,19 +99,23 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 const image_acquired = try vc.device.createSemaphore(.{
                     .flags = .{},
                 }, null);
+                errdefer vc.device.destroySemaphore(image_acquired, null);
 
                 const command_completed = try vc.device.createSemaphore(.{
                     .flags = .{},
                 }, null);
+                errdefer vc.device.destroySemaphore(command_completed, null);
 
                 const fence = try vc.device.createFence(.{
                     .flags = .{ .signaled_bit = true },
                 }, null);
+                errdefer vc.device.destroyFence(fence, null);
 
                 const command_pool = try vc.device.createCommandPool(.{
                     .queue_family_index = vc.physical_device.queue_families.compute,
                     .flags = .{ .transient_bit = true },
                 }, null);
+                errdefer vc.device.destroyCommandPool(command_pool, null);
 
                 var command_buffer: vk.CommandBuffer = undefined;
                 try vc.device.allocateCommandBuffers(.{

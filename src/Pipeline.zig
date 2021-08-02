@@ -5,24 +5,6 @@ const utils = @import("./utils.zig");
 const vk = @import("vulkan");
 const std = @import("std");
 
-fn createStage(vc: *const VulkanContext, stage: vk.ShaderStageFlags, comptime filepath: []const u8) !vk.PipelineShaderStageCreateInfo {
-    const code = @embedFile(filepath);
-
-    const module = try vc.device.createShaderModule(.{
-        .flags = .{},
-        .code_size = code.len,
-        .p_code = @ptrCast([*]const u32, code),
-    }, null);
-
-    return vk.PipelineShaderStageCreateInfo {
-        .flags = .{},
-        .stage = stage,
-        .module = module,
-        .p_name = "main",
-        .p_specialization_info = null,
-    };
-}
-
 fn ShaderInfo(comptime infos: anytype) type {
     return struct {
         const ShaderStruct = @This();
@@ -43,6 +25,7 @@ fn ShaderInfo(comptime infos: anytype) type {
                     .code_size = code.len,
                     .p_code = @ptrCast([*]const u32, code),
                 }, null);
+                errdefer vc.device.destroyShaderModule(module, null);
 
                 stages[i] = vk.PipelineShaderStageCreateInfo {
                     .flags = .{},
@@ -107,8 +90,9 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
         .push_constant_range_count = 0,
         .p_push_constant_ranges = undefined,
     }, null);
+    errdefer vc.device.destroyPipelineLayout(layout, null);
 
-    var pipeline: vk.Pipeline = undefined;
+    var handle: vk.Pipeline = undefined;
     const createInfo = vk.RayTracingPipelineCreateInfoKHR {
         .flags = .{},
         .stage_count = shader_info.stages.len,
@@ -123,13 +107,15 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
         .base_pipeline_handle = .null_handle,
         .base_pipeline_index = -1,
     };
-    _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &pipeline));
+    _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &handle));
+    errdefer vc.device.destroyPipeline(handle, null);
 
-    const sbt = try ShaderBindingTable.create(vc, allocator, pipeline, cmd, 1, 1, 1);
+    const sbt = try ShaderBindingTable.create(vc, allocator, handle, cmd, 1, 1, 1);
+    errdefer sbt.destroy(vc);
 
     return Self {
         .layout = layout,
-        .handle = pipeline,
+        .handle = handle,
 
         .sbt = sbt,
     };
@@ -184,18 +170,24 @@ const ShaderBindingTable = struct {
         var raygen_memory: vk.DeviceMemory = undefined;
         const raygen_size = handle_size_aligned * raygen_entry_count;
         try utils.createBuffer(vc, raygen_size, buffer_usage_flags, memory_properties, &raygen, &raygen_memory);
+        errdefer vc.device.destroyBuffer(raygen, null);
+        errdefer vc.device.freeMemory(raygen_memory, null);
         try cmd.uploadData(vc, raygen, sbt[0..raygen_size]);
 
         var miss: vk.Buffer = undefined;
         var miss_memory: vk.DeviceMemory = undefined;
         const miss_size = handle_size_aligned * miss_entry_count;
         try utils.createBuffer(vc, miss_size, buffer_usage_flags, memory_properties, &miss, &miss_memory);
+        errdefer vc.device.destroyBuffer(miss, null);
+        errdefer vc.device.freeMemory(miss_memory, null);
         try cmd.uploadData(vc, miss, sbt[raygen_size..raygen_size + miss_size]);
 
         var hit: vk.Buffer = undefined;
         var hit_memory: vk.DeviceMemory = undefined;
         const hit_size = handle_size_aligned * hit_entry_count;
         try utils.createBuffer(vc, hit_size, buffer_usage_flags, memory_properties, &hit, &hit_memory);
+        errdefer vc.device.destroyBuffer(hit, null);
+        errdefer vc.device.freeMemory(hit_memory, null);
         try cmd.uploadData(vc, hit, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
 
         return ShaderBindingTable {

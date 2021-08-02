@@ -25,6 +25,7 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands) !Self {
     var meshes = try Meshes.createOne(vc, allocator, commands, &vertices);
+    errdefer meshes.destroy(vc, allocator);
 
     const geometry = try meshes.getGeometries(vc, allocator, &.{ vertices.len });
     defer allocator.free(geometry);
@@ -38,8 +39,11 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
         },
     };
 
-    const blases = try BottomLevelAccels.create(vc, allocator, commands, geometry, &build_infos);
-    const tlas = try TopLevelAccel.create(vc, commands, &blases);
+    var blases = try BottomLevelAccels.create(vc, allocator, commands, geometry, &build_infos);
+    errdefer blases.destroy(vc, allocator);
+
+    var tlas = try TopLevelAccel.create(vc, commands, &blases);
+    errdefer tlas.destroy(vc);
 
     return Self {
         .meshes = meshes,
