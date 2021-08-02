@@ -9,15 +9,11 @@ const SwapchainError = error {
 
 handle: vk.SwapchainKHR,
 images: []SwapImage,
-
-image_acquired_semaphore: vk.Semaphore,
-render_finished_semaphore: vk.Semaphore,
-
-extent: vk.Extent2D,
+image_index: u32,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: vk.Extent2D) !Self {
+pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !Self {
 
     const settings = try SwapSettings.find(vc, allocator, extent);
 
@@ -32,7 +28,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: v
         .min_image_count = settings.image_count,
         .image_format = settings.format.format,
         .image_color_space = settings.format.color_space,
-        .image_extent = settings.extent,
+        .image_extent = extent.*,
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
@@ -58,54 +54,31 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: v
         swap_images[i] = try SwapImage.create(vc, image, settings.format.format);
     }
 
-    const image_acquired_semaphore = try vc.device.createSemaphore(.{
-        .flags = .{},
-    }, null);
-
-    const render_finished_semaphore = try vc.device.createSemaphore(.{
-        .flags = .{},
-    }, null);
-
     return Self {
         .handle = handle,
         .images = swap_images,
-
-        .image_acquired_semaphore = image_acquired_semaphore,
-        .render_finished_semaphore = render_finished_semaphore,
-
-        .extent = settings.extent,
+        .image_index = undefined, // this is odd, is it the best?
     };
 }
 
-// TODO: GPU-GPU sync done, do GPU-CPU with fences prob seems to be the way?
 // TODO: handle suboptimal swapchain
-pub fn present(self: *Self, vc: *const VulkanContext) !void {
-    const image_index = (try vc.device.acquireNextImageKHR(self.handle, std.math.maxInt(u64), self.image_acquired_semaphore, .null_handle)).image_index;
-    _ = image_index;
+pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !void {
+    self.image_index = (try vc.device.acquireNextImageKHR(self.handle, std.math.maxInt(u64), semaphore, .null_handle)).image_index;
+}
 
-    //try vc.device.queueSubmit(queue, 1, &[_]vk.SubmitInfo { .{
-    //    .wait_semaphore_count = 1,
-    //    .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &self.image_acquired_semaphore),
-    //    .p_wait_dst_stage_mask = &[_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }},
-    //    .command_buffer_count = 1,
-    //    .p_command_buffers = command_buffers[image_index],
-    //    .signal_semaphore_count = 1,
-    //    .p_signal_semaphores = @ptrCast([*]const vk.Semaphore, &self.render_finished_semaphore),
-    //}}, .null_handle);
-
-    //_ = try vc.device.queuePresentKHR(queue, .{
-    //    .wait_semaphore_count = 1,
-    //    .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &self.render_finished_semaphore),
-    //    .swapchain_count = 1,
-    //    .p_swapchains = @ptrCast([*]const vk.SwapchainKHR, &self.handle),
-    //    .p_image_indices = @ptrCast([*]const u32, &image_index),
-    //    .p_results = null,
-    //});
+// TODO: handle this result
+pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !void {
+    _ = try vc.device.queuePresentKHR(queue, .{
+        .wait_semaphore_count = 1,
+        .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &semaphore),
+        .swapchain_count = 1,
+        .p_swapchains = @ptrCast([*]const vk.SwapchainKHR, &self.handle),
+        .p_image_indices = @ptrCast([*]const u32, &self.image_index),
+        .p_results = null,
+    });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
-    vc.device.destroySemaphore(self.image_acquired_semaphore, null);
-    vc.device.destroySemaphore(self.render_finished_semaphore, null);
     for (self.images) |image| {
         image.destroy(vc);
     }
@@ -153,18 +126,18 @@ const SwapImage = struct {
 const SwapSettings = struct {
     format: vk.SurfaceFormatKHR,
     present_mode: vk.PresentModeKHR,
-    extent: vk.Extent2D,
     image_count: u32,
     image_sharing_mode: vk.SharingMode,
     pre_transform: vk.SurfaceTransformFlagsKHR,
 
-    pub fn find(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: vk.Extent2D) !SwapSettings {
+    // updates mutable extent
+    pub fn find(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, vc.surface);
+        try updateExtent(extent, caps);
 
         return SwapSettings {
             .format = try findFormat(vc, allocator),
             .present_mode = try findPresentMode(vc, allocator),
-            .extent = try getExtent(extent, caps),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else std.math.min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = vc.physical_device.queue_families.sharingMode(),
             .pre_transform = caps.current_transform,
@@ -214,15 +187,17 @@ const SwapSettings = struct {
         return formats[0];
     }
 
-    pub fn getExtent(extent: vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !vk.Extent2D {
-        var result = caps.current_extent;
+    pub fn updateExtent(extent: *vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !void {
         if (caps.current_extent.width == std.math.maxInt(u32)) {
-            result = vk.Extent2D {
+            extent.* = vk.Extent2D {
                 .width = std.math.clamp(extent.width, caps.min_image_extent.width, caps.max_image_extent.width),
                 .height = std.math.clamp(extent.height, caps.min_image_extent.height, caps.max_image_extent.height),
             };
+        } else {
+            extent.* = caps.current_extent;
         }
-        if (result.height == 0 and result.width == 0) return SwapchainError.InvalidSurfaceDimensions;
-        return result;
+        if (extent.*.height == 0 and extent.*.width == 0) {
+            return SwapchainError.InvalidSurfaceDimensions;
+        } 
     }
 };

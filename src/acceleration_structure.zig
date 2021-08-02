@@ -84,7 +84,7 @@ pub const BottomLevelAccels = struct {
 
         var instances: vk.Buffer = undefined;
         var instances_memory: vk.DeviceMemory = undefined;
-        try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * storage.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, &instances, &instances_memory);
+        try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * storage.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &instances, &instances_memory);
 
         var self = BottomLevelAccels {
             .storage = storage,
@@ -124,7 +124,7 @@ pub const BottomLevelAccels = struct {
             };
         }
 
-        try commands.uploadData(vc, self.instances, @bitCast([]u8, instances)); // a bit weird but works I think?
+        try commands.uploadData(vc, self.instances, std.mem.sliceAsBytes(instances));
     }
 
     pub fn destroy(self: *BottomLevelAccels, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {

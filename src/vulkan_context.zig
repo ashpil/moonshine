@@ -2,6 +2,7 @@ const c = @import("./c.zig");
 const vk = @import("vulkan");
 const std = @import("std");
 const Swapchain = @import("./swapchain.zig").Swapchain;
+const Window = @import("./window.zig");
 
 const validate = @import("builtin").mode == std.builtin.Mode.Debug;
 
@@ -194,9 +195,15 @@ const Device = vk.DeviceWrapper(.{
     .DestroyImage,
     .GetImageMemoryRequirements,
     .BindImageMemory,
-    .CmdCopyImage,
     .GetRayTracingShaderGroupHandlesKHR,
     .CmdTraceRaysKHR,
+    .CmdPipelineBarrier2KHR,
+    .CmdBlitImage,
+    .DeviceWaitIdle,
+    .CreateFence,
+    .DestroyFence,
+    .WaitForFences,
+    .ResetFences,
 });
 
 fn debugCallback(
@@ -230,12 +237,6 @@ const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
     .flags = .{},
 };
 
-fn createSurface(instance: Instance, window: *c.GLFWwindow) !vk.SurfaceKHR {
-    var surface: vk.SurfaceKHR = undefined;
-    if (c.glfwCreateWindowSurface(instance.handle, window, null, &surface) != vk.Result.success) return VulkanContextError.SurfaceCreateFail;
-    return surface;
-}
-
 base: Base,
 instance: Instance,
 device: Device,
@@ -245,9 +246,12 @@ surface: vk.SurfaceKHR,
 
 debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
+compute_queue: vk.Queue,
+present_queue: vk.Queue,
+
 const Self = @This();
 
-pub fn create(allocator: *std.mem.Allocator, window: *c.GLFWwindow) !Self {
+pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
     const base = try Base.new();
 
     const instance = try base.createInstance(allocator);
@@ -256,12 +260,16 @@ pub fn create(allocator: *std.mem.Allocator, window: *c.GLFWwindow) !Self {
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const surface = try createSurface(instance, window);
+    const surface = window.createSurface(instance.handle);
     errdefer instance.destroySurfaceKHR(surface, null);
 
     const physical_device = try PhysicalDevice.pick(instance, allocator, surface);
     const device = try physical_device.createLogicalDevice(instance);
     errdefer device.destroyDevice(null);
+
+    // not sure what best abstraction for queues is yet
+    const compute_queue = device.getDeviceQueue(physical_device.queue_families.compute, 0);
+    const present_queue = device.getDeviceQueue(physical_device.queue_families.present, 0);
 
     return Self {
         .base = base,
@@ -270,6 +278,9 @@ pub fn create(allocator: *std.mem.Allocator, window: *c.GLFWwindow) !Self {
         .surface = surface,
         .device = device,
         .physical_device = physical_device,
+
+        .compute_queue = compute_queue,
+        .present_queue = present_queue,
     };
 }
 
@@ -286,6 +297,7 @@ const device_extensions = [_][*:0]const u8{
     vk.extension_info.khr_deferred_host_operations.name,
     vk.extension_info.khr_acceleration_structure.name,
     vk.extension_info.khr_ray_tracing_pipeline.name,
+    vk.extension_info.khr_synchronization_2.name,
 };
 
 const PhysicalDevice = struct {
@@ -412,9 +424,14 @@ const PhysicalDevice = struct {
                 }
             }
         );
+
+        var sync2_features = vk.PhysicalDeviceSynchronization2FeaturesKHR {
+            .synchronization_2 = vk.TRUE,
+        };
         
         var accel_struct_features = vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
             .acceleration_structure = vk.TRUE,
+            .p_next = &sync2_features,
         };
 
         var ray_tracing_pipeline_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {

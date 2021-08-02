@@ -25,6 +25,22 @@ pub fn create(size: vk.Extent2D) GlfwError!Self {
     };
 }
 
+// TODO: error checking
+pub fn shouldClose(self: *const Self) bool {
+    return c.glfwWindowShouldClose(self.handle) != 0;
+}
+
+pub fn pollEvents(self: *const Self) void {
+    _ = self; // just ensure we're initialized
+    c.glfwPollEvents();
+}
+
+pub fn createSurface(self: *const Self, instance: vk.Instance) vk.SurfaceKHR {
+    var surface: vk.SurfaceKHR = undefined;
+    _ = c.glfwCreateWindowSurface(instance, self.handle, null, &surface);
+    return surface;
+}
+
 pub fn destroy(self: *Self) void {
     c.glfwDestroyWindow(self.handle);
     c.glfwTerminate();

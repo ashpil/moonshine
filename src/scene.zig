@@ -12,9 +12,9 @@ const TransferCommands = @import("./commands.zig").ComputeCommands;
 const Vec3 = @import("./zug.zig").Vec3(f32);
 
 const vertices = [_]Vec3 {
-    Vec3.new(0.0, -0.5, 0.0),
-    Vec3.new(0.5, 0.5, 0.0),
-    Vec3.new(-0.5, 0.5, 0.0),
+    Vec3.new(0.25, 0.25, 0.0),
+    Vec3.new(0.75, 0.25, 0.0),
+    Vec3.new(0.50, 0.75, 0.0),
 };
 
 meshes: Meshes,

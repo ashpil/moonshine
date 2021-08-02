@@ -17,11 +17,10 @@ const Self = @This();
 
 // TODO: indices
 pub fn createOne(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands, vertices: []const Vec3) !Self {
-    const vertices_bytes = @ptrCast([*]const u8, vertices.ptr)[0..vertices.len * @sizeOf(Vec3)];
-
+    const vertices_bytes = std.mem.sliceAsBytes(vertices);
     var vertex_buffer: vk.Buffer = undefined;
     var vertex_buffer_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(vc, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true}, .{ .device_local_bit = true }, &vertex_buffer, &vertex_buffer_memory);
+    try utils.createBuffer(vc, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &vertex_buffer, &vertex_buffer_memory);
     errdefer vc.device.destroyBuffer(vertex_buffer, null);
     errdefer vc.device.freeMemory(vertex_buffer_memory, null);
 

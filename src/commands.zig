@@ -1,99 +1,185 @@
 const std = @import("std");
 const VulkanContext = @import("./vulkan_context.zig");
 const Pipeline = @import("./pipeline.zig");
-const Swapchain = @import("./swapchain.zig");
+const Display = @import("./display.zig").Display;
 const Scene = @import("./scene.zig");
 const Image = @import("./image.zig");
-const DescriptorSet = @import("./descriptor_set.zig");
+const DescriptorSet = @import("./descriptor.zig");
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");
 
-pub const RenderCommands = struct {
-    buffer_pool: vk.CommandPool,
-    buffers: []vk.CommandBuffer,
-
-    queue: vk.Queue,
-
-    pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: *const Pipeline, image: *const Image, swapchain: *const Swapchain, descriptor_sets: *const DescriptorSet, queue_index: u32) !RenderCommands {
-        const num_buffers = @intCast(u32, swapchain.images.len);
-
-        const buffer_pool = try vc.device.createCommandPool(.{
-            .queue_family_index = vc.physical_device.queue_families.compute,
-            .flags = .{},
-        }, null);
-        errdefer vc.device.destroyCommandPool(buffer_pool, null);
-
-        var buffers = try allocator.alloc(vk.CommandBuffer, num_buffers);
-        try vc.device.allocateCommandBuffers(.{
-            .level = vk.CommandBufferLevel.primary,
-            .command_pool = buffer_pool,
-            .command_buffer_count = num_buffers,
-        }, buffers.ptr);
-
-        for (buffers) |buffer, i| {
-            try vc.device.beginCommandBuffer(buffer, .{
-                .flags = .{},
-                .p_inheritance_info = null,
+pub fn RenderCommand(comptime frame_count: comptime_int) type {
+    return struct {
+        pub fn record(vc: *const VulkanContext, buffer: vk.CommandBuffer, pipeline: *const Pipeline, display: *const Display(frame_count), descriptor_sets: *[frame_count]vk.DescriptorSet) !void {
+            // transition swapchain to format we can use
+            const swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+                .{
+                    .src_stage_mask = .{},
+                    .src_access_mask = .{},
+                    .dst_stage_mask = .{ .blit_bit_khr = true, },
+                    .dst_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .old_layout = .@"undefined",
+                    .new_layout = .transfer_dst_optimal,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = display.swapchain.images[display.swapchain.image_index].handle,
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                },
+                .{
+                    .src_stage_mask = .{},
+                    .src_access_mask = .{},
+                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
+                    .dst_access_mask = .{ .shader_storage_write_bit_khr = true, },
+                    .old_layout = .@"undefined",
+                    .new_layout = .general,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = display.storage_image.handle,
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                },
+            };
+            vc.device.cmdPipelineBarrier2KHR(buffer, vk.DependencyInfoKHR {
+                .dependency_flags = .{},
+                .memory_barrier_count = 0,
+                .p_memory_barriers = undefined,
+                .buffer_memory_barrier_count = 0,
+                .p_buffer_memory_barriers = undefined,
+                .image_memory_barrier_count = swap_image_memory_barriers.len,
+                .p_image_memory_barriers = &swap_image_memory_barriers,
             });
-            
-            vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
-            vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets.sets[i]), 0, undefined);
 
+            // bind our stuff
+            vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
+            vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets[display.frame_index]), 0, undefined);
+            
+            // trace rays
             const callable_table = vk.StridedDeviceAddressRegionKHR {
                 .device_address = 0,
                 .stride = 0,
                 .size = 0,
             };
-            vc.device.cmdTraceRaysKHR(buffer, pipeline.sbt.getRaygenSBT(vc), pipeline.sbt.getMissSBT(vc), pipeline.sbt.getRaygenSBT(vc), callable_table, swapchain.extent.width, swapchain.extent.height, 1);
-            _ = image;
-            // const subresource = vk.ImageSubresourceLayers {
-            //     .aspect_mask = .{ .color_bit = true },
-            //     .mip_level = 0,
-            //     .base_array_layer = 0,
-            //     .layer_count = 1,
-            // };
-            // const offset = vk.Offset3D {
-            //     .x = 0,
-            //     .y = 0,
-            //     .z = 0,
-            // };
-            // const region = vk.ImageCopy {
-            //     .src_subresource = subresource,
-            //     .src_offset = offset,
-            //     .dst_subresource = subresource,
-            //     .dst_offset = offset,
-            //     .extent = .{
-            //         .width = swapchain.extent.width,
-            //         .height = swapchain.extent.height,
-            //         .depth = 1,
-            //     },
-            // };
-            // vc.device.cmdCopyImage(buffer, image.handle, .transfer_src_optimal, swapchain.images[i].handle, .present_src_khr, 1, @ptrCast([*]const vk.ImageCopy, &region));
 
-            try vc.device.endCommandBuffer(buffer);
+            vc.device.cmdTraceRaysKHR(buffer, pipeline.sbt.getRaygenSBT(vc), pipeline.sbt.getMissSBT(vc), pipeline.sbt.getHitSBT(vc), callable_table, display.extent.width, display.extent.height, 1);
+
+            // transition storage image to one we can blit from
+            const image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+                .{
+                    .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
+                    .src_access_mask = .{ .shader_storage_write_bit_khr = true, },
+                    .dst_stage_mask = .{ .blit_bit_khr = true, },
+                    .dst_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .old_layout = .general,
+                    .new_layout = .transfer_src_optimal,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = display.storage_image.handle,
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                }
+            };
+            vc.device.cmdPipelineBarrier2KHR(buffer, vk.DependencyInfoKHR {
+                .dependency_flags = .{},
+                .memory_barrier_count = 0,
+                .p_memory_barriers = undefined,
+                .buffer_memory_barrier_count = 0,
+                .p_buffer_memory_barriers = undefined,
+                .image_memory_barrier_count = image_memory_barriers.len,
+                .p_image_memory_barriers = &image_memory_barriers,
+            });
+
+            // blit storage image onto swap image
+            const subresource = vk.ImageSubresourceLayers {
+                .aspect_mask = .{ .color_bit = true },
+                .mip_level = 0,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            };
+
+            const region = vk.ImageBlit {
+                .src_subresource = subresource,
+                .src_offsets = .{
+                    .{
+                        .x = 0,
+                        .y = 0,
+                        .z = 0,
+                    }, .{
+                        .x = @intCast(i32, display.extent.width),
+                        .y = @intCast(i32, display.extent.height),
+                        .z = 1,
+                    }
+                },
+                .dst_subresource = subresource,
+                .dst_offsets = .{
+                    .{
+                        .x = 0,
+                        .y = 0,
+                        .z = 0,
+                    }, .{
+                        .x = @intCast(i32, display.extent.width),
+                        .y = @intCast(i32, display.extent.height),
+                        .z = 1,
+                    },
+                },
+            };
+
+            vc.device.cmdBlitImage(buffer, display.storage_image.handle, .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, @ptrCast([*]const vk.ImageBlit, &region), .nearest);
+
+            // transition swapchain back to present mode
+            const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+                .{
+                    .src_stage_mask = .{ .blit_bit_khr = true, },
+                    .src_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .dst_stage_mask = .{},
+                    .dst_access_mask = .{},
+                    .old_layout = .transfer_dst_optimal,
+                    .new_layout = .present_src_khr,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = display.swapchain.images[display.swapchain.image_index].handle,
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                }
+            };
+            vc.device.cmdPipelineBarrier2KHR(buffer, vk.DependencyInfoKHR {
+                .dependency_flags = .{},
+                .memory_barrier_count = 0,
+                .p_memory_barriers = undefined,
+                .buffer_memory_barrier_count = 0,
+                .p_buffer_memory_barriers = undefined,
+                .image_memory_barrier_count = return_swap_image_memory_barriers.len,
+                .p_image_memory_barriers = &return_swap_image_memory_barriers,
+            });
         }
-
-        const queue = vc.device.getDeviceQueue(vc.physical_device.queue_families.compute, queue_index);
-
-        return RenderCommands {
-            .buffer_pool = buffer_pool,
-            .buffers = buffers,
-            .queue = queue,
-        };
-    }
-
-    pub fn destroy(self: *RenderCommands, vc: *const VulkanContext, allocator: *std.mem.Allocator,) void {
-        allocator.free(self.buffers);
-        vc.device.destroyCommandPool(self.buffer_pool, null);
-    }
-};
+    };
+}
 
 pub const ComputeCommands = struct {
     pool: vk.CommandPool,
     buffer: vk.CommandBuffer,
-    queue: vk.Queue,
 
-    pub fn create(vc: *const VulkanContext, queue_index: u32) !ComputeCommands {
+    pub fn create(vc: *const VulkanContext) !ComputeCommands {
         const pool = try vc.device.createCommandPool(.{
             .queue_family_index = vc.physical_device.queue_families.compute,
             .flags = .{},
@@ -107,12 +193,9 @@ pub const ComputeCommands = struct {
             .command_buffer_count = 1,
         }, @ptrCast([*]vk.CommandBuffer, &buffer));
 
-        const queue = vc.device.getDeviceQueue(vc.physical_device.queue_families.compute, queue_index);
-
         return ComputeCommands {
             .pool = pool,
             .buffer = buffer,
-            .queue = queue,
         };
     }
 
@@ -143,8 +226,8 @@ pub const ComputeCommands = struct {
             .p_wait_dst_stage_mask = undefined,
         };
 
-        try vc.device.queueSubmit(self.queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
-        try vc.device.queueWaitIdle(self.queue);
+        try vc.device.queueSubmit(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.compute_queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
     
@@ -185,8 +268,8 @@ pub const ComputeCommands = struct {
             .p_wait_dst_stage_mask = undefined,
         };
 
-        try vc.device.queueSubmit(self.queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
-        try vc.device.queueWaitIdle(self.queue);
+        try vc.device.queueSubmit(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.compute_queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
 };

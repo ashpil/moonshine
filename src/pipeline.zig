@@ -1,5 +1,4 @@
 const VulkanContext = @import("./vulkan_context.zig");
-const DescriptorSet = @import("./descriptor_set.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 const utils = @import("./utils.zig");
 
@@ -92,7 +91,7 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *TransferCommands, descriptor_set: *const DescriptorSet) !Self {
+pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *TransferCommands, descriptor_layout: vk.DescriptorSetLayout) !Self {
 
     var shader_info = try ShaderInfo(.{
         .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../zig-cache/shaders/rgen.spv" },
@@ -104,7 +103,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
     const layout = try vc.device.createPipelineLayout(.{
         .flags = .{},
         .set_layout_count = 1,
-        .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_set.layout),
+        .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_layout),
         .push_constant_range_count = 0,
         .p_push_constant_ranges = undefined,
     }, null);
@@ -185,19 +184,19 @@ const ShaderBindingTable = struct {
         var raygen_memory: vk.DeviceMemory = undefined;
         const raygen_size = handle_size_aligned * raygen_entry_count;
         try utils.createBuffer(vc, raygen_size, buffer_usage_flags, memory_properties, &raygen, &raygen_memory);
-        try cmd.uploadData(vc, raygen, @bitCast([]const u8, sbt[0..raygen_size]));
+        try cmd.uploadData(vc, raygen, sbt[0..raygen_size]);
 
         var miss: vk.Buffer = undefined;
         var miss_memory: vk.DeviceMemory = undefined;
         const miss_size = handle_size_aligned * miss_entry_count;
         try utils.createBuffer(vc, miss_size, buffer_usage_flags, memory_properties, &miss, &miss_memory);
-        try cmd.uploadData(vc, miss, @bitCast([]const u8, sbt[raygen_size..raygen_size + miss_size]));
+        try cmd.uploadData(vc, miss, sbt[raygen_size..raygen_size + miss_size]);
 
         var hit: vk.Buffer = undefined;
         var hit_memory: vk.DeviceMemory = undefined;
         const hit_size = handle_size_aligned * hit_entry_count;
         try utils.createBuffer(vc, hit_size, buffer_usage_flags, memory_properties, &hit, &hit_memory);
-        try cmd.uploadData(vc, hit, @bitCast([]const u8, sbt[miss_size + raygen_size..miss_size + raygen_size + hit_size]));
+        try cmd.uploadData(vc, hit, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
 
         return ShaderBindingTable {
             .raygen = raygen,

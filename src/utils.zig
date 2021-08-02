@@ -7,7 +7,6 @@ const Error = error {
 };
 
 pub fn createBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags, buffer: *vk.Buffer, buffer_memory: *vk.DeviceMemory) !void {
-    const memory_allocate_flags = if (usage.contains(.{ .shader_device_address_bit = true })) vk.MemoryAllocateFlags { .device_address_bit = true } else vk.MemoryAllocateFlags {};
     buffer.* = try vc.device.createBuffer(.{
             .size = size,
             .usage = usage,
@@ -19,15 +18,14 @@ pub fn createBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.Buf
     errdefer vc.device.destroyBuffer(buffer.*, null);
 
     const mem_requirements = vc.device.getBufferMemoryRequirements(buffer.*);
-    const memory_allocate_flags_info = vk.MemoryAllocateFlagsInfo {
-        .device_mask = 0,
-        .flags = memory_allocate_flags,
-    };
 
     buffer_memory.* = try vc.device.allocateMemory(.{
         .allocation_size = mem_requirements.size,
         .memory_type_index = try findMemoryType(vc, mem_requirements.memory_type_bits, properties),
-        .p_next = &memory_allocate_flags_info,
+        .p_next = if (usage.contains(.{ .shader_device_address_bit = true })) &vk.MemoryAllocateFlagsInfo {
+            .device_mask = 0,
+            .flags = .{ .device_address_bit = true },
+            } else null,
     }, null);
     errdefer vc.device.freeMemory(buffer_memory.*, null);
 
