@@ -2,7 +2,7 @@ const vk = @import("vulkan");
 const std = @import("std");
 const utils = @import("./utils.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;
-const VulkanContext = @import("./vulkan_context.zig");
+const VulkanContext = @import("./VulkanContext.zig");
 
 const Vec3 = @import("./zug.zig").Vec3(f32);
 

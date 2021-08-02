@@ -1,10 +1,9 @@
 const std = @import("std");
-const VulkanContext = @import("./vulkan_context.zig");
-const Pipeline = @import("./pipeline.zig");
+const VulkanContext = @import("./VulkanContext.zig");
+const Pipeline = @import("./Pipeline.zig");
 const Display = @import("./display.zig").Display;
-const Scene = @import("./scene.zig");
-const Image = @import("./image.zig");
-const DescriptorSet = @import("./descriptor.zig");
+const Scene = @import("./Scene.zig");
+const Image = @import("./Image.zig");
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");
 

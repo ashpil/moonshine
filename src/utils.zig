@@ -1,6 +1,6 @@
 const vk = @import("vulkan");
 const std = @import("std");
-const VulkanContext = @import("./vulkan_context.zig");
+const VulkanContext = @import("./VulkanContext.zig");
 
 const Error = error {
     UnavailbleMemoryType,

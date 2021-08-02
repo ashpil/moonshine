@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const VulkanContext = @import("./vulkan_context.zig");
+const VulkanContext = @import("./VulkanContext.zig");
 
 fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
     return switch (in) {

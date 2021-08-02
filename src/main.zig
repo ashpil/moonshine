@@ -1,13 +1,13 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./vulkan_context.zig");
-const Window = @import("./window.zig");
-const Swapchain = @import("./swapchain.zig");
-const RaytracingPipeline = @import("./pipeline.zig");
-const Scene = @import("./scene.zig");
+const VulkanContext = @import("./VulkanContext.zig");
+const Window = @import("./Window.zig");
+const Swapchain = @import("./Swapchain.zig");
+const Pipeline = @import("./Pipeline.zig");
+const Scene = @import("./Scene.zig");
 const Descriptor = @import("./descriptor.zig").Descriptor;
-const Image = @import("./image.zig");
+const Image = @import("./Image.zig");
 const Display = @import("./display.zig").Display;
 const commands = @import("./commands.zig");
 
@@ -55,7 +55,7 @@ pub fn main() !void {
     });
     defer sets.destroy(&context);
 
-    var pipeline = try RaytracingPipeline.create(&context, allocator, &transfer_commands, sets.layout);
+    var pipeline = try Pipeline.create(&context, allocator, &transfer_commands, sets.layout);
     defer pipeline.destroy(&context);
 
     while (!window.shouldClose()) {

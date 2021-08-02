@@ -1,10 +1,10 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./vulkan_context.zig");
-const Window = @import("./window.zig");
-const Swapchain = @import("./swapchain.zig");
-const Image = @import("./image.zig");
+const VulkanContext = @import("./VulkanContext.zig");
+const Window = @import("./Window.zig");
+const Swapchain = @import("./Swapchain.zig");
+const Image = @import("./Image.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
 
 pub fn Display(comptime num_frames: comptime_int) type {

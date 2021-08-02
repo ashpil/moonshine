@@ -1,8 +1,8 @@
 const c = @import("./c.zig");
 const vk = @import("vulkan");
 const std = @import("std");
-const Swapchain = @import("./swapchain.zig").Swapchain;
-const Window = @import("./window.zig");
+const Swapchain = @import("./Swapchain.zig").Swapchain;
+const Window = @import("./Window.zig");
 
 const validate = @import("builtin").mode == std.builtin.Mode.Debug;
 

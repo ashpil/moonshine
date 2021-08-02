@@ -1,9 +1,9 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./vulkan_context.zig");
+const VulkanContext = @import("./VulkanContext.zig");
 
-const Meshes = @import("./mesh.zig");
+const Meshes = @import("./Mesh.zig");
 const BottomLevelAccels = @import("./acceleration_structure.zig").BottomLevelAccels;
 const TopLevelAccel = @import("./acceleration_structure.zig").TopLevelAccel;
 
