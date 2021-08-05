@@ -10,6 +10,14 @@ fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
     };
 }
 
+fn isImageWrite(comptime in: type) bool {
+    return in == vk.DescriptorImageInfo;
+}
+
+fn isAccelWrite(comptime in: type) bool {
+    return in == vk.AccelerationStructureKHR;
+}
+
 pub fn Descriptor(comptime set_count: comptime_int) type {
     return struct {
         const Self = @This();
@@ -23,18 +31,15 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             comptime if (!std.meta.trait.isTuple(@TypeOf(writes))) @compileError("Writes must be a tuple");
             comptime if (stages.len != writes.len) @compileError("Must have same amount of writes and flags");
 
-            const bindings = comptime blk: {
-                var comp_bindings: [stages.len]vk.DescriptorSetLayoutBinding = undefined;
-                for (comp_bindings) |*comp_binding, i| {
-                    comp_binding.* = .{
-                        .binding = i,
-                        .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
-                        .descriptor_count = 1,
-                        .stage_flags = stages[i],
-                        .p_immutable_samplers = null,
-                    };
-                }
-                break :blk comp_bindings;
+            comptime var bindings: [stages.len]vk.DescriptorSetLayoutBinding = undefined;
+            comptime for (bindings) |*binding, i| {
+                binding.* = .{
+                    .binding = i,
+                    .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
+                    .descriptor_count = 1,
+                    .stage_flags = stages[i],
+                    .p_immutable_samplers = null,
+                };
             };
 
             const layout = try vc.device.createDescriptorSetLayout(.{
@@ -45,15 +50,12 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             errdefer vc.device.destroyDescriptorSetLayout(layout, null);
 
             // TODO: deduplicate
-            const pool_sizes = comptime blk: {
-                var comp_pool_sizes: [stages.len]vk.DescriptorPoolSize = undefined;
-                for (comp_pool_sizes) |*comp_pool_size, i| {
-                    comp_pool_size.* = .{
-                        .type_ = typeToDescriptorType(@TypeOf(writes[i])),
-                        .descriptor_count = 1,
-                    };
-                }
-                break :blk comp_pool_sizes;
+            comptime var pool_sizes: [stages.len]vk.DescriptorPoolSize = undefined;
+            comptime for (pool_sizes) |*pool_size, i| {
+                pool_size.* = .{
+                    .type_ = typeToDescriptorType(@TypeOf(writes[i])),
+                    .descriptor_count = 1,
+                };
             };
 
             const pool = try vc.device.createDescriptorPool(.{
@@ -66,8 +68,9 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
 
             var descriptor_set_layouts: [set_count]vk.DescriptorSetLayout = undefined;
 
-            for (descriptor_set_layouts) |*descriptor_set_layout| {
-                descriptor_set_layout.* = layout;
+            comptime var k = 0;
+            inline while (k < set_count) : (k += 1) {
+                descriptor_set_layouts[k] = layout;
             }
 
             var descriptor_sets: [set_count]vk.DescriptorSet = undefined;
@@ -78,22 +81,19 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 .p_set_layouts = &descriptor_set_layouts,
             }, &descriptor_sets);
 
-            const descriptor_write = comptime blk: {
-                var comp_descriptor_writes: [stages.len]vk.WriteDescriptorSet = undefined;
-                for (comp_descriptor_writes) |*comp_descriptor_write, i| {
-                    comp_descriptor_write.* = .{
-                        .dst_set = undefined, // this can only be set at runtime
-                        .dst_binding = i,
-                        .dst_array_element = 0,
-                        .descriptor_count = 1,
-                        .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
-                        .p_buffer_info = undefined,
-                        .p_image_info = undefined,
-                        .p_texel_buffer_view = undefined,
-                        .p_next = undefined,
-                    };
-                }
-                break :blk comp_descriptor_writes;
+            comptime var descriptor_write: [stages.len]vk.WriteDescriptorSet = undefined;
+            comptime for (descriptor_write) |_, i| {
+                descriptor_write[i] = .{
+                    .dst_set = undefined, // this can only be set at runtime
+                    .dst_binding = i,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
+                    .p_buffer_info = undefined,
+                    .p_image_info = undefined,
+                    .p_texel_buffer_view = undefined,
+                    .p_next = null,
+                };
             };
 
             const descriptor_write_count = set_count * stages.len;
@@ -101,15 +101,15 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
 
             comptime var i = 0;
             inline while (i < descriptor_write_count) : (i = i + stages.len) {
-                inline for (descriptor_write) |write, j| {
-                    descriptor_writes[i+j] = write;
+                inline for (descriptor_write) |write_info, j| {
+                    descriptor_writes[i+j] = write_info;
                     descriptor_writes[i+j].dst_set = descriptor_sets[i / stages.len];
-                    if (@TypeOf(writes[j]) == vk.AccelerationStructureKHR) {
+                    if (isAccelWrite(@TypeOf(writes[j]))) {
                         descriptor_writes[i+j].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                             .acceleration_structure_count = 1,
                             .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &writes[j]),
                         };
-                    } else if (@TypeOf(writes[j]) == vk.DescriptorImageInfo) {
+                    } else if (isImageWrite(@TypeOf(writes[j]))) {
                         descriptor_writes[i+j].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &writes[j]);
                     }
                 }
@@ -122,6 +122,29 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 .pool = pool,
                 .sets = descriptor_sets,
             };
+        }
+
+        pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_binding: comptime_int, write_info: anytype) void {
+            var descriptor_writes: [set_count]vk.WriteDescriptorSet = undefined;
+            comptime var i = 0;
+            inline while (i < set_count) : (i += 1) {
+                descriptor_writes[i] = .{
+                    .dst_set = self.sets[i],
+                    .dst_binding = dst_binding,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = typeToDescriptorType(@TypeOf(write_info)),
+                    .p_buffer_info = undefined,
+                    .p_image_info = if (isImageWrite(@TypeOf(write_info))) @ptrCast([*]const vk.DescriptorImageInfo, &write_info) else undefined,
+                    .p_texel_buffer_view = undefined,
+                    .p_next = if (isAccelWrite(@TypeOf(write_info))) &vk.WriteDescriptorSetAccelerationStructureKHR {
+                                .acceleration_structure_count = 1,
+                                .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &write_info),
+                            } else null,
+                };
+            }
+
+            vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {

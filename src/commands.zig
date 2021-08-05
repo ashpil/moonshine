@@ -215,17 +215,20 @@ pub const ComputeCommands = struct {
 
         // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
         // because they should be individually optimized
-        const submit_info = vk.SubmitInfo {
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast([*]const vk.CommandBuffer, &self.buffer),
-            .wait_semaphore_count = 0,
-            .p_wait_semaphores = undefined,
-            .signal_semaphore_count = 0,
-            .p_signal_semaphores = undefined,
-            .p_wait_dst_stage_mask = undefined,
+        const submit_info = vk.SubmitInfo2KHR {
+            .flags = .{},
+            .command_buffer_info_count = 1,
+            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                .command_buffer = self.buffer,
+                .device_mask = 0,
+            }),
+            .wait_semaphore_info_count = 0,
+            .p_wait_semaphore_infos = undefined,
+            .signal_semaphore_info_count = 0,
+            .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.compute_queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
@@ -257,17 +260,20 @@ pub const ComputeCommands = struct {
 
         try vc.device.endCommandBuffer(self.buffer);
 
-        const submit_info = vk.SubmitInfo {
-            .command_buffer_count = 1,
-            .p_command_buffers = @ptrCast([*]const vk.CommandBuffer, &self.buffer),
-            .wait_semaphore_count = 0,
-            .p_wait_semaphores = undefined,
-            .signal_semaphore_count = 0,
-            .p_signal_semaphores = undefined,
-            .p_wait_dst_stage_mask = undefined,
+        const submit_info = vk.SubmitInfo2KHR {
+            .flags = .{},
+            .command_buffer_info_count = 1,
+            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                .command_buffer = self.buffer,
+                .device_mask = 0,
+            }),
+            .wait_semaphore_info_count = 0,
+            .p_wait_semaphore_infos = undefined,
+            .signal_semaphore_info_count = 0,
+            .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.compute_queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }

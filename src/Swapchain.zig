@@ -14,7 +14,10 @@ image_index: u32,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !Self {
+    return try createFromOld(vc, allocator, extent, .null_handle, null);
+}
 
+fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
     const settings = try SwapSettings.find(vc, allocator, extent);
 
     const queue_family_indices = if (settings.image_sharing_mode == .exclusive)
@@ -38,9 +41,13 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = settings.present_mode,
         .clipped = vk.TRUE,
-        .old_swapchain = .null_handle,
+        .old_swapchain = old_handle,
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
+
+    if (old_handle != .null_handle) {
+        vc.device.destroySwapchainKHR(old_handle, null);
+    }
 
     var image_count: u32 = 0;
     _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, null);
@@ -48,7 +55,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *
     defer allocator.free(images);
     _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, images.ptr);
     
-    var swap_images = try allocator.alloc(SwapImage, image_count);
+    var swap_images = if (old_images) |ptr| (try allocator.realloc(ptr, image_count)) else try allocator.alloc(SwapImage, image_count);
     errdefer allocator.free(swap_images);
     for (images) |image, i| {
         swap_images[i] = try SwapImage.create(vc, image, settings.format.format);
@@ -61,14 +68,27 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *
     };
 }
 
-// TODO: handle suboptimal swapchain
-pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !void {
-    self.image_index = (try vc.device.acquireNextImageKHR(self.handle, std.math.maxInt(u64), semaphore, .null_handle)).image_index;
+pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !void {
+    for (self.images) |image| {
+        image.destroy(vc);
+    }
+    self.* = try createFromOld(vc, allocator, extent, self.handle, self.images);
 }
 
-// TODO: handle this result
-pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !void {
-    _ = try vc.device.queuePresentKHR(queue, .{
+pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
+    const result = try vc.device.acquireNextImage2KHR(.{
+        .swapchain = self.handle,
+        .timeout = std.math.maxInt(u64),
+        .semaphore = semaphore,
+        .fence = .null_handle,
+        .device_mask = 1,
+    });
+    self.image_index = result.image_index;
+    return result.result;
+}
+
+pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !vk.Result {
+    return try vc.device.queuePresentKHR(queue, .{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &semaphore),
         .swapchain_count = 1,

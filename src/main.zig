@@ -59,10 +59,10 @@ pub fn main() !void {
     defer pipeline.destroy(&context);
 
     while (!window.shouldClose()) {
-        window.pollEvents();
-        const buffer = try display.startFrame(&context);
+        const buffer = try display.startFrame(&context, allocator, &window, &sets);
         try RenderCommands(frame_count).record(&context, buffer, &pipeline, &display, &sets.sets);
-        try display.endFrame(&context);
+        try display.endFrame(&context, allocator, &window, &sets);
+        window.pollEvents();
     }
 
     try context.device.deviceWaitIdle();

@@ -41,6 +41,16 @@ pub fn createSurface(self: *const Self, instance: vk.Instance) Error!vk.SurfaceK
     return surface;
 }
 
+pub fn getExtent(self: *const Self) vk.Extent2D {
+    var width: c_int = undefined;
+    var height: c_int = undefined;
+    c.glfwGetWindowSize(self.handle, &width, &height);
+    return vk.Extent2D {
+        .width = @intCast(u32, width),
+        .height = @intCast(u32, height),
+    };
+}
+
 pub fn destroy(self: *Self) void {
     c.glfwDestroyWindow(self.handle);
     c.glfwTerminate();

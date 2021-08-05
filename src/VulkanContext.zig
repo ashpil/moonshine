@@ -164,7 +164,6 @@ const Device = vk.DeviceWrapper(.{
     .BeginCommandBuffer,
     .CmdCopyBuffer,
     .EndCommandBuffer,
-    .QueueSubmit,
     .QueueWaitIdle,
     .CreateRayTracingPipelinesKHR,
     .DestroyPipeline,
@@ -183,7 +182,6 @@ const Device = vk.DeviceWrapper(.{
     .CreateAccelerationStructureKHR,
     .GetAccelerationStructureBuildSizesKHR,
     .GetAccelerationStructureDeviceAddressKHR,
-    .AcquireNextImageKHR,
     .CreateSemaphore,
     .QueuePresentKHR,
     .DestroySemaphore,
@@ -204,6 +202,8 @@ const Device = vk.DeviceWrapper(.{
     .DestroyFence,
     .WaitForFences,
     .ResetFences,
+    .QueueSubmit2KHR,
+    .AcquireNextImage2KHR,
 });
 
 fn debugCallback(

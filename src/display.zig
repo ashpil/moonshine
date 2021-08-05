@@ -6,15 +6,18 @@ const Window = @import("./Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Image = @import("./Image.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
+const Descriptor = @import("./descriptor.zig").Descriptor;
 
 pub fn Display(comptime num_frames: comptime_int) type {
     return struct {
         const Self = @This();
 
         swapchain: Swapchain,
-        storage_image: Image,
         frames: [num_frames]Frame,
+        fences: [num_frames]vk.Fence,
         frame_index: u8,
+
+        storage_image: Image,
 
         extent: vk.Extent2D,
 
@@ -27,16 +30,22 @@ pub fn Display(comptime num_frames: comptime_int) type {
             errdefer storage_image.destroy(vc);
             
             var frames: [num_frames]Frame = undefined;
+            var fences: [num_frames]vk.Fence = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
                 frames[i] = try Frame.create(vc);
+                fences[i] = try vc.device.createFence(.{
+                    .flags = .{ .signaled_bit = true },
+                }, null);
             }
 
             return Self {
                 .swapchain = swapchain,
-                .storage_image = storage_image,
                 .frames = frames,
+                .fences = fences,
                 .frame_index = 0,
+
+                .storage_image = storage_image,
 
                 .extent = extent,
             };
@@ -48,16 +57,23 @@ pub fn Display(comptime num_frames: comptime_int) type {
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
                 self.frames[i].destroy(vc);
+                vc.device.destroyFence(self.fences[i], null);
             }
         }
 
-        // todo: change this to sync2
-        pub fn startFrame(self: *Self, vc: *const VulkanContext) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames)) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
+            const fence = self.fences[self.frame_index];
 
-            _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
-            try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
-            try self.swapchain.acquireNextImage(vc, frame.image_acquired);
+            _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &fence), vk.TRUE, std.math.maxInt(u64));
+            try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &fence));
+
+            // we can optionally handle swapchain recreation on suboptimal here,
+            // but I think for some reason it's better to just do it after presentation
+            _ = self.swapchain.acquireNextImage(vc, frame.image_acquired) catch |err| switch (err) {
+                error.OutOfDateKHR => try self.recreateSwapchain(vc, allocator, window, descriptor),
+                else => return err,
+            };
 
             try vc.device.resetCommandPool(frame.command_pool, .{});
             try vc.device.beginCommandBuffer(frame.command_buffer, .{
@@ -68,22 +84,63 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext) !void {
+        pub fn recreateSwapchain(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames)) !void {
+            var new_extent = window.getExtent();
+            try self.swapchain.recreate(vc, allocator, &new_extent);
+            if (!std.meta.eql(new_extent, self.extent)) {
+                try self.waitForAllFences(vc);
+                self.extent = new_extent;
+                self.storage_image.destroy(vc);
+                self.storage_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true });
+                descriptor.write(vc, 0, vk.DescriptorImageInfo {
+                    .sampler = .null_handle,
+                    .image_view = self.storage_image.view,
+                    .image_layout = vk.ImageLayout.general,
+                });
+            }
+        }
+
+        pub fn waitForAllFences(self: *Self, vc: *const VulkanContext) !void {
+            _ = try vc.device.waitForFences(self.fences.len, &self.fences, vk.TRUE, std.math.maxInt(u64));
+        }
+
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames)) !void {
             const frame = self.frames[self.frame_index];
+            const fence = self.fences[self.frame_index];
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
-            try vc.device.queueSubmit(vc.compute_queue, 1, &[_]vk.SubmitInfo { .{
-                .wait_semaphore_count = 1,
-                .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &frame.image_acquired),
-                .p_wait_dst_stage_mask = &[_]vk.PipelineStageFlags{.{ .color_attachment_output_bit = true }},
-                .command_buffer_count = 1,
-                .p_command_buffers = @ptrCast([*]const vk.CommandBuffer, &frame.command_buffer),
-                .signal_semaphore_count = 1,
-                .p_signal_semaphores = @ptrCast([*]const vk.Semaphore, &frame.command_completed),
-            }}, frame.fence);
+            try vc.device.queueSubmit2KHR(vc.compute_queue, 1, &[_]vk.SubmitInfo2KHR { .{
+                .flags = .{},
+                .wait_semaphore_info_count = 1,
+                .p_wait_semaphore_infos = @ptrCast([*]const vk.SemaphoreSubmitInfoKHR, &vk.SemaphoreSubmitInfoKHR{
+                    .semaphore = frame.image_acquired,
+                    .value = 0,
+                    .stage_mask = .{ .color_attachment_output_bit_khr = true },
+                    .device_index = 0,
+                }),
+                .command_buffer_info_count = 1,
+                .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                    .command_buffer = frame.command_buffer,
+                    .device_mask = 0,
+                }),
+                .signal_semaphore_info_count = 1,
+                .p_signal_semaphore_infos = @ptrCast([*]const vk.SemaphoreSubmitInfoKHR, &vk.SemaphoreSubmitInfoKHR {
+                    .semaphore = frame.command_completed,
+                    .value = 0,
+                    .stage_mask =  .{ .color_attachment_output_bit_khr = true },
+                    .device_index = 0,
+                }),
+            }}, fence);
 
-            try self.swapchain.present(vc, vc.present_queue, frame.command_completed);
+            const present_result = self.swapchain.present(vc, vc.present_queue, frame.command_completed) catch |err| switch (err) {
+                error.OutOfDateKHR => vk.Result.suboptimal_khr,
+                else => return err,
+            };
+
+            if (present_result == .suboptimal_khr) {
+                try self.recreateSwapchain(vc, allocator, window, descriptor);
+            }
 
             self.frame_index = (self.frame_index + 1) % num_frames;
         }
@@ -91,7 +148,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
         const Frame = struct {
             image_acquired: vk.Semaphore,
             command_completed: vk.Semaphore,
-            fence: vk.Fence,
             command_pool: vk.CommandPool,
             command_buffer: vk.CommandBuffer,
 
@@ -105,11 +161,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .flags = .{},
                 }, null);
                 errdefer vc.device.destroySemaphore(command_completed, null);
-
-                const fence = try vc.device.createFence(.{
-                    .flags = .{ .signaled_bit = true },
-                }, null);
-                errdefer vc.device.destroyFence(fence, null);
 
                 const command_pool = try vc.device.createCommandPool(.{
                     .queue_family_index = vc.physical_device.queue_families.compute,
@@ -127,7 +178,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 return Frame {
                     .image_acquired = image_acquired,
                     .command_completed = command_completed,
-                    .fence = fence,
 
                     .command_pool = command_pool,
                     .command_buffer = command_buffer,
@@ -137,7 +187,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
             fn destroy(self: *Frame, vc: *const VulkanContext) void {
                 vc.device.destroySemaphore(self.image_acquired, null);
                 vc.device.destroySemaphore(self.command_completed, null);
-                vc.device.destroyFence(self.fence, null);
                 vc.device.destroyCommandPool(self.command_pool, null);
             }
         };
