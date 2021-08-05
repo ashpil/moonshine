@@ -73,7 +73,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
     vc.device.destroyImageView(self.view, null);
     vc.device.destroyImage(self.handle, null);
     vc.device.freeMemory(self.memory, null);

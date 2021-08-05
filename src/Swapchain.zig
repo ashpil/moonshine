@@ -45,10 +45,6 @@ fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
-    if (old_handle != .null_handle) {
-        vc.device.destroySwapchainKHR(old_handle, null);
-    }
-
     var image_count: u32 = 0;
     _ = try vc.device.getSwapchainImagesKHR(handle, &image_count, null);
     var images = try allocator.alloc(vk.Image, image_count);
@@ -68,6 +64,7 @@ fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent
     };
 }
 
+// assumes old handle destruction is handled
 pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !void {
     for (self.images) |image| {
         image.destroy(vc);

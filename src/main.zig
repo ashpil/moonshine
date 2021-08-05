@@ -61,7 +61,7 @@ pub fn main() !void {
     while (!window.shouldClose()) {
         const buffer = try display.startFrame(&context, allocator, &window, &sets);
         try RenderCommands(frame_count).record(&context, buffer, &pipeline, &display, &sets.sets);
-        try display.endFrame(&context, allocator, &window, &sets);
+        try display.endFrame(&context, allocator, &window);
         window.pollEvents();
     }
 
