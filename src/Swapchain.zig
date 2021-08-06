@@ -20,10 +20,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *
 fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
     const settings = try SwapSettings.find(vc, allocator, extent);
 
-    const queue_family_indices = if (settings.image_sharing_mode == .exclusive)
-        (&[_]u32{ vc.physical_device.queue_families.compute })
-    else
-        (&[_]u32{ vc.physical_device.queue_families.compute, vc.physical_device.queue_families.present });
+    const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
     const handle = try vc.device.createSwapchainKHR(.{
         .flags = .{},
@@ -36,7 +33,7 @@ fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
         .queue_family_index_count = @intCast(u32, queue_family_indices.len),
-        .p_queue_family_indices = queue_family_indices.ptr,
+        .p_queue_family_indices = &queue_family_indices,
         .pre_transform = settings.pre_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = settings.present_mode,
@@ -156,7 +153,7 @@ const SwapSettings = struct {
             .format = try findFormat(vc, allocator),
             .present_mode = try findPresentMode(vc, allocator),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else std.math.min(caps.min_image_count + 1, caps.max_image_count),
-            .image_sharing_mode = vc.physical_device.queue_families.sharingMode(),
+            .image_sharing_mode = .exclusive,
             .pre_transform = caps.current_transform,
         };
     }

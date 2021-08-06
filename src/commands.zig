@@ -180,7 +180,7 @@ pub const ComputeCommands = struct {
 
     pub fn create(vc: *const VulkanContext) !ComputeCommands {
         const pool = try vc.device.createCommandPool(.{
-            .queue_family_index = vc.physical_device.queue_families.compute,
+            .queue_family_index = vc.physical_device.queue_family_index,
             .flags = .{},
         }, null);
         errdefer vc.device.destroyCommandPool(pool, null);
@@ -228,8 +228,8 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.compute_queue);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
     
@@ -273,8 +273,8 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.compute_queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.compute_queue);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
 };

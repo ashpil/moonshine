@@ -246,8 +246,7 @@ surface: vk.SurfaceKHR,
 
 debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
-compute_queue: vk.Queue,
-present_queue: vk.Queue,
+queue: vk.Queue,
 
 const Self = @This();
 
@@ -268,8 +267,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
     errdefer device.destroyDevice(null);
 
     // not sure what best abstraction for queues is yet
-    const compute_queue = device.getDeviceQueue(physical_device.queue_families.compute, 0);
-    const present_queue = device.getDeviceQueue(physical_device.queue_families.present, 0);
+    const queue = device.getDeviceQueue(physical_device.queue_family_index, 0);
 
     return Self {
         .base = base,
@@ -279,8 +277,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
         .device = device,
         .physical_device = physical_device,
 
-        .compute_queue = compute_queue,
-        .present_queue = present_queue,
+        .queue = queue,
     };
 }
 
@@ -302,41 +299,28 @@ const device_extensions = [_][*:0]const u8{
 
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
-    queue_families: QueueFamilies,
+    queue_family_index: u32,
     mem_properties: vk.PhysicalDeviceMemoryProperties,
 
-    const QueueFamilies = struct {
-        compute: u32,
-        present: u32,
+    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !u32 {
+        var family_count: u32 = 0;
+        instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, null);
 
-        fn find(instance: Instance, device: vk.PhysicalDevice, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !QueueFamilies {
-            var compute: ?u32 = null;
-            var present: ?u32 = null;
+        const families = try allocator.alloc(vk.QueueFamilyProperties, family_count);
+        defer allocator.free(families);
+        instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, families.ptr);
 
-            var family_count: u32 = 0;
-            instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, null);
-
-            const families = try allocator.alloc(vk.QueueFamilyProperties, family_count);
-            defer allocator.free(families);
-
-            instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, families.ptr);
-
-            return for (families) |family, i| {
-                const index = @intCast(u32, i);
-                if (compute == null and family.queue_flags.compute_bit) compute = index;
-                if (present == null and ((try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE)) present = index;
-
-                if (compute != null and present != null) break QueueFamilies {
-                    .compute = compute.?,
-                    .present = present.?,
-                };
-            } else VulkanContextError.UnavailableQueues;
+        var ideal_family: ?u32 = null;
+        for (families) |family, i| {
+            const index = @intCast(u32, i);
+            if (family.queue_flags.compute_bit and (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE) ideal_family = index;
+            if (!family.queue_flags.graphics_bit) break;
         }
 
-        pub fn sharingMode(self: *const QueueFamilies) vk.SharingMode {
-            return if (self.compute == self.present) .exclusive else .concurrent;
-        }
-    };
+        if (ideal_family) |index| {
+            return index;
+        } else return VulkanContextError.UnavailableQueues;
+    }
 
     fn pick(instance: Instance, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !PhysicalDevice {
         var device_count: u32 = 0;
@@ -348,11 +332,11 @@ const PhysicalDevice = struct {
         _ = try instance.enumeratePhysicalDevices(&device_count, devices.ptr);
         return for (devices) |device| {
             if (try PhysicalDevice.isDeviceSuitable(instance, device, allocator, surface)) {
-                if (QueueFamilies.find(instance, device, allocator, surface)) |queue_families| {
+                if (pickQueueFamily(instance, device, allocator, surface)) |index| {
                     const mem_properties = instance.getPhysicalDeviceMemoryProperties(device);
                     break PhysicalDevice {
                         .handle = device,
-                        .queue_families = queue_families,
+                        .queue_family_index = index,
                         .mem_properties = mem_properties,
                     };
                 } else |err| return err;
@@ -399,31 +383,14 @@ const PhysicalDevice = struct {
 
     fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance) !Device {
         const priority = [_]f32{1.0};
-        const queue_create_infos = if (self.queue_families.compute == self.queue_families.present) (
-            &[_]vk.DeviceQueueCreateInfo{
-                .{
-                    .queue_family_index = self.queue_families.compute,
-                    .queue_count = 1,
-                    .p_queue_priorities = &priority,
-                    .flags = .{},
-                }
+        const queue_create_info = [_]vk.DeviceQueueCreateInfo{
+            .{
+                .queue_family_index = self.queue_family_index,
+                .queue_count = 1,
+                .p_queue_priorities = &priority,
+                .flags = .{},
             }
-        ) else (
-            &[_]vk.DeviceQueueCreateInfo{
-                .{
-                    .queue_family_index = self.queue_families.compute,
-                    .queue_count = 1,
-                    .p_queue_priorities = &priority,
-                    .flags = .{},
-                },
-                .{
-                    .queue_family_index = self.queue_families.present,
-                    .queue_count = 1,
-                    .p_queue_priorities = &priority,
-                    .flags = .{},
-                }
-            }
-        );
+        };
 
         var sync2_features = vk.PhysicalDeviceSynchronization2FeaturesKHR {
             .synchronization_2 = vk.TRUE,
@@ -449,8 +416,8 @@ const PhysicalDevice = struct {
             instance.dispatch.vkGetDeviceProcAddr,
             self.handle,
             .{
-                .queue_create_info_count = @intCast(u32, queue_create_infos.len),
-                .p_queue_create_infos = queue_create_infos.ptr,
+                .queue_create_info_count = queue_create_info.len,
+                .p_queue_create_infos = &queue_create_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
                 .enabled_extension_count = device_extensions.len,

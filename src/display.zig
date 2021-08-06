@@ -111,7 +111,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
-            try vc.device.queueSubmit2KHR(vc.compute_queue, 1, &[_]vk.SubmitInfo2KHR { .{
+            try vc.device.queueSubmit2KHR(vc.queue, 1, &[_]vk.SubmitInfo2KHR { .{
                 .flags = .{},
                 .wait_semaphore_info_count = 1,
                 .p_wait_semaphore_infos = @ptrCast([*]const vk.SemaphoreSubmitInfoKHR, &vk.SemaphoreSubmitInfoKHR{
@@ -134,7 +134,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 }),
             }}, frame.fence);
 
-            const present_result = self.swapchain.present(vc, vc.present_queue, frame.command_completed) catch |err| switch (err) {
+            const present_result = self.swapchain.present(vc, vc.queue, frame.command_completed) catch |err| switch (err) {
                 error.OutOfDateKHR => vk.Result.suboptimal_khr,
                 else => return err,
             };
@@ -172,7 +172,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 }, null);
 
                 const command_pool = try vc.device.createCommandPool(.{
-                    .queue_family_index = vc.physical_device.queue_families.compute,
+                    .queue_family_index = vc.physical_device.queue_family_index,
                     .flags = .{ .transient_bit = true },
                 }, null);
                 errdefer vc.device.destroyCommandPool(command_pool, null);
