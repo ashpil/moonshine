@@ -141,7 +141,7 @@ const debug_instance_cmds = instance_cmds ++ [_]vk.InstanceCommand {
 
 const Instance = vk.InstanceWrapper(if (validate) debug_instance_cmds else instance_cmds);
 
-const Device = vk.DeviceWrapper(.{
+const device_commands = [_]vk.DeviceCommand {
     .GetDeviceQueue,
     .GetSwapchainImagesKHR,
     .CreateSwapchainKHR,
@@ -204,7 +204,13 @@ const Device = vk.DeviceWrapper(.{
     .ResetFences,
     .QueueSubmit2KHR,
     .AcquireNextImage2KHR,
-});
+};
+
+const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {
+    .SetDebugUtilsObjectNameEXT,
+};
+
+const Device = vk.DeviceWrapper(if (validate) debug_device_commands else device_commands);
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,
@@ -422,7 +428,9 @@ const PhysicalDevice = struct {
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
                 .enabled_extension_count = device_extensions.len,
                 .pp_enabled_extension_names = &device_extensions,
-                .p_enabled_features = null,
+                .p_enabled_features = &.{
+                    .shader_int_64 = vk.TRUE,
+                },
                 .flags = .{},
                 .p_next = &device_features,
             },

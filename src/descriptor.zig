@@ -4,6 +4,7 @@ const VulkanContext = @import("./VulkanContext.zig");
 
 fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
     return switch (in) {
+        vk.DescriptorBufferInfo => .storage_buffer,
         vk.AccelerationStructureKHR => .acceleration_structure_khr,
         vk.DescriptorImageInfo => .storage_image,
         else => @compileError("Unknown input type: " ++ @typeName(in)),
@@ -16,6 +17,10 @@ fn isImageWrite(comptime in: type) bool {
 
 fn isAccelWrite(comptime in: type) bool {
     return in == vk.AccelerationStructureKHR;
+}
+
+fn isBufferWrite(comptime in: type) bool {
+    return in == vk.DescriptorBufferInfo;
 }
 
 pub fn Descriptor(comptime set_count: comptime_int) type {
@@ -111,6 +116,8 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                         };
                     } else if (isImageWrite(@TypeOf(writes[j]))) {
                         descriptor_writes[i+j].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &writes[j]);
+                    } else if (isBufferWrite(@TypeOf(writes[j]))) {
+                        descriptor_writes[i+j].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &writes[j]);
                     }
                 }
             }

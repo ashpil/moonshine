@@ -39,19 +39,27 @@ pub fn main() !void {
     defer transfer_commands.destroy(&context);
 
     var scene = try Scene.create(&context, allocator, &transfer_commands);
-    defer scene.destroy(&context, allocator);
+    defer scene.destroy(&context);
 
     const image_info = vk.DescriptorImageInfo {
         .sampler = .null_handle,
         .image_view = display.storage_image.view,
         .image_layout = vk.ImageLayout.general,
     };
+
+    const buffer_info = vk.DescriptorBufferInfo {
+        .range = vk.WHOLE_SIZE,
+        .offset = 0,
+        .buffer = scene.meshes.mesh_info,
+    };
     var sets = try Descriptor(frame_count).create(&context, .{
         vk.ShaderStageFlags { .raygen_bit_khr = true },
         vk.ShaderStageFlags { .raygen_bit_khr = true },
+        vk.ShaderStageFlags { .closest_hit_bit_khr = true },
     }, .{
         image_info,
         scene.tlas.handle,
+        buffer_info,
     });
     defer sets.destroy(&context);
 

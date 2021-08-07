@@ -42,3 +42,20 @@ pub fn findMemoryType(vc: *const VulkanContext, type_filter: u32, properties: vk
 
     return Error.UnavailbleMemoryType;
 }
+
+fn typeToObjectType(comptime in: type) vk.ObjectType {
+    return switch(in) {
+        vk.DescriptorSetLayout => .descriptor_set_layout,
+        else => unreachable, // TODO: add more
+    };
+}
+
+pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const u8) !void {
+    if (comptime @import("builtin").mode == std.builtin.Mode.Debug) {
+        try vc.device.setDebugUtilsObjectNameEXT(.{
+            .object_type = comptime typeToObjectType(@TypeOf(object)),
+            .object_handle = @bitCast(u64, object),
+            .p_object_name = name,
+        });
+    }
+}

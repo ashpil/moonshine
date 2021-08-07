@@ -1,21 +1,17 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const Object = @import("./Object.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
 
-const Meshes = @import("./Mesh.zig");
-const BottomLevelAccels = @import("./acceleration_structure.zig").BottomLevelAccels;
-const TopLevelAccel = @import("./acceleration_structure.zig").TopLevelAccel;
+const Meshes = @import("./mesh.zig").Meshes(object_count);
+const Accels = @import("./accels.zig").Accels(object_count);
+const BottomLevelAccels = Accels.BottomLevelAccels;
+const TopLevelAccel = Accels.TopLevelAccel;
 
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 
-const Vec3 = @import("./zug.zig").Vec3(f32);
-
-const vertices = [_]Vec3 {
-    Vec3.new(0.25, 0.25, 0.0),
-    Vec3.new(0.75, 0.25, 0.0),
-    Vec3.new(0.50, 0.75, 0.0),
-};
+const object_count = 2;
 
 meshes: Meshes,
 blases: BottomLevelAccels,
@@ -24,23 +20,44 @@ tlas: TopLevelAccel,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands) !Self {
-    var meshes = try Meshes.createOne(vc, allocator, commands, &vertices);
-    errdefer meshes.destroy(vc, allocator);
 
-    const geometry = try meshes.getGeometries(vc, allocator, &.{ vertices.len });
-    defer allocator.free(geometry);
+    const cube_obj = @embedFile("../assets/cube.obj");
+    var cube = try Object.fromObj(allocator, cube_obj);
+    defer cube.destroy(allocator);
 
-    const build_infos = [_]*const vk.AccelerationStructureBuildRangeInfoKHR {
-        &.{
-            .primitive_count = 1,
-            .primitive_offset = 0,
-            .transform_offset = 0,
-            .first_vertex = 0,
-        },
+    const pawn_obj = @embedFile("../assets/pawn.obj");
+    var pawn = try Object.fromObj(allocator, pawn_obj);
+    defer pawn.destroy(allocator);
+
+    const objects = [object_count]Object {
+        cube,
+        pawn,
     };
 
-    var blases = try BottomLevelAccels.create(vc, allocator, commands, geometry, &build_infos);
-    errdefer blases.destroy(vc, allocator);
+    var geometries: [object_count]vk.AccelerationStructureGeometryKHR = undefined;
+    var build_infos: [object_count]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
+    var build_infos_ref: [object_count]*const vk.AccelerationStructureBuildRangeInfoKHR = undefined;
+    comptime var i = 0;
+    comptime while (i < object_count) : (i += 1) {
+        build_infos_ref[i] = &build_infos[i];
+    };
+    var meshes = try Meshes.create(vc, commands, &objects, &geometries, &build_infos);
+    errdefer meshes.destroy(vc);
+
+    const matrices = [object_count][3][4]f32 {
+        .{
+            .{3.0, 0.0, 0.0, 0.0},
+            .{0.0, 0.5, 0.0, -1.0},
+            .{0.0, 0.0, 3.0, 0.0},
+        },
+        .{
+            .{0.8, 0.0, 0.0, 0.0},
+            .{0.0, 0.8, 0.0, 0.0},
+            .{0.0, 0.0, 0.8, 0.0},
+        },
+    };
+    var blases = try BottomLevelAccels.create(vc, commands, &geometries, &build_infos_ref, &matrices);
+    errdefer blases.destroy(vc);
 
     var tlas = try TopLevelAccel.create(vc, commands, &blases);
     errdefer tlas.destroy(vc);
@@ -52,8 +69,8 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
-    self.meshes.destroy(vc, allocator);
-    self.blases.destroy(vc, allocator);
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+    self.meshes.destroy(vc);
+    self.blases.destroy(vc);
     self.tlas.destroy(vc);
 }
