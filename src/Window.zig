@@ -1,6 +1,8 @@
 const c = @import("./c.zig");
 const vk = @import("vulkan");
 
+const Engine = @import("./Engine.zig");
+
 const Error = error {
     InitFail,
     WindowCreateFail,
@@ -30,11 +32,11 @@ pub fn shouldClose(self: *const Self) bool {
     return c.glfwWindowShouldClose(self.handle) == c.GLFW_TRUE;
 }
 
-pub fn setUserPointer(self: *const Self, ptr: *c_void) void {
+pub fn setEngine(self: *const Self, ptr: *Engine) void {
     c.glfwSetWindowUserPointer(self.handle, ptr);
 }
 
-pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D, *c_void) void) void {
+pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D, *Engine) void) void {
     const Callback = struct {
         fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
             const extent = vk.Extent2D {
@@ -58,7 +60,7 @@ pub const Action = enum(c_int) {
     repeat = 2,
 };
 
-pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, *c_void) void) void {
+pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, *Engine) void) void {
     const Callback = struct {
         fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
             _ = scancode;
@@ -68,7 +70,8 @@ pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32
                 .handle = handle.?,
             };
             const ptr = c.glfwGetWindowUserPointer(window.handle).?;
-            callback(&window, @intCast(u32, key), @intToEnum(Action, action), ptr);
+            const engine = @ptrCast(*Engine, @alignCast(@alignOf(Engine), ptr));
+            callback(&window, @intCast(u32, key), @intToEnum(Action, action), engine);
         }
     };
     _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);

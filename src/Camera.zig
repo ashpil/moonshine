@@ -52,5 +52,5 @@ pub fn new(create_info: CreateInfo) Self {
 
 pub fn push(self: *const Self, vc: *const VulkanContext, buffer: vk.CommandBuffer, layout: vk.PipelineLayout) void {
     const bytes = std.mem.asBytes(&self.push_info);
-    vc.device.cmdPushConstants(buffer, layout, .{ .raygen_bit_khr = true}, 0, bytes.len, bytes);
+    vc.device.cmdPushConstants(buffer, layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 }

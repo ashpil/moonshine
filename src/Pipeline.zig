@@ -86,7 +86,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
 
     const push_constant_range = vk.PushConstantRange {
         .offset = 0,
-        .size = @sizeOf(CameraSize),
+        .size = @sizeOf(CameraSize) + @sizeOf(u32),
         .stage_flags = .{ .raygen_bit_khr = true },
     };
 

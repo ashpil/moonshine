@@ -3,11 +3,15 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_scalar_block_layout : require
 
-layout(binding = 0, set = 0, rgba32f) uniform image2D image;
-layout(binding = 1, set = 0) uniform accelerationStructureEXT TLAS;
+layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
+layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
+layout(binding = 2, set = 0) uniform accelerationStructureEXT TLAS;
 
 layout(location = 0) rayPayloadEXT struct hitPayload {
-    vec3 color;
+    vec3 attenuation;
+    vec3 point;
+    vec3 normal;
+    bool done;
 } payload;
 
 struct Camera {
@@ -19,18 +23,80 @@ struct Camera {
 
 layout(push_constant, scalar) uniform cam {
     Camera camera;
+    uint sampleCount;
 };
 
 vec3 generateDir(Camera camera, vec2 uv) {
     return camera.lower_left_corner + uv.x * camera.horizontal + uv.y * camera.vertical - camera.origin;
 }
 
+uint stepRNG(uint rngState) {
+    return rngState * 747796405 + 1;
+}
+
+float stepAndOutputRNGFloat(inout uint rngState) {
+    rngState  = stepRNG(rngState);
+    uint word = ((rngState >> ((rngState >> 28) + 4)) ^ rngState) * 277803737;
+    word = (word >> 22) ^ word;
+    return float(word) / 4294967295.0;
+}
+
+const float PI = 3.14159265;
+
+vec3 randomDirection(inout uint rngState) {
+    const float theta = 2 * PI * stepAndOutputRNGFloat(rngState);
+    const float u = 2.0 * stepAndOutputRNGFloat(rngState) - 1.0;
+    const float r = sqrt(1.0 - u * u);
+    return vec3(r * cos(theta), r * sin(theta), u);
+}
+
+vec2 randomGaussian(inout uint rngState) {
+    const float u1 = max(1e-38, stepAndOutputRNGFloat(rngState));
+    const float u2 = stepAndOutputRNGFloat(rngState);
+    const float r = sqrt(-2.0 * log(u1));
+    const float theta = 2 * PI * u2;
+    return r * vec2(cos(theta), sin(theta));
+}
+
 void main() {
+    uint rngState = (sampleCount + 1) * gl_LaunchSizeEXT.x * gl_LaunchIDEXT.x + gl_LaunchIDEXT.y;
     // camera stuff
-    vec2 uv = vec2(gl_LaunchIDEXT.xy) / vec2(gl_LaunchSizeEXT.xy);
+    vec2 randomCenter = vec2(0.5) + 0.25 * randomGaussian(rngState);
+    vec2 uv = (vec2(gl_LaunchIDEXT.xy) + randomCenter) / vec2(gl_LaunchSizeEXT.xy);
     uv.y -= 1;
     uv.y *= -1;
-    vec3 direction = generateDir(camera, uv);
-    traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, camera.origin, 0.001, direction, 10000.0, 0);
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
+
+    vec3 origin = camera.origin;
+    vec3 direction = normalize(generateDir(camera, uv));
+
+    vec3 accumulatedColor = vec3(1.0);
+
+    const int MAX_BOUNCES = 32;
+    for (int bounceCount = 0; bounceCount < MAX_BOUNCES; bounceCount++) {
+        if (bounceCount == MAX_BOUNCES) {
+            accumulatedColor = vec3(0.0);
+            break;
+        }
+        traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, origin, 0.0001, direction, 10000.0, 0);
+
+        accumulatedColor *= payload.attenuation;
+
+        if (payload.done) {
+            break;
+        } else {
+            // Start a new segment
+            origin = payload.point;
+            vec3 normal = faceforward(payload.normal, direction, payload.normal);
+            direction = normalize(normal + randomDirection(rngState));
+        }
+    }
+    ivec2 imageCoords = ivec2(gl_LaunchIDEXT.xy);
+    vec3 previouslyAccumulated;
+    if (sampleCount == 0) {
+        previouslyAccumulated = vec3(0);
+    } else {
+        previouslyAccumulated = imageLoad(accumulationImage, imageCoords).rgb;
+    }
+    imageStore(accumulationImage, imageCoords, vec4(previouslyAccumulated + accumulatedColor, 1.0));
+    imageStore(displayImage, imageCoords, vec4((previouslyAccumulated + accumulatedColor) / (sampleCount + 1), 1.0));
 }

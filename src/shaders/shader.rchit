@@ -12,24 +12,26 @@ struct Instance {
 layout(buffer_reference, scalar) readonly buffer Indices { ivec3 i[]; };
 layout(buffer_reference, scalar) readonly buffer Vertices { vec3 v[]; };
 
-layout(binding = 2, set = 0) readonly buffer Instances { Instance instances[]; };
+layout(binding = 3, set = 0) readonly buffer Instances { Instance instances[]; };
 
 layout(location = 0) rayPayloadInEXT struct hitPayload {
-    vec3 color;
+    vec3 attenuation;
+    vec3 point;
+    vec3 normal;
+    bool done;
 } payload;
+
 hitAttributeEXT vec3 attribs;
 
 vec3 calculateNormal(vec3 barycentrics, vec3 v0, vec3 v1, vec3 v2) {
     vec3 normalObjectSpace = normalize(cross(v1 - v0, v2 - v0));
-    return gl_ObjectToWorldEXT * vec4(normalObjectSpace, 0.0);
+    return normalize(gl_ObjectToWorldEXT * vec4(normalObjectSpace, 0.0));
 }
 
 vec3 calculateHitPoint(vec3 barycentrics, vec3 v0, vec3 v1, vec3 v2) {
     vec3 hitObjectSpace = barycentrics.x * v0 + barycentrics.y * v1 + barycentrics.z * v2;
     return gl_ObjectToWorldEXT * vec4(hitObjectSpace, 1.0);
 }
-
-vec3 lightPosition = vec3(4.0, 8.0, 10.0);
 
 void main() {
     Instance instance = instances[gl_InstanceID];
@@ -44,11 +46,12 @@ void main() {
     vec3 normal = calculateNormal(barycentrics, v0, v1, v2);
     vec3 point = calculateHitPoint(barycentrics, v0, v1, v2);
 
-    vec3 lightDir = normalize(lightPosition - point);
-    float shade = dot(normal, lightDir);
     if (gl_InstanceID == 1) {
-        payload.color = vec3(shade * 0.61, shade * 0.34, shade * 0.07);
+        payload.attenuation = vec3(0.61, 0.34, 0.07);
     } else {
-        payload.color = vec3(0.0, shade * 0.6, shade * 0.09);
+        payload.attenuation = vec3(0.0, 0.6, 0.09);
     }
+    payload.point = point;
+    payload.normal = normal;
+    payload.done = false;
 }

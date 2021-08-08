@@ -39,7 +39,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = display.storage_image.handle,
+                    .image = display.display_image.handle,
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -83,7 +83,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = display.storage_image.handle,
+                    .image = display.display_image.handle,
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -138,7 +138,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(buffer, display.storage_image.handle, .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, @ptrCast([*]const vk.ImageBlit, &region), .nearest);
+            vc.device.cmdBlitImage(buffer, display.display_image.handle, .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, @ptrCast([*]const vk.ImageBlit, &region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
@@ -211,6 +211,64 @@ pub const ComputeCommands = struct {
             .p_inheritance_info = null,
         });
         vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_infos.len), geometry_infos.ptr, build_infos.ptr);
+        try vc.device.endCommandBuffer(self.buffer);
+
+        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
+        // because they should be individually optimized
+        const submit_info = vk.SubmitInfo2KHR {
+            .flags = .{},
+            .command_buffer_info_count = 1,
+            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                .command_buffer = self.buffer,
+                .device_mask = 0,
+            }),
+            .wait_semaphore_info_count = 0,
+            .p_wait_semaphore_infos = undefined,
+            .signal_semaphore_info_count = 0,
+            .p_signal_semaphore_infos = undefined,
+        };
+
+        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.queue);
+        try vc.device.resetCommandPool(self.pool, .{});
+    }
+
+    pub fn transitionImageLayout(self: *ComputeCommands, vc: *const VulkanContext, image: vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
+        try vc.device.beginCommandBuffer(self.buffer, .{
+            .flags = .{},
+            .p_inheritance_info = null,
+        });
+
+        const barriers = [_]vk.ImageMemoryBarrier2KHR {
+            .{
+                .src_stage_mask = .{},
+                .src_access_mask = .{},
+                .dst_stage_mask = .{},
+                .dst_access_mask = .{},
+                .old_layout = src_layout,
+                .new_layout = dst_layout,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = image,
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = 1,
+                },
+            }
+        };
+        vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+            .dependency_flags = .{},
+            .memory_barrier_count = 0,
+            .p_memory_barriers = undefined,
+            .buffer_memory_barrier_count = 0,
+            .p_buffer_memory_barriers = undefined,
+            .image_memory_barrier_count = barriers.len,
+            .p_image_memory_barriers = &barriers,
+        });
+
         try vc.device.endCommandBuffer(self.buffer);
 
         // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet

@@ -47,7 +47,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
     const matrices = [object_count][3][4]f32 {
         .{
             .{3.0, 0.0, 0.0, 0.0},
-            .{0.0, 0.5, 0.0, -1.0},
+            .{0.0, 0.5, 0.0, -0.8},
             .{0.0, 0.0, 3.0, 0.0},
         },
         .{

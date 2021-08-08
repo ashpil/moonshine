@@ -8,7 +8,6 @@ const Image = @import("./Image.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
 const Descriptor = @import("./descriptor.zig").Descriptor;
 const DestructionQueue = @import("./DestructionQueue.zig");
-const Camera = @import("./Camera.zig");
 
 pub fn Display(comptime num_frames: comptime_int) type {
     return struct {
@@ -18,7 +17,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         frame_index: u8,
 
         swapchain: Swapchain,
-        storage_image: Image,
+        display_image: Image,
+        accumulation_image: Image,
 
         extent: vk.Extent2D,
 
@@ -29,9 +29,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
 
-            var storage_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true });
-            errdefer storage_image.destroy(vc);
-            
+            var display_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true });
+            errdefer display_image.destroy(vc);
+
+            var accumulation_image = try Image.create(vc, extent, .{ .storage_bit = true });
+            errdefer accumulation_image.destroy(vc);
+
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -43,7 +46,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .frames = frames,
                 .frame_index = 0,
 
-                .storage_image = storage_image,
+                .display_image = display_image,
+                .accumulation_image = accumulation_image,
 
                 .extent = extent,
 
@@ -52,7 +56,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
-            self.storage_image.destroy(vc);
+            self.display_image.destroy(vc);
+            self.accumulation_image.destroy(vc);
             self.swapchain.destroy(vc, allocator);
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -61,7 +66,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames), camera: *Camera) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
@@ -70,7 +75,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
             if (frame.needs_rebind) {
                 descriptor.write(vc, 0, self.frame_index, vk.DescriptorImageInfo {
                     .sampler = .null_handle,
-                    .image_view = self.storage_image.view,
+                    .image_view = self.display_image.view,
+                    .image_layout = vk.ImageLayout.general,
+                });
+                descriptor.write(vc, 1, self.frame_index, vk.DescriptorImageInfo {
+                    .sampler = .null_handle,
+                    .image_view = self.accumulation_image.view,
                     .image_layout = vk.ImageLayout.general,
                 });
                 self.frames[self.frame_index].needs_rebind = false;
@@ -79,7 +89,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             // we can optionally handle swapchain recreation on suboptimal here,
             // but I think for some reason it's better to just do it after presentation
             _ = self.swapchain.acquireNextImage(vc, frame.image_acquired) catch |err| switch (err) {
-                error.OutOfDateKHR => try self.recreate(vc, allocator, window, camera),
+                error.OutOfDateKHR => try self.recreate(vc, allocator, window, resized),
                 else => return err,
             };
 
@@ -92,17 +102,20 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, camera: *Camera) !void {
+        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, resized: *bool) !void {
             var new_extent = window.getExtent();
             try self.destruction_queue.add(allocator, self.swapchain.handle);
             try self.swapchain.recreate(vc, allocator, &new_extent);
             if (!std.meta.eql(new_extent, self.extent)) {
+                resized.* = true;
                 self.extent = new_extent;
-                var camera_create_info = camera.create_info;
-                camera_create_info.extent = self.extent;
-                camera.* = Camera.new(camera_create_info);
-                try self.destruction_queue.add(allocator, self.storage_image);
-                self.storage_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true });
+
+                try self.destruction_queue.add(allocator, self.display_image);
+                self.display_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true });
+
+                try self.destruction_queue.add(allocator, self.accumulation_image);
+                self.accumulation_image = try Image.create(vc, self.extent, .{ .storage_bit = true });
+
                 comptime var i = 0;
                 inline while (i < num_frames) : (i += 1) {
                     self.frames[i].needs_rebind = true;
@@ -110,7 +123,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             }
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, camera: *Camera) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, resized: *bool) !void {
             const frame = self.frames[self.frame_index];
 
             try vc.device.endCommandBuffer(frame.command_buffer);
@@ -144,7 +157,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
 
             if (present_result == .suboptimal_khr) {
-                try self.recreate(vc, allocator, window, camera);
+                try self.recreate(vc, allocator, window, resized);
             }
 
             self.frame_index = (self.frame_index + 1) % num_frames;
