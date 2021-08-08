@@ -204,6 +204,7 @@ const device_commands = [_]vk.DeviceCommand {
     .ResetFences,
     .QueueSubmit2KHR,
     .AcquireNextImage2KHR,
+    .CmdPushConstants,
 };
 
 const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {
@@ -415,6 +416,7 @@ const PhysicalDevice = struct {
         const device_features = vk.PhysicalDeviceVulkan12Features {
             .p_next = &ray_tracing_pipeline_features,
             .buffer_device_address = vk.TRUE,
+            .scalar_block_layout = vk.TRUE,
         };
 
         return try instance.createDevice(

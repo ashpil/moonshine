@@ -30,6 +30,50 @@ pub fn shouldClose(self: *const Self) bool {
     return c.glfwWindowShouldClose(self.handle) == c.GLFW_TRUE;
 }
 
+pub fn setUserPointer(self: *const Self, ptr: *c_void) void {
+    c.glfwSetWindowUserPointer(self.handle, ptr);
+}
+
+pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D, *c_void) void) void {
+    const Callback = struct {
+        fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
+            const extent = vk.Extent2D {
+                .width = @intCast(u32, width),
+                .height = @intCast(u32, height),
+            };
+            const window = Self {
+                .handle = handle.?,
+            };
+            const ptr = c.glfwGetWindowUserPointer(window.handle).?;
+
+            callback(&window, extent, ptr);
+        }
+    };
+    _ = c.glfwSetFramebufferSizeCallback(self.handle, Callback.resizeCallback);
+}
+
+pub const Action = enum(c_int) {
+    release = 0,
+    press = 1,
+    repeat = 2,
+};
+
+pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, *c_void) void) void {
+    const Callback = struct {
+        fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
+            _ = scancode;
+            _ = mods;
+            
+            const window = Self {
+                .handle = handle.?,
+            };
+            const ptr = c.glfwGetWindowUserPointer(window.handle).?;
+            callback(&window, @intCast(u32, key), @intToEnum(Action, action), ptr);
+        }
+    };
+    _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);
+}
+
 pub fn pollEvents(self: *const Self) void {
     _ = self; // just ensure we're initialized
     c.glfwPollEvents();

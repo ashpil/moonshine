@@ -8,6 +8,7 @@ const Image = @import("./Image.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
 const Descriptor = @import("./descriptor.zig").Descriptor;
 const DestructionQueue = @import("./DestructionQueue.zig");
+const Camera = @import("./Camera.zig");
 
 pub fn Display(comptime num_frames: comptime_int) type {
     return struct {
@@ -60,7 +61,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames)) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, descriptor: *Descriptor(num_frames), camera: *Camera) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
@@ -78,7 +79,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             // we can optionally handle swapchain recreation on suboptimal here,
             // but I think for some reason it's better to just do it after presentation
             _ = self.swapchain.acquireNextImage(vc, frame.image_acquired) catch |err| switch (err) {
-                error.OutOfDateKHR => try self.recreateSwapchain(vc, allocator, window),
+                error.OutOfDateKHR => try self.recreate(vc, allocator, window, camera),
                 else => return err,
             };
 
@@ -91,12 +92,15 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreateSwapchain(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window) !void {
+        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, camera: *Camera) !void {
             var new_extent = window.getExtent();
             try self.destruction_queue.add(allocator, self.swapchain.handle);
             try self.swapchain.recreate(vc, allocator, &new_extent);
             if (!std.meta.eql(new_extent, self.extent)) {
                 self.extent = new_extent;
+                var camera_create_info = camera.create_info;
+                camera_create_info.extent = self.extent;
+                camera.* = Camera.new(camera_create_info);
                 try self.destruction_queue.add(allocator, self.storage_image);
                 self.storage_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true });
                 comptime var i = 0;
@@ -106,7 +110,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             }
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, window: *const Window, camera: *Camera) !void {
             const frame = self.frames[self.frame_index];
 
             try vc.device.endCommandBuffer(frame.command_buffer);
@@ -140,7 +144,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
 
             if (present_result == .suboptimal_khr) {
-                try self.recreateSwapchain(vc, allocator, window);
+                try self.recreate(vc, allocator, window, camera);
             }
 
             self.frame_index = (self.frame_index + 1) % num_frames;

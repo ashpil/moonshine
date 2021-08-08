@@ -30,6 +30,8 @@ pub fn Vec2(comptime T: type) type {
 pub fn Vec3(comptime T: type) type {
     checkValidVecT(T);
 
+    const Vec4T = Vec4(T);
+
     return extern struct {
         x: T,
         y: T,
@@ -72,12 +74,20 @@ pub fn Vec3(comptime T: type) type {
             return Self.new(self.x - other.x, self.y - other.y, self.z - other.z);
         }
 
+        pub fn add(self: Self, other: Self) Self {
+            return Self.new(self.x + other.x, self.y + other.y, self.z + other.z);
+        }
+
         pub fn unit(self: Self) Self {
             return self.div_scalar(self.length());
         }
 
         pub fn length(self: Self) T {
             return math.sqrt(self.dot(self));
+        }
+
+        pub fn extend(self: Self, w: T) Vec4T {
+            return Vec4T.new(self.x, self.y, self.x, w);
         }
     };
 }
@@ -105,6 +115,21 @@ pub fn Vec4(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z, .w = w };
         }
 
+        pub fn dot(self: Self, other: Self) T {
+            return self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w;
+        }
+
+        pub fn sum(self: Self) T {
+            return self.x + self.y + self.z + self.w;
+        }
+
+        pub fn mul_scalar(self: Self, scalar: T) Self {
+            return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
+        }
+
+        pub fn add(self: Self, other: Self) Self {
+            return Self.new(self.x + other.x, self.y + other.y, self.z + other.z, self.w + other.w);
+        }
     };
 }
 
@@ -126,6 +151,21 @@ pub fn Mat4(comptime T: type) type {
 
         pub fn new(x: Vec4T, y: Vec4T, z: Vec4T, w: Vec4T) Self {
             return Self { .x = x, .y = y, .z = z, .w = w };
+        }
+
+        pub fn mul_point(self: Self, v: Vec3T) Vec3T {
+            var res = self.x.mul_scalar(v.x);
+            res = self.y.mul_scalar(v.y).add(res);
+            res = self.z.mul_scalar(v.z).add(res);
+            res = self.w.add(res);
+            return Vec3T.new(res.x, res.y, res.z);
+        }
+
+        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
+            var res = self.x.mul_scalar(v.x);
+            res = self.y.mul_scalar(v.y).add(res);
+            res = self.z.mul_scalar(v.z).add(res);
+            return Vec3T.new(x, y, z);
         }
 
         pub fn lookAt(eye: Vec3T, target: Vec3T, up: Vec3T) Self {

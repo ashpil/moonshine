@@ -1,5 +1,6 @@
 const VulkanContext = @import("./VulkanContext.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;
+const CameraSize = @import("./Camera.zig").PushInfo;
 const utils = @import("./utils.zig");
 
 const vk = @import("vulkan");
@@ -83,12 +84,18 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
     }).create(vc);
     defer shader_info.destroy(vc);
 
+    const push_constant_range = vk.PushConstantRange {
+        .offset = 0,
+        .size = @sizeOf(CameraSize),
+        .stage_flags = .{ .raygen_bit_khr = true },
+    };
+
     const layout = try vc.device.createPipelineLayout(.{
         .flags = .{},
         .set_layout_count = 1,
         .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_layout),
-        .push_constant_range_count = 0,
-        .p_push_constant_ranges = undefined,
+        .push_constant_range_count = 1,
+        .p_push_constant_ranges = @ptrCast([*]const vk.PushConstantRange, &push_constant_range),
     }, null);
     errdefer vc.device.destroyPipelineLayout(layout, null);
 

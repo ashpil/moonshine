@@ -1,6 +1,7 @@
 // minimal shader for testing
 #version 460
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
 
 layout(binding = 0, set = 0, rgba32f) uniform image2D image;
 layout(binding = 1, set = 0) uniform accelerationStructureEXT TLAS;
@@ -16,23 +17,9 @@ struct Camera {
     vec3 vertical;
 };
 
-Camera createCamera(vec3 lookfrom, vec3 lookat, vec3 vup, float vfov, float aspect_ratio) {
-    float h = tan(vfov / 2);
-    float viewport_height = 2.0 * h;
-    float viewport_width = aspect_ratio * viewport_height;
-
-    vec3 w = normalize(lookfrom - lookat);
-    vec3 u = normalize(cross(vup, w));
-    vec3 v = cross(w, u);
-
+layout(push_constant, scalar) uniform cam {
     Camera camera;
-    camera.origin = lookfrom;
-    camera.horizontal = viewport_width * u;
-    camera.vertical = viewport_height * v;
-    camera.lower_left_corner = camera.origin - camera.horizontal / 2 - camera.vertical / 2 - w;
-
-    return camera;
-}
+};
 
 vec3 generateDir(Camera camera, vec2 uv) {
     return camera.lower_left_corner + uv.x * camera.horizontal + uv.y * camera.vertical - camera.origin;
@@ -40,15 +27,10 @@ vec3 generateDir(Camera camera, vec2 uv) {
 
 void main() {
     // camera stuff
-    float aspect_ratio = float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
-
-    vec3 origin = vec3(7.0, 5.0, 7.0);
-
     vec2 uv = vec2(gl_LaunchIDEXT.xy) / vec2(gl_LaunchSizeEXT.xy);
     uv.y -= 1;
     uv.y *= -1;
-    Camera camera = createCamera(origin, vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 0.0), 0.8, aspect_ratio);
     vec3 direction = generateDir(camera, uv);
-    traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, origin, 0.001, direction, 10000.0, 0);
+    traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, camera.origin, 0.001, direction, 10000.0, 0);
     imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
 }
