@@ -9,6 +9,13 @@
 * Better memory/buffers
 * Create homebrew version of `std.MultiArrayList` that has len as a `u32`, as that's what a `DeviceSize` is
 
-# TODO:
+## Misc TODO:
 * better SBT
 * better build command for shaders
+
+## Some stuff I'd like to implement
+- [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
+- [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
+- [Multiple importance sampling](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)
+- [Microfacets](https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/)
+- [Better sky](https://sebh.github.io/publications/egsr2020.pdf)
