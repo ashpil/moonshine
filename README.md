@@ -3,7 +3,7 @@
 ### Build dependencies:
 * Zig
 * GLFW
-* glslangValidator on your path
+* glslc on your path
 
 ### Possible optimizations
 * Better memory/buffers
