@@ -2,17 +2,15 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.glsl"
 
 layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
 layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
 layout(binding = 2, set = 0) uniform accelerationStructureEXT TLAS;
 
-layout(location = 0) rayPayloadEXT struct hitPayload {
-    vec3 attenuation;
-    vec3 point;
-    vec3 normal;
-    bool done;
-} payload;
+layout(location = 0) rayPayloadEXT Payload payload;
 
 struct Camera {
     vec3 origin;
@@ -23,7 +21,7 @@ struct Camera {
 
 layout(push_constant, scalar) uniform cam {
     Camera camera;
-    uint sampleCount;
+    uint numAccumulatedFrames;
 };
 
 vec3 generateDir(Camera camera, vec2 uv) {
@@ -59,44 +57,49 @@ vec2 randomGaussian(inout uint rngState) {
 }
 
 void main() {
-    uint rngState = (sampleCount + 1) * gl_LaunchSizeEXT.x * gl_LaunchIDEXT.x + gl_LaunchIDEXT.y;
-    // camera stuff
-    vec2 randomCenter = vec2(0.5) + 0.25 * randomGaussian(rngState);
-    vec2 uv = (vec2(gl_LaunchIDEXT.xy) + randomCenter) / vec2(gl_LaunchSizeEXT.xy);
-    uv.y -= 1;
-    uv.y *= -1;
+    uint rngState = (numAccumulatedFrames + 1) * gl_LaunchSizeEXT.x * gl_LaunchIDEXT.x + gl_LaunchIDEXT.y;
 
-    vec3 origin = camera.origin;
-    vec3 direction = normalize(generateDir(camera, uv));
-
-    vec3 accumulatedColor = vec3(1.0);
+    vec3 accumulatedColor = vec3(0.0);
 
     const int MAX_BOUNCES = 32;
-    for (int bounceCount = 0; bounceCount < MAX_BOUNCES; bounceCount++) {
-        if (bounceCount == MAX_BOUNCES) {
-            accumulatedColor = vec3(0.0);
-            break;
-        }
-        traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, origin, 0.0001, direction, 10000.0, 0);
+    const int SAMPLES_PER_FRAME = 4;
+    for (int sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
+        vec3 bouncedColor = vec3(1.0);
 
-        accumulatedColor *= payload.attenuation;
+        vec2 randomCenter = vec2(0.5) + 0.25 * randomGaussian(rngState);
+        vec2 uv = (vec2(gl_LaunchIDEXT.xy) + randomCenter) / vec2(gl_LaunchSizeEXT.xy);
+        uv.y -= 1;
+        uv.y *= -1;
 
-        if (payload.done) {
-            break;
-        } else {
-            // Start a new segment
-            origin = payload.point;
-            vec3 normal = faceforward(payload.normal, direction, payload.normal);
-            direction = normalize(normal + randomDirection(rngState));
+        vec3 origin = camera.origin;
+        vec3 direction = normalize(generateDir(camera, uv));
+        for (int bounceCount = 0; bounceCount < MAX_BOUNCES; bounceCount++) {
+            if (bounceCount == MAX_BOUNCES) {
+                bouncedColor = vec3(0.0);
+                break;
+            }
+            traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, origin, 0.0001, direction, 10000.0, 0);
+
+            bouncedColor *= payload.attenuation;
+
+            if (payload.done) {
+                accumulatedColor += bouncedColor;
+                break;
+            } else {
+                // Start a new segment
+                origin = payload.point;
+                vec3 normal = faceforward(payload.normal, direction, payload.normal);
+                direction = normalize(normal + randomDirection(rngState));
+            }
         }
     }
     ivec2 imageCoords = ivec2(gl_LaunchIDEXT.xy);
     vec3 previouslyAccumulated;
-    if (sampleCount == 0) {
+    if (numAccumulatedFrames == 0) {
         previouslyAccumulated = vec3(0);
     } else {
         previouslyAccumulated = imageLoad(accumulationImage, imageCoords).rgb;
     }
     imageStore(accumulationImage, imageCoords, vec4(previouslyAccumulated + accumulatedColor, 1.0));
-    imageStore(displayImage, imageCoords, vec4((previouslyAccumulated + accumulatedColor) / (sampleCount + 1), 1.0));
+    imageStore(displayImage, imageCoords, vec4((previouslyAccumulated + accumulatedColor) / ((numAccumulatedFrames + 1) * SAMPLES_PER_FRAME), 1.0));
 }

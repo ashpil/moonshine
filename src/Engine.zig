@@ -8,6 +8,8 @@ const Scene = @import("./Scene.zig");
 const Descriptor = @import("./descriptor.zig").Descriptor(frame_count);
 const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
+const Image = @import("./Image.zig");
+
 const F32x3 = @import("./zug.zig").Vec3(f32);
 const Mat4 = @import("./zug.zig").Mat4(f32);
 
@@ -35,6 +37,8 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
     try transfer_commands.transitionImageLayout(&context, display.accumulation_image.handle, .@"undefined", .general);
 
     const scene = try Scene.create(&context, allocator, &transfer_commands);
+    const skymap = try Image.createCubeMap(&context, 500);
+    defer skymap.destroy(&context);
 
     const display_image_info = vk.DescriptorImageInfo {
         .sampler = .null_handle,

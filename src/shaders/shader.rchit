@@ -3,6 +3,9 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "common.glsl"
 
 struct Instance {
     uint64_t vertexAddress;
@@ -14,12 +17,7 @@ layout(buffer_reference, scalar) readonly buffer Vertices { vec3 v[]; };
 
 layout(binding = 3, set = 0) readonly buffer Instances { Instance instances[]; };
 
-layout(location = 0) rayPayloadInEXT struct hitPayload {
-    vec3 attenuation;
-    vec3 point;
-    vec3 normal;
-    bool done;
-} payload;
+layout(location = 0) rayPayloadInEXT Payload payload;
 
 hitAttributeEXT vec3 attribs;
 
