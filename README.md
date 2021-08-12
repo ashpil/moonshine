@@ -18,4 +18,5 @@
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
 - [Multiple importance sampling](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)
 - [Microfacets](https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/)
+- [Actual materials](https://github.com/wdas/brdf) - ton of BRDF examples, in **CODE**!
 - [Better sky](https://sebh.github.io/publications/egsr2020.pdf)
