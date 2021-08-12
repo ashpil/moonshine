@@ -2,17 +2,55 @@ const std = @import("std");
 const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 
+pub const StorageImage = struct {
+    view: vk.ImageView,
+
+    fn toDescriptor(self: StorageImage) vk.DescriptorImageInfo {
+        return .{
+            .sampler = .null_handle,
+            .image_view = self.view,
+            .image_layout = vk.ImageLayout.general,
+        };
+    }
+};
+
+pub const Texture = struct {
+    view: vk.ImageView,
+    sampler: vk.Sampler,
+
+    fn toDescriptor(self: Texture) vk.DescriptorImageInfo {
+        return .{
+            .sampler = self.sampler,
+            .image_view = self.view,
+            .image_layout = vk.ImageLayout.shader_read_only_optimal,
+        };
+    }
+};
+
+pub const StorageBuffer = struct {
+    buffer: vk.Buffer,
+
+    fn toDescriptor(self: StorageBuffer) vk.DescriptorBufferInfo {
+        return .{
+            .range = vk.WHOLE_SIZE,
+            .offset = 0,
+            .buffer = self.buffer,
+        };
+    }
+};
+
 fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
     return switch (in) {
-        vk.DescriptorBufferInfo => .storage_buffer,
+        StorageBuffer => .storage_buffer,
+        StorageImage => .storage_image,
+        Texture => .combined_image_sampler,
         vk.AccelerationStructureKHR => .acceleration_structure_khr,
-        vk.DescriptorImageInfo => .storage_image,
         else => @compileError("Unknown input type: " ++ @typeName(in)),
     };
 }
 
 fn isImageWrite(comptime in: type) bool {
-    return in == vk.DescriptorImageInfo;
+    return in == StorageImage or in == Texture;
 }
 
 fn isAccelWrite(comptime in: type) bool {
@@ -20,7 +58,7 @@ fn isAccelWrite(comptime in: type) bool {
 }
 
 fn isBufferWrite(comptime in: type) bool {
-    return in == vk.DescriptorBufferInfo;
+    return in == StorageBuffer;
 }
 
 pub fn Descriptor(comptime set_count: comptime_int) type {
@@ -109,15 +147,15 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 inline for (descriptor_write) |write_info, j| {
                     descriptor_writes[i+j] = write_info;
                     descriptor_writes[i+j].dst_set = descriptor_sets[i / stages.len];
-                    if (isAccelWrite(@TypeOf(writes[j]))) {
+                    if (comptime isAccelWrite(@TypeOf(writes[j]))) {
                         descriptor_writes[i+j].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                             .acceleration_structure_count = 1,
                             .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &writes[j]),
                         };
-                    } else if (isImageWrite(@TypeOf(writes[j]))) {
-                        descriptor_writes[i+j].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &writes[j]);
-                    } else if (isBufferWrite(@TypeOf(writes[j]))) {
-                        descriptor_writes[i+j].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &writes[j]);
+                    } else if (comptime isImageWrite(@TypeOf(writes[j]))) {
+                        descriptor_writes[i+j].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &writes[j].toDescriptor());
+                    } else if (comptime isBufferWrite(@TypeOf(writes[j]))) {
+                        descriptor_writes[i+j].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &writes[j].toDescriptor());
                     }
                 }
             }
@@ -137,11 +175,11 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 .dst_binding = dst_binding,
                 .dst_array_element = 0,
                 .descriptor_count = 1,
-                .descriptor_type = typeToDescriptorType(@TypeOf(write_info)),
+                .descriptor_type = comptime typeToDescriptorType(@TypeOf(write_info)),
                 .p_buffer_info = undefined,
-                .p_image_info = if (isImageWrite(@TypeOf(write_info))) @ptrCast([*]const vk.DescriptorImageInfo, &write_info) else undefined,
+                .p_image_info = if (comptime isImageWrite(@TypeOf(write_info))) @ptrCast([*]const vk.DescriptorImageInfo, &write_info.toDescriptor()) else undefined,
                 .p_texel_buffer_view = undefined,
-                .p_next = if (isAccelWrite(@TypeOf(write_info))) &vk.WriteDescriptorSetAccelerationStructureKHR {
+                .p_next = if (comptime isAccelWrite(@TypeOf(write_info))) &vk.WriteDescriptorSetAccelerationStructureKHR {
                             .acceleration_structure_count = 1,
                             .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &write_info),
                         } else null,

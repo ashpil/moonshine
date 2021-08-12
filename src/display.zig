@@ -6,7 +6,8 @@ const Window = @import("./Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Image = @import("./Image.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
-const Descriptor = @import("./descriptor.zig").Descriptor;
+const desc = @import("./descriptor.zig");
+const Descriptor = desc.Descriptor;
 const DestructionQueue = @import("./DestructionQueue.zig");
 
 pub fn Display(comptime num_frames: comptime_int) type {
@@ -73,15 +74,11 @@ pub fn Display(comptime num_frames: comptime_int) type {
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
 
             if (frame.needs_rebind) {
-                descriptor.write(vc, 0, self.frame_index, vk.DescriptorImageInfo {
-                    .sampler = .null_handle,
-                    .image_view = self.display_image.view,
-                    .image_layout = vk.ImageLayout.general,
+                descriptor.write(vc, 0, self.frame_index, desc.StorageImage {
+                    .view = self.display_image.view,
                 });
-                descriptor.write(vc, 1, self.frame_index, vk.DescriptorImageInfo {
-                    .sampler = .null_handle,
-                    .image_view = self.accumulation_image.view,
-                    .image_layout = vk.ImageLayout.general,
+                descriptor.write(vc, 1, self.frame_index, desc.StorageImage {
+                    .view = self.accumulation_image.view,
                 });
                 self.frames[self.frame_index].needs_rebind = false;
             }

@@ -11,6 +11,7 @@ layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
 layout(binding = 2, set = 0) uniform accelerationStructureEXT TLAS;
 
 layout(location = 0) rayPayloadEXT Payload payload;
+layout(location = 1) rayPayloadEXT bool inShadow;
 
 struct Camera {
     vec3 origin;
@@ -56,14 +57,17 @@ vec2 randomGaussian(inout uint rngState) {
     return r * vec2(cos(theta), sin(theta));
 }
 
+// should this be a uniform?
+const vec3 SUN_DIR = vec3(-0.494118, 0.406275, -0.768628);
+
 void main() {
     uint rngState = (numAccumulatedFrames + 1) * gl_LaunchSizeEXT.x * gl_LaunchIDEXT.x + gl_LaunchIDEXT.y;
 
     vec3 accumulatedColor = vec3(0.0);
 
-    const int MAX_BOUNCES = 32;
-    const int SAMPLES_PER_FRAME = 4;
-    for (int sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
+    const uint MAX_BOUNCES = 32;
+    const uint SAMPLES_PER_FRAME = 4;
+    for (uint sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
         vec3 bouncedColor = vec3(1.0);
 
         vec2 randomCenter = vec2(0.5) + 0.25 * randomGaussian(rngState);
@@ -71,13 +75,29 @@ void main() {
         uv.y -= 1;
         uv.y *= -1;
 
-        vec3 origin = camera.origin;
         vec3 direction = normalize(generateDir(camera, uv));
-        for (int bounceCount = 0; bounceCount < MAX_BOUNCES; bounceCount++) {
+        traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, camera.origin, 0.0001, direction, 10000.0, 0);
+        bouncedColor *= payload.attenuation;
+        if (payload.done) {
+            accumulatedColor += bouncedColor;
+            continue;
+        }
+        inShadow = true;
+        if (dot(payload.normal, SUN_DIR) > 0.0) { 
+            uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+            traceRayEXT(TLAS, flags, 0xFF, 0, 0, 1, payload.point, 0.001, SUN_DIR, 10000.0, 1);
+        }
+        if (!inShadow) {
+            accumulatedColor += 0.5 * payload.attenuation;
+        }
+
+        for (uint bounceCount = 1; bounceCount < MAX_BOUNCES; bounceCount++) {
             if (bounceCount == MAX_BOUNCES) {
-                bouncedColor = vec3(0.0);
                 break;
             }
+            vec3 origin = payload.point;
+            vec3 normal = faceforward(payload.normal, direction, payload.normal);
+            direction = normalize(normal + randomDirection(rngState));
             traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, origin, 0.0001, direction, 10000.0, 0);
 
             bouncedColor *= payload.attenuation;
@@ -85,11 +105,6 @@ void main() {
             if (payload.done) {
                 accumulatedColor += bouncedColor;
                 break;
-            } else {
-                // Start a new segment
-                origin = payload.point;
-                vec3 normal = faceforward(payload.normal, direction, payload.normal);
-                direction = normalize(normal + randomDirection(rngState));
             }
         }
     }

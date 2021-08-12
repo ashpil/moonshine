@@ -233,6 +233,55 @@ pub const ComputeCommands = struct {
         try vc.device.resetCommandPool(self.pool, .{});
     }
 
+    pub fn copyBufferToImage(self: *ComputeCommands, vc: *const VulkanContext, src: vk.Buffer, dst: vk.Image, width: u32, height: u32, layer_count: u32) !void {
+        try vc.device.beginCommandBuffer(self.buffer, .{
+            .flags = .{},
+            .p_inheritance_info = null,
+        });
+        const copy = vk.BufferImageCopy {
+            .buffer_offset = 0,
+            .buffer_row_length = width,
+            .buffer_image_height = height,
+            .image_subresource = .{
+                .aspect_mask = .{ .color_bit = true },
+                .mip_level = 0,
+                .base_array_layer = 0,
+                .layer_count = layer_count,
+            },
+            .image_offset = .{
+                .x = 0,
+                .y = 0,
+                .z = 0,
+            },
+            .image_extent = .{
+                .width = width,
+                .height = height,
+                .depth = 1,
+            },  
+        };
+        vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, @ptrCast([*]const vk.BufferImageCopy, &copy));
+        try vc.device.endCommandBuffer(self.buffer);
+
+        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
+        // because they should be individually optimized
+        const submit_info = vk.SubmitInfo2KHR {
+            .flags = .{},
+            .command_buffer_info_count = 1,
+            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                .command_buffer = self.buffer,
+                .device_mask = 0,
+            }),
+            .wait_semaphore_info_count = 0,
+            .p_wait_semaphore_infos = undefined,
+            .signal_semaphore_info_count = 0,
+            .p_signal_semaphore_infos = undefined,
+        };
+
+        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueWaitIdle(vc.queue);
+        try vc.device.resetCommandPool(self.pool, .{});
+    }
+
     pub fn transitionImageLayout(self: *ComputeCommands, vc: *const VulkanContext, image: vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
         try vc.device.beginCommandBuffer(self.buffer, .{
             .flags = .{},
@@ -255,7 +304,7 @@ pub const ComputeCommands = struct {
                     .base_mip_level = 0,
                     .level_count = 1,
                     .base_array_layer = 0,
-                    .layer_count = 1,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
             }
         };

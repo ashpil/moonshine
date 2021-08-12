@@ -5,10 +5,12 @@ const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("./Window.zig");
 const Pipeline = @import("./Pipeline.zig");
 const Scene = @import("./Scene.zig");
-const Descriptor = @import("./descriptor.zig").Descriptor(frame_count);
+const desc = @import("./descriptor.zig");
+const Descriptor = desc.Descriptor(frame_count);
 const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
 const Image = @import("./Image.zig");
+const Texture = @import("./Texture.zig");
 
 const F32x3 = @import("./zug.zig").Vec3(f32);
 const Mat4 = @import("./zug.zig").Mat4(f32);
@@ -29,6 +31,7 @@ descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
 sample_count: u32,
+skybox: Texture,
 
 pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_size: vk.Extent2D) !Self {
     const context = try VulkanContext.create(allocator, window);
@@ -37,43 +40,44 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
     try transfer_commands.transitionImageLayout(&context, display.accumulation_image.handle, .@"undefined", .general);
 
     const scene = try Scene.create(&context, allocator, &transfer_commands);
-    const skymap = try Image.createCubeMap(&context, 500);
-    defer skymap.destroy(&context);
 
-    const display_image_info = vk.DescriptorImageInfo {
-        .sampler = .null_handle,
-        .image_view = display.display_image.view,
-        .image_layout = vk.ImageLayout.general,
+    const skybox = try Texture.createCubeMap(&context, &transfer_commands, "../assets/skybox/", 2048);
+
+    const display_image_info = desc.StorageImage {
+        .view = display.display_image.view,
     };
 
-    const accmululation_image_info = vk.DescriptorImageInfo {
-        .sampler = .null_handle,
-        .image_view = display.accumulation_image.view,
-        .image_layout = vk.ImageLayout.general,
+    const accmululation_image_info = desc.StorageImage {
+        .view = display.accumulation_image.view,
     };
 
-    const buffer_info = vk.DescriptorBufferInfo {
-        .range = vk.WHOLE_SIZE,
-        .offset = 0,
+    const buffer_info = desc.StorageBuffer {
         .buffer = scene.meshes.mesh_info,
+    };
+
+    const cubemap = desc.Texture {
+        .sampler = skybox.sampler,
+        .view = skybox.view,
     };
     const descriptor = try Descriptor.create(&context, .{
         vk.ShaderStageFlags { .raygen_bit_khr = true },
         vk.ShaderStageFlags { .raygen_bit_khr = true },
         vk.ShaderStageFlags { .raygen_bit_khr = true },
         vk.ShaderStageFlags { .closest_hit_bit_khr = true },
+        vk.ShaderStageFlags { .miss_bit_khr = true },
     }, .{
         display_image_info,
         accmululation_image_info,
         scene.tlas.handle,
         buffer_info,
+        cubemap,
     });
 
     var camera = Camera.new(.{
         .origin = F32x3.new(7.0, 5.0, 7.0),
         .target = F32x3.new(0.0, 1.0, 0.0),
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 40.0,
+        .vfov = 50.0,
         .extent = initial_window_size,
     });
 
@@ -87,6 +91,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
         .descriptor = descriptor,
         .camera = camera,
         .pipeline = pipeline,
+        .skybox = skybox,
         .sample_count = 0,
     };
 
@@ -94,6 +99,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
 }
 
 pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
+    self.skybox.destroy(&self.context);
     self.pipeline.destroy(&self.context);
     self.descriptor.destroy(&self.context);
     self.scene.destroy(&self.context);

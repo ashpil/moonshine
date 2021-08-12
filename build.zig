@@ -32,19 +32,25 @@ pub fn build(b: *std.build.Builder) void {
     const shader_cmd0 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shader.rgen",
         "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/rgen.spv",
+        "-o", "zig-cache/shaders/shader_rgen.spv",
         "-O",
     });
     const shader_cmd1 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shader.rchit",
         "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/rchit.spv",
+        "-o", "zig-cache/shaders/shader_rchit.spv",
         "-O",
     });
     const shader_cmd2 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shader.rmiss",
         "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/rmiss.spv",
+        "-o", "zig-cache/shaders/shader_rmiss.spv",
+        "-O",
+    });
+    const shader_cmd3 = b.addSystemCommand(&[_][]const u8 {
+        "glslc", "src/shaders/shadow.rmiss",
+        "--target-env=vulkan1.2",
+        "-o", "zig-cache/shaders/shadow_rmiss.spv",
         "-O",
     });
 
@@ -52,6 +58,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.step.dependOn(&shader_cmd0.step);
     exe.step.dependOn(&shader_cmd1.step);
     exe.step.dependOn(&shader_cmd2.step);
+    exe.step.dependOn(&shader_cmd3.step);
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());

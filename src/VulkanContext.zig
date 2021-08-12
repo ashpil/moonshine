@@ -205,6 +205,9 @@ const device_commands = [_]vk.DeviceCommand {
     .QueueSubmit2KHR,
     .AcquireNextImage2KHR,
     .CmdPushConstants,
+    .CmdCopyBufferToImage,
+    .CreateSampler,
+    .DestroySampler,
 };
 
 const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {

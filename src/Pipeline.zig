@@ -78,9 +78,10 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *TransferCommands, descriptor_layout: vk.DescriptorSetLayout) !Self {
 
     var shader_info = try ShaderInfo(.{
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../zig-cache/shaders/rgen.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../zig-cache/shaders/rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../zig-cache/shaders/rchit.spv" },
+        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../zig-cache/shaders/shader_rgen.spv" },
+        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../zig-cache/shaders/shader_rmiss.spv" },
+        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../zig-cache/shaders/shadow_rmiss.spv" },
+        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../zig-cache/shaders/shader_rchit.spv" },
     }).create(vc);
     defer shader_info.destroy(vc);
 
@@ -117,7 +118,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Tra
     _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &handle));
     errdefer vc.device.destroyPipeline(handle, null);
 
-    const sbt = try ShaderBindingTable.create(vc, allocator, handle, cmd, 1, 1, 1);
+    const sbt = try ShaderBindingTable.create(vc, allocator, handle, cmd, 1, 2, 1);
     errdefer sbt.destroy(vc);
 
     return Self {

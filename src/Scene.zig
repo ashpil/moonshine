@@ -21,11 +21,11 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands) !Self {
 
-    const cube_obj = @embedFile("../assets/cube.obj");
+    const cube_obj = @embedFile("../assets/models/cube.obj");
     var cube = try Object.fromObj(allocator, cube_obj);
     defer cube.destroy(allocator);
 
-    const pawn_obj = @embedFile("../assets/pawn.obj");
+    const pawn_obj = @embedFile("../assets/models/pawn.obj");
     var pawn = try Object.fromObj(allocator, pawn_obj);
     defer pawn.destroy(allocator);
 
