@@ -6,16 +6,18 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "common.glsl"
+#include "microfacet.glsl"
 
 struct Instance {
     uint64_t vertexAddress;
     uint64_t indexAddress;
+    Material material;
 };
 
 layout(buffer_reference, scalar) readonly buffer Indices { ivec3 i[]; };
 layout(buffer_reference, scalar) readonly buffer Vertices { vec3 v[]; };
 
-layout(binding = 3, set = 0) readonly buffer Instances { Instance instances[]; };
+layout(binding = 3, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 
@@ -44,12 +46,8 @@ void main() {
     vec3 normal = calculateNormal(barycentrics, v0, v1, v2);
     vec3 point = calculateHitPoint(barycentrics, v0, v1, v2);
 
-    if (gl_InstanceID == 1) {
-        payload.attenuation = vec3(0.61, 0.34, 0.07);
-    } else {
-        payload.attenuation = vec3(0.0, 0.6, 0.09);
-    }
     payload.point = point;
     payload.normal = normal;
     payload.done = false;
+    payload.material = instance.material;
 }

@@ -13,6 +13,7 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
         const MeshInfo = struct {
             vertex_address: vk.DeviceAddress,
             index_address: vk.DeviceAddress,
+            material: Object.Material,
         };
 
         vertices: [mesh_count]vk.Buffer,
@@ -58,6 +59,7 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                 mesh_infos[i] = MeshInfo {
                     .vertex_address = vertex_address,
                     .index_address = index_address,
+                    .material = object.material,
                 };
 
                 geometries[i] = vk.AccelerationStructureGeometryKHR {

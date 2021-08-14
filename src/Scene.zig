@@ -11,6 +11,8 @@ const TopLevelAccel = Accels.TopLevelAccel;
 
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 
+const f32x3 = @import("./zug.zig").Vec3(f32);
+
 const object_count = 2;
 
 meshes: Meshes,
@@ -22,11 +24,11 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands) !Self {
 
     const cube_obj = @embedFile("../assets/models/cube.obj");
-    var cube = try Object.fromObj(allocator, cube_obj);
+    var cube = try Object.fromObj(allocator, cube_obj, f32x3.new(0.58, 0.29, 0.0), 1.0, 0.2, 1.5);
     defer cube.destroy(allocator);
 
     const pawn_obj = @embedFile("../assets/models/pawn.obj");
-    var pawn = try Object.fromObj(allocator, pawn_obj);
+    var pawn = try Object.fromObj(allocator, pawn_obj, f32x3.new(0.8, 0.8, 0.8), 0.2, 0.15, 1.5);
     defer pawn.destroy(allocator);
 
     const objects = [object_count]Object {

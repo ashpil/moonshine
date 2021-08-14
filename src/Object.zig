@@ -4,8 +4,16 @@ const zug = @import("./zug.zig");
 const u32x3 = zug.Vec3(u32);
 const f32x3 = zug.Vec3(f32);
 
+pub const Material = struct {
+    attenuation: f32x3,
+    metallic: f32,
+    roughness: f32,
+    ior: f32,
+};
+
 vertices: []f32x3,
 indices: []u32x3,
+material: Material,
 
 const Self = @This();
 
@@ -39,7 +47,7 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     };
 }
 
-pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8) !Self {
+pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8, attenuation: f32x3, metallic: f32, roughness: f32, ior: f32) !Self {
     const sizes = getObjSizes(contents);
     const vertices = try allocator.alloc(f32x3, sizes.num_vertices);
     const indices = try allocator.alloc(u32x3, sizes.num_indices);
@@ -67,6 +75,12 @@ pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8) !Self {
     return Self {
         .vertices = vertices,
         .indices = indices,
+        .material = .{
+            .attenuation = attenuation,
+            .metallic = metallic,
+            .roughness = roughness,
+            .ior = ior,
+        }
     };
 }
 

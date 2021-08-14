@@ -10,6 +10,6 @@ layout(location = 0) rayPayloadInEXT Payload payload;
 
 void main() {
     vec3 dir = normalize(gl_WorldRayDirectionEXT);
-    payload.attenuation = texture(skySampler, dir).xyz;
+    payload.material.attenuation = texture(skySampler, dir).xyz;
     payload.done = true;
 }
