@@ -89,9 +89,8 @@ void main() {
             
             // set up info for next bounce
             origin = payload.point;
-            vec3 normal = faceforward(payload.normal, direction, payload.normal);
-            direction = normalize(normal + randomDirection(rngState));
-            throughput *= f_r(direction, outgoing, normal, payload.material) * dot(normal, direction);
+            direction = normalize(payload.normal + randomDirection(rngState));
+            throughput *= f_r(direction, outgoing, payload.normal, payload.material) * dot(payload.normal, direction);
         }
     }
 
