@@ -1,6 +1,3 @@
-const float PI = 3.14159265;
-
-
 // helper
 float X(float a) {
     if (a > 0.0) {
@@ -18,8 +15,8 @@ vec3 F(vec3 w_i, vec3 m, Material material) {
 }
 
 // GGX
-float D(vec3 m, vec3 n, float roughness) {
-    float cos_theta_m = dot(m, n);
+float D(vec3 m, float roughness) {
+    float cos_theta_m = frameCosTheta(m);
     if (cos_theta_m > 0.0) {
         float roughness_squared = pow(roughness, 2);
         float cos_theta_m_squared = pow(cos_theta_m, 2);
@@ -32,8 +29,8 @@ float D(vec3 m, vec3 n, float roughness) {
 }
 
 // G_1 for GGX
-float G_1(vec3 v, vec3 m, vec3 n, float roughness) {
-    float cos_theta_v = dot(v, n);
+float G_1(vec3 v, vec3 m, float roughness) {
+    float cos_theta_v = frameCosTheta(v);
     float val = dot(v, m) / cos_theta_v;
     if (val > 0.0) {
         float cos_theta_v_squared = pow(cos_theta_v, 2);
@@ -46,23 +43,97 @@ float G_1(vec3 v, vec3 m, vec3 n, float roughness) {
 }
 
 // smith shadow-masking
-float G(vec3 w_i, vec3 w_o, vec3 m, vec3 n, float roughness) {
-    return G_1(w_i, m, n, roughness) * G_1(w_o, m, n, roughness);
+float G(vec3 w_i, vec3 w_o, vec3 m, float roughness) {
+    return G_1(w_i, m, roughness) * G_1(w_o, m, roughness);
 }
 
-vec3 cook_torrance(vec3 w_i, vec3 w_o, vec3 n, Material material) {
+vec3 cookTorrance(vec3 w_i, vec3 w_o, Material material) {
     vec3 h = normalize(w_i + w_o);
     vec3 fresnel = F(w_i, h, material);
-    float geometry = G(w_i, w_o, h, n, material.roughness);
-    float distribution = D(h, n, material.roughness);
-    return (fresnel * geometry * distribution) / (4 * abs(dot(w_i, n)) * abs(dot(w_o, n)));
+    float geometry = G(w_i, w_o, h, material.roughness);
+    float distribution = D(h, material.roughness);
+    return (fresnel * geometry * distribution) / max(4 * abs(frameCosTheta(w_i)) * abs(frameCosTheta(w_o)), EPSILON);
 }
 
-vec3 lambert(Material material) {
-    return material.attenuation;
+vec3 lambert(vec3 w_i, vec3 w_o, Material material) {
+    return material.attenuation / PI;
 }
 
-vec3 f_r(vec3 w_i, vec3 w_o, vec3 n, Material material) {
-    vec3 microfacet = cook_torrance(w_i, w_o, n, material);
-    return ((1.0 - material.metallic) * lambert(material)) + (material.metallic * microfacet);
+bool sameHemisphere(vec3 v1, vec3 v2) {
+    return v1.z * v2.z > 0.0;
+}
+
+float lambertPDF(vec3 w_i, vec3 w_o, Material material) {
+    return sameHemisphere(w_i, w_o) ? abs(frameCosTheta(w_i)) / PI : EPSILON;
+}
+
+vec3 sampleLambert(vec3 w_o, Material material, inout float pdf, vec2 square) {
+    vec3 w_i = squareToCosineHemisphere(square);
+    if (w_o.z < 0.0) {
+        w_i.z *= -1;
+    }
+
+    pdf = lambertPDF(w_i, w_o, material);
+
+    return w_i;
+}
+
+vec3 sphericalToVector(float sinTheta, float cosTheta, float phi) {
+    return vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+}
+
+vec3 sampleCookTorrance(vec3 w_o, Material material, inout float pdf, vec2 square) {
+    // figure out spherical coords of half vector
+    float tanTheta = material.roughness * sqrt(square.x) / sqrt(1 - square.x);
+    float cosThetaSquared = 1 / (1 + (tanTheta * tanTheta));
+    float sinTheta = sqrt(max(0, 1 - cosThetaSquared));
+    float cosTheta = sqrt(cosThetaSquared);
+    float phi = 2 * PI * square.y;
+
+    // convert them to cartesian
+    vec3 h = sphericalToVector(sinTheta, cosTheta, phi);
+    if (!sameHemisphere(w_o, h)) {
+        h = -h;
+    }
+
+    vec3 w_i = -reflect(w_o, h);
+
+    pdf = max(D(h, material.roughness) * abs(frameCosTheta(h)) / (4.0 * dot(w_o, h)), EPSILON);
+
+    return w_i;
+}
+
+float cookTorrancePDF(vec3 w_i, vec3 w_o, Material material) {
+    if (!sameHemisphere(w_o, w_i)) {
+        return 0.0;
+    }
+    vec3 h = normalize(w_i + w_o);
+    float distributionPDF = D(h, material.roughness) * abs(frameCosTheta(h));
+    return distributionPDF / (4.0 * dot(w_o, h));
+}
+
+vec3 sample_f_r(vec3 w_o, Material material, inout float pdf, vec2 square) {
+    if (square.x < material.metallic) {
+        square.x /= material.metallic;
+        vec3 w_i = sampleCookTorrance(w_o, material, pdf, square);
+
+        float pdf2 = lambertPDF(w_i, w_o, material);
+
+        pdf = mix(pdf2, pdf, material.metallic);
+        return w_i;
+    } else {
+        square.x = (1 / (1.0 - material.metallic)) * (square.x - material.metallic);
+        vec3 w_i = sampleLambert(w_o, material, pdf, square);
+
+        float pdf2 = cookTorrancePDF(w_i, w_o, material);
+
+        pdf = mix(pdf, pdf2, material.metallic);
+        return w_i;
+    }
+}
+
+vec3 f_r(vec3 w_i, vec3 w_o, Material material) {
+    vec3 microfacet = cookTorrance(w_i, w_o, material);
+    vec3 lambertian = lambert(w_i, w_o, material);
+    return ((1.0 - material.metallic) * lambertian) + (material.metallic * microfacet);
 }

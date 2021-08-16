@@ -74,8 +74,8 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
     });
 
     var camera = Camera.new(.{
-        .origin = F32x3.new(7.0, 5.0, 7.0),
-        .target = F32x3.new(0.0, 1.0, 0.0),
+        .origin = F32x3.new(7.0, 5.0, -7.0),
+        .target = F32x3.new(0.0, 0.5, 0.0),
         .up = F32x3.new(0.0, 1.0, 0.0),
         .vfov = 50.0,
         .extent = initial_window_size,

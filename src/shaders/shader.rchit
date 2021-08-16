@@ -6,7 +6,6 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "common.glsl"
-#include "microfacet.glsl"
 
 struct Instance {
     uint64_t vertexAddress;

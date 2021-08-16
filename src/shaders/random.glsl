@@ -27,28 +27,35 @@ vec2 randomGaussian(inout uint rngState) {
 vec2 squareToUniformDiskConcentric(vec2 square) {
     float r1 = 2.0 * square.x - 1.0;
     float r2 = 2.0 * square.y - 1.0;
+    vec2 uOffset = 2.0 * square - vec2(1.0);
 
-    float phi, r;
-
-    if (r1 == 0 && r2 == 0) {
-        r = phi = 0;
-    } else if (r1 * r1 > r2 * r2) {
-        r = r1;
-        phi = PI / 4.0 * r2 / r1;
-    } else {
-        r = r2;
-        phi = (PI / 2.0) - (r1 / r2) * (PI / 4.0);
+    if (uOffset == vec2(0.0)) {
+        return vec2(0.0);
     }
 
-    float cosPhi = cos(phi);
-    float sinPhi = sin(phi);
+    float theta, r;
 
-    return vec2(r * cosPhi, r * sinPhi);
+    if (abs(uOffset.x) > abs(uOffset.y)) {
+        r = uOffset.x;
+        theta = (PI / 4) * (uOffset.y / uOffset.x);
+    } else {
+        r = uOffset.y;
+        theta = (PI / 2) - (PI / 4) * (uOffset.x / uOffset.y);
+    }
+
+    return r * vec2(cos(theta), sin(theta));
 }
 
 vec3 squareToCosineHemisphere(vec2 square) {
-    vec2 p = squareToUniformDiskConcentric(square);
-    float z = sqrt(max(1.0 - p.x * p.x - p.y * p.y, 0.00001));
+    vec2 d = squareToUniformDiskConcentric(square);
+    float z = sqrt(max(0.0, 1.0 - d.x * d.x - d.y * d.y));
 
-    return vec3(p.x, p.y, z);
+    return vec3(d.x, d.y, z);
+}
+
+vec3 squareToUniformHemisphere(vec2 square) {
+    float z = square.x;
+    float r = sqrt(max(0.0, 1.0 - z * z));
+    float phi = 2 * PI * square.y;
+    return vec3(r * cos(phi), r * sin(phi), z);
 }

@@ -3,10 +3,12 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
 
 #include "common.glsl"
-#include "microfacet.glsl"
+#include "reflection_frame.glsl"
 #include "random.glsl"
+#include "microfacet.glsl"
 
 layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
 layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
@@ -29,17 +31,19 @@ layout(push_constant, scalar) uniform cam {
 
 // should this be a uniform?
 const vec3 SUN_DIR = vec3(-0.494118, 0.406275, -0.768628);
+const vec3 SUN_ILLUMINANCE = vec3(1.0, 1.0, 0.98) * PI;
 
 // explicitly sample our light sources (currently just the sun)
-vec3 sampleLights(vec3 outgoing) {
+vec3 sampleLights(Frame frame, vec3 outgoing) {
     inShadow = true;
     if (dot(payload.normal, SUN_DIR) > 0.0) { 
         uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
         traceRayEXT(TLAS, flags, 0xFF, 0, 0, 1, payload.point, 0.001, SUN_DIR, 10000.0, 1);
     }
     if (!inShadow) {
-        vec3 brdf = f_r(SUN_DIR, outgoing, payload.normal, payload.material);
-        return vec3(1.0, 1.0, 0.98) * brdf * dot(payload.normal, SUN_DIR);
+        vec3 frameSunDir = worldToFrame(frame, SUN_DIR);
+        vec3 brdf = f_r(frameSunDir, outgoing, payload.material);
+        return SUN_ILLUMINANCE * brdf * frameCosTheta(frameSunDir);
     } else {
         return vec3(0.0);
     }
@@ -82,15 +86,21 @@ void main() {
                 break;
             }
 
-            // explicitly sample our lights; still unsure if this is correct
-            // as we get weird super light halo underneath
-            vec3 outgoing = -direction;
-            accumulatedColor += (throughput * sampleLights(outgoing));
+            Frame frame = createFrame(payload.normal);
+            vec3 outgoing = worldToFrame(frame, -direction);
+            accumulatedColor += (throughput * sampleLights(frame, outgoing));
             
             // set up info for next bounce
             origin = payload.point;
-            direction = normalize(payload.normal + randomDirection(rngState));
-            throughput *= f_r(direction, outgoing, payload.normal, payload.material) * dot(payload.normal, direction);
+            float pdf;
+            float u = stepAndOutputRNGFloat(rngState);
+            float v = stepAndOutputRNGFloat(rngState);
+            vec3 incoming = sample_f_r(outgoing, payload.material, pdf, vec2(u, v));
+            if (!sameHemisphere(outgoing, incoming)) {
+                break;
+            }
+            direction = frameToWorld(frame, incoming);
+            throughput *= f_r(incoming, outgoing, payload.material) * abs(frameCosTheta(incoming)) / pdf;
         }
     }
 
