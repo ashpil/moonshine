@@ -30,7 +30,7 @@ scene: Scene,
 descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
-sample_count: u32,
+frame_count: u32,
 skybox: Texture,
 
 pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_size: vk.Extent2D) !Self {
@@ -92,7 +92,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
         .camera = camera,
         .pipeline = pipeline,
         .skybox = skybox,
-        .sample_count = 0,
+        .frame_count = 0,
     };
 
     return engine;
@@ -119,8 +119,8 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator, window: *const Window) !v
         }
 
         self.camera.push(&self.context, buffer, self.pipeline.layout);
-        const sample_count_bytes = std.mem.asBytes(&self.sample_count);
-        self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), sample_count_bytes.len, sample_count_bytes);
+        const frame_count_bytes = std.mem.asBytes(&self.frame_count);
+        self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), frame_count_bytes.len, frame_count_bytes);
 
         try RenderCommands(frame_count).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
 
@@ -129,7 +129,9 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator, window: *const Window) !v
             try resize(self);
         }
 
-        self.sample_count += 1;
+        if (!resized) {
+            self.frame_count += 1;
+        }
         window.pollEvents();
     }
     try self.context.device.deviceWaitIdle();
@@ -142,5 +144,5 @@ fn resize(self: *Self) !void {
     camera_create_info.extent = self.display.extent;
     self.camera = Camera.new(camera_create_info);
 
-    self.sample_count = 0;
+    self.frame_count = 0;
 }

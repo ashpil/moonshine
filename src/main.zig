@@ -63,6 +63,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, engine: *
 
         engine.camera = Camera.new(camera_create_info);
 
-        engine.sample_count = 0;
+        engine.frame_count = 0;
     }
 }
