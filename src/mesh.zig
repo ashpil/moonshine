@@ -55,13 +55,11 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                 const index_address = vc.device.getBufferDeviceAddress(.{
                     .buffer = indices[i],
                 });
-
                 mesh_infos[i] = MeshInfo {
                     .vertex_address = vertex_address,
                     .index_address = index_address,
                     .material = object.material,
                 };
-
                 geometries[i] = vk.AccelerationStructureGeometryKHR {
                     .geometry_type = .triangles_khr,
                     .flags = .{ .opaque_bit_khr = true },
@@ -71,7 +69,7 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                             .vertex_data = .{
                                 .device_address = vertex_address,
                             },
-                            .vertex_stride = @sizeOf(f32x3),
+                            .vertex_stride = @sizeOf(@TypeOf(object.vertices[0])),
                             .max_vertex = @intCast(u32, object.vertices.len - 1),
                             .index_type = .uint32,
                             .index_data = .{

@@ -41,7 +41,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
 
     const scene = try Scene.create(&context, allocator, &transfer_commands);
 
-    const skybox = try Texture.createCubeMap(&context, &transfer_commands, "../assets/skybox/", 2048);
+    const skybox = try Texture.createCubeMap(&context, &transfer_commands, "../assets/textures/skybox/", 2048);
 
     const display_image_info = desc.StorageImage {
         .view = display.display_image.view,

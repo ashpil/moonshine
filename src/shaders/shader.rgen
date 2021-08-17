@@ -3,7 +3,6 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_GOOGLE_include_directive : require
-#extension GL_EXT_debug_printf : enable
 
 #include "common.glsl"
 #include "reflection_frame.glsl"
@@ -64,8 +63,8 @@ void main() {
     // the result that we write to our buffer
     vec3 accumulatedColor = vec3(0.0);
 
-    const uint MAX_BOUNCES = 16;
-    const uint SAMPLES_PER_FRAME = 2;
+    const uint MAX_BOUNCES = 8;
+    const uint SAMPLES_PER_FRAME = 4;
     for (uint sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
         vec3 throughput = vec3(1.0);
         
