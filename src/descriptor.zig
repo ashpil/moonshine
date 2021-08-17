@@ -169,23 +169,29 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             };
         }
 
-        pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_binding: comptime_int, dst_set: u32, write_info: anytype) void {
-            const descriptor_write = vk.WriteDescriptorSet {
-                .dst_set = self.sets[dst_set],
-                .dst_binding = dst_binding,
-                .dst_array_element = 0,
-                .descriptor_count = 1,
-                .descriptor_type = comptime typeToDescriptorType(@TypeOf(write_info)),
-                .p_buffer_info = undefined,
-                .p_image_info = if (comptime isImageWrite(@TypeOf(write_info))) @ptrCast([*]const vk.DescriptorImageInfo, &write_info.toDescriptor()) else undefined,
-                .p_texel_buffer_view = undefined,
-                .p_next = if (comptime isAccelWrite(@TypeOf(write_info))) &vk.WriteDescriptorSetAccelerationStructureKHR {
-                            .acceleration_structure_count = 1,
-                            .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &write_info),
-                        } else null,
-            };
+        // expects `write_info` to be a tuple of descriptors
+        // expects `dst_bindings` is an array of `comptime_int`s specifying their respective write info dst binding
+        pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_bindings: anytype, dst_set: u32, write_infos: anytype) void {
+            var descriptor_writes: [write_infos.len]vk.WriteDescriptorSet = undefined;
+            comptime var i = 0;
+            inline while (i < write_infos.len) : (i += 1) {
+                descriptor_writes[i] = vk.WriteDescriptorSet {
+                    .dst_set = self.sets[dst_set],
+                    .dst_binding = dst_bindings[i],
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = comptime typeToDescriptorType(@TypeOf(write_infos[i])),
+                    .p_buffer_info = undefined,
+                    .p_image_info = if (comptime isImageWrite(@TypeOf(write_infos[i]))) @ptrCast([*]const vk.DescriptorImageInfo, &write_infos[i].toDescriptor()) else undefined,
+                    .p_texel_buffer_view = undefined,
+                    .p_next = if (comptime isAccelWrite(@TypeOf(write_infos[i]))) &vk.WriteDescriptorSetAccelerationStructureKHR {
+                                .acceleration_structure_count = 1,
+                                .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &write_infos[i]),
+                            } else null,
+                };
+            }
 
-            vc.device.updateDescriptorSets(1, @ptrCast([*]const vk.WriteDescriptorSet, &descriptor_write), 0, undefined);
+            vc.device.updateDescriptorSets(write_infos.len, &descriptor_writes, 0, undefined);
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {
