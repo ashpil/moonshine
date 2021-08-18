@@ -1,4 +1,4 @@
-# Chess RTX - please think of a better name
+# Chess with ray tracing - please think of a better name
 
 ### Build dependencies:
 * Zig
@@ -12,6 +12,7 @@
 ## Misc TODO:
 * better SBT
 * better build command for shaders
+* more DOD image interface
 
 ## Some stuff I'd like to implement
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
