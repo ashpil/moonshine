@@ -6,9 +6,7 @@ const f32x3 = zug.Vec3(f32);
 const f32x2 = zug.Vec2(f32);
 
 pub const Material = struct {
-    attenuation: f32x3,
     metallic: f32,
-    roughness: f32,
     ior: f32,
 };
 
@@ -59,7 +57,7 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     };
 }
 
-pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8, attenuation: f32x3, metallic: f32, roughness: f32, ior: f32) !Self {
+pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8, metallic: f32, ior: f32) !Self {
     const sizes = getObjSizes(contents);
     const positions = try allocator.alloc(f32x3, sizes.num_positions);
     defer allocator.free(positions);
@@ -132,9 +130,7 @@ pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8, attenuation:
         .vertices = vertices,
         .indices = indices,
         .material = .{
-            .attenuation = attenuation,
             .metallic = metallic,
-            .roughness = roughness,
             .ior = ior,
         }
     };

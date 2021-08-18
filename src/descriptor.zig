@@ -5,11 +5,15 @@ const VulkanContext = @import("./VulkanContext.zig");
 pub const StorageImage = struct {
     view: vk.ImageView,
 
-    fn toDescriptor(self: StorageImage) vk.DescriptorImageInfo {
-        return .{
-            .sampler = .null_handle,
-            .image_view = self.view,
-            .image_layout = vk.ImageLayout.general,
+    const count = 1;
+    
+    fn toDescriptor(self: StorageImage) [1]vk.DescriptorImageInfo {
+        return [1]vk.DescriptorImageInfo {
+            .{
+                .sampler = .null_handle,
+                .image_view = self.view,
+                .image_layout = .general,
+            }
         };
     }
 };
@@ -18,23 +22,69 @@ pub const Texture = struct {
     view: vk.ImageView,
     sampler: vk.Sampler,
 
-    fn toDescriptor(self: Texture) vk.DescriptorImageInfo {
-        return .{
-            .sampler = self.sampler,
-            .image_view = self.view,
-            .image_layout = vk.ImageLayout.shader_read_only_optimal,
+    const count = 1;
+
+    fn toDescriptor(self: Texture) [1]vk.DescriptorImageInfo {
+        return [1]vk.DescriptorImageInfo {
+            .{
+                .sampler = self.sampler,
+                .image_view = self.view,
+                .image_layout = .shader_read_only_optimal,
+            }
         };
     }
 };
 
+pub const Sampler = struct {
+    sampler: vk.Sampler,
+
+    const count = 1;
+
+    fn toDescriptor(self: Sampler) [1]vk.DescriptorImageInfo {
+        return [1]vk.DescriptorImageInfo {
+            .{
+                .sampler = self.sampler,
+                .image_view = .null_handle,
+                .image_layout = undefined,
+            }
+        };
+    }
+};
+
+pub fn TextureArray(comptime texture_count: comptime_int) type {
+    return struct {
+        views: [texture_count]vk.ImageView,
+
+        const count = texture_count;
+
+        fn toDescriptor(self: @This()) [texture_count]vk.DescriptorImageInfo {
+            var infos: [texture_count]vk.DescriptorImageInfo = undefined;
+            comptime var i = 0;
+            inline while (i < texture_count) : (i += 1) {
+                infos[i] = vk.DescriptorImageInfo {
+                    .sampler = .null_handle,
+                    .image_view = self.views[i],
+                    .image_layout = .shader_read_only_optimal,
+                };
+            }
+
+            return infos;
+        }
+    };
+}
+
 pub const StorageBuffer = struct {
     buffer: vk.Buffer,
 
-    fn toDescriptor(self: StorageBuffer) vk.DescriptorBufferInfo {
-        return .{
-            .range = vk.WHOLE_SIZE,
-            .offset = 0,
-            .buffer = self.buffer,
+    const count = 1;
+
+    fn toDescriptor(self: StorageBuffer) [1]vk.DescriptorBufferInfo {
+        return [1]vk.DescriptorBufferInfo {
+            .{
+                .range = vk.WHOLE_SIZE,
+                .offset = 0,
+                .buffer = self.buffer,
+            }
         };
     }
 };
@@ -44,13 +94,19 @@ fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
         StorageBuffer => .storage_buffer,
         StorageImage => .storage_image,
         Texture => .combined_image_sampler,
+        Sampler => .sampler,
         vk.AccelerationStructureKHR => .acceleration_structure_khr,
-        else => @compileError("Unknown input type: " ++ @typeName(in)),
+        else => {
+            if (std.mem.indexOf(u8, @typeName(in), "TextureArray")) |_| {
+                return .sampled_image;
+            }
+            @compileError("Unknown input type: " ++ @typeName(in));
+        }
     };
 }
 
 fn isImageWrite(comptime in: type) bool {
-    return in == StorageImage or in == Texture;
+    return in == StorageImage or in == Texture or in == Sampler or (if (std.mem.indexOf(u8, @typeName(in), "TextureArray")) |_| true else false);
 }
 
 fn isAccelWrite(comptime in: type) bool {
@@ -79,7 +135,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 binding.* = .{
                     .binding = i,
                     .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
-                    .descriptor_count = 1,
+                    .descriptor_count = if (isAccelWrite(@TypeOf(writes[i]))) 1 else @TypeOf(writes[i]).count,
                     .stage_flags = stages[i],
                     .p_immutable_samplers = null,
                 };
@@ -97,7 +153,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             comptime for (pool_sizes) |*pool_size, i| {
                 pool_size.* = .{
                     .type_ = typeToDescriptorType(@TypeOf(writes[i])),
-                    .descriptor_count = 1,
+                    .descriptor_count = if (isAccelWrite(@TypeOf(writes[i]))) 1 else @TypeOf(writes[i]).count,
                 };
             };
 
@@ -130,7 +186,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                     .dst_set = undefined, // this can only be set at runtime
                     .dst_binding = i,
                     .dst_array_element = 0,
-                    .descriptor_count = 1,
+                    .descriptor_count = if (isAccelWrite(@TypeOf(writes[i]))) 1 else @TypeOf(writes[i]).count,
                     .descriptor_type = typeToDescriptorType(@TypeOf(writes[i])),
                     .p_buffer_info = undefined,
                     .p_image_info = undefined,
@@ -171,6 +227,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
 
         // expects `write_info` to be a tuple of descriptors
         // expects `dst_bindings` is an array of `comptime_int`s specifying their respective write info dst binding
+        // currently only supports images I think
         pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_bindings: anytype, dst_set: u32, write_infos: anytype) void {
             var descriptor_writes: [write_infos.len]vk.WriteDescriptorSet = undefined;
             comptime var i = 0;

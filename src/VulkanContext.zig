@@ -420,6 +420,7 @@ const PhysicalDevice = struct {
             .p_next = &ray_tracing_pipeline_features,
             .buffer_device_address = vk.TRUE,
             .scalar_block_layout = vk.TRUE,
+            .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
         };
 
         return try instance.createDevice(

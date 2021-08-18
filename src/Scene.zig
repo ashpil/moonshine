@@ -8,10 +8,11 @@ const Meshes = @import("./mesh.zig").Meshes(object_count);
 const Accels = @import("./accels.zig").Accels(object_count);
 const BottomLevelAccels = Accels.BottomLevelAccels;
 const TopLevelAccel = Accels.TopLevelAccel;
+const Image = @import("./Image.zig");
 
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 
-const f32x3 = @import("./zug.zig").Vec3(f32);
+const F32x3 = @import("./zug.zig").Vec3(f32);
 
 const object_count = 2;
 
@@ -19,21 +20,40 @@ meshes: Meshes,
 blases: BottomLevelAccels,
 tlas: TopLevelAccel,
 
+albedo_textures: [object_count]Image,
+roughness_textures: [object_count]Image,
+normal_textures: [object_count]Image,
+
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *TransferCommands) !Self {
 
     const cube_obj = @embedFile("../assets/models/cube.obj");
-    var cube = try Object.fromObj(allocator, cube_obj, f32x3.new(0.58, 0.29, 0.0), 1.0, 0.2, 1.5);
+    var cube = try Object.fromObj(allocator, cube_obj, 0.4, 1.35);
     defer cube.destroy(allocator);
 
     const pawn_obj = @embedFile("../assets/models/pawn.obj");
-    var pawn = try Object.fromObj(allocator, pawn_obj, f32x3.new(0.8, 0.8, 0.8), 0.2, 0.15, 1.5);
+    var pawn = try Object.fromObj(allocator, pawn_obj, 0.2, 1.5);
     defer pawn.destroy(allocator);
 
     const objects = [object_count]Object {
         cube,
         pawn,
+    };
+
+    const albedo_textures = [object_count]Image {
+        try Image.createTexture(vc, commands, "../assets/textures/board/color.dds"),
+        try Image.createTombstone(vc, commands, F32x3.new(0.8, 0.8, 0.8)),
+    };
+
+    const roughness_textures = [object_count]Image {
+        try Image.createTexture(vc, commands, "../assets/textures/board/roughness.dds"),
+        try Image.createTombstone(vc, commands, 0.15),
+    };
+
+    const normal_textures = [object_count]Image {
+        try Image.createTexture(vc, commands, "../assets/textures/board/normal.dds"),
+        try Image.createTombstone(vc, commands, F32x3.new(0.5, 0.5, 1.0)),
     };
 
     var geometries: [object_count]vk.AccelerationStructureGeometryKHR = undefined;
@@ -68,6 +88,9 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
         .meshes = meshes,
         .blases = blases,
         .tlas = tlas,
+        .albedo_textures = albedo_textures,
+        .roughness_textures = roughness_textures,
+        .normal_textures = normal_textures,
     };
 }
 
@@ -75,4 +98,11 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.meshes.destroy(vc);
     self.blases.destroy(vc);
     self.tlas.destroy(vc);
+    
+    comptime var i = 0;
+    inline while (i < object_count) : (i += 1) {
+        self.albedo_textures[i].destroy(vc);
+        self.roughness_textures[i].destroy(vc);
+        self.normal_textures[i].destroy(vc);
+    }
 }

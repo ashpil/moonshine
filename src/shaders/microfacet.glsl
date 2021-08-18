@@ -10,7 +10,7 @@ float X(float a) {
 // schlick approximation
 vec3 F(vec3 w_i, vec3 m, Material material) {
     float R_0 = pow((1 - material.ior) / (1 + material.ior), 2);
-    vec3 mixed = mix(vec3(R_0), material.attenuation, material.metallic);
+    vec3 mixed = mix(vec3(R_0), material.color, material.metallic);
     return mixed + (vec3(1.0) - mixed) * pow((1 - dot(w_i, m)), 5);
 }
 
@@ -21,7 +21,7 @@ float D(vec3 m, float roughness) {
         float roughness_squared = pow(roughness, 2);
         float cos_theta_m_squared = pow(cos_theta_m, 2);
         float tan_theta_m_squared = (1.0 - cos_theta_m_squared) / cos_theta_m_squared;
-        float denominator = PI * pow(cos_theta_m_squared, 2) * pow(roughness_squared + tan_theta_m_squared, 2);
+        float denominator = PI * pow(cos_theta_m_squared, 2) * max(pow(roughness_squared + tan_theta_m_squared, 2), EPSILON);
         return roughness_squared / denominator;
     } else {
         return 0.0;
@@ -56,7 +56,7 @@ vec3 cookTorrance(vec3 w_i, vec3 w_o, Material material) {
 }
 
 vec3 lambert(vec3 w_i, vec3 w_o, Material material) {
-    return material.attenuation / PI;
+    return material.color / PI;
 }
 
 bool sameHemisphere(vec3 v1, vec3 v2) {

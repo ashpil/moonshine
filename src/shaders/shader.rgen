@@ -64,7 +64,7 @@ void main() {
     vec3 accumulatedColor = vec3(0.0);
 
     const uint MAX_BOUNCES = 8;
-    const uint SAMPLES_PER_FRAME = 4;
+    const uint SAMPLES_PER_FRAME = 2;
     for (uint sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
         vec3 throughput = vec3(1.0);
         
@@ -81,10 +81,10 @@ void main() {
 
             // if finished, add final bounce color to accumulated
             if (payload.done) {
-                accumulatedColor += throughput * payload.material.attenuation;
+                accumulatedColor += throughput * payload.material.color;
                 break;
             }
-
+            
             Frame frame = createFrame(payload.normal);
             vec3 outgoing = worldToFrame(frame, -direction);
             accumulatedColor += (throughput * sampleLights(frame, outgoing));

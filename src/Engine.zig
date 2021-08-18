@@ -10,7 +10,6 @@ const Descriptor = desc.Descriptor(frame_count);
 const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
 const Image = @import("./Image.zig");
-const Texture = @import("./Texture.zig");
 
 const F32x3 = @import("./zug.zig").Vec3(f32);
 const Mat4 = @import("./zug.zig").Mat4(f32);
@@ -31,7 +30,9 @@ descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
 frame_count: u32,
-skybox: Texture,
+
+skybox: Image,
+sampler: vk.Sampler,
 
 pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_size: vk.Extent2D) !Self {
     const context = try VulkanContext.create(allocator, window);
@@ -41,7 +42,8 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
 
     const scene = try Scene.create(&context, allocator, &transfer_commands);
 
-    const skybox = try Texture.createCubeMap(&context, &transfer_commands, "../assets/textures/skybox/", 2048);
+    const skybox = try Image.createCubeMap(&context, &transfer_commands, "../assets/textures/skybox/", 2048);
+    const sampler = try Image.createSampler(&context);
 
     const display_image_info = desc.StorageImage {
         .view = display.display_image.view,
@@ -56,8 +58,30 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
     };
 
     const cubemap = desc.Texture {
-        .sampler = skybox.sampler,
+        .sampler = sampler,
         .view = skybox.view,
+    };
+
+    const sampler_info = desc.Sampler {
+        .sampler = sampler,
+    };
+    var texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
+    var roughness_texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
+    var normal_texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
+    comptime var i = 0;
+    inline while (i < scene.albedo_textures.len) : (i += 1) {
+        texture_views[i] = scene.albedo_textures[i].view;
+        roughness_texture_views[i] = scene.roughness_textures[i].view;
+        normal_texture_views[i] = scene.normal_textures[i].view;
+    }
+    const color_textures = desc.TextureArray(scene.albedo_textures.len) {
+        .views = texture_views,
+    };
+    const roughness_textures = desc.TextureArray(scene.albedo_textures.len) {
+        .views = roughness_texture_views,
+    };
+    const normal_textures = desc.TextureArray(scene.albedo_textures.len) {
+        .views = normal_texture_views,
     };
     const descriptor = try Descriptor.create(&context, .{
         vk.ShaderStageFlags { .raygen_bit_khr = true },
@@ -65,12 +89,20 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
         vk.ShaderStageFlags { .raygen_bit_khr = true },
         vk.ShaderStageFlags { .closest_hit_bit_khr = true },
         vk.ShaderStageFlags { .miss_bit_khr = true },
+        vk.ShaderStageFlags { .closest_hit_bit_khr = true },
+        vk.ShaderStageFlags { .closest_hit_bit_khr = true },
+        vk.ShaderStageFlags { .closest_hit_bit_khr = true },
+        vk.ShaderStageFlags { .closest_hit_bit_khr = true },
     }, .{
         display_image_info,
         accmululation_image_info,
         scene.tlas.handle,
         buffer_info,
         cubemap,
+        sampler_info,
+        color_textures,
+        roughness_textures,
+        normal_textures,
     });
 
     var camera = Camera.new(.{
@@ -92,6 +124,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
         .camera = camera,
         .pipeline = pipeline,
         .skybox = skybox,
+        .sampler = sampler,
         .frame_count = 0,
     };
 
@@ -99,6 +132,7 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
 }
 
 pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
+    self.context.device.destroySampler(self.sampler, null);
     self.skybox.destroy(&self.context);
     self.pipeline.destroy(&self.context);
     self.descriptor.destroy(&self.context);

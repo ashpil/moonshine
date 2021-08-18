@@ -30,10 +30,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
 
-            var display_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true });
+            var display_image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true }, .r32g32b32a32_sfloat, null);
             errdefer display_image.destroy(vc);
 
-            var accumulation_image = try Image.create(vc, extent, .{ .storage_bit = true });
+            var accumulation_image = try Image.create(vc, extent, .{ .storage_bit = true }, .r32g32b32a32_sfloat, null);
             errdefer accumulation_image.destroy(vc);
 
             var frames: [num_frames]Frame = undefined;
@@ -74,7 +74,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
 
             if (frame.needs_rebind) {
-                descriptor.write(vc, .{ 0, 1 }, self.frame_index, .{
+                descriptor.write(vc, .{ 0, 1 }, self.frame_index, [_]desc.StorageImage {
                     desc.StorageImage {
                         .view = self.display_image.view,
                     },
@@ -110,10 +110,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 self.extent = new_extent;
 
                 try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true });
+                self.display_image = try Image.create(vc, self.extent, .{ .storage_bit = true, .transfer_src_bit = true }, .r32g32b32a32_sfloat, null);
 
                 try self.destruction_queue.add(allocator, self.accumulation_image);
-                self.accumulation_image = try Image.create(vc, self.extent, .{ .storage_bit = true });
+                self.accumulation_image = try Image.create(vc, self.extent, .{ .storage_bit = true }, .r32g32b32a32_sfloat, null);
 
                 comptime var i = 0;
                 inline while (i < num_frames) : (i += 1) {
