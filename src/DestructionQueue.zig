@@ -2,11 +2,13 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const Image = @import("./Image.zig");
+const Images = @import("./images.zig").Images;
 
+// TODO: how to make this use some sort of duck typing and take in any 
+// type with a `destroy` function
 const Item = union(enum) {
     swapchain: vk.SwapchainKHR,
-    image: Image,
+    image: Images(1),
 
     fn destroy(self: Item, vc: *const VulkanContext) void {
         switch (self) {
@@ -29,11 +31,11 @@ pub fn create() Self {
 }
 
 pub fn add(self: *Self, allocator: *std.mem.Allocator, item: anytype) !void {
-    if (@TypeOf(item) == Image) {
+    if (@TypeOf(item) == Images(1)) {
         try self.queue.append(allocator, .{ .image = item });
     } else if (@TypeOf(item) == vk.SwapchainKHR) {
         try self.queue.append(allocator, .{ .swapchain = item });
-    } else unreachable;
+    } else @compileError("Unknown destruction type: " ++ @typeName(@TypeOf(item)));
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {

@@ -9,7 +9,7 @@ const desc = @import("./descriptor.zig");
 const Descriptor = desc.Descriptor(frame_count);
 const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
-const Image = @import("./Image.zig");
+const Image = @import("./images.zig").Images(1);
 
 const F32x3 = @import("./zug.zig").Vec3(f32);
 const Mat4 = @import("./zug.zig").Mat4(f32);
@@ -38,19 +38,24 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
     const context = try VulkanContext.create(allocator, window);
     var transfer_commands = try ComputeCommands.create(&context);
     const display = try Display.create(&context, allocator, initial_window_size);
-    try transfer_commands.transitionImageLayout(&context, display.accumulation_image.handle, .@"undefined", .general);
+    try transfer_commands.transitionImageLayout(&context, display.accumulation_image.images[0], .@"undefined", .general);
 
     const scene = try Scene.create(&context, allocator, &transfer_commands);
 
-    const skybox = try Image.createCubeMap(&context, &transfer_commands, "../assets/textures/skybox/", 2048);
+    const skybox = try Image.createTexture(&context, .{
+        .{
+            .filepath = "../assets/textures/skybox.dds",
+        }
+    }, &transfer_commands);
+
     const sampler = try Image.createSampler(&context);
 
     const display_image_info = desc.StorageImage {
-        .view = display.display_image.view,
+        .view = display.display_image.views[0],
     };
 
     const accmululation_image_info = desc.StorageImage {
-        .view = display.accumulation_image.view,
+        .view = display.accumulation_image.views[0],
     };
 
     const buffer_info = desc.StorageBuffer {
@@ -59,29 +64,21 @@ pub fn create(allocator: *std.mem.Allocator, window: *Window, initial_window_siz
 
     const cubemap = desc.Texture {
         .sampler = sampler,
-        .view = skybox.view,
+        .view = skybox.views[0],
     };
 
     const sampler_info = desc.Sampler {
         .sampler = sampler,
     };
-    var texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
-    var roughness_texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
-    var normal_texture_views: [scene.albedo_textures.len]vk.ImageView = undefined;
-    comptime var i = 0;
-    inline while (i < scene.albedo_textures.len) : (i += 1) {
-        texture_views[i] = scene.albedo_textures[i].view;
-        roughness_texture_views[i] = scene.roughness_textures[i].view;
-        normal_texture_views[i] = scene.normal_textures[i].view;
-    }
-    const color_textures = desc.TextureArray(scene.albedo_textures.len) {
-        .views = texture_views,
+
+    const color_textures = desc.TextureArray(scene.albedo_textures.views.len) {
+        .views = scene.albedo_textures.views,
     };
-    const roughness_textures = desc.TextureArray(scene.albedo_textures.len) {
-        .views = roughness_texture_views,
+    const roughness_textures = desc.TextureArray(scene.albedo_textures.views.len) {
+        .views = scene.roughness_textures.views,
     };
-    const normal_textures = desc.TextureArray(scene.albedo_textures.len) {
-        .views = normal_texture_views,
+    const normal_textures = desc.TextureArray(scene.albedo_textures.views.len) {
+        .views = scene.normal_textures.views,
     };
     const descriptor = try Descriptor.create(&context, .{
         vk.ShaderStageFlags { .raygen_bit_khr = true },
@@ -172,7 +169,7 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator, window: *const Window) !v
 }
 
 fn resize(self: *Self) !void {
-    try self.transfer_commands.transitionImageLayout(&self.context, self.display.accumulation_image.handle, .@"undefined", .general);
+    try self.transfer_commands.transitionImageLayout(&self.context, self.display.accumulation_image.images[0], .@"undefined", .general);
 
     var camera_create_info = self.camera.create_info;
     camera_create_info.extent = self.display.extent;
