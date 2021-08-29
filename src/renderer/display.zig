@@ -86,7 +86,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
 
             if (frame.needs_rebind) {
-                descriptor.write(vc, .{ 0, 1 }, self.frame_index, [_]desc.StorageImage {
+                descriptor.write(vc, .{ 0, 1 }, .{ self.frame_index }, [_]desc.StorageImage {
                     desc.StorageImage {
                         .view = self.display_image.views[0],
                     },

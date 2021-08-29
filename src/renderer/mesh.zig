@@ -5,8 +5,8 @@ const TransferCommands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./VulkanContext.zig");
 const Object = @import("./Object.zig");
 
-const f32x3 = @import("./zug.zig").Vec3(f32);
-const u32x3 = @import("./zug.zig").Vec3(u32);
+const f32x3 = @import("../zug.zig").Vec3(f32);
+const u32x3 = @import("../zug.zig").Vec3(u32);
 
 pub fn Meshes(comptime mesh_count: comptime_int) type {
     return struct {

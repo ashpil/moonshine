@@ -1,5 +1,5 @@
 const std = @import("std");
-const zug = @import("./zug.zig");
+const zug = @import("../zug.zig");
 
 const u32x3 = zug.Vec3(u32);
 const f32x3 = zug.Vec3(f32);

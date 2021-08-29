@@ -4,7 +4,7 @@ const std = @import("std");
 const utils = @import("./utils.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const F32x3 = @import("./zug.zig").Vec3(f32);
+const F32x3 = @import("../zug.zig").Vec3(f32);
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-reference

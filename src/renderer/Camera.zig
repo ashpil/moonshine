@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const F32x3 = @import("./zug.zig").Vec3(f32);
+const F32x3 = @import("../zug.zig").Vec3(f32);
 
 pub const CreateInfo = struct {
     origin: F32x3,
