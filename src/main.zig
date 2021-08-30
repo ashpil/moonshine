@@ -2,7 +2,7 @@ const std = @import("std");
 
 const Engine = @import("./renderer/Engine.zig");
 const Scene = @import("./logic/scene.zig");
-const F32x3 = @import("./zug.zig").Vec3(f32);
+const F32x3 = @import("./utils/zug.zig").Vec3(f32);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};

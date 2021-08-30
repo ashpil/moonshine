@@ -10,8 +10,8 @@ const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
 const Image = @import("./images.zig").Images(1);
 
-const F32x3 = @import("../zug.zig").Vec3(f32);
-const Mat4 = @import("../zug.zig").Mat4(f32);
+const F32x3 = @import("../utils/zug.zig").Vec3(f32);
+const Mat4 = @import("../utils/zug.zig").Mat4(f32);
 
 const commands = @import("./commands.zig");
 const ComputeCommands = commands.ComputeCommands;
@@ -198,26 +198,26 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, engine: *
     _ = window;
     if (action == .repeat or action == .press) {
         var camera_create_info = engine.camera.create_info;
-
+        const move_amount = 1.0 / 18.0;
         var mat: Mat4 = undefined;
         if (key == 65) {
-            mat = Mat4.fromAxisAngle(-0.1, F32x3.new(0.0, 1.0, 0.0));
+            mat = Mat4.fromAxisAngle(-move_amount, F32x3.new(0.0, 1.0, 0.0));
         } else if (key == 68) {
-            mat = Mat4.fromAxisAngle(0.1, F32x3.new(0.0, 1.0, 0.0));
+            mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
         } else if (key == 83) {
             const target_dir = camera_create_info.origin.sub(camera_create_info.target);
             const axis = camera_create_info.up.cross(target_dir).unit();
             if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                 return;
             }
-            mat = Mat4.fromAxisAngle(0.1, axis);
+            mat = Mat4.fromAxisAngle(move_amount, axis);
         } else if (key == 87) {
             const target_dir = camera_create_info.origin.sub(camera_create_info.target);
             const axis = camera_create_info.up.cross(target_dir).unit();
             if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                 return;
             }
-            mat = Mat4.fromAxisAngle(-0.1, axis);
+            mat = Mat4.fromAxisAngle(-move_amount, axis);
         } else return;
 
         camera_create_info.origin = mat.mul_point(camera_create_info.origin.sub(camera_create_info.target)).add(camera_create_info.target);

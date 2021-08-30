@@ -13,6 +13,7 @@ struct Instance {
     uint64_t indexAddress;
     float metallic;
     float ior;
+    uint textureIndex;
 };
 
 struct Vertex {
@@ -54,13 +55,13 @@ mat3 createTBNMatrix(vec3 normal, vec3 edge0, vec3 edge1, vec2 t0, vec2 t1, vec2
     return mat3(normalize(tangent), normalize(bitangent), normal);
 }
 
-vec3 calculateNormal(Vertex v0, Vertex v1, Vertex v2, vec2 texcoords) {
+vec3 calculateNormal(Vertex v0, Vertex v1, Vertex v2, vec2 texcoords, uint textureIndex) {
     vec3 edge0 = v1.position - v0.position;
     vec3 edge1 = v2.position - v0.position;
     vec3 positionNormalObjectSpace = normalize(cross(edge0, edge1));
 
     mat3 tangentToObjectMat = createTBNMatrix(positionNormalObjectSpace, edge0, edge1, v0.texcoord, v1.texcoord, v2.texcoord);
-    vec2 textureNormal = (texture(sampler2D(normalTextures[nonuniformEXT(gl_InstanceID)], textureSampler), texcoords).rg * 2.0) - 1.0;
+    vec2 textureNormal = (texture(sampler2D(normalTextures[nonuniformEXT(textureIndex)], textureSampler), texcoords).rg * 2.0) - 1.0;
     vec3 normalTangentSpace = vec3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((gl_WorldToObject3x4EXT * tangentToObjectMat * normalTangentSpace).xyz);
 }
@@ -93,7 +94,7 @@ void main() {
 
     vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
     vec2 texcoords = calculateTexcoords(barycentrics, t0, t1, t2);
-    vec3 normal = calculateNormal(v0, v1, v2, texcoords);
+    vec3 normal = calculateNormal(v0, v1, v2, texcoords, instance.textureIndex);
     vec3 point = calculateHitPoint(barycentrics, p0, p1, p2);
 
     payload.point = point;
@@ -101,6 +102,6 @@ void main() {
     payload.done = false;
     payload.material.metallic = instance.metallic;
     payload.material.ior = instance.ior;
-    payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(gl_InstanceID)], textureSampler), texcoords).rgb;
-    payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(gl_InstanceID)], textureSampler), texcoords).r;
+    payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(instance.textureIndex)], textureSampler), texcoords).rgb;
+    payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(instance.textureIndex)], textureSampler), texcoords).r;
 }

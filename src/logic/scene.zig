@@ -2,13 +2,14 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("../renderer/VulkanContext.zig");
-const Object = @import("../renderer/Object.zig");
+const MeshData = @import("../utils/Object.zig");
 const Images = @import("../renderer/images.zig");
 const Image = Images.Images(1);
 
 const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 
-const Meshes = @import("../renderer/mesh.zig").Meshes(object_count);
+const mesh = @import("../renderer/mesh.zig");
+const Meshes = mesh.Meshes(object_count);
 const Accels = @import("../renderer/accels.zig").Accels(object_count);
 const BottomLevelAccels = Accels.BottomLevelAccels;
 const TopLevelAccel = Accels.TopLevelAccel;
@@ -19,21 +20,15 @@ pub const TextureSet = struct {
     normal: Images.TextureSource,
 };
 
-pub const Material = struct {
-    metallic: f32,
-    ior: f32,
-    texture_index: u8,
-};
-
 pub const Piece = struct {
     model_path: []const u8,
-    black_material: Material,
-    white_material: Material,
+    black_material: mesh.Material,
+    white_material: mesh.Material,
 };
 
 pub const Board = struct {
     model_path: []const u8,
-    material: Material,
+    material: mesh.Material,
 };
 
 pub const ChessSet = struct {
@@ -88,16 +83,22 @@ pub fn Scene(comptime texture_count: comptime_int) type {
             const normal_textures = try Textures.createTexture(vc, normal_sources, commands);
 
             const board_obj = @embedFile(chess_set.board.model_path);
-            var board = try Object.fromObj(allocator, board_obj, chess_set.board.material.metallic, chess_set.board.material.ior);
+            var board = try MeshData.fromObj(allocator, board_obj);
             defer board.destroy(allocator);
 
             const pawn_obj = @embedFile(chess_set.pawn.model_path);
-            var pawn = try Object.fromObj(allocator, pawn_obj, chess_set.pawn.white_material.metallic, chess_set.pawn.white_material.ior);
+            var pawn = try MeshData.fromObj(allocator, pawn_obj);
             defer pawn.destroy(allocator);
 
-            const objects = [object_count]Object {
-                board,
-                pawn,
+            const objects = [object_count]mesh.Object {
+                .{
+                    .mesh = board,
+                    .material = chess_set.board.material
+                },
+                .{
+                    .mesh = pawn,
+                    .material = chess_set.pawn.white_material
+                }
             };
 
             var geometries: [object_count]vk.AccelerationStructureGeometryKHR = undefined;
