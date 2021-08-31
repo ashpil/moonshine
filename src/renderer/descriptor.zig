@@ -215,20 +215,21 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             var descriptor_writes: [descriptor_write_count]vk.WriteDescriptorSet = undefined;
 
             comptime var i = 0;
-            inline while (i < descriptor_write_count) : (i = i + dst_bindings.len) {
+            inline while (i < dst_sets.len) : (i += 1) {
                 inline for (descriptor_write) |write_info, j| {
-                    descriptor_writes[i+j] = write_info;
-                    descriptor_writes[i+j].dst_set = self.sets[i / dst_bindings.len];
+                    const index = (i * dst_bindings.len) + j;
+                    descriptor_writes[index] = write_info;
+                    descriptor_writes[index].dst_set = self.sets[dst_sets[i]];
                     if (comptime isAccelWrite(@TypeOf(write_infos[j]))) {
-                        descriptor_writes[i+j].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
+                        descriptor_writes[index].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                             .acceleration_structure_count = 1,
                             .p_acceleration_structures = @ptrCast([*]const vk.AccelerationStructureKHR, &write_infos[j]),
                         };
                     } else if (comptime isImageWrite(@TypeOf(write_infos[j]))) {
-                        descriptor_writes[i+j].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &write_infos[j].toDescriptor());
+                        descriptor_writes[index].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &write_infos[j].toDescriptor());
                     } else if (comptime isBufferWrite(@TypeOf(write_infos[j]))) {
-                        descriptor_writes[i+j].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &write_infos[j].toDescriptor());
-                    }
+                        descriptor_writes[index].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &write_infos[j].toDescriptor());
+                    } else comptime unreachable;
                 }
             }
 
