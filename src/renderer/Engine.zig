@@ -132,12 +132,17 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         sampler_info,
     });
 
+    const camera_origin = F32x3.new(0.4, 0.3, -0.4);
+    const camera_target = F32x3.new(0.0, 0.0, 0.0);
+
     var camera = Camera.new(.{
-        .origin = F32x3.new(0.4, 0.3, -0.4),
-        .target = F32x3.new(0.0, 0.0, 0.0),
+        .origin = camera_origin,
+        .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
         .vfov = 40.0,
         .extent = initial_window_size,
+        .aperture = 0.007,
+        .focus_distance = camera_origin.sub(camera_target).length(),
     });
 
     const pipeline = try Pipeline.create(&context, allocator, &transfer_commands, descriptor.layout);
@@ -207,29 +212,39 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, engine: *
     _ = window;
     if (action == .repeat or action == .press) {
         var camera_create_info = engine.camera.create_info;
-        const move_amount = 1.0 / 18.0;
-        var mat: Mat4 = undefined;
-        if (key == 65) {
-            mat = Mat4.fromAxisAngle(-move_amount, F32x3.new(0.0, 1.0, 0.0));
-        } else if (key == 68) {
-            mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
-        } else if (key == 83) {
-            const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-            const axis = camera_create_info.up.cross(target_dir).unit();
-            if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
-                return;
-            }
-            mat = Mat4.fromAxisAngle(move_amount, axis);
-        } else if (key == 87) {
-            const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-            const axis = camera_create_info.up.cross(target_dir).unit();
-            if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
-                return;
-            }
-            mat = Mat4.fromAxisAngle(-move_amount, axis);
-        } else return;
+        if (key == 65 or key == 68 or key == 83 or key == 87) {
+            const move_amount = 1.0 / 18.0;
+            var mat: Mat4 = undefined;
+            if (key == 65) {
+                mat = Mat4.fromAxisAngle(-move_amount, F32x3.new(0.0, 1.0, 0.0));
+            } else if (key == 68) {
+                mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
+            } else if (key == 83) {
+                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
+                const axis = camera_create_info.up.cross(target_dir).unit();
+                if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
+                    return;
+                }
+                mat = Mat4.fromAxisAngle(move_amount, axis);
+            } else if (key == 87) {
+                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
+                const axis = camera_create_info.up.cross(target_dir).unit();
+                if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
+                    return;
+                }
+                mat = Mat4.fromAxisAngle(-move_amount, axis);
+            } else unreachable;
 
-        camera_create_info.origin = mat.mul_point(camera_create_info.origin.sub(camera_create_info.target)).add(camera_create_info.target);
+            camera_create_info.origin = mat.mul_point(camera_create_info.origin.sub(camera_create_info.target)).add(camera_create_info.target);
+        } else if (key == 70 and camera_create_info.aperture > 0.0) {
+            camera_create_info.aperture -= 0.0005;
+        } else if (key == 82) {
+            camera_create_info.aperture += 0.0005;
+        } else if (key == 81) {
+            camera_create_info.focus_distance -= 0.01;
+        } else if (key == 69) {
+            camera_create_info.focus_distance += 0.01;
+        } else return;
 
         engine.camera = Camera.new(camera_create_info);
 

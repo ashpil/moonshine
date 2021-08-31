@@ -22,17 +22,16 @@ pub const TextureSet = struct {
 };
 
 pub const Piece = struct {
-    model_path: []const u8,
     black_material: accels.Material,
     white_material: accels.Material,
 };
 
 pub const Board = struct {
-    model_path: []const u8,
     material: accels.Material,
 };
 
 pub const ChessSet = struct {
+    models_dir: []const u8,
     board: Board,
 
     pawn: Piece,
@@ -83,25 +82,25 @@ pub fn Scene(comptime texture_count: comptime_int) type {
             const roughness_textures = try Textures.createTexture(vc, roughness_sources, commands);
             const normal_textures = try Textures.createTexture(vc, normal_sources, commands);
 
-            var board = try MeshData.fromObj(allocator, @embedFile(chess_set.board.model_path));
+            var board = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "board.obj"));
             defer board.destroy(allocator);
 
-            var pawn = try MeshData.fromObj(allocator, @embedFile(chess_set.pawn.model_path));
+            var pawn = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "pawn.obj"));
             defer pawn.destroy(allocator);
 
-            var rook = try MeshData.fromObj(allocator, @embedFile(chess_set.rook.model_path));
+            var rook = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "rook.obj"));
             defer rook.destroy(allocator);
 
-            var knight = try MeshData.fromObj(allocator, @embedFile(chess_set.knight.model_path));
+            var knight = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "knight.obj"));
             defer knight.destroy(allocator);
 
-            var bishop = try MeshData.fromObj(allocator, @embedFile(chess_set.bishop.model_path));
+            var bishop = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "bishop.obj"));
             defer bishop.destroy(allocator);
 
-            var king = try MeshData.fromObj(allocator, @embedFile(chess_set.king.model_path));
+            var king = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "king.obj"));
             defer king.destroy(allocator);
 
-            var queen = try MeshData.fromObj(allocator, @embedFile(chess_set.queen.model_path));
+            var queen = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "queen.obj"));
             defer queen.destroy(allocator);
 
             const objects = [object_count] MeshData {

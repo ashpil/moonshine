@@ -49,8 +49,8 @@ pub fn main() !void {
     defer engine.destroy(allocator);
 
     const chess_set = Scene.ChessSet {
+        .models_dir = "../../assets/models/",
         .board = .{
-            .model_path = "../../assets/models/board.obj",
             .material = .{
                 .metallic = 0.4,
                 .ior = 1.35,
@@ -59,7 +59,6 @@ pub fn main() !void {
         },
 
         .pawn = .{
-            .model_path = "../../assets/models/pawn.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
@@ -72,7 +71,6 @@ pub fn main() !void {
             },
         },
         .rook = .{
-            .model_path = "../../assets/models/rook.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
@@ -85,7 +83,6 @@ pub fn main() !void {
             },
         },
         .knight = .{
-            .model_path = "../../assets/models/knight.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
@@ -98,7 +95,6 @@ pub fn main() !void {
             },
         },
         .bishop = .{
-            .model_path = "../../assets/models/bishop.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
@@ -111,7 +107,6 @@ pub fn main() !void {
             },
         },
         .king = .{
-            .model_path = "../../assets/models/king.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
@@ -124,7 +119,6 @@ pub fn main() !void {
             },
         },
         .queen = .{
-            .model_path = "../../assets/models/queen.obj",
             .white_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
