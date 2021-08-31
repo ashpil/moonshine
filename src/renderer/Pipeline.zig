@@ -213,6 +213,7 @@ const ShaderBindingTable = struct {
     }
 
     fn getStridedGroupAddressRegion(self: *const ShaderBindingTable, vc: *const VulkanContext, buffer: vk.Buffer) vk.StridedDeviceAddressRegionKHR {
+        // TODO: cache address
         return vk.StridedDeviceAddressRegionKHR {
             .device_address = vc.device.getBufferDeviceAddress(.{
                 .buffer = buffer,
@@ -235,12 +236,12 @@ const ShaderBindingTable = struct {
     }
 
     fn destroy(self: *ShaderBindingTable, vc: *const VulkanContext) void {
-        vc.device.freeMemory(self.raygen_memory, null);
-        vc.device.freeMemory(self.miss_memory, null);
-        vc.device.freeMemory(self.hit_memory, null);
-
         vc.device.destroyBuffer(self.raygen, null);
         vc.device.destroyBuffer(self.miss, null);
         vc.device.destroyBuffer(self.hit, null);
+
+        vc.device.freeMemory(self.raygen_memory, null);
+        vc.device.freeMemory(self.miss_memory, null);
+        vc.device.freeMemory(self.hit_memory, null);
     }
 };

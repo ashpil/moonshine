@@ -17,7 +17,7 @@ const commands = @import("./commands.zig");
 const ComputeCommands = commands.ComputeCommands;
 const RenderCommands = commands.RenderCommand;
 
-const Scene = @import("../logic/scene.zig").Scene(2); // TODO: unhardcode this
+const Scene = @import("../logic/scene.zig").Scene(3); // TODO: unhardcode this
 
 const frame_count = 2;
 
@@ -49,7 +49,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
     const display = try Display.create(&context, allocator, initial_window_size);
     try transfer_commands.transitionImageLayout(&context, display.accumulation_image.images[0], .@"undefined", .general);
 
-    const descriptor = try Descriptor.create(&context, [9]desc.BindingInfo {
+    const descriptor = try Descriptor.create(&context, [10]desc.BindingInfo {
         .{
             .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .storage_image,
@@ -73,6 +73,11 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         .{
             .stage_flags = .{ .miss_bit_khr = true },
             .descriptor_type = .combined_image_sampler,
+            .count = 1,
+        },
+        .{
+            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .descriptor_type = .storage_buffer,
             .count = 1,
         },
         .{
@@ -157,7 +162,7 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
         frames[i] = i;
     };
 
-    comptime var sets: [6]u32 = undefined;
+    comptime var sets: [7]u32 = undefined;
     comptime for (sets) |_, i| {
         sets[i] = i + 3;
     };
@@ -166,8 +171,11 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
         .sampler = self.sampler,
         .view = scene.background.views[0],
     };
-    const buffer_info = desc.StorageBuffer {
+    const mesh_info = desc.StorageBuffer {
         .buffer = scene.meshes.mesh_info,
+    };
+    const instance_info = desc.StorageBuffer {
+        .buffer = scene.blases.instance_infos,
     };
     const color_textures = desc.TextureArray(scene.color_textures.views.len) {
         .views = scene.color_textures.views,
@@ -182,7 +190,8 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
     self.descriptor.write(&self.context, sets, frames, .{
         scene.tlas.handle,
         background,
-        buffer_info,
+        mesh_info,
+        instance_info,
         color_textures,
         roughness_textures,
         normal_textures,

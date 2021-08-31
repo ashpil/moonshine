@@ -4,7 +4,19 @@ const Commands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./VulkanContext.zig");
 const utils = @import("./utils.zig");
 
-pub fn Accels(comptime blas_count: comptime_int) type {
+pub const Material = struct {
+    metallic: f32,
+    ior: f32,
+    texture_index: u8,
+};
+
+pub fn Accels(comptime blas_count: comptime_int, comptime instance_counts: [blas_count]comptime_int) type {
+
+    comptime var instanced_blas_count = 0;
+    comptime for (instance_counts) |count| {
+        instanced_blas_count += count;
+    };
+
     return struct {
         // currently, one geometry per BLAS
         pub const BottomLevelAccels = struct {
@@ -16,7 +28,10 @@ pub fn Accels(comptime blas_count: comptime_int) type {
             instances: vk.Buffer,
             instances_memory: vk.DeviceMemory,
 
-            pub fn create(vc: *const VulkanContext, commands: *Commands, geometries: *const [blas_count]vk.AccelerationStructureGeometryKHR, build_infos: *const [blas_count]*const vk.AccelerationStructureBuildRangeInfoKHR, initial_transforms: *const [blas_count][3][4]f32) !BottomLevelAccels {
+            instance_infos: vk.Buffer,
+            instance_infos_memory: vk.DeviceMemory,
+
+            pub fn create(vc: *const VulkanContext, commands: *Commands, geometries: *const [blas_count]vk.AccelerationStructureGeometryKHR, build_infos: *const [blas_count]*const vk.AccelerationStructureBuildRangeInfoKHR, initial_transforms: *const [instanced_blas_count][3][4]f32, materials: [instanced_blas_count]Material) !BottomLevelAccels {
                 var geometry_infos: [blas_count]vk.AccelerationStructureBuildGeometryInfoKHR = undefined;
 
                 var scratch_buffers: [blas_count]vk.Buffer = undefined;
@@ -74,9 +89,17 @@ pub fn Accels(comptime blas_count: comptime_int) type {
 
                 var instances: vk.Buffer = undefined;
                 var instances_memory: vk.DeviceMemory = undefined;
-                try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * blas_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &instances, &instances_memory);
+                try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * instanced_blas_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &instances, &instances_memory);
                 errdefer vc.device.destroyBuffer(instances, null);
                 errdefer vc.device.freeMemory(instances_memory, null);
+
+                var instance_infos: vk.Buffer = undefined;
+                var instance_infos_memory: vk.DeviceMemory = undefined;
+                try utils.createBuffer(vc, @sizeOf(Material) * instanced_blas_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }, .{ .device_local_bit = true }, &instance_infos, &instance_infos_memory);
+                errdefer vc.device.destroyBuffer(instance_infos, null);
+                errdefer vc.device.freeMemory(instance_infos_memory, null);
+
+                try commands.uploadData(vc, instance_infos, std.mem.asBytes(&materials));
 
                 var self = BottomLevelAccels {
                     .handles = handles,
@@ -85,6 +108,9 @@ pub fn Accels(comptime blas_count: comptime_int) type {
 
                     .instances = instances,
                     .instances_memory = instances_memory,
+
+                    .instance_infos = instance_infos,
+                    .instance_infos_memory = instance_infos_memory,
                 };
 
                 try self.updateInstanceBuffer(vc, commands, initial_transforms);
@@ -93,22 +119,28 @@ pub fn Accels(comptime blas_count: comptime_int) type {
             }
 
             // this should take in matrix inputs later
-            pub fn updateInstanceBuffer(self: *BottomLevelAccels, vc: *const VulkanContext, commands: *Commands, matrices: *const [blas_count][3][4]f32) !void {
-                var instances: [blas_count]vk.AccelerationStructureInstanceKHR = undefined;
+            pub fn updateInstanceBuffer(self: *BottomLevelAccels, vc: *const VulkanContext, commands: *Commands, matrices: *const [instanced_blas_count][3][4]f32) !void {
 
-                for (instances) |_, i| {
-                    instances[i] = .{
-                        .transform = vk.TransformMatrixKHR {
-                            .matrix = matrices[i]
-                        },
-                        .instance_custom_index = 0,
-                        .mask = 0xFF,
-                        .instance_shader_binding_table_record_offset = 0,
-                        .flags = 0,
-                        .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(.{
-                            .acceleration_structure = self.handles[i],
-                        }),
-                    };
+                var instances: [instanced_blas_count]vk.AccelerationStructureInstanceKHR = undefined;
+
+                comptime var offset = 0;
+                inline for (instance_counts) |count, i| {
+                    comptime var j = 0;
+                    inline while (j < count) : (j += 1) {
+                        instances[offset + j] = .{
+                            .transform = vk.TransformMatrixKHR {
+                                .matrix = matrices[offset + j]
+                            },
+                            .instance_custom_index = i, // we use this in order to differentiate different types of instances - each that has same mesh has same index
+                            .mask = 0xFF,
+                            .instance_shader_binding_table_record_offset = 0,
+                            .flags = 0,
+                            .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(.{
+                                .acceleration_structure = self.handles[i],
+                            }),
+                        };
+                    }
+                    offset += count;
                 }
 
                 try commands.uploadData(vc, self.instances, std.mem.asBytes(&instances));
@@ -117,6 +149,9 @@ pub fn Accels(comptime blas_count: comptime_int) type {
             pub fn destroy(self: *BottomLevelAccels, vc: *const VulkanContext) void {
                 vc.device.destroyBuffer(self.instances, null);
                 vc.device.freeMemory(self.instances_memory, null);
+
+                vc.device.destroyBuffer(self.instance_infos, null);
+                vc.device.freeMemory(self.instance_infos_memory, null);
 
                 comptime var i: usize = 0;
                 inline while (i < blas_count) : (i += 1) {
@@ -160,7 +195,7 @@ pub fn Accels(comptime blas_count: comptime_int) type {
                     .scratch_data = undefined,
                 };
 
-                const size_info = getBuildSizesInfo(vc, geometry_info, blas_count);
+                const size_info = getBuildSizesInfo(vc, geometry_info, instanced_blas_count);
 
                 var scratch_buffer: vk.Buffer = undefined;
                 var scratch_buffer_memory: vk.DeviceMemory = undefined;
@@ -189,7 +224,7 @@ pub fn Accels(comptime blas_count: comptime_int) type {
                 });
 
                 const build_info = .{
-                    .primitive_count = blas_count,
+                    .primitive_count = instanced_blas_count,
                     .first_vertex = 0,
                     .primitive_offset = 0,
                     .transform_offset = 0,

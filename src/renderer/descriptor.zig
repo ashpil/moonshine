@@ -191,7 +191,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
 
         // expects `write_info` to be a tuple of descriptors
         // expects `dst_bindings` is an array of `comptime_int`s specifying their respective write info dst binding
-        // expects `dst_bindings` is an array of `u32`s specifying their respective set index
+        // expects `dst_sets` is an array of `u32`s specifying their respective set index
         // currently only supports images I think
         pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_bindings: anytype, dst_sets: anytype, write_infos: anytype) void {
             comptime if (dst_bindings.len != write_infos.len) @compileError("`dst_bindings` and `write_info` must have same length!");

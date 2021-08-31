@@ -9,9 +9,6 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;
 
-    var engine = try Engine.create(2, allocator);
-    defer engine.destroy(allocator);
-
     const texture_sets = comptime [_]Scene.TextureSet {
         Scene.TextureSet {
             .color = .{
@@ -26,7 +23,18 @@ pub fn main() !void {
         },
         Scene.TextureSet {
             .color = .{
-                .color = F32x3.new(0.8, 0.8, 0.8)
+                .color = F32x3.new(0.653, 0.653, 0.653)
+            },
+            .roughness = .{
+                .greyscale = 0.15,
+            },
+            .normal = .{
+                .color = F32x3.new(0.5, 0.5, 1.0)
+            }
+        },
+        Scene.TextureSet {
+            .color = .{
+                .color = F32x3.new(0.0004, 0.0025, 0.0096)
             },
             .roughness = .{
                 .greyscale = 0.15,
@@ -36,6 +44,9 @@ pub fn main() !void {
             }
         },
     };
+
+    var engine = try Engine.create(texture_sets.len, allocator);
+    defer engine.destroy(allocator);
 
     const chess_set = Scene.ChessSet {
         .board = .{
@@ -57,7 +68,72 @@ pub fn main() !void {
             .black_material = .{
                 .metallic = 0.2,
                 .ior = 1.5,
+                .texture_index = 2,
+            },
+        },
+        .rook = .{
+            .model_path = "../../assets/models/rook.obj",
+            .white_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
                 .texture_index = 1,
+            },
+            .black_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 2,
+            },
+        },
+        .knight = .{
+            .model_path = "../../assets/models/knight.obj",
+            .white_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 1,
+            },
+            .black_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 2,
+            },
+        },
+        .bishop = .{
+            .model_path = "../../assets/models/bishop.obj",
+            .white_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 1,
+            },
+            .black_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 2,
+            },
+        },
+        .king = .{
+            .model_path = "../../assets/models/king.obj",
+            .white_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 1,
+            },
+            .black_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 2,
+            },
+        },
+        .queen = .{
+            .model_path = "../../assets/models/queen.obj",
+            .white_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 1,
+            },
+            .black_material = .{
+                .metallic = 0.2,
+                .ior = 1.5,
+                .texture_index = 2,
             },
         },
     };

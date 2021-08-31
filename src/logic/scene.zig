@@ -10,7 +10,8 @@ const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 
 const mesh = @import("../renderer/mesh.zig");
 const Meshes = mesh.Meshes(object_count);
-const Accels = @import("../renderer/accels.zig").Accels(object_count);
+const accels = @import("../renderer/accels.zig");
+const Accels = accels.Accels(object_count, .{ 1, 16, 4, 4, 4, 2, 2 });
 const BottomLevelAccels = Accels.BottomLevelAccels;
 const TopLevelAccel = Accels.TopLevelAccel;
 
@@ -22,27 +23,27 @@ pub const TextureSet = struct {
 
 pub const Piece = struct {
     model_path: []const u8,
-    black_material: mesh.Material,
-    white_material: mesh.Material,
+    black_material: accels.Material,
+    white_material: accels.Material,
 };
 
 pub const Board = struct {
     model_path: []const u8,
-    material: mesh.Material,
+    material: accels.Material,
 };
 
 pub const ChessSet = struct {
     board: Board,
 
     pawn: Piece,
-    // rook: Piece,
-    // knight: Piece,
-    // bishop: Piece,
-    // king: Piece,
-    // queen: Piece,
+    rook: Piece,
+    knight: Piece,
+    bishop: Piece,
+    king: Piece,
+    queen: Piece,
 };
 
-const object_count = 2;
+const object_count = 7;
 
 pub fn Scene(comptime texture_count: comptime_int) type {
     return struct {
@@ -82,23 +83,35 @@ pub fn Scene(comptime texture_count: comptime_int) type {
             const roughness_textures = try Textures.createTexture(vc, roughness_sources, commands);
             const normal_textures = try Textures.createTexture(vc, normal_sources, commands);
 
-            const board_obj = @embedFile(chess_set.board.model_path);
-            var board = try MeshData.fromObj(allocator, board_obj);
+            var board = try MeshData.fromObj(allocator, @embedFile(chess_set.board.model_path));
             defer board.destroy(allocator);
 
-            const pawn_obj = @embedFile(chess_set.pawn.model_path);
-            var pawn = try MeshData.fromObj(allocator, pawn_obj);
+            var pawn = try MeshData.fromObj(allocator, @embedFile(chess_set.pawn.model_path));
             defer pawn.destroy(allocator);
 
-            const objects = [object_count]mesh.Object {
-                .{
-                    .mesh = board,
-                    .material = chess_set.board.material
-                },
-                .{
-                    .mesh = pawn,
-                    .material = chess_set.pawn.white_material
-                }
+            var rook = try MeshData.fromObj(allocator, @embedFile(chess_set.rook.model_path));
+            defer rook.destroy(allocator);
+
+            var knight = try MeshData.fromObj(allocator, @embedFile(chess_set.knight.model_path));
+            defer knight.destroy(allocator);
+
+            var bishop = try MeshData.fromObj(allocator, @embedFile(chess_set.bishop.model_path));
+            defer bishop.destroy(allocator);
+
+            var king = try MeshData.fromObj(allocator, @embedFile(chess_set.king.model_path));
+            defer king.destroy(allocator);
+
+            var queen = try MeshData.fromObj(allocator, @embedFile(chess_set.queen.model_path));
+            defer queen.destroy(allocator);
+
+            const objects = [object_count] MeshData {
+                board,
+                pawn,
+                rook,
+                knight,
+                bishop,
+                king,
+                queen,
             };
 
             var geometries: [object_count]vk.AccelerationStructureGeometryKHR = undefined;
@@ -111,19 +124,227 @@ pub fn Scene(comptime texture_count: comptime_int) type {
             var meshes = try Meshes.create(vc, commands, &objects, &geometries, &build_infos);
             errdefer meshes.destroy(vc);
 
-            const matrices = [object_count][3][4]f32 {
+            const matrices = [33][3][4]f32 {
+                // board
                 .{
                     .{1.0, 0.0, 0.0, 0.0},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.0},
                 },
+                // white pawns
+                .{
+                    .{1.0, 0.0, 0.0, -0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
                 .{
                     .{1.0, 0.0, 0.0, 0.025},
                     .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, 0.025},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.125},
+                },
+                // black pawns
+                .{
+                    .{1.0, 0.0, 0.0, -0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, 0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                // white rooks
+                .{
+                    .{1.0, 0.0, 0.0, 0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                // black rooks
+                .{
+                    .{1.0, 0.0, 0.0, 0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.175},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
+                },
+                // white knights
+                .{
+                    .{1.0, 0.0, 0.0, 0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                // black knights
+                .{
+                    .{-1.0, 0.0, 0.0, 0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, -1.0, 0.175},
+                },
+                .{
+                    .{-1.0, 0.0, 0.0, -0.125},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, -1.0, 0.175},
+                },
+                // white bishops
+                .{
+                    .{1.0, 0.0, 0.0, 0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                .{
+                    .{1.0, 0.0, 0.0, -0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                // black bishops
+                .{
+                    .{-1.0, 0.0, 0.0, 0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, -1.0, 0.175},
+                },
+                .{
+                    .{-1.0, 0.0, 0.0, -0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, -1.0, 0.175},
+                },
+                // white king
+                .{
+                    .{1.0, 0.0, 0.0, 0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                // black king
+                .{
+                    .{1.0, 0.0, 0.0, 0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
+                },
+                // white queen
+                .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                // black queen
+                .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
                 },
             };
-            var blases = try BottomLevelAccels.create(vc, commands, &geometries, &build_infos_ref, &matrices);
+            var blases = try BottomLevelAccels.create(vc, commands, &geometries, &build_infos_ref, &matrices, [33]accels.Material {
+                chess_set.board.material,
+
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.white_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+                chess_set.pawn.black_material,
+
+                chess_set.rook.white_material,
+                chess_set.rook.white_material,
+                chess_set.rook.black_material,
+                chess_set.rook.black_material,
+
+                chess_set.knight.white_material,
+                chess_set.knight.white_material,
+                chess_set.knight.black_material,
+                chess_set.knight.black_material,
+
+                chess_set.bishop.white_material,
+                chess_set.bishop.white_material,
+                chess_set.bishop.black_material,
+                chess_set.bishop.black_material,
+
+                chess_set.king.white_material,
+                chess_set.king.black_material,
+
+                chess_set.queen.white_material,
+                chess_set.queen.black_material,
+            });
             errdefer blases.destroy(vc);
 
             var tlas = try TopLevelAccel.create(vc, commands, &blases);

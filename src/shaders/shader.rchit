@@ -8,9 +8,12 @@
 
 #include "common.glsl"
 
-struct Instance {
+struct Mesh {
     uint64_t vertexAddress;
     uint64_t indexAddress;
+};
+
+struct Instance {
     float metallic;
     float ior;
     uint textureIndex;
@@ -25,10 +28,11 @@ layout(buffer_reference, scalar) readonly buffer Indices { ivec3 i[]; };
 layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
 
 layout(binding = 2, set = 0) uniform sampler textureSampler;
-layout(binding = 5, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
-layout(binding = 6, set = 0) uniform texture2D colorTextures[2]; // this needs to be kept in sync with texturearray's size in Engine.zig
-layout(binding = 7, set = 0) uniform texture2D roughnessTextures[2]; // this needs to be kept in sync with texturearray's size in Engine.zig
-layout(binding = 8, set = 0) uniform texture2D normalTextures[2]; // this needs to be kept in sync with texturearray's size in Engine.zig
+layout(binding = 5, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 6, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
+layout(binding = 7, set = 0) uniform texture2D colorTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
+layout(binding = 8, set = 0) uniform texture2D roughnessTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
+layout(binding = 9, set = 0) uniform texture2D normalTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 
@@ -76,9 +80,10 @@ vec2 calculateTexcoords(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
 }
 
 void main() {
+    Mesh mesh = meshes[gl_InstanceCustomIndexEXT];
     Instance instance = instances[gl_InstanceID];
-    Vertices vertices = Vertices(instance.vertexAddress);
-    Indices indices = Indices(instance.indexAddress);
+    Vertices vertices = Vertices(mesh.vertexAddress);
+    Indices indices = Indices(mesh.indexAddress);
     ivec3 ind = indices.i[gl_PrimitiveID];
     Vertex v0 = vertices.v[ind.x];
     Vertex v1 = vertices.v[ind.y];

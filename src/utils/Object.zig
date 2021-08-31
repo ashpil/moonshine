@@ -147,7 +147,10 @@ fn categorizeLine(first_token: []const u8) LineType {
         return .index;
     } else if (std.mem.eql(u8, first_token, "vt")) {
         return .texture;
-    } else unreachable; // TODO if we want more
+    } else {
+        std.debug.print("Unknown line: {s}\n", .{first_token});
+        unreachable;
+    }
 }
 
 fn textureFromIter(iter: *std.mem.TokenIterator(u8)) !f32x2 {

@@ -122,7 +122,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 self.extent = new_extent;
 
                 try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image  = try Image.createRaw(vc, .{
+                self.display_image = try Image.createRaw(vc, .{
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },

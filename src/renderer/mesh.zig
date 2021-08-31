@@ -3,28 +3,16 @@ const std = @import("std");
 const utils = @import("./utils.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./VulkanContext.zig");
-const Obj = @import("../utils/Object.zig");
+const Object = @import("../utils/Object.zig");
 
 const f32x3 = @import("../utils/zug.zig").Vec3(f32);
 const u32x3 = @import("../utils/zug.zig").Vec3(u32);
-
-pub const Material = struct {
-    metallic: f32,
-    ior: f32,
-    texture_index: u8,
-};
-
-pub const Object = struct {
-    mesh: Obj,
-    material: Material,
-};
 
 pub fn Meshes(comptime mesh_count: comptime_int) type {
     return struct {
         const MeshInfo = struct {
             vertex_address: vk.DeviceAddress,
             index_address: vk.DeviceAddress,
-            material: Material,
         };
 
         vertices: [mesh_count]vk.Buffer,
@@ -48,13 +36,13 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
             var mesh_infos: [mesh_count]MeshInfo = undefined;
 
             for (objects) |object, i| {
-                const vertices_bytes = std.mem.sliceAsBytes(object.mesh.vertices);
+                const vertices_bytes = std.mem.sliceAsBytes(object.vertices);
                 try utils.createBuffer(vc, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true}, .{ .device_local_bit = true }, &vertices[i], &vertices_memory[i]);
                 errdefer vc.device.destroyBuffer(vertices[i], null);
                 errdefer vc.device.freeMemory(vertices_memory[i], null);
                 try commands.uploadData(vc, vertices[i], vertices_bytes);
 
-                const indices_bytes = std.mem.sliceAsBytes(object.mesh.indices);
+                const indices_bytes = std.mem.sliceAsBytes(object.indices);
                 try utils.createBuffer(vc, indices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true}, .{ .device_local_bit = true }, &indices[i], &indices_memory[i]);
                 errdefer vc.device.destroyBuffer(indices[i], null);
                 errdefer vc.device.freeMemory(indices_memory[i], null);
@@ -69,7 +57,6 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                 mesh_infos[i] = MeshInfo {
                     .vertex_address = vertex_address,
                     .index_address = index_address,
-                    .material = object.material,
                 };
                 geometries[i] = vk.AccelerationStructureGeometryKHR {
                     .geometry_type = .triangles_khr,
@@ -80,8 +67,8 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                             .vertex_data = .{
                                 .device_address = vertex_address,
                             },
-                            .vertex_stride = @sizeOf(@TypeOf(object.mesh.vertices[0])),
-                            .max_vertex = @intCast(u32, object.mesh.vertices.len - 1),
+                            .vertex_stride = @sizeOf(@TypeOf(object.vertices[0])),
+                            .max_vertex = @intCast(u32, object.vertices.len - 1),
                             .index_type = .uint32,
                             .index_data = .{
                                 .device_address = index_address,
@@ -94,7 +81,7 @@ pub fn Meshes(comptime mesh_count: comptime_int) type {
                 };
 
                 build_infos[i] = vk.AccelerationStructureBuildRangeInfoKHR {
-                    .primitive_count = @intCast(u32, object.mesh.indices.len),
+                    .primitive_count = @intCast(u32, object.indices.len),
                     .primitive_offset = 0,
                     .transform_offset = 0,
                     .first_vertex = 0,
