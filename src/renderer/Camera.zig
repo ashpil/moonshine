@@ -21,7 +21,6 @@ pub const PushInfo = struct {
     vertical: F32x3,
     u: F32x3,
     v: F32x3,
-    w: F32x3,
     lens_radius: f32,
 };
 
@@ -50,7 +49,6 @@ pub fn new(create_info: CreateInfo) Self {
         .lower_left_corner = create_info.origin.sub(horizontal.div_scalar(2.0)).sub(vertical.div_scalar(2.0)).sub(w.mul_scalar(create_info.focus_distance)),
         .u = u,
         .v = v,
-        .w = w,
         .lens_radius = create_info.aperture / 2,
     };
 

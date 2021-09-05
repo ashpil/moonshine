@@ -10,28 +10,36 @@ const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 
 const mesh = @import("../renderer/mesh.zig");
 const Meshes = mesh.Meshes(object_count);
-const accels = @import("../renderer/accels.zig");
-const Accels = accels.Accels(object_count, .{ 1, 16, 4, 4, 4, 2, 2 });
-const BottomLevelAccels = Accels.BottomLevelAccels;
-const TopLevelAccel = Accels.TopLevelAccel;
+const instance_counts = .{ 1, 16, 4, 4, 4, 2, 2 };
+const Accel = @import("../renderer/accel.zig");
+const utils = @import("../renderer/utils.zig");
 
-pub const TextureSet = struct {
+pub const Material = struct {
     color: Images.TextureSource,
     roughness: Images.TextureSource,
     normal: Images.TextureSource,
+
+    metallic: f32,
+    ior: f32,
+};
+
+pub const GpuMaterial = packed struct {
+    metallic: f32,
+    ior: f32,
 };
 
 pub const Piece = struct {
-    black_material: accels.Material,
-    white_material: accels.Material,
+    black_material_index: u32,
+    white_material_index: u32,
+    model_path: []const u8,
 };
 
 pub const Board = struct {
-    material: accels.Material,
+    material_index: u32,
+    model_path: []const u8,
 };
 
 pub const ChessSet = struct {
-    models_dir: []const u8,
     board: Board,
 
     pawn: Piece,
@@ -44,10 +52,10 @@ pub const ChessSet = struct {
 
 const object_count = 7;
 
-pub fn Scene(comptime texture_count: comptime_int) type {
+pub fn Scene(comptime material_count: comptime_int) type {
     return struct {
 
-        const Textures = Images.Images(texture_count);
+        const Textures = Images.Images(material_count);
 
         background: Image,
 
@@ -56,51 +64,66 @@ pub fn Scene(comptime texture_count: comptime_int) type {
         normal_textures: Textures,
 
         meshes: Meshes,
-        blases: BottomLevelAccels,
-        tlas: TopLevelAccel,
+        accel: Accel,
+
+        materials_buffer: vk.Buffer,
+        materials_memory: vk.DeviceMemory,
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime texture_sets: [texture_count]TextureSet, comptime background_filepath: []const u8, comptime chess_set: ChessSet, allocator: *std.mem.Allocator) !Self {
+        pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: [material_count]Material, comptime background_filepath: []const u8, comptime chess_set: ChessSet, allocator: *std.mem.Allocator) !Self {
             const background = try Image.createTexture(vc, .{
                 .{
                     .filepath = background_filepath,
                 }
             }, commands);
 
-            comptime var color_sources: [texture_count]Images.TextureSource = undefined;
-            comptime var roughness_sources: [texture_count]Images.TextureSource = undefined;
-            comptime var normal_sources: [texture_count]Images.TextureSource = undefined;
+            comptime var color_sources: [material_count]Images.TextureSource = undefined;
+            comptime var roughness_sources: [material_count]Images.TextureSource = undefined;
+            comptime var normal_sources: [material_count]Images.TextureSource = undefined;
 
-            comptime for (texture_sets) |set, i| {
+            comptime var gpu_materials: [material_count]GpuMaterial = undefined;
+
+            comptime for (materials) |set, i| {
                 color_sources[i] = set.color;
                 roughness_sources[i] = set.roughness;
                 normal_sources[i] = set.normal;
+
+                gpu_materials[i].ior = set.ior;
+                gpu_materials[i].metallic = set.metallic;
             };
 
             const color_textures = try Textures.createTexture(vc, color_sources, commands);
             const roughness_textures = try Textures.createTexture(vc, roughness_sources, commands);
             const normal_textures = try Textures.createTexture(vc, normal_sources, commands);
 
-            var board = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "board.obj"));
+            var materials_buffer: vk.Buffer = undefined;
+            var materials_memory: vk.DeviceMemory = undefined;
+            try utils.createBuffer(vc, @sizeOf(GpuMaterial) * material_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }, .{ .device_local_bit = true }, &materials_buffer, &materials_memory);
+            errdefer vc.device.destroyBuffer(materials_buffer, null);
+            errdefer vc.device.freeMemory(materials_memory, null);
+
+            try commands.uploadData(vc, materials_buffer, std.mem.asBytes(&gpu_materials));
+
+            var board = try MeshData.fromObj(allocator, @embedFile(chess_set.board.model_path));
             defer board.destroy(allocator);
 
-            var pawn = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "pawn.obj"));
+            var pawn = try MeshData.fromObj(allocator, @embedFile(chess_set.pawn.model_path));
             defer pawn.destroy(allocator);
 
-            var rook = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "rook.obj"));
+            var rook = try MeshData.fromObj(allocator, @embedFile(chess_set.rook.model_path));
             defer rook.destroy(allocator);
 
-            var knight = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "knight.obj"));
+            var knight = try MeshData.fromObj(allocator, @embedFile(chess_set.knight.model_path));
             defer knight.destroy(allocator);
 
-            var bishop = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "bishop.obj"));
+            var bishop = try MeshData.fromObj(allocator, @embedFile(chess_set.bishop.model_path));
             defer bishop.destroy(allocator);
 
-            var king = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "king.obj"));
+            var king = try MeshData.fromObj(allocator, @embedFile(chess_set.king.model_path));
             defer king.destroy(allocator);
 
-            var queen = try MeshData.fromObj(allocator, @embedFile(chess_set.models_dir ++ "queen.obj"));
+            var queen = try MeshData.fromObj(allocator, @embedFile(chess_set.queen.model_path));
             defer queen.destroy(allocator);
 
             const objects = [object_count] MeshData {
@@ -113,241 +136,335 @@ pub fn Scene(comptime texture_count: comptime_int) type {
                 queen,
             };
 
-            var geometries: [object_count]vk.AccelerationStructureGeometryKHR = undefined;
-            var build_infos: [object_count]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
-            var build_infos_ref: [object_count]*const vk.AccelerationStructureBuildRangeInfoKHR = undefined;
-            comptime var i = 0;
-            comptime while (i < object_count) : (i += 1) {
-                build_infos_ref[i] = &build_infos[i];
-            };
-            var meshes = try Meshes.create(vc, commands, &objects, &geometries, &build_infos);
-            errdefer meshes.destroy(vc);
+            var geometry_infos = Accel.GeometryInfos {};
+            defer geometry_infos.deinit(allocator);
+            try geometry_infos.ensureTotalCapacity(allocator, object_count);
 
-            const matrices = [33][3][4]f32 {
-                // board
-                .{
+            var board_instance = Accel.Instances {};
+            defer board_instance.deinit(allocator);
+            try board_instance.ensureTotalCapacity(allocator, 1);
+            board_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.0},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.0},
                 },
-                // white pawns
-                .{
+                .material_index = 0,
+            });
+
+            var pawn_instance = Accel.Instances {};
+            defer pawn_instance.deinit(allocator);
+            try pawn_instance.ensureTotalCapacity(allocator, 16);
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.025},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.025},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .{
+                .material_index = 1,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                // black pawns
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
+                    .{1.0, 0.0, 0.0, -0.075},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.125},
+                },
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.025},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
-                    .{1.0, 0.0, 0.0, 0.025},
-                    .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, 0.125},
-                },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                .{
+                .material_index = 2,
+            });
+            pawn_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.125},
                 },
-                // white rooks
-                .{
+                .material_index = 2,
+            });
+
+            var rook_instance = Accel.Instances {};
+            defer rook_instance.deinit(allocator);
+            try rook_instance.ensureTotalCapacity(allocator, 4);
+            rook_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                .{
+                .material_index = 1,
+            });
+            rook_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                // black rooks
-                .{
+                .material_index = 1,
+            });
+            rook_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.175},
                 },
-                .{
+                .material_index = 2,
+            });
+            rook_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.175},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, 0.175},
                 },
-                // white knights
-                .{
+                .material_index = 2,
+            });
+
+            var knight_instance = Accel.Instances {};
+            defer knight_instance.deinit(allocator);
+            try knight_instance.ensureTotalCapacity(allocator, 4);
+            knight_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                .{
+                .material_index = 1,
+            });
+            knight_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                // black knights
-                .{
+                .material_index = 1,
+            });
+            knight_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{-1.0, 0.0, 0.0, 0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, -1.0, 0.175},
                 },
-                .{
+                .material_index = 2,
+            });
+            knight_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{-1.0, 0.0, 0.0, -0.125},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, -1.0, 0.175},
                 },
-                // white bishops
-                .{
+                .material_index = 2,
+            });
+
+            var bishop_instance = Accel.Instances {};
+            defer bishop_instance.deinit(allocator);
+            try bishop_instance.ensureTotalCapacity(allocator, 4);
+            bishop_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, 0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                .{
+                .material_index = 1,
+            });
+            bishop_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{1.0, 0.0, 0.0, -0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.175},
                 },
-                // black bishops
-                .{
+                .material_index = 1,
+            });
+            bishop_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{-1.0, 0.0, 0.0, 0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, -1.0, 0.175},
                 },
-                .{
+                .material_index = 2,
+            });
+            bishop_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
                     .{-1.0, 0.0, 0.0, -0.075},
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, -1.0, 0.175},
                 },
-                // white king
-                .{
-                    .{1.0, 0.0, 0.0, 0.025},
-                    .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, -0.175},
-                },
-                // black king
-                .{
-                    .{1.0, 0.0, 0.0, 0.025},
-                    .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, 0.175},
-                },
-                // white queen
-                .{
-                    .{1.0, 0.0, 0.0, -0.025},
-                    .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, -0.175},
-                },
-                // black queen
-                .{
-                    .{1.0, 0.0, 0.0, -0.025},
-                    .{0.0, 1.0, 0.0, 0.0},
-                    .{0.0, 0.0, 1.0, 0.175},
-                },
-            };
-            var blases = try BottomLevelAccels.create(vc, commands, &geometries, &build_infos_ref, &matrices, [33]accels.Material {
-                chess_set.board.material,
-
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.white_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-                chess_set.pawn.black_material,
-
-                chess_set.rook.white_material,
-                chess_set.rook.white_material,
-                chess_set.rook.black_material,
-                chess_set.rook.black_material,
-
-                chess_set.knight.white_material,
-                chess_set.knight.white_material,
-                chess_set.knight.black_material,
-                chess_set.knight.black_material,
-
-                chess_set.bishop.white_material,
-                chess_set.bishop.white_material,
-                chess_set.bishop.black_material,
-                chess_set.bishop.black_material,
-
-                chess_set.king.white_material,
-                chess_set.king.black_material,
-
-                chess_set.queen.white_material,
-                chess_set.queen.black_material,
+                .material_index = 2,
             });
-            errdefer blases.destroy(vc);
 
-            var tlas = try TopLevelAccel.create(vc, commands, &blases);
-            errdefer tlas.destroy(vc);
+            var king_instance = Accel.Instances {};
+            defer king_instance.deinit(allocator);
+            try king_instance.ensureTotalCapacity(allocator, 2);
+            king_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
+                    .{1.0, 0.0, 0.0, 0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                .material_index = 1,
+            });
+            king_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
+                    .{1.0, 0.0, 0.0, 0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
+                },
+                .material_index = 2,
+            });
+
+            var queen_instance = Accel.Instances {};
+            defer queen_instance.deinit(allocator);
+            try queen_instance.ensureTotalCapacity(allocator, 2);
+            queen_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, -0.175},
+                },
+                .material_index = 1,
+            });
+            queen_instance.appendAssumeCapacity(.{
+                .initial_transform = .{
+                    .{1.0, 0.0, 0.0, -0.025},
+                    .{0.0, 1.0, 0.0, 0.0},
+                    .{0.0, 0.0, 1.0, 0.175},
+                },
+                .material_index = 2,
+            });
+
+            const instances = [object_count]Accel.Instances {
+                board_instance,
+                pawn_instance,
+                rook_instance,
+                knight_instance,
+                bishop_instance,
+                king_instance,
+                queen_instance,
+            };
+                
+            comptime var i = 0;
+            inline while (i < object_count) : (i += 1) {
+                geometry_infos.appendAssumeCapacity(.{
+                    .geometry = undefined,
+                    .build_info = undefined,
+                    .instances = instances[i],
+                });
+            }
+
+            const geometry_infos_slice = geometry_infos.slice();
+            const geometries = geometry_infos_slice.items(.geometry);
+            var build_infos: [object_count]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
+            var meshes = try Meshes.create(vc, commands, &objects, @ptrCast(*[object_count]vk.AccelerationStructureGeometryKHR, geometries.ptr), &build_infos);
+
+            var build_infos_ref = geometry_infos_slice.items(.build_info);
+            i = 0;
+            inline while (i < object_count) : (i += 1) {
+                build_infos_ref[i] = &build_infos[i];
+            }
+            errdefer meshes.destroy(vc);
+
+            var accel = try Accel.create(vc, allocator, commands, geometry_infos);
+            errdefer accel.destroy(vc, allocator);
 
             return Self {
                 .background = background,
@@ -356,20 +473,24 @@ pub fn Scene(comptime texture_count: comptime_int) type {
                 .roughness_textures = roughness_textures,
                 .normal_textures = normal_textures,
 
+                .materials_buffer = materials_buffer,
+                .materials_memory = materials_memory,
+
                 .meshes = meshes,
-                .blases = blases,
-                .tlas = tlas,
+                .accel = accel,
             };
         }
 
-        pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+        pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
             self.background.destroy(vc);
             self.color_textures.destroy(vc);
             self.roughness_textures.destroy(vc);
             self.normal_textures.destroy(vc);
             self.meshes.destroy(vc);
-            self.blases.destroy(vc);
-            self.tlas.destroy(vc);
+            self.accel.destroy(vc, allocator);
+
+            vc.device.destroyBuffer(self.materials_buffer, null);
+            vc.device.freeMemory(self.materials_memory, null);
         }
     };
 }

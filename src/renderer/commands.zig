@@ -59,7 +59,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
 
             // bind our stuff
             vc.device.cmdBindPipeline(buffer, .ray_tracing_khr, pipeline.handle);
-            vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, @ptrCast([*]vk.DescriptorSet, &descriptor_sets[display.frame_index]), 0, undefined);
+            vc.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, pipeline.layout, 0, 1, utils.toPointerType(&descriptor_sets[display.frame_index]), 0, undefined);
             
             // trace rays
             const callable_table = vk.StridedDeviceAddressRegionKHR {
@@ -136,7 +136,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(buffer, display.display_image.images[0], .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, @ptrCast([*]const vk.ImageBlit, &region), .nearest);
+            vc.device.cmdBlitImage(buffer, display.display_image.images[0], .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
@@ -197,7 +197,7 @@ pub const ComputeCommands = struct {
     }
 
     pub fn destroy(self: *ComputeCommands, vc: *const VulkanContext) void {
-        vc.device.freeCommandBuffers(self.pool, 1, @ptrCast([*]vk.CommandBuffer, &self.buffer));
+        vc.device.freeCommandBuffers(self.pool, 1, utils.toPointerType(&self.buffer));
         vc.device.destroyCommandPool(self.pool, null);
     }
 
@@ -216,7 +216,7 @@ pub const ComputeCommands = struct {
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
                 .command_buffer = self.buffer,
                 .device_mask = 0,
             }),
@@ -226,7 +226,7 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
@@ -257,7 +257,7 @@ pub const ComputeCommands = struct {
                 .depth = 1,
             },  
         };
-        vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, @ptrCast([*]const vk.BufferImageCopy, &copy));
+        vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
         try vc.device.endCommandBuffer(self.buffer);
 
         // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
@@ -265,7 +265,7 @@ pub const ComputeCommands = struct {
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
                 .command_buffer = self.buffer,
                 .device_mask = 0,
             }),
@@ -275,7 +275,7 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
@@ -323,7 +323,7 @@ pub const ComputeCommands = struct {
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
                 .command_buffer = self.buffer,
                 .device_mask = 0,
             }),
@@ -333,7 +333,7 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
@@ -435,7 +435,7 @@ pub const ComputeCommands = struct {
                     .depth = 1,
                 },  
             };
-            vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i], dst_images[i], .transfer_dst_optimal, 1, @ptrCast([*]const vk.BufferImageCopy, &copy));
+            vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i], dst_images[i], .transfer_dst_optimal, 1, utils.toPointerType(&copy));
         }
 
         vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
@@ -455,7 +455,7 @@ pub const ComputeCommands = struct {
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
                 .command_buffer = self.buffer,
                 .device_mask = 0,
             }),
@@ -465,7 +465,7 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }
@@ -493,14 +493,14 @@ pub const ComputeCommands = struct {
             .size = data.len,
         };
 
-        vc.device.cmdCopyBuffer(self.buffer, staging_buffer, dst_buffer, 1, @ptrCast([*]const vk.BufferCopy, &region));
+        vc.device.cmdCopyBuffer(self.buffer, staging_buffer, dst_buffer, 1, utils.toPointerType(&region));
 
         try vc.device.endCommandBuffer(self.buffer);
 
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
-            .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
                 .command_buffer = self.buffer,
                 .device_mask = 0,
             }),
@@ -510,7 +510,7 @@ pub const ComputeCommands = struct {
             .p_signal_semaphore_infos = undefined,
         };
 
-        try vc.device.queueSubmit2KHR(vc.queue, 1, @ptrCast([*]const vk.SubmitInfo2KHR, &submit_info), .null_handle);
+        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
         try vc.device.queueWaitIdle(vc.queue);
         try vc.device.resetCommandPool(self.pool, .{});
     }

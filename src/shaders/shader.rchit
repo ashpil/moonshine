@@ -16,7 +16,6 @@ struct Mesh {
 struct Instance {
     float metallic;
     float ior;
-    uint textureIndex;
 };
 
 struct Vertex {
@@ -79,9 +78,18 @@ vec2 calculateTexcoords(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
     return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
 }
 
+int getMeshIndex() {
+    return gl_InstanceCustomIndexEXT & 0x0000FF;
+}
+
+int getMaterialIndex() {
+    return (gl_InstanceCustomIndexEXT & 0xFFFF00) >> 16;
+}
+
 void main() {
-    Mesh mesh = meshes[gl_InstanceCustomIndexEXT];
-    Instance instance = instances[gl_InstanceID];
+    Mesh mesh = meshes[getMeshIndex()];
+    int materialIndex = getMaterialIndex();
+    Instance instance = instances[materialIndex];
     Vertices vertices = Vertices(mesh.vertexAddress);
     Indices indices = Indices(mesh.indexAddress);
     ivec3 ind = indices.i[gl_PrimitiveID];
@@ -99,7 +107,7 @@ void main() {
 
     vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
     vec2 texcoords = calculateTexcoords(barycentrics, t0, t1, t2);
-    vec3 normal = calculateNormal(v0, v1, v2, texcoords, instance.textureIndex);
+    vec3 normal = calculateNormal(v0, v1, v2, texcoords, materialIndex);
     vec3 point = calculateHitPoint(barycentrics, p0, p1, p2);
 
     payload.point = point;
@@ -107,6 +115,6 @@ void main() {
     payload.done = false;
     payload.material.metallic = instance.metallic;
     payload.material.ior = instance.ior;
-    payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(instance.textureIndex)], textureSampler), texcoords).rgb;
-    payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(instance.textureIndex)], textureSampler), texcoords).r;
+    payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).rgb;
+    payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).r;
 }

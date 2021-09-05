@@ -40,7 +40,7 @@ fn ShaderInfo(comptime infos: anytype) type {
                 const is_general_shader = comptime info.stage.contains(.{ .raygen_bit_khr = true }) or info.stage.contains(.{ .miss_bit_khr = true });
                 const is_closest_hit_shader = comptime info.stage.contains(.{ .closest_hit_bit_khr = true });
                 groups[i] = vk.RayTracingShaderGroupCreateInfoKHR {
-                    .type_ = comptime if (is_general_shader) .general_khr
+                    .@"type" = comptime if (is_general_shader) .general_khr
                         else if (is_closest_hit_shader) .triangles_hit_group_khr
                         else @compileError("Unknown shader stage!"),
                     .general_shader = comptime if (is_general_shader) i

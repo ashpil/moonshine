@@ -179,8 +179,8 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
     const mesh_info = desc.StorageBuffer {
         .buffer = scene.meshes.mesh_info,
     };
-    const instance_info = desc.StorageBuffer {
-        .buffer = scene.blases.instance_infos,
+    const materials_info = desc.StorageBuffer {
+        .buffer = scene.materials_buffer,
     };
     const color_textures = desc.TextureArray(scene.color_textures.views.len) {
         .views = scene.color_textures.views,
@@ -193,10 +193,10 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
     };
 
     self.descriptor.write(&self.context, sets, frames, .{
-        scene.tlas.handle,
+        scene.accel.tlas_handle,
         background,
         mesh_info,
-        instance_info,
+        materials_info,
         color_textures,
         roughness_textures,
         normal_textures,

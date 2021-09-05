@@ -154,7 +154,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             comptime var pool_sizes: [binding_infos.len]vk.DescriptorPoolSize = undefined;
             comptime for (pool_sizes) |*pool_size, i| {
                 pool_size.* = .{
-                    .type_ =  binding_infos[i].descriptor_type,
+                    .@"type" =  binding_infos[i].descriptor_type,
                     .descriptor_count = binding_infos[i].count,
                 };
             };

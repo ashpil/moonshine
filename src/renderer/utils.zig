@@ -59,3 +59,7 @@ pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const 
         });
     }
 }
+
+pub fn toPointerType(in: anytype) [*]const @typeInfo(@TypeOf(in)).Pointer.child {
+    return @ptrCast([*]const @typeInfo(@TypeOf(in)).Pointer.child, in);
+}
