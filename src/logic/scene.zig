@@ -8,9 +8,7 @@ const Image = Images.Images(1);
 
 const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 
-const mesh = @import("../renderer/mesh.zig");
-const Meshes = mesh.Meshes(object_count);
-const instance_counts = .{ 1, 16, 4, 4, 4, 2, 2 };
+const Meshes = @import("../renderer/meshes.zig");
 const Accel = @import("../renderer/accel.zig");
 const utils = @import("../renderer/utils.zig");
 
@@ -50,8 +48,6 @@ pub const ChessSet = struct {
     queen: Piece,
 };
 
-const object_count = 7;
-
 pub fn Scene(comptime material_count: comptime_int) type {
     return struct {
 
@@ -72,6 +68,8 @@ pub fn Scene(comptime material_count: comptime_int) type {
         const Self = @This();
 
         pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: [material_count]Material, comptime background_filepath: []const u8, comptime chess_set: ChessSet, allocator: *std.mem.Allocator) !Self {
+            const object_count = 7;
+
             const background = try Image.createTexture(vc, .{
                 .{
                     .filepath = background_filepath,
@@ -454,14 +452,15 @@ pub fn Scene(comptime material_count: comptime_int) type {
             const geometry_infos_slice = geometry_infos.slice();
             const geometries = geometry_infos_slice.items(.geometry);
             var build_infos: [object_count]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
-            var meshes = try Meshes.create(vc, commands, &objects, @ptrCast(*[object_count]vk.AccelerationStructureGeometryKHR, geometries.ptr), &build_infos);
+            
+            var meshes = try Meshes.create(vc, commands, allocator, &objects, geometries, &build_infos);
+            errdefer meshes.destroy(vc, allocator);
 
             var build_infos_ref = geometry_infos_slice.items(.build_info);
             i = 0;
             inline while (i < object_count) : (i += 1) {
                 build_infos_ref[i] = &build_infos[i];
             }
-            errdefer meshes.destroy(vc);
 
             var accel = try Accel.create(vc, allocator, commands, geometry_infos);
             errdefer accel.destroy(vc, allocator);
@@ -486,7 +485,7 @@ pub fn Scene(comptime material_count: comptime_int) type {
             self.color_textures.destroy(vc);
             self.roughness_textures.destroy(vc);
             self.normal_textures.destroy(vc);
-            self.meshes.destroy(vc);
+            self.meshes.destroy(vc, allocator);
             self.accel.destroy(vc, allocator);
 
             vc.device.destroyBuffer(self.materials_buffer, null);
