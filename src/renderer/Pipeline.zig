@@ -178,24 +178,24 @@ const ShaderBindingTable = struct {
         var raygen_memory: vk.DeviceMemory = undefined;
         const raygen_size = handle_size_aligned * raygen_entry_count;
         try utils.createBuffer(vc, raygen_size, buffer_usage_flags, memory_properties, &raygen, &raygen_memory);
-        errdefer vc.device.destroyBuffer(raygen, null);
         errdefer vc.device.freeMemory(raygen_memory, null);
+        errdefer vc.device.destroyBuffer(raygen, null);
         try cmd.uploadData(vc, raygen, sbt[0..raygen_size]);
 
         var miss: vk.Buffer = undefined;
         var miss_memory: vk.DeviceMemory = undefined;
         const miss_size = handle_size_aligned * miss_entry_count;
         try utils.createBuffer(vc, miss_size, buffer_usage_flags, memory_properties, &miss, &miss_memory);
-        errdefer vc.device.destroyBuffer(miss, null);
         errdefer vc.device.freeMemory(miss_memory, null);
+        errdefer vc.device.destroyBuffer(miss, null);
         try cmd.uploadData(vc, miss, sbt[raygen_size..raygen_size + miss_size]);
 
         var hit: vk.Buffer = undefined;
         var hit_memory: vk.DeviceMemory = undefined;
         const hit_size = handle_size_aligned * hit_entry_count;
         try utils.createBuffer(vc, hit_size, buffer_usage_flags, memory_properties, &hit, &hit_memory);
-        errdefer vc.device.destroyBuffer(hit, null);
         errdefer vc.device.freeMemory(hit_memory, null);
+        errdefer vc.device.destroyBuffer(hit, null);
         try cmd.uploadData(vc, hit, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
 
         return ShaderBindingTable {

@@ -4,7 +4,6 @@ const vk = @import("vulkan");
 const VulkanContext = @import("../renderer/VulkanContext.zig");
 const MeshData = @import("../utils/Object.zig");
 const Images = @import("../renderer/images.zig");
-const Image = Images.Images(1);
 
 const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 
@@ -51,13 +50,11 @@ pub const ChessSet = struct {
 pub fn Scene(comptime material_count: comptime_int) type {
     return struct {
 
-        const Textures = Images.Images(material_count);
+        background: Images,
 
-        background: Image,
-
-        color_textures: Textures,
-        roughness_textures: Textures,
-        normal_textures: Textures,
+        color_textures: Images,
+        roughness_textures: Images,
+        normal_textures: Images,
 
         meshes: Meshes,
         accel: Accel,
@@ -70,8 +67,8 @@ pub fn Scene(comptime material_count: comptime_int) type {
         pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: [material_count]Material, comptime background_filepath: []const u8, comptime chess_set: ChessSet, allocator: *std.mem.Allocator) !Self {
             const object_count = 7;
 
-            const background = try Image.createTexture(vc, .{
-                .{
+            const background = try Images.createTexture(vc, allocator, &[_]Images.TextureSource {
+                Images.TextureSource {
                     .filepath = background_filepath,
                 }
             }, commands);
@@ -91,15 +88,15 @@ pub fn Scene(comptime material_count: comptime_int) type {
                 gpu_materials[i].metallic = set.metallic;
             };
 
-            const color_textures = try Textures.createTexture(vc, color_sources, commands);
-            const roughness_textures = try Textures.createTexture(vc, roughness_sources, commands);
-            const normal_textures = try Textures.createTexture(vc, normal_sources, commands);
+            const color_textures = try Images.createTexture(vc, allocator, &color_sources, commands);
+            const roughness_textures = try Images.createTexture(vc, allocator, &roughness_sources, commands);
+            const normal_textures = try Images.createTexture(vc, allocator, &normal_sources, commands);
 
             var materials_buffer: vk.Buffer = undefined;
             var materials_memory: vk.DeviceMemory = undefined;
             try utils.createBuffer(vc, @sizeOf(GpuMaterial) * material_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }, .{ .device_local_bit = true }, &materials_buffer, &materials_memory);
-            errdefer vc.device.destroyBuffer(materials_buffer, null);
             errdefer vc.device.freeMemory(materials_memory, null);
+            errdefer vc.device.destroyBuffer(materials_buffer, null);
 
             try commands.uploadData(vc, materials_buffer, std.mem.asBytes(&gpu_materials));
 
@@ -215,7 +212,7 @@ pub fn Scene(comptime material_count: comptime_int) type {
                     .{0.0, 1.0, 0.0, 0.0},
                     .{0.0, 0.0, 1.0, -0.125},
                 },
-                .material_index = 2,
+                .material_index = 1,
             });
             pawn_instance.appendAssumeCapacity(.{
                 .initial_transform = .{
@@ -481,10 +478,10 @@ pub fn Scene(comptime material_count: comptime_int) type {
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
-            self.background.destroy(vc);
-            self.color_textures.destroy(vc);
-            self.roughness_textures.destroy(vc);
-            self.normal_textures.destroy(vc);
+            self.background.destroy(vc, allocator);
+            self.color_textures.destroy(vc, allocator);
+            self.roughness_textures.destroy(vc, allocator);
+            self.normal_textures.destroy(vc, allocator);
             self.meshes.destroy(vc, allocator);
             self.accel.destroy(vc, allocator);
 

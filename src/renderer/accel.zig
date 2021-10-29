@@ -75,8 +75,8 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             const size_info = getBuildSizesInfo(vc, build_geometry_infos[i], build_infos[i].primitive_count);
 
             try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true }, .{ .device_local_bit = true }, &scratch_buffers[i], &scratch_buffers_memory[i]);
-            errdefer vc.device.destroyBuffer(scratch_buffers[i], null);
             errdefer vc.device.freeMemory(scratch_buffers_memory[i], null);
+            errdefer vc.device.destroyBuffer(scratch_buffers[i], null);
             build_geometry_infos[i].scratch_data.device_address = vc.device.getBufferDeviceAddress(.{
                 .buffer = scratch_buffers[i],
             });
@@ -84,8 +84,8 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             var buffer: vk.Buffer = undefined;
             var memory: vk.DeviceMemory = undefined;
             try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffer, &memory);
-            errdefer vc.device.destroyBuffer(buffer, null);
             errdefer vc.device.freeMemory(memory, null);
+            errdefer vc.device.destroyBuffer(buffer, null);
 
             build_geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
                 .create_flags = .{},
@@ -117,8 +117,8 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
     var instance_infos: vk.Buffer = undefined;
     var instance_infos_memory: vk.DeviceMemory = undefined;
     try utils.createBuffer(vc, @sizeOf(vk.AccelerationStructureInstanceKHR) * total_instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &instance_infos, &instance_infos_memory);
-    errdefer vc.device.destroyBuffer(instance_infos, null);
     errdefer vc.device.freeMemory(instance_infos_memory, null);
+    errdefer vc.device.destroyBuffer(instance_infos, null);
 
     // create tlas
     const geometry = vk.AccelerationStructureGeometryKHR {
@@ -152,15 +152,15 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
 
     var scratch_buffer: vk.Buffer = undefined;
     var scratch_buffer_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true  }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
+    try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
     defer vc.device.destroyBuffer(scratch_buffer, null);
     defer vc.device.freeMemory(scratch_buffer_memory, null);
 
     var tlas_buffer: vk.Buffer = undefined;
     var tlas_memory: vk.DeviceMemory = undefined;
     try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &tlas_buffer, &tlas_memory);
-    errdefer vc.device.destroyBuffer(tlas_buffer, null);
     errdefer vc.device.freeMemory(tlas_memory, null);
+    errdefer vc.device.destroyBuffer(tlas_buffer, null);
 
     geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
         .create_flags = .{},

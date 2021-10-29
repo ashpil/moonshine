@@ -37,7 +37,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = display.display_image.images[0],
+                    .image = display.display_image.data.items(.image)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -81,7 +81,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = display.display_image.images[0],
+                    .image = display.display_image.data.items(.image)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -136,7 +136,7 @@ pub fn RenderCommand(comptime frame_count: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(buffer, display.display_image.images[0], .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+            vc.device.cmdBlitImage(buffer, display.display_image.data.items(.image)[0], .transfer_src_optimal, display.swapchain.images[display.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
@@ -338,20 +338,28 @@ pub const ComputeCommands = struct {
         try vc.device.resetCommandPool(self.pool, .{});
     }
 
-    pub fn uploadDataToImages(self: *ComputeCommands, vc: *const VulkanContext, comptime image_count: comptime_int, dst_images: [image_count]vk.Image, src_datas: [image_count][]const u8, sizes: [image_count]u64, extents: [image_count]vk.Extent2D, is_cubemaps: [image_count]bool) !void {
-        _ = src_datas;
+    // TODO: possible to ensure all params have same len?
+    pub fn uploadDataToImages(self: *ComputeCommands, vc: *const VulkanContext, allocator: *std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []u64, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
         try vc.device.beginCommandBuffer(self.buffer, .{
             .flags = .{},
             .p_inheritance_info = null,
         });
 
-        var first_barriers: [image_count]vk.ImageMemoryBarrier2KHR = undefined;
-        var second_barriers: [image_count]vk.ImageMemoryBarrier2KHR = undefined;
-        var staging_buffers: [image_count]vk.Buffer = undefined;
-        var staging_buffers_memory: [image_count]vk.DeviceMemory = undefined;
+        const len = @intCast(u32, dst_images.len);
 
-        comptime var i = 0;
-        inline while (i < image_count) : ( i += 1) {
+        const first_barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, len);
+        defer allocator.free(first_barriers);
+
+        const second_barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, len);
+        defer allocator.free(second_barriers);
+
+        const staging_buffers = try allocator.alloc(vk.Buffer, len);
+        defer allocator.free(staging_buffers);
+
+        const staging_buffers_memory = try allocator.alloc(vk.DeviceMemory, len);
+        defer allocator.free(staging_buffers_memory);
+
+        for (dst_images) |image, i| {
             first_barriers[i] = .{
                 .src_stage_mask = .{},
                 .src_access_mask = .{},
@@ -361,7 +369,7 @@ pub const ComputeCommands = struct {
                 .new_layout = .transfer_dst_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = dst_images[i],
+                .image = image,
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -380,7 +388,7 @@ pub const ComputeCommands = struct {
                 .new_layout = .shader_read_only_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = dst_images[i],
+                .image = image,
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -408,16 +416,15 @@ pub const ComputeCommands = struct {
             .p_memory_barriers = undefined,
             .buffer_memory_barrier_count = 0,
             .p_buffer_memory_barriers = undefined,
-            .image_memory_barrier_count = first_barriers.len,
-            .p_image_memory_barriers = &first_barriers,
+            .image_memory_barrier_count = len,
+            .p_image_memory_barriers = first_barriers.ptr,
         });
 
-        i = 0;
-        inline while (i < image_count) : ( i += 1) {
+        for (dst_images) |image, i| {
             const copy = vk.BufferImageCopy {
                 .buffer_offset = 0,
-                .buffer_row_length = extents[i].width,
-                .buffer_image_height = extents[i].height,
+                .buffer_row_length = 0,
+                .buffer_image_height = 0,
                 .image_subresource = .{
                     .aspect_mask = .{ .color_bit = true },
                     .mip_level = 0,
@@ -435,7 +442,7 @@ pub const ComputeCommands = struct {
                     .depth = 1,
                 },  
             };
-            vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i], dst_images[i], .transfer_dst_optimal, 1, utils.toPointerType(&copy));
+            vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i], image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
         }
 
         vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
@@ -444,8 +451,8 @@ pub const ComputeCommands = struct {
             .p_memory_barriers = undefined,
             .buffer_memory_barrier_count = 0,
             .p_buffer_memory_barriers = undefined,
-            .image_memory_barrier_count = second_barriers.len,
-            .p_image_memory_barriers = &second_barriers,
+            .image_memory_barrier_count = len,
+            .p_image_memory_barriers = second_barriers.ptr,
         });
 
         try vc.device.endCommandBuffer(self.buffer);

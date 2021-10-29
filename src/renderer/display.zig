@@ -4,7 +4,7 @@ const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("./Window.zig");
 const Swapchain = @import("./Swapchain.zig");
-const Image = @import("./images.zig").Images(1);
+const Images = @import("./images.zig");
 const RenderCommand = @import("./commands.zig").RenderCommand;
 const desc = @import("./descriptor.zig");
 const Descriptor = desc.Descriptor;
@@ -18,8 +18,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         frame_index: u8,
 
         swapchain: Swapchain,
-        display_image: Image,
-        accumulation_image: Image,
+        display_image: Images,
+        accumulation_image: Images,
 
         extent: vk.Extent2D,
 
@@ -30,23 +30,21 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
 
-            var display_image = try Image.createRaw(vc, .{
-                .{
-                    .extent = extent,
-                    .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                    .format = .r32g32b32a32_sfloat,
-                }
-            });
-            errdefer display_image.destroy(vc);
+            const display_image_info = Images.ImageCreateRawInfo {
+                .extent = extent,
+                .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
+                .format = .r32g32b32a32_sfloat,
+            };
+            var display_image = try Images.createRaw(vc, allocator, &.{ display_image_info });
+            errdefer display_image.destroy(vc, allocator);
 
-            var accumulation_image = try Image.createRaw(vc, .{
-                .{
-                    .extent = extent,
-                    .usage = .{ .storage_bit = true, },
-                    .format = .r32g32b32a32_sfloat,
-                }
-            });
-            errdefer accumulation_image.destroy(vc);
+            const accumulation_image_info = Images.ImageCreateRawInfo {
+                .extent = extent,
+                .usage = .{ .storage_bit = true, },
+                .format = .r32g32b32a32_sfloat,
+            };
+            var accumulation_image = try Images.createRaw(vc, allocator, &.{ accumulation_image_info });
+            errdefer accumulation_image.destroy(vc, allocator);
 
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
@@ -64,13 +62,14 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
                 .extent = extent,
 
+                // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
                 .destruction_queue = DestructionQueue.create(),
             };
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
-            self.display_image.destroy(vc);
-            self.accumulation_image.destroy(vc);
+            self.display_image.destroy(vc, allocator);
+            self.accumulation_image.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -88,10 +87,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
             if (frame.needs_rebind) {
                 try descriptor.write(vc, allocator, .{ 0, 1 }, .{ self.frame_index }, [_]desc.StorageImage {
                     desc.StorageImage {
-                        .view = self.display_image.views[0],
+                        .view = self.display_image.data.items(.view)[0],
                     },
                     desc.StorageImage {
-                        .view = self.accumulation_image.views[0],
+                        .view = self.accumulation_image.data.items(.view)[0],
                     }
                 });
                 self.frames[self.frame_index].needs_rebind = false;
@@ -122,7 +121,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 self.extent = new_extent;
 
                 try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image = try Image.createRaw(vc, .{
+                self.display_image = try Images.createRaw(vc, allocator, &[_]Images.ImageCreateRawInfo {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
@@ -131,7 +130,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 });
 
                 try self.destruction_queue.add(allocator, self.accumulation_image);
-                self.accumulation_image = try Image.createRaw(vc, .{
+                self.accumulation_image = try Images.createRaw(vc, allocator, &[_]Images.ImageCreateRawInfo {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, },

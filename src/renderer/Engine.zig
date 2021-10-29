@@ -8,7 +8,7 @@ const desc = @import("./descriptor.zig");
 const Descriptor = desc.Descriptor(frame_count);
 const Display = @import("./display.zig").Display(frame_count);
 const Camera = @import("./Camera.zig");
-const Image = @import("./images.zig").Images(1);
+const images = @import("./images.zig");
 
 const F32x3 = @import("../utils/zug.zig").Vec3(f32);
 const Mat4 = @import("../utils/zug.zig").Mat4(f32);
@@ -47,7 +47,8 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
     const context = try VulkanContext.create(allocator, &window);
     var transfer_commands = try ComputeCommands.create(&context);
     const display = try Display.create(&context, allocator, initial_window_size);
-    try transfer_commands.transitionImageLayout(&context, display.accumulation_image.images[0], .@"undefined", .general);
+    // todo: why transition here?
+    try transfer_commands.transitionImageLayout(&context, display.accumulation_image.data.items(.image)[0], .@"undefined", .general);
 
     const descriptor = try Descriptor.create(&context, [10]desc.BindingInfo {
         .{
@@ -112,14 +113,14 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         sets[i] = i;
     };
 
-    const sampler = try Image.createSampler(&context);
+    const sampler = try images.createSampler(&context);
 
     const display_image_info = desc.StorageImage {
-        .view = display.display_image.views[0],
+        .view = display.display_image.data.items(.view)[0],
     };
 
     const accmululation_image_info = desc.StorageImage {
-        .view = display.accumulation_image.views[0],
+        .view = display.accumulation_image.data.items(.view)[0],
     };
 
     const sampler_info = desc.Sampler {
@@ -174,7 +175,7 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
 
     const background = desc.Texture {
         .sampler = self.sampler,
-        .view = scene.background.views[0],
+        .view = scene.background.data.items(.view)[0],
     };
     const mesh_info = desc.StorageBuffer {
         .buffer = scene.meshes.mesh_info,
@@ -183,13 +184,13 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
         .buffer = scene.materials_buffer,
     };
     const color_textures = desc.TextureArray {
-        .views = &scene.color_textures.views,
+        .views = scene.color_textures.data.items(.view),
     };
     const roughness_textures = desc.TextureArray {
-        .views = &scene.roughness_textures.views,
+        .views = scene.roughness_textures.data.items(.view),
     };
     const normal_textures = desc.TextureArray {
-        .views = &scene.normal_textures.views,
+        .views = scene.normal_textures.data.items(.view),
     };
 
     try self.descriptor.write(&self.context, allocator, sets, frames, .{
@@ -292,7 +293,8 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator) !void {
 }
 
 fn resize(self: *Self) !void {
-    try self.transfer_commands.transitionImageLayout(&self.context, self.display.accumulation_image.images[0], .@"undefined", .general);
+    // todo: or here
+    try self.transfer_commands.transitionImageLayout(&self.context, self.display.accumulation_image.data.items(.image)[0], .@"undefined", .general);
 
     var camera_create_info = self.camera.create_info;
     camera_create_info.extent = self.display.extent;

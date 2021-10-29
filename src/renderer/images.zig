@@ -98,125 +98,138 @@ pub const TextureSource = union(enum) {
     greyscale: comptime_float,
 };
 
-pub fn Images(comptime image_count: comptime_int) type {
+const Data = std.MultiArrayList(struct {
+    image: vk.Image,
+    view: vk.ImageView,
+    memory: vk.DeviceMemory,
+});
 
-    return struct {
-        images: [image_count]vk.Image,
-        views: [image_count]vk.ImageView,
-        memories: [image_count]vk.DeviceMemory,
+data: Data,
 
-        const Self = @This();
+const Self = @This();
 
-        pub fn createRaw(vc: *const VulkanContext, info: [image_count]ImageCreateRawInfo) !Self {
-            
-            var images: [image_count]vk.Image = undefined;
-            var views: [image_count]vk.ImageView = undefined;
-            var memories: [image_count]vk.DeviceMemory = undefined;
+pub fn createRaw(vc: *const VulkanContext, allocator: *std.mem.Allocator, infos: []const ImageCreateRawInfo) !Self {
+    var data = Data {};
+    try data.ensureTotalCapacity(allocator, infos.len);
+    errdefer data.deinit(allocator);
 
-            comptime var i = 0;
-            inline while (i < image_count) : (i += 1) {
-                const image = try Image.create(vc, info[i].extent, info[i].usage, info[i].format, false);
+    for (infos) |info| {
+        const image = try Image.create(vc, info.extent, info.usage, info.format, false);
 
-                images[i] = image.handle;
-                views[i] = image.view;
-                memories[i] = image.memory;
-            }
+        data.appendAssumeCapacity(.{
+            .image = image.handle,
+            .view = image.view,
+            .memory = image.memory,
+        });
+    }
 
-            return Self {
-                .images = images,
-                .views = views,
-                .memories = memories,
-            };
-        }
-
-        pub fn createTexture(vc: *const VulkanContext, comptime sources: [image_count]TextureSource, commands: *TransferCommands) !Self {
-            var images: [image_count]vk.Image = undefined;
-            var views: [image_count]vk.ImageView = undefined;
-            var memories: [image_count]vk.DeviceMemory = undefined;
-
-            var extents: [image_count]vk.Extent2D = undefined;
-            var bytes: [image_count][]const u8 = undefined;
-            var sizes: [image_count]u64 = undefined;
-            var is_cubemaps: [image_count]bool = undefined;
-
-            inline for (sources) |source, i| {
-                const image = switch (source) {
-                    .filepath => |filepath| blk: {
-                        const dds_file = @embedFile(filepath);
-                        const dds_info = @ptrCast(*const DDSFileInfo, dds_file[0..@sizeOf(DDSFileInfo)]);
-                        dds_info.verify(); // this could be comptime but compiler glitches out for some reason
-                        extents[i] = dds_info.getExtent();
-                        is_cubemaps[i] = dds_info.isCubemap();
-                        bytes[i] = dds_file[@sizeOf(DDSFileInfo)..];
-
-                        break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
-                    },
-                    .color => |color| blk: {
-                        bytes[i] = comptime std.mem.asBytes(&color);
-                        extents[i] = vk.Extent2D {
-                            .width = 1,
-                            .height = 1,
-                        };
-                        is_cubemaps[i] = false;
-                        
-                        break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
-                    },
-                    .greyscale => |greyscale| blk: {
-                        bytes[i] = comptime std.mem.asBytes(&@floatCast(f32, greyscale));
-                        extents[i] = vk.Extent2D {
-                            .width = 1,
-                            .height = 1,
-                        };
-                        is_cubemaps[i] = false;
-
-                        break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
-                    },
-                };
-                images[i] = image.handle;
-                views[i] = image.view;
-                memories[i] = image.memory;
-                sizes[i] = image.size;
-            }
-
-            try commands.uploadDataToImages(vc, image_count, images, bytes, sizes, extents, is_cubemaps);
-
-            return Self {
-                .images = images,
-                .views = views,
-                .memories = memories,
-            };      
-        }
-
-        pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
-            return try vc.device.createSampler(.{
-                .flags = .{},
-                .mag_filter = .linear,
-                .min_filter = .linear,
-                .mipmap_mode = .linear,
-                .address_mode_u = .clamp_to_edge,
-                .address_mode_v = .clamp_to_edge,
-                .address_mode_w = .clamp_to_edge,
-                .mip_lod_bias = 0.0,
-                .anisotropy_enable = vk.FALSE,
-                .max_anisotropy = 0.0,
-                .compare_enable = vk.FALSE,
-                .compare_op = .always,
-                .min_lod = 0.0,
-                .max_lod = 0.0,
-                .border_color = .float_opaque_white,
-                .unnormalized_coordinates = vk.FALSE,
-            }, null);
-        }
-
-        pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
-            comptime var i = 0;
-            inline while (i < image_count) : (i += 1) {
-                vc.device.destroyImageView(self.views[i], null);
-                vc.device.destroyImage(self.images[i], null);
-                vc.device.freeMemory(self.memories[i], null);
-            }
-        }
+    return Self {
+        .data = data,
     };
+}
+
+// TODO: sources won't be able to be comptime at some point, handle this after we have proper asset loading
+pub fn createTexture(vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime sources: []const TextureSource, commands: *TransferCommands) !Self {
+    var data = Data {};
+    try data.ensureTotalCapacity(allocator, sources.len);
+    errdefer data.deinit(allocator);
+
+    const extents = try allocator.alloc(vk.Extent2D, sources.len);
+    defer allocator.free(extents);
+
+    const bytes = try allocator.alloc([]const u8, sources.len);
+    defer allocator.free(bytes);
+
+    const sizes = try allocator.alloc(u64, sources.len);
+    defer allocator.free(sizes);
+
+    const is_cubemaps = try allocator.alloc(bool, sources.len);
+    defer allocator.free(is_cubemaps);
+
+    inline for (sources) |source, i| {
+        const image = switch (source) {
+            .filepath => |filepath| blk: {
+                const dds_file = @embedFile(filepath);
+                const dds_info = @ptrCast(*const DDSFileInfo, dds_file[0..@sizeOf(DDSFileInfo)]);
+                dds_info.verify(); // this could be comptime but compiler glitches out for some reason
+                extents[i] = dds_info.getExtent();
+                is_cubemaps[i] = dds_info.isCubemap();
+                bytes[i] = dds_file[@sizeOf(DDSFileInfo)..];
+
+                break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
+            },
+            .color => |color| blk: {
+                bytes[i] = comptime std.mem.asBytes(&color);
+                extents[i] = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                is_cubemaps[i] = false;
+                
+                break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
+            },
+            .greyscale => |greyscale| blk: {
+                bytes[i] = comptime std.mem.asBytes(&@floatCast(f32, greyscale));
+                extents[i] = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                is_cubemaps[i] = false;
+
+                break :blk try Image.create(vc, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
+            },
+        };
+        data.appendAssumeCapacity(.{
+            .image = image.handle,
+            .view = image.view,
+            .memory = image.memory,
+        });
+        sizes[i] = image.size;
+    }
+
+    const images = data.items(.image);
+
+    try commands.uploadDataToImages(vc, allocator, images, bytes, sizes, extents, is_cubemaps);
+
+    return Self {
+        .data = data,
+    };      
+}
+
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+    const data_slice = self.data.slice();
+    const views = data_slice.items(.view);
+    const images = data_slice.items(.image);
+    const memories = data_slice.items(.memory);
+
+    var i: u32 = 0;
+    while (i < self.data.len) : (i += 1) {
+        vc.device.destroyImageView(views[i], null);
+        vc.device.destroyImage(images[i], null);
+        vc.device.freeMemory(memories[i], null);
+    }
+    self.data.deinit(allocator);
+}
+
+pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
+    return try vc.device.createSampler(.{
+        .flags = .{},
+        .mag_filter = .linear,
+        .min_filter = .linear,
+        .mipmap_mode = .linear,
+        .address_mode_u = .clamp_to_edge,
+        .address_mode_v = .clamp_to_edge,
+        .address_mode_w = .clamp_to_edge,
+        .mip_lod_bias = 0.0,
+        .anisotropy_enable = vk.FALSE,
+        .max_anisotropy = 0.0,
+        .compare_enable = vk.FALSE,
+        .compare_op = .always,
+        .min_lod = 0.0,
+        .max_lod = 0.0,
+        .border_color = .float_opaque_white,
+        .unnormalized_coordinates = vk.FALSE,
+    }, null);
 }
 
 const Image = struct {

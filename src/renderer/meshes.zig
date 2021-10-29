@@ -45,16 +45,16 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, allocator: 
         var vertex_buffer: vk.Buffer = undefined;
         var vertex_buffer_memory: vk.DeviceMemory = undefined;
         try utils.createBuffer(vc, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &vertex_buffer, &vertex_buffer_memory);
-        errdefer vc.device.destroyBuffer(vertex_buffer, null);
         errdefer vc.device.freeMemory(vertex_buffer_memory, null);
+        errdefer vc.device.destroyBuffer(vertex_buffer, null);
         try commands.uploadData(vc, vertex_buffer, vertices_bytes);
 
         var index_buffer: vk.Buffer = undefined;
         var index_buffer_memory: vk.DeviceMemory = undefined;
         const indices_bytes = std.mem.sliceAsBytes(object.indices);
         try utils.createBuffer(vc, indices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }, .{ .device_local_bit = true }, &index_buffer, &index_buffer_memory);
-        errdefer vc.device.destroyBuffer(index_buffer, null);
         errdefer vc.device.freeMemory(index_buffer_memory, null);
+        errdefer vc.device.destroyBuffer(index_buffer, null);
         try commands.uploadData(vc, index_buffer, indices_bytes);
 
         const vertex_address = vc.device.getBufferDeviceAddress(.{
@@ -110,8 +110,8 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, allocator: 
     var mesh_info: vk.Buffer = undefined;
     var mesh_info_memory: vk.DeviceMemory = undefined;
     try utils.createBuffer(vc, mesh_info_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true }, .{ .device_local_bit = true }, &mesh_info, &mesh_info_memory);
-    errdefer vc.device.destroyBuffer(mesh_info, null);
     errdefer vc.device.freeMemory(mesh_info_memory, null);
+    errdefer vc.device.destroyBuffer(mesh_info, null);
     try commands.uploadData(vc, mesh_info, mesh_info_bytes);
 
     return Self {
