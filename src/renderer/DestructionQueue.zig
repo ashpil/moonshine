@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const Images = @import("./images.zig");
+const Images = @import("./Images.zig");
 
 // TODO: how to make this use some sort of duck typing and take in any 
 // type with a `destroy` function

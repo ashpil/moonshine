@@ -5,10 +5,10 @@ const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("./Window.zig");
 const Pipeline = @import("./Pipeline.zig");
 const desc = @import("./descriptor.zig");
-const Descriptor = desc.Descriptor(frame_count);
-const Display = @import("./display.zig").Display(frame_count);
+const Descriptor = desc.Descriptor(frames_in_flight);
+const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
-const images = @import("./images.zig");
+const Images = @import("./Images.zig");
 
 const F32x3 = @import("../utils/zug.zig").Vec3(f32);
 const Mat4 = @import("../utils/zug.zig").Mat4(f32);
@@ -17,9 +17,9 @@ const commands = @import("./commands.zig");
 const ComputeCommands = commands.ComputeCommands;
 const RenderCommands = commands.RenderCommand;
 
-const Scene = @import("../logic/scene.zig").Scene(3); // TODO: unhardcode this
+const Scene = @import("../logic/Scene.zig"); // TODO: create scene struct in renderer, decouple chess logic from scene
 
-const frame_count = 2;
+const frames_in_flight = 2;
 
 const initial_window_size = vk.Extent2D {
     .width = 800,
@@ -36,7 +36,7 @@ transfer_commands: ComputeCommands,
 descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
-frame_count: u32,
+num_accumulted_frames: u32,
 
 sampler: vk.Sampler,
 
@@ -103,7 +103,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         },
     });
 
-    comptime var frames: [frame_count]u32 = undefined;
+    comptime var frames: [frames_in_flight]u32 = undefined;
     comptime for (frames) |_, i| {
         frames[i] = i;
     };
@@ -113,7 +113,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         sets[i] = i;
     };
 
-    const sampler = try images.createSampler(&context);
+    const sampler = try Images.createSampler(&context);
 
     const display_image_info = desc.StorageImage {
         .view = display.display_image.data.items(.view)[0],
@@ -157,13 +157,13 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         .camera = camera,
         .pipeline = pipeline,
         .sampler = sampler,
-        .frame_count = 0,
+        .num_accumulted_frames = 0,
     };
 }
 
 pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene) !void {
 
-    comptime var frames: [frame_count]u32 = undefined;
+    comptime var frames: [frames_in_flight]u32 = undefined;
     comptime for (frames) |_, i| {
         frames[i] = i;
     };
@@ -249,7 +249,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, engine: *
 
         engine.camera = Camera.new(camera_create_info);
 
-        engine.frame_count = 0;
+        engine.num_accumulted_frames = 0;
     }
 }
 
@@ -274,10 +274,10 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator) !void {
         }
 
         self.camera.push(&self.context, buffer, self.pipeline.layout);
-        const frame_count_bytes = std.mem.asBytes(&self.frame_count);
-        self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), frame_count_bytes.len, frame_count_bytes);
+        const num_accumulted_frames_bytes = std.mem.asBytes(&self.num_accumulted_frames);
+        self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), num_accumulted_frames_bytes.len, num_accumulted_frames_bytes);
 
-        try RenderCommands(frame_count).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
+        try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
 
         try self.display.endFrame(&self.context, allocator, &self.window, &resized);
         if (resized) {
@@ -285,7 +285,7 @@ pub fn run(self: *Self, allocator: *std.mem.Allocator) !void {
         }
 
         if (!resized) {
-            self.frame_count += 1;
+            self.num_accumulted_frames += 1;
         }
         self.window.pollEvents();
     }
@@ -300,5 +300,5 @@ fn resize(self: *Self) !void {
     camera_create_info.extent = self.display.extent;
     self.camera = Camera.new(camera_create_info);
 
-    self.frame_count = 0;
+    self.num_accumulted_frames = 0;
 }

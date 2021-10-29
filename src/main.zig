@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const Engine = @import("./renderer/Engine.zig");
-const Scene = @import("./logic/scene.zig");
+const Scene = @import("./logic/Scene.zig");
 const F32x3 = @import("./utils/zug.zig").Vec3(f32);
 
 pub fn main() !void {
@@ -92,7 +92,7 @@ pub fn main() !void {
         },
     };
 
-    var scene = try Scene.Scene(texture_sets.len).create(&engine.context, &engine.transfer_commands, texture_sets, "../../assets/textures/skybox.dds", chess_set, allocator);
+    var scene = try Scene.create(&engine.context, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", chess_set, allocator);
     defer scene.destroy(&engine.context, allocator);
 
     engine.setCallbacks();
