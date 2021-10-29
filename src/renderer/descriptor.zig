@@ -5,7 +5,10 @@ const VulkanContext = @import("./VulkanContext.zig");
 pub const StorageImage = struct {
     view: vk.ImageView,
 
-    const count = 1;
+    fn count(self: StorageImage) u32 {
+        _ = self;
+        return 1;
+    }
     
     fn toDescriptor(self: StorageImage) [1]vk.DescriptorImageInfo {
         return [1]vk.DescriptorImageInfo {
@@ -22,7 +25,10 @@ pub const Texture = struct {
     view: vk.ImageView,
     sampler: vk.Sampler,
 
-    const count = 1;
+    fn count(self: Texture) u32 {
+        _ = self;
+        return 1;
+    }
 
     fn toDescriptor(self: Texture) [1]vk.DescriptorImageInfo {
         return [1]vk.DescriptorImageInfo {
@@ -38,7 +44,10 @@ pub const Texture = struct {
 pub const Sampler = struct {
     sampler: vk.Sampler,
 
-    const count = 1;
+    fn count(self: Sampler) u32 {
+        _ = self;
+        return 1;
+    }
 
     fn toDescriptor(self: Sampler) [1]vk.DescriptorImageInfo {
         return [1]vk.DescriptorImageInfo {
@@ -51,32 +60,34 @@ pub const Sampler = struct {
     }
 };
 
-pub fn TextureArray(comptime texture_count: comptime_int) type {
-    return struct {
-        views: [texture_count]vk.ImageView,
+pub const TextureArray = struct {
+    views: []const vk.ImageView,
 
-        const count = texture_count;
+    fn count(self: TextureArray) u32 {
+        return @intCast(u32, self.views.len);
+    }
 
-        fn toDescriptor(self: @This()) [texture_count]vk.DescriptorImageInfo {
-            var infos: [texture_count]vk.DescriptorImageInfo = undefined;
-            comptime var i = 0;
-            inline while (i < texture_count) : (i += 1) {
-                infos[i] = vk.DescriptorImageInfo {
-                    .sampler = .null_handle,
-                    .image_view = self.views[i],
-                    .image_layout = .shader_read_only_optimal,
-                };
-            }
-
-            return infos;
+    fn toDescriptor(self: TextureArray, allocator: *std.mem.Allocator) ![]vk.DescriptorImageInfo {
+        const infos = try allocator.alloc(vk.DescriptorImageInfo, self.views.len);
+        for (self.views) |view, i| {
+            infos[i] = vk.DescriptorImageInfo {
+                .sampler = .null_handle,
+                .image_view = view,
+                .image_layout = .shader_read_only_optimal,
+            };
         }
-    };
-}
+
+        return infos;
+    }
+};
 
 pub const StorageBuffer = struct {
     buffer: vk.Buffer,
 
-    const count = 1;
+    fn count(self: StorageBuffer) u32 {
+        _ = self;
+        return 1;
+    }
 
     fn toDescriptor(self: StorageBuffer) [1]vk.DescriptorBufferInfo {
         return [1]vk.DescriptorBufferInfo {
@@ -105,8 +116,12 @@ fn typeToDescriptorType(comptime in: type) vk.DescriptorType {
     };
 }
 
+fn isImageArrayWrite(comptime in: type) bool {
+    return in == TextureArray;
+}
+
 fn isImageWrite(comptime in: type) bool {
-    return in == StorageImage or in == Texture or in == Sampler or (if (std.mem.indexOf(u8, @typeName(in), "TextureArray")) |_| true else false);
+    return in == StorageImage or in == Texture or in == Sampler;
 }
 
 fn isAccelWrite(comptime in: type) bool {
@@ -193,7 +208,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
         // expects `dst_bindings` is an array of `comptime_int`s specifying their respective write info dst binding
         // expects `dst_sets` is an array of `u32`s specifying their respective set index
         // currently only supports images I think
-        pub fn write(self: *const Self, vc: *const VulkanContext, comptime dst_bindings: anytype, dst_sets: anytype, write_infos: anytype) void {
+        pub fn write(self: *const Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime dst_bindings: anytype, dst_sets: anytype, write_infos: anytype) !void {
             comptime if (dst_bindings.len != write_infos.len) @compileError("`dst_bindings` and `write_info` must have same length!");
 
             comptime var descriptor_write: [dst_bindings.len]vk.WriteDescriptorSet = undefined;
@@ -202,7 +217,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                     .dst_set = undefined, // this can only be set at runtime
                     .dst_binding = dst_bindings[i],
                     .dst_array_element = 0,
-                    .descriptor_count = if (isAccelWrite(@TypeOf(write_infos[i]))) 1 else @TypeOf(write_infos[i]).count,
+                    .descriptor_count = undefined,
                     .descriptor_type = typeToDescriptorType(@TypeOf(write_infos[i])),
                     .p_buffer_info = undefined,
                     .p_image_info = undefined,
@@ -220,6 +235,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                     const index = (i * dst_bindings.len) + j;
                     descriptor_writes[index] = write_info;
                     descriptor_writes[index].dst_set = self.sets[dst_sets[i]];
+                    descriptor_writes[index].descriptor_count = if (comptime isAccelWrite(@TypeOf(write_infos[j]))) 1 else write_infos[j].count();
                     if (comptime isAccelWrite(@TypeOf(write_infos[j]))) {
                         descriptor_writes[index].p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                             .acceleration_structure_count = 1,
@@ -227,6 +243,8 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                         };
                     } else if (comptime isImageWrite(@TypeOf(write_infos[j]))) {
                         descriptor_writes[index].p_image_info = @ptrCast([*]const vk.DescriptorImageInfo, &write_infos[j].toDescriptor());
+                    } else if (comptime isImageArrayWrite(@TypeOf(write_infos[j]))) {
+                        descriptor_writes[index].p_image_info = (try write_infos[j].toDescriptor(allocator)).ptr;
                     } else if (comptime isBufferWrite(@TypeOf(write_infos[j]))) {
                         descriptor_writes[index].p_buffer_info = @ptrCast([*]const vk.DescriptorBufferInfo, &write_infos[j].toDescriptor());
                     } else comptime unreachable;
@@ -234,6 +252,16 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
             }
 
             vc.device.updateDescriptorSets(descriptor_write_count, &descriptor_writes, 0, undefined);
+
+            i = 0;
+            inline while (i < dst_sets.len) : (i += 1) {
+                inline for (descriptor_write) |_, j| {
+                    const index = (i * dst_bindings.len) + j;
+                    if (comptime isImageArrayWrite(@TypeOf(write_infos[j]))) {
+                        allocator.destroy(descriptor_writes[index].p_image_info);
+                    }
+                }
+            }
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {

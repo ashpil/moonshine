@@ -96,7 +96,7 @@ pub fn main() !void {
     defer scene.destroy(&engine.context, allocator);
 
     engine.setCallbacks();
-    engine.setScene(&scene);
+    try engine.setScene(allocator, &scene);
 
     try engine.run(allocator);
 

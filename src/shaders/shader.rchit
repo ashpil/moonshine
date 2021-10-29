@@ -29,9 +29,9 @@ layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
 layout(binding = 2, set = 0) uniform sampler textureSampler;
 layout(binding = 5, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
 layout(binding = 6, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
-layout(binding = 7, set = 0) uniform texture2D colorTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
-layout(binding = 8, set = 0) uniform texture2D roughnessTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
-layout(binding = 9, set = 0) uniform texture2D normalTextures[3]; // this needs to be kept in sync with texturearray's size in Engine.zig
+layout(binding = 7, set = 0) uniform texture2D colorTextures[];
+layout(binding = 8, set = 0) uniform texture2D roughnessTextures[];
+layout(binding = 9, set = 0) uniform texture2D normalTextures[];
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 

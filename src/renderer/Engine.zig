@@ -126,7 +126,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         .sampler = sampler,
     };
 
-    descriptor.write(&context, sets, frames, .{
+    try descriptor.write(&context, allocator, sets, frames, .{
         display_image_info,
         accmululation_image_info,
         sampler_info,
@@ -160,7 +160,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
     };
 }
 
-pub fn setScene(self: *Self, scene: *const Scene) void {
+pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene) !void {
 
     comptime var frames: [frame_count]u32 = undefined;
     comptime for (frames) |_, i| {
@@ -182,17 +182,17 @@ pub fn setScene(self: *Self, scene: *const Scene) void {
     const materials_info = desc.StorageBuffer {
         .buffer = scene.materials_buffer,
     };
-    const color_textures = desc.TextureArray(scene.color_textures.views.len) {
-        .views = scene.color_textures.views,
+    const color_textures = desc.TextureArray {
+        .views = &scene.color_textures.views,
     };
-    const roughness_textures = desc.TextureArray(scene.color_textures.views.len) {
-        .views = scene.roughness_textures.views,
+    const roughness_textures = desc.TextureArray {
+        .views = &scene.roughness_textures.views,
     };
-    const normal_textures = desc.TextureArray(scene.color_textures.views.len) {
-        .views = scene.normal_textures.views,
+    const normal_textures = desc.TextureArray {
+        .views = &scene.normal_textures.views,
     };
 
-    self.descriptor.write(&self.context, sets, frames, .{
+    try self.descriptor.write(&self.context, allocator, sets, frames, .{
         scene.accel.tlas_handle,
         background,
         mesh_info,

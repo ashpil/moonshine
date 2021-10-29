@@ -421,6 +421,7 @@ const PhysicalDevice = struct {
             .buffer_device_address = vk.TRUE,
             .scalar_block_layout = vk.TRUE,
             .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
+            .runtime_descriptor_array = vk.TRUE,
         };
 
         return try instance.createDevice(
