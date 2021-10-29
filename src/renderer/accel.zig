@@ -74,7 +74,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             };
             const size_info = getBuildSizesInfo(vc, build_geometry_infos[i], build_infos[i].primitive_count);
 
-            try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true }, .{ .device_local_bit = true }, &scratch_buffers[i], &scratch_buffers_memory[i]);
+            try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true }, .{ .device_local_bit = true }, &scratch_buffers[i], &scratch_buffers_memory[i]);
             errdefer vc.device.destroyBuffer(scratch_buffers[i], null);
             errdefer vc.device.freeMemory(scratch_buffers_memory[i], null);
             build_geometry_infos[i].scratch_data.device_address = vc.device.getBufferDeviceAddress(.{
@@ -152,7 +152,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
 
     var scratch_buffer: vk.Buffer = undefined;
     var scratch_buffer_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
+    try utils.createBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true  }, .{ .device_local_bit = true }, &scratch_buffer, &scratch_buffer_memory);
     defer vc.device.destroyBuffer(scratch_buffer, null);
     defer vc.device.freeMemory(scratch_buffer_memory, null);
 
