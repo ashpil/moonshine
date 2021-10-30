@@ -140,7 +140,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         .origin = camera_origin,
         .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 40.0,
+        .vfov = 50.0,
         .extent = initial_window_size,
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),
