@@ -201,18 +201,16 @@ pub const ComputeCommands = struct {
         vc.device.destroyCommandPool(self.pool, null);
     }
 
-    pub fn createAccelStructs(self: *ComputeCommands, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
-        std.debug.assert(geometry_infos.len == build_infos.len);
-
+    fn beginOneTimeCommands(self: *ComputeCommands, vc: *const VulkanContext) !void {
         try vc.device.beginCommandBuffer(self.buffer, .{
             .flags = .{},
             .p_inheritance_info = null,
         });
-        vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_infos.len), geometry_infos.ptr, build_infos.ptr);
+    }
+
+    fn endOneTimeCommands(self: *ComputeCommands, vc: *const VulkanContext) !void {
         try vc.device.endCommandBuffer(self.buffer);
 
-        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
-        // because they should be individually optimized
         const submit_info = vk.SubmitInfo2KHR {
             .flags = .{},
             .command_buffer_info_count = 1,
@@ -231,11 +229,17 @@ pub const ComputeCommands = struct {
         try vc.device.resetCommandPool(self.pool, .{});
     }
 
+    pub fn createAccelStructs(self: *ComputeCommands, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
+        std.debug.assert(geometry_infos.len == build_infos.len);
+
+        try self.beginOneTimeCommands(vc);
+        vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_infos.len), geometry_infos.ptr, build_infos.ptr);
+        try self.endOneTimeCommands(vc);
+    }
+
     pub fn copyBufferToImage(self: *ComputeCommands, vc: *const VulkanContext, src: vk.Buffer, dst: vk.Image, width: u32, height: u32, layer_count: u32) !void {
-        try vc.device.beginCommandBuffer(self.buffer, .{
-            .flags = .{},
-            .p_inheritance_info = null,
-        });
+        try self.beginOneTimeCommands(vc);
+        
         const copy = vk.BufferImageCopy {
             .buffer_offset = 0,
             .buffer_row_length = width,
@@ -258,33 +262,11 @@ pub const ComputeCommands = struct {
             },  
         };
         vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
-        try vc.device.endCommandBuffer(self.buffer);
-
-        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
-        // because they should be individually optimized
-        const submit_info = vk.SubmitInfo2KHR {
-            .flags = .{},
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
-                .command_buffer = self.buffer,
-                .device_mask = 0,
-            }),
-            .wait_semaphore_info_count = 0,
-            .p_wait_semaphore_infos = undefined,
-            .signal_semaphore_info_count = 0,
-            .p_signal_semaphore_infos = undefined,
-        };
-
-        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.queue);
-        try vc.device.resetCommandPool(self.pool, .{});
+        try self.endOneTimeCommands(vc);
     }
 
     pub fn transitionImageLayout(self: *ComputeCommands, vc: *const VulkanContext, image: vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
-        try vc.device.beginCommandBuffer(self.buffer, .{
-            .flags = .{},
-            .p_inheritance_info = null,
-        });
+        try self.beginOneTimeCommands(vc);
 
         const barriers = [_]vk.ImageMemoryBarrier2KHR {
             .{
@@ -316,34 +298,17 @@ pub const ComputeCommands = struct {
             .p_image_memory_barriers = &barriers,
         });
 
-        try vc.device.endCommandBuffer(self.buffer);
-
-        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
-        // because they should be individually optimized
-        const submit_info = vk.SubmitInfo2KHR {
-            .flags = .{},
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
-                .command_buffer = self.buffer,
-                .device_mask = 0,
-            }),
-            .wait_semaphore_info_count = 0,
-            .p_wait_semaphore_infos = undefined,
-            .signal_semaphore_info_count = 0,
-            .p_signal_semaphore_infos = undefined,
-        };
-
-        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.queue);
-        try vc.device.resetCommandPool(self.pool, .{});
+        try self.endOneTimeCommands(vc);
     }
 
-    // TODO: possible to ensure all params have same len?
+    // TODO: possible to ensure all params have same len at comptime?
     pub fn uploadDataToImages(self: *ComputeCommands, vc: *const VulkanContext, allocator: *std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []u64, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
-        try vc.device.beginCommandBuffer(self.buffer, .{
-            .flags = .{},
-            .p_inheritance_info = null,
-        });
+        std.debug.assert(dst_images.len == src_datas.len);
+        std.debug.assert(src_datas.len == sizes.len);
+        std.debug.assert(sizes.len == extents.len);
+        std.debug.assert(extents.len == is_cubemaps.len);
+
+        try self.beginOneTimeCommands(vc);
 
         const len = @intCast(u32, dst_images.len);
 
@@ -455,26 +420,7 @@ pub const ComputeCommands = struct {
             .p_image_memory_barriers = second_barriers.ptr,
         });
 
-        try vc.device.endCommandBuffer(self.buffer);
-
-        // todo: do this while doing something else? not factoring out copybuffer and createaccelstruct endings into own function yet
-        // because they should be individually optimized
-        const submit_info = vk.SubmitInfo2KHR {
-            .flags = .{},
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
-                .command_buffer = self.buffer,
-                .device_mask = 0,
-            }),
-            .wait_semaphore_info_count = 0,
-            .p_wait_semaphore_infos = undefined,
-            .signal_semaphore_info_count = 0,
-            .p_signal_semaphore_infos = undefined,
-        };
-
-        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.queue);
-        try vc.device.resetCommandPool(self.pool, .{});
+        try self.endOneTimeCommands(vc);
     }
     
     pub fn uploadData(self: *ComputeCommands, vc: *const VulkanContext, dst_buffer: vk.Buffer, data: []const u8) !void {
@@ -489,10 +435,7 @@ pub const ComputeCommands = struct {
         std.mem.copy(u8, @ptrCast([*]u8, dst)[0..data.len], data);
         vc.device.unmapMemory(staging_buffer_memory);
 
-        try vc.device.beginCommandBuffer(self.buffer, .{
-            .flags = .{},
-            .p_inheritance_info = null,
-        });
+        try self.beginOneTimeCommands(vc);
 
         const region = vk.BufferCopy {
             .src_offset = 0,
@@ -501,24 +444,6 @@ pub const ComputeCommands = struct {
         };
 
         vc.device.cmdCopyBuffer(self.buffer, staging_buffer, dst_buffer, 1, utils.toPointerType(&region));
-
-        try vc.device.endCommandBuffer(self.buffer);
-
-        const submit_info = vk.SubmitInfo2KHR {
-            .flags = .{},
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
-                .command_buffer = self.buffer,
-                .device_mask = 0,
-            }),
-            .wait_semaphore_info_count = 0,
-            .p_wait_semaphore_infos = undefined,
-            .signal_semaphore_info_count = 0,
-            .p_signal_semaphore_infos = undefined,
-        };
-
-        try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
-        try vc.device.queueWaitIdle(vc.queue);
-        try vc.device.resetCommandPool(self.pool, .{});
+        try self.endOneTimeCommands(vc);
     }
 };
