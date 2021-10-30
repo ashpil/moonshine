@@ -17,7 +17,7 @@ const commands = @import("./commands.zig");
 const ComputeCommands = commands.ComputeCommands;
 const RenderCommands = commands.RenderCommand;
 
-const Scene = @import("../logic/Scene.zig"); // TODO: create scene struct in renderer, decouple chess logic from scene
+const Scene = @import("./Scene.zig");
 
 const frames_in_flight = 2;
 

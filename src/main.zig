@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const Engine = @import("./renderer/Engine.zig");
-const Scene = @import("./logic/Scene.zig");
+const ChessSet = @import("./logic/ChessSet.zig");
 const F32x3 = @import("./utils/zug.zig").Vec3(f32);
 
 pub fn main() !void {
@@ -9,8 +9,8 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = &gpa.allocator;
 
-    const texture_sets = comptime [_]Scene.Material {
-        Scene.Material {
+    const texture_sets = comptime [_]ChessSet.Material {
+        ChessSet.Material {
             .color = .{
                 .filepath = "../../assets/textures/board/color.dds",
             },
@@ -23,7 +23,7 @@ pub fn main() !void {
             .metallic = 0.4,
             .ior = 1.35,
         },
-        Scene.Material {
+        ChessSet.Material {
             .color = .{
                 .color = F32x3.new(0.653, 0.653, 0.653)
             },
@@ -36,7 +36,7 @@ pub fn main() !void {
             .metallic = 0.2,
             .ior = 1.5,
         },
-        Scene.Material {
+        ChessSet.Material {
             .color = .{
                 .color = F32x3.new(0.0004, 0.0025, 0.0096)
             },
@@ -54,7 +54,7 @@ pub fn main() !void {
     var engine = try Engine.create(texture_sets.len, allocator);
     defer engine.destroy(allocator);
 
-    const chess_set = Scene.ChessSet {
+    const set_info = ChessSet.SetInfo {
         .board = .{
             .material_index = 0,
             .model_path = "../../assets/models/board.obj"
@@ -92,11 +92,11 @@ pub fn main() !void {
         },
     };
 
-    var scene = try Scene.create(&engine.context, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", chess_set, allocator);
-    defer scene.destroy(&engine.context, allocator);
+    var set = try ChessSet.create(&engine.context, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", set_info, allocator);
+    defer set.destroy(&engine.context, allocator);
 
     engine.setCallbacks();
-    try engine.setScene(allocator, &scene);
+    try engine.setScene(allocator, &set.scene);
 
     try engine.run(allocator);
 
