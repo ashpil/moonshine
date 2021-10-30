@@ -39,6 +39,13 @@ pub fn Vec3(comptime T: type) type {
 
         const Self = @This();
 
+        const zero = intToT(T, 0);
+        const one = intToT(T, 1);
+
+        pub const e_0 = Self.new(one, zero, zero);
+        pub const e_1 = Self.new(zero, one, zero);
+        pub const e_2 = Self.new(zero, zero, one);
+
         pub fn new(x: T, y: T, z: T) Self {
             return Self { .x = x, .y = y, .z = z };
         }
@@ -87,7 +94,7 @@ pub fn Vec3(comptime T: type) type {
         }
 
         pub fn extend(self: Self, w: T) Vec4T {
-            return Vec4T.new(self.x, self.y, self.x, w);
+            return Vec4T.new(self.x, self.y, self.z, w);
         }
     };
 }
@@ -130,6 +137,96 @@ pub fn Vec4(comptime T: type) type {
         pub fn add(self: Self, other: Self) Self {
             return Self.new(self.x + other.x, self.y + other.y, self.z + other.z, self.w + other.w);
         }
+    };
+}
+
+pub fn Mat4x3(comptime T: type) type {
+    checkValidVecT(T);
+
+    const Vec3T = Vec3(T);
+
+    return extern struct {
+        x: Vec3T,
+        y: Vec3T,
+        z: Vec3T,
+        w: Vec3T,
+
+        const Self = @This();
+
+        pub fn new(x: Vec3T, y: Vec3T, z: Vec3T, w: Vec3T) Self {
+            return Self { .x = x, .y = y, .z = z, .w = w };
+        }
+    };
+}
+
+pub fn Mat3x4(comptime T: type) type {
+    checkValidVecT(T);
+
+    const Vec4T = Vec4(T);
+    const Vec3T = Vec3(T);
+    const Mat4x3T = Mat4x3(T);
+
+    return extern struct {
+        x: Vec4T,
+        y: Vec4T,
+        z: Vec4T,
+
+        const Self = @This();
+
+        pub const identity = Self.new(Vec4T.e_0, Vec4T.e_1, Vec4T.e_2);
+
+        pub fn new(x: Vec4T, y: Vec4T, z: Vec4T) Self {
+            return Self { .x = x, .y = y, .z = z };
+        }
+
+        pub fn from_translation(translation: Vec3T) Self {
+            return Self {
+                .x = Vec3T.e_0.extend(translation.x),
+                .y = Vec3T.e_1.extend(translation.y),
+                .z = Vec3T.e_2.extend(translation.z),
+            };
+        }
+
+        pub fn transpose(self: Self) Mat4x3T {
+            return Mat4x3T.new(
+                Vec3T.new(self.x.x, self.y.x, self.z.x),
+                Vec3T.new(self.x.y, self.y.y, self.z.y),
+                Vec3T.new(self.x.z, self.y.z, self.z.z),
+                Vec3T.new(self.x.w, self.y.w, self.z.w),
+            );
+        }
+
+        pub fn mul(self: Self, other: Self) Self {
+            const transposed = other.transpose();
+            return Self.new(
+                Vec4T.new(self.x.dot(transposed.x.extend(0.0)), self.x.dot(transposed.y.extend(0.0)), self.x.dot(transposed.z.extend(0.0)), self.x.dot(transposed.w.extend(1.0))),
+                Vec4T.new(self.y.dot(transposed.x.extend(0.0)), self.y.dot(transposed.y.extend(0.0)), self.y.dot(transposed.z.extend(0.0)), self.y.dot(transposed.w.extend(1.0))),
+                Vec4T.new(self.z.dot(transposed.x.extend(0.0)), self.z.dot(transposed.y.extend(0.0)), self.z.dot(transposed.z.extend(0.0)), self.z.dot(transposed.w.extend(1.0))),
+            );
+        }
+
+        pub usingnamespace if (@typeInfo(T) != .Float) struct {} else struct {
+            pub fn from_rotation(axis: Vec3T, angle: f32) Self {
+                const sin = math.sin(angle);
+                const cos = math.cos(angle);
+
+                const axissin = axis.mul_scalar(sin);
+                const axis2 = axis.mul(axis);
+
+                const omc = 1.0 - cos;
+
+                const xyomc = axis.x * axis.y * omc;
+                const xzomc = axis.x * axis.z * omc;
+                const yzomc = axis.y * axis.z * omc;
+
+                return Self.new(
+                    Vec4T.new(axis2.x * omc + cos, xyomc + axissin.z, xzomc - axissin.y, 0.0),
+                    Vec4T.new(xyomc - axissin.z, axis2.y * omc + cos, yzomc + axissin.x, 0.0),
+                    Vec4T.new(xzomc + axissin.y, yzomc - axissin.x, axis2.z * omc + cos, 0.0),
+                );
+            }
+        };
+
     };
 }
 

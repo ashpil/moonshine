@@ -3,9 +3,10 @@ const vk = @import("vulkan");
 const Commands = @import("./commands.zig").ComputeCommands;
 const VulkanContext = @import("./VulkanContext.zig");
 const utils = @import("./utils.zig");
+const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);
 
 pub const Instances = std.MultiArrayList(struct {
-    initial_transform: [3][4]f32,
+    initial_transform: Mat3x4,
     material_index: u8,
 });
 
@@ -268,7 +269,7 @@ pub fn updateInstanceBuffer(self: *Self, vc: *const VulkanContext, commands: *Co
             const custom_index = mesh_index | (material_index << 16);
             self.instance_infos_host[offset + j] = .{
                 .transform = vk.TransformMatrixKHR {
-                    .matrix = transforms[j]
+                    .matrix = @bitCast([3][4]f32, transforms[j]),
                 },
                 .instance_custom_index = custom_index,
                 .mask = 0xFF,

@@ -3,6 +3,10 @@ const std = @import("std");
 const VulkanContext = @import("../renderer/VulkanContext.zig");
 const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
 const Scene = @import("../renderer/Scene.zig");
+const zug = @import("../utils/zug.zig");
+const Mat3x4 = zug.Mat3x4(f32);
+const Vec3 = zug.Vec3(f32);
+const Coord = @import("./coord.zig").Coord;
 
 pub const Material = Scene.Material;
 
@@ -38,143 +42,77 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer board_instance.deinit(allocator);
     try board_instance.ensureTotalCapacity(allocator, 1);
     board_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.0},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.0},
-        },
+        .initial_transform = Mat3x4.identity,
         .material_index = 0,
     });
+
+    const black_rotation = Mat3x4.from_rotation(Vec3.new(0.0, 1.0, 0.0), std.math.pi);
 
     var pawn_instance = Scene.Instances {};
     defer pawn_instance.deinit(allocator);
     try pawn_instance.ensureTotalCapacity(allocator, 16);
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.h2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.g2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.f2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.e2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.d2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.c2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.b2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.125},
-        },
+        .initial_transform = Coord.a2.toTransform(),
         .material_index = 1,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.h7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.g7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.f7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.e7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.d7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.c7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.b7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.125},
-        },
+        .initial_transform = Coord.a7.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
@@ -182,35 +120,19 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer rook_instance.deinit(allocator);
     try rook_instance.ensureTotalCapacity(allocator, 4);
     rook_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.a1.toTransform(),
         .material_index = 1,
     });
     rook_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.h1.toTransform(),
         .material_index = 1,
     });
     rook_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.175},
-        },
+        .initial_transform = Coord.a8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     rook_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.175},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.175},
-        },
+        .initial_transform = Coord.h8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
@@ -218,35 +140,19 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer knight_instance.deinit(allocator);
     try knight_instance.ensureTotalCapacity(allocator, 4);
     knight_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.b1.toTransform(),
         .material_index = 1,
     });
     knight_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.g1.toTransform(),
         .material_index = 1,
     });
     knight_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{-1.0, 0.0, 0.0, 0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, -1.0, 0.175},
-        },
+        .initial_transform = Coord.b8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     knight_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{-1.0, 0.0, 0.0, -0.125},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, -1.0, 0.175},
-        },
+        .initial_transform = Coord.g8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
@@ -254,35 +160,19 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer bishop_instance.deinit(allocator);
     try bishop_instance.ensureTotalCapacity(allocator, 4);
     bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.c1.toTransform(),
         .material_index = 1,
     });
     bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.f1.toTransform(),
         .material_index = 1,
     });
     bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{-1.0, 0.0, 0.0, 0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, -1.0, 0.175},
-        },
+        .initial_transform = Coord.c8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
     bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{-1.0, 0.0, 0.0, -0.075},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, -1.0, 0.175},
-        },
+        .initial_transform = Coord.f8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
@@ -290,19 +180,11 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer king_instance.deinit(allocator);
     try king_instance.ensureTotalCapacity(allocator, 2);
     king_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.e1.toTransform(),
         .material_index = 1,
     });
     king_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, 0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.175},
-        },
+        .initial_transform = Coord.e8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
@@ -310,19 +192,11 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     defer queen_instance.deinit(allocator);
     try queen_instance.ensureTotalCapacity(allocator, 2);
     queen_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, -0.175},
-        },
+        .initial_transform = Coord.d1.toTransform(),
         .material_index = 1,
     });
     queen_instance.appendAssumeCapacity(.{
-        .initial_transform = .{
-            .{1.0, 0.0, 0.0, -0.025},
-            .{0.0, 1.0, 0.0, 0.0},
-            .{0.0, 0.0, 1.0, 0.175},
-        },
+        .initial_transform = Coord.d8.toTransform().mul(black_rotation),
         .material_index = 2,
     });
 
