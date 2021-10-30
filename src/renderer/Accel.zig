@@ -39,6 +39,25 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
     var total_instance_count: u32 = 0;
     const geometry_infos_slice = geometry_infos.slice();
     const instances = geometry_infos_slice.items(.instances);
+
+    const memories = try allocator.alloc(vk.DeviceMemory, geometry_infos.len);
+    defer allocator.free(memories);
+    defer for (memories) |memory| {
+        vc.device.freeMemory(memory, null);
+    };
+
+    const buffers = try allocator.alloc(vk.Buffer, geometry_infos.len);
+    defer allocator.free(buffers);
+    defer for (buffers) |buffer| {
+        vc.device.destroyBuffer(buffer, null);
+    };
+
+    const handles = try allocator.alloc(vk.AccelerationStructureKHR, geometry_infos.len);
+    defer allocator.free(handles);
+    defer for (handles) |handle| {
+        vc.device.destroyAccelerationStructureKHR(handle, null);
+    };
+    
     const blases = blk: {
         var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, geometry_infos.len);
         defer allocator.free(build_geometry_infos);
@@ -52,10 +71,6 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             vc.device.freeMemory(scratch_buffers_memory[i], null);
         };
 
-        var blases = BottomLevelAccels {};
-        try blases.ensureTotalCapacity(allocator, geometry_infos.len);
-        errdefer blases.deinit(allocator);
-
         const geometries = geometry_infos_slice.items(.geometry);
         const build_infos = geometry_infos_slice.items(.build_info);
 
@@ -63,7 +78,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             total_instance_count += @intCast(u32, instances[i].len);
             build_geometry_infos[i] = .{
                 .@"type" = .bottom_level_khr,
-                .flags = .{ .prefer_fast_trace_bit_khr = true },
+                .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
                 .mode = .build_khr,
                 .src_acceleration_structure = .null_handle,
                 .dst_acceleration_structure = .null_handle,
@@ -81,15 +96,13 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
                 .buffer = scratch_buffers[i],
             });
 
-            var buffer: vk.Buffer = undefined;
-            var memory: vk.DeviceMemory = undefined;
-            try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffer, &memory);
-            errdefer vc.device.freeMemory(memory, null);
-            errdefer vc.device.destroyBuffer(buffer, null);
+            try utils.createBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffers[i], &memories[i]);
+            errdefer vc.device.destroyBuffer(buffers[i], null);
+            errdefer vc.device.freeMemory(memories[i], null);
 
             build_geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
                 .create_flags = .{},
-                .buffer = buffer,
+                .buffer = buffers[i],
                 .offset = 0,
                 .size = size_info.acceleration_structure_size,
                 .@"type" = .bottom_level_khr,
@@ -97,17 +110,54 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
             }, null);
             errdefer vc.device.destroyAccelerationStructureKHR(build_geometry_infos[i].dst_acceleration_structure, null);
 
+            handles[i] = build_geometry_infos[i].dst_acceleration_structure;
+        }
+
+        const compactedSizes = try allocator.alloc(vk.DeviceSize, geometry_infos.len);
+        defer allocator.free(compactedSizes);
+        try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos, handles, compactedSizes);
+
+        var blases = BottomLevelAccels {};
+        try blases.ensureTotalCapacity(allocator, geometry_infos.len);
+        errdefer blases.deinit(allocator);
+
+        const copy_infos = try allocator.alloc(vk.CopyAccelerationStructureInfoKHR, geometry_infos.len);
+        defer allocator.free(copy_infos);
+
+        for (compactedSizes) |compactedSize, i| {
+            var buffer: vk.Buffer = undefined;
+            var memory: vk.DeviceMemory = undefined;
+            try utils.createBuffer(vc, compactedSize, .{ .acceleration_structure_storage_bit_khr = true }, .{ .device_local_bit = true }, &buffer, &memory);
+            errdefer vc.device.destroyBuffer(buffer, null);
+            errdefer vc.device.freeMemory(memory, null);
+
+            const handle = try vc.device.createAccelerationStructureKHR(.{
+                .create_flags = .{},
+                .buffer = buffer,
+                .offset = 0,
+                .size = compactedSize,
+                .@"type" = .bottom_level_khr,
+                .device_address = 0,
+            }, null);
+
+            copy_infos[i] = .{
+                .src = handles[i],
+                .dst = handle,
+                .mode = .compact_khr,
+            };
+
             blases.appendAssumeCapacity(.{
-                .handle = build_geometry_infos[i].dst_acceleration_structure,
+                .handle = handle,
                 .buffer = buffer,
                 .memory = memory,
                 .address = vc.device.getAccelerationStructureDeviceAddressKHR(.{
-                    .acceleration_structure = build_geometry_infos[i].dst_acceleration_structure,
+                    .acceleration_structure = handle,
                 }),
             });
         }
-        try commands.createAccelStructs(vc, build_geometry_infos, build_infos);
-        
+
+        try commands.copyAccelStructs(vc, copy_infos);
+
         break :blk blases;
     };
 

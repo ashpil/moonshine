@@ -229,12 +229,65 @@ pub const ComputeCommands = struct {
         try vc.device.resetCommandPool(self.pool, .{});
     }
 
+    pub fn copyAccelStructs(self: *ComputeCommands, vc: *const VulkanContext, infos: []const vk.CopyAccelerationStructureInfoKHR) !void {
+        try self.beginOneTimeCommands(vc);
+        for (infos) |info| {
+            vc.device.cmdCopyAccelerationStructureKHR(self.buffer, info);
+        }
+        try self.endOneTimeCommands(vc);
+    }
+
     pub fn createAccelStructs(self: *ComputeCommands, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
         std.debug.assert(geometry_infos.len == build_infos.len);
+        const size = @intCast(u32, geometry_infos.len);
+        try self.beginOneTimeCommands(vc);
+        vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
+        try self.endOneTimeCommands(vc);
+    }
+
+    pub fn createAccelStructsAndGetCompactedSizes(self: *ComputeCommands, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR, handles: []const vk.AccelerationStructureKHR, compactedSizes: []vk.DeviceSize) !void {
+        std.debug.assert(geometry_infos.len == build_infos.len);
+        std.debug.assert(build_infos.len == handles.len);
+        const size = @intCast(u32, geometry_infos.len);
+
+
+        const query_pool = try vc.device.createQueryPool(.{
+            .flags = .{},
+            .query_type = .acceleration_structure_compacted_size_khr,
+            .query_count = size,
+            .pipeline_statistics = .{},
+        }, null);
+        defer vc.device.destroyQueryPool(query_pool, null);
+
+        vc.device.resetQueryPool(query_pool, 0, size);
 
         try self.beginOneTimeCommands(vc);
-        vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, @intCast(u32, geometry_infos.len), geometry_infos.ptr, build_infos.ptr);
+
+        vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
+
+        const barriers = [_]vk.MemoryBarrier2KHR {
+            .{
+                .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
+                .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
+            }
+        };
+        vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+            .dependency_flags = .{},
+            .memory_barrier_count = barriers.len,
+            .p_memory_barriers = &barriers,
+            .buffer_memory_barrier_count = 0,
+            .p_buffer_memory_barriers = undefined,
+            .image_memory_barrier_count = 0,
+            .p_image_memory_barriers = undefined,
+        });
+
+        vc.device.cmdWriteAccelerationStructuresPropertiesKHR(self.buffer, size, handles.ptr, .acceleration_structure_compacted_size_khr, query_pool, 0);
+
         try self.endOneTimeCommands(vc);
+
+        _ = try vc.device.getQueryPoolResults(query_pool, 0, size, size * @sizeOf(vk.DeviceSize), compactedSizes.ptr, @sizeOf(vk.DeviceSize), .{.@"64_bit" = true, .wait_bit = true });
     }
 
     pub fn copyBufferToImage(self: *ComputeCommands, vc: *const VulkanContext, src: vk.Buffer, dst: vk.Image, width: u32, height: u32, layer_count: u32) !void {
