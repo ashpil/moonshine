@@ -38,177 +38,256 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo, allocator: *std.mem.Allocator) !Self {
 
-    var board_instance = Scene.Instances {};
-    defer board_instance.deinit(allocator);
-    try board_instance.ensureTotalCapacity(allocator, 1);
-    board_instance.appendAssumeCapacity(.{
-        .initial_transform = Mat3x4.identity,
+    var instances = Scene.Instances {};
+    defer instances.deinit(allocator);
+    try instances.ensureTotalCapacity(allocator, 33);
+
+    // board
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Mat3x4.identity,
+            .mesh_index = 0,
+        },
         .material_index = 0,
     });
 
     const black_rotation = Mat3x4.from_rotation(Vec3.new(0.0, 1.0, 0.0), std.math.pi);
 
-    var pawn_instance = Scene.Instances {};
-    defer pawn_instance.deinit(allocator);
-    try pawn_instance.ensureTotalCapacity(allocator, 16);
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.h2.toTransform(),
+    // pawns
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.h2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.g2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.g2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.f2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.f2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.e2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.e2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.d2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.d2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.c2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.c2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.b2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.b2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.a2.toTransform(),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.a2.toTransform(),
+            .mesh_index = 1,
+        },
         .material_index = 1,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.h7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.h7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.g7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.g7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.f7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.f7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.e7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.e7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.d7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.d7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.c7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.c7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.b7.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.b7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
-    pawn_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.a7.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-
-    var rook_instance = Scene.Instances {};
-    defer rook_instance.deinit(allocator);
-    try rook_instance.ensureTotalCapacity(allocator, 4);
-    rook_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.a1.toTransform(),
-        .material_index = 1,
-    });
-    rook_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.h1.toTransform(),
-        .material_index = 1,
-    });
-    rook_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.a8.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-    rook_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.h8.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-
-    var knight_instance = Scene.Instances {};
-    defer knight_instance.deinit(allocator);
-    try knight_instance.ensureTotalCapacity(allocator, 4);
-    knight_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.b1.toTransform(),
-        .material_index = 1,
-    });
-    knight_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.g1.toTransform(),
-        .material_index = 1,
-    });
-    knight_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.b8.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-    knight_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.g8.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-
-    var bishop_instance = Scene.Instances {};
-    defer bishop_instance.deinit(allocator);
-    try bishop_instance.ensureTotalCapacity(allocator, 4);
-    bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.c1.toTransform(),
-        .material_index = 1,
-    });
-    bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.f1.toTransform(),
-        .material_index = 1,
-    });
-    bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.c8.toTransform().mul(black_rotation),
-        .material_index = 2,
-    });
-    bishop_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.f8.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.a7.toTransform().mul(black_rotation),
+            .mesh_index = 1,
+        },
         .material_index = 2,
     });
 
-    var king_instance = Scene.Instances {};
-    defer king_instance.deinit(allocator);
-    try king_instance.ensureTotalCapacity(allocator, 2);
-    king_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.e1.toTransform(),
+    // rooks
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.a1.toTransform(),
+            .mesh_index = 2,
+        },
         .material_index = 1,
     });
-    king_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.e8.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.h1.toTransform(),
+            .mesh_index = 2,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.a8.toTransform().mul(black_rotation),
+            .mesh_index = 2,
+        },
+        .material_index = 2,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.h8.toTransform().mul(black_rotation),
+            .mesh_index = 2,
+        },
         .material_index = 2,
     });
 
-    var queen_instance = Scene.Instances {};
-    defer queen_instance.deinit(allocator);
-    try queen_instance.ensureTotalCapacity(allocator, 2);
-    queen_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.d1.toTransform(),
+    // knights
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.b1.toTransform(),
+            .mesh_index = 3,
+        },
         .material_index = 1,
     });
-    queen_instance.appendAssumeCapacity(.{
-        .initial_transform = Coord.d8.toTransform().mul(black_rotation),
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.g1.toTransform(),
+            .mesh_index = 3,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.b8.toTransform().mul(black_rotation),
+            .mesh_index = 3,
+        },
+        .material_index = 2,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.g8.toTransform().mul(black_rotation),
+            .mesh_index = 3,
+        },
         .material_index = 2,
     });
 
-    const instances = [_]Scene.Instances {
-        board_instance,
-        pawn_instance,
-        rook_instance,
-        knight_instance,
-        bishop_instance,
-        king_instance,
-        queen_instance,
-    };
+    // bishops
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.c1.toTransform(),
+            .mesh_index = 4,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.f1.toTransform(),
+            .mesh_index = 4,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.c8.toTransform().mul(black_rotation),
+            .mesh_index = 4,
+        },
+        .material_index = 2,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.f8.toTransform().mul(black_rotation),
+            .mesh_index = 4,
+        },
+        .material_index = 2,
+    });
+
+    // kings
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.e1.toTransform(),
+            .mesh_index = 5,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.e8.toTransform().mul(black_rotation),
+            .mesh_index = 5,
+        },
+        .material_index = 2,
+    });
+
+    // queens
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.d1.toTransform(),
+            .mesh_index = 6,
+        },
+        .material_index = 1,
+    });
+    instances.appendAssumeCapacity(.{
+        .mesh_info = .{
+            .transform = Coord.d8.toTransform().mul(black_rotation),
+            .mesh_index = 6,
+        },
+        .material_index = 2,
+    });
 
     const mesh_filepaths = [_][]const u8 {
         chess_set.board.model_path,

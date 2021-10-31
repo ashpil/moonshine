@@ -50,7 +50,7 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
     // todo: why transition here?
     try transfer_commands.transitionImageLayout(&context, display.accumulation_image.data.items(.image)[0], .@"undefined", .general);
 
-    const descriptor = try Descriptor.create(&context, [10]desc.BindingInfo {
+    const descriptor = try Descriptor.create(&context, [_]desc.BindingInfo {
         .{
             .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .storage_image,
@@ -74,6 +74,11 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
         .{
             .stage_flags = .{ .miss_bit_khr = true },
             .descriptor_type = .combined_image_sampler,
+            .count = 1,
+        },
+        .{
+            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .descriptor_type = .storage_buffer,
             .count = 1,
         },
         .{
@@ -168,7 +173,7 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
         frames[i] = i;
     };
 
-    comptime var sets: [7]u32 = undefined;
+    comptime var sets: [8]u32 = undefined;
     comptime for (sets) |_, i| {
         sets[i] = i + 3;
     };
@@ -182,6 +187,9 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
     };
     const materials_info = desc.StorageBuffer {
         .buffer = scene.materials_buffer,
+    };
+    const instances_info = desc.StorageBuffer {
+        .buffer = scene.accel.instance_buffer,
     };
     const color_textures = desc.TextureArray {
         .views = scene.color_textures.data.items(.view),
@@ -198,6 +206,7 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
         background,
         mesh_info,
         materials_info,
+        instances_info,
         color_textures,
         roughness_textures,
         normal_textures,

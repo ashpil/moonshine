@@ -26,6 +26,7 @@ pub const GpuMaterial = packed struct {
 };
 
 pub const Instances = Accel.Instances;
+pub const Instance = Accel.Instance;
 
 background: Images,
 
@@ -41,7 +42,7 @@ materials_memory: vk.DeviceMemory,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: [mesh_filepaths.len]Instances, allocator: *std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, allocator: *std.mem.Allocator) !Self {
     const background = try Images.createTexture(vc, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
             .filepath = background_filepath,
@@ -85,18 +86,11 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
         object.destroy(allocator);
     };
 
+    // set it all to undefined to it can be filled below
     var geometry_infos = Accel.GeometryInfos {};
     defer geometry_infos.deinit(allocator);
     try geometry_infos.ensureTotalCapacity(allocator, mesh_filepaths.len);
-    
-    comptime var i = 0;
-    inline while (i < mesh_filepaths.len) : (i += 1) {
-        geometry_infos.appendAssumeCapacity(.{
-            .geometry = undefined,
-            .build_info = undefined,
-            .instances = instances[i],
-        });
-    }
+    geometry_infos.len = mesh_filepaths.len;
 
     const geometry_infos_slice = geometry_infos.slice();
     const geometries = geometry_infos_slice.items(.geometry);
@@ -106,12 +100,12 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     errdefer meshes.destroy(vc, allocator);
 
     var build_infos_ref = geometry_infos_slice.items(.build_info);
-    i = 0;
+    comptime var i = 0;
     inline while (i < mesh_filepaths.len) : (i += 1) {
         build_infos_ref[i] = &build_infos[i];
     }
 
-    var accel = try Accel.create(vc, allocator, commands, geometry_infos);
+    var accel = try Accel.create(vc, allocator, commands, geometry_infos, instances);
     errdefer accel.destroy(vc, allocator);
 
     return Self {

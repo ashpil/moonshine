@@ -13,9 +13,13 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
-struct Instance {
+struct MaterialData {
     float metallic;
     float ior;
+};
+
+struct Instance {
+    uint materialIndex;
 };
 
 struct Vertex {
@@ -28,10 +32,11 @@ layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
 
 layout(binding = 2, set = 0) uniform sampler textureSampler;
 layout(binding = 5, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
-layout(binding = 6, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
-layout(binding = 7, set = 0) uniform texture2D colorTextures[];
-layout(binding = 8, set = 0) uniform texture2D roughnessTextures[];
-layout(binding = 9, set = 0) uniform texture2D normalTextures[];
+layout(binding = 6, set = 0, scalar) readonly buffer MaterialDatas { MaterialData materialDatas[]; };
+layout(binding = 7, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
+layout(binding = 8, set = 0) uniform texture2D colorTextures[];
+layout(binding = 9, set = 0) uniform texture2D roughnessTextures[];
+layout(binding = 10, set = 0) uniform texture2D normalTextures[];
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 
@@ -78,18 +83,10 @@ vec2 calculateTexcoords(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
     return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
 }
 
-int getMeshIndex() {
-    return gl_InstanceCustomIndexEXT & 0x0000FF;
-}
-
-int getMaterialIndex() {
-    return (gl_InstanceCustomIndexEXT & 0xFFFF00) >> 16;
-}
-
 void main() {
-    Mesh mesh = meshes[getMeshIndex()];
-    int materialIndex = getMaterialIndex();
-    Instance instance = instances[materialIndex];
+    Mesh mesh = meshes[gl_InstanceCustomIndexEXT];
+    uint materialIndex = instances[gl_InstanceID].materialIndex;
+    MaterialData materialData = materialDatas[materialIndex];
     Vertices vertices = Vertices(mesh.vertexAddress);
     Indices indices = Indices(mesh.indexAddress);
     ivec3 ind = indices.i[gl_PrimitiveID];
@@ -113,8 +110,8 @@ void main() {
     payload.point = point;
     payload.normal = normal;
     payload.done = false;
-    payload.material.metallic = instance.metallic;
-    payload.material.ior = instance.ior;
+    payload.material.metallic = materialData.metallic;
+    payload.material.ior = materialData.ior;
     payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).rgb;
     payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).r;
 }

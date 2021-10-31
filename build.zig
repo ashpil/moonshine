@@ -33,24 +33,28 @@ pub fn build(b: *std.build.Builder) void {
         "glslc", "src/shaders/shader.rgen",
         "--target-env=vulkan1.2",
         "-o", "zig-cache/shaders/shader_rgen.spv",
+        "-g",
         "-O",
     });
     const shader_cmd1 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shader.rchit",
         "--target-env=vulkan1.2",
         "-o", "zig-cache/shaders/shader_rchit.spv",
+        "-g",
         "-O",
     });
     const shader_cmd2 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shader.rmiss",
         "--target-env=vulkan1.2",
         "-o", "zig-cache/shaders/shader_rmiss.spv",
+        "-g",
         "-O",
     });
     const shader_cmd3 = b.addSystemCommand(&[_][]const u8 {
         "glslc", "src/shaders/shadow.rmiss",
         "--target-env=vulkan1.2",
         "-o", "zig-cache/shaders/shadow_rmiss.spv",
+        "-g",
         "-O",
     });
 
