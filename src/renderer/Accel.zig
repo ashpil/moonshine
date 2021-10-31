@@ -35,6 +35,7 @@ instance_infos_memory: vk.DeviceMemory,
 
 instance_buffer: vk.Buffer,
 instance_memory: vk.DeviceMemory,
+instance_count: u32,
 
 tlas_device_address: vk.DeviceAddress,
 tlas_handle: vk.AccelerationStructureKHR,
@@ -44,6 +45,8 @@ tlas_memory: vk.DeviceMemory,
 tlas_update_scratch_device_address: vk.DeviceAddress,
 tlas_update_scratch_buffer: vk.Buffer,
 tlas_update_scratch_memory: vk.DeviceMemory,
+
+changed: bool,
 
 const Self = @This();
 
@@ -266,6 +269,9 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands:
 
         .instance_buffer = instance_buffer,
         .instance_memory = instance_memory,
+        .instance_count = instance_count,
+
+        .changed = false,
     };
 
     const instance_data = instances.items(.mesh_info);
@@ -300,45 +306,70 @@ pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) !void {
     } 
 }
 
-pub fn updateTlas(self: *Self, vc: *const VulkanContext, commands: *Commands, mesh_infos: []const MeshInfo) !void {
+pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) !void {
     try self.updateInstanceBuffer(mesh_infos);
 
-    const geometry = vk.AccelerationStructureGeometryKHR {
-        .geometry_type = .instances_khr,
-        .flags = .{ .opaque_bit_khr = true },
-        .geometry = .{
-            .instances = .{
-                .array_of_pointers = vk.FALSE,
-                .data = .{
-                    .device_address = self.tlas_device_address,
+    self.changed = true;
+}
+
+pub fn applyChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
+    if (self.changed) {
+        const geometry = vk.AccelerationStructureGeometryKHR {
+            .geometry_type = .instances_khr,
+            .flags = .{ .opaque_bit_khr = true },
+            .geometry = .{
+                .instances = .{
+                    .array_of_pointers = vk.FALSE,
+                    .data = .{
+                        .device_address = self.tlas_device_address,
+                    }
                 }
+            },
+        };
+
+        var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
+            .@"type" = .top_level_khr,
+            .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
+            .mode = .update_khr,
+            .src_acceleration_structure = self.tlas_handle,
+            .dst_acceleration_structure = self.tlas_handle,
+            .geometry_count = 1,
+            .p_geometries = utils.toPointerType(&geometry),
+            .pp_geometries = null,
+            .scratch_data = .{
+                .device_address = self.tlas_update_scratch_device_address,
+            },
+        };
+
+        const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
+            .primitive_count = self.instance_count,
+            .first_vertex = 0,
+            .primitive_offset = 0,
+            .transform_offset = 0,
+        };
+
+        const build_info_ref = &build_info;
+
+        vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
+
+        const barriers = [_]vk.MemoryBarrier2KHR {
+            .{
+                .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
+                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
             }
-        },
-    };
-
-    var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-        .@"type" = .top_level_khr,
-        .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
-        .mode = .update_khr,
-        .src_acceleration_structure = self.tlas_handle,
-        .dst_acceleration_structure = self.tlas_handle,
-        .geometry_count = 1,
-        .p_geometries = utils.toPointerType(&geometry),
-        .pp_geometries = null,
-        .scratch_data = .{
-            .device_address = self.tlas_update_scratch_device_address,
-        },
-    };
-
-    const build_info = .{
-        .primitive_count = @intCast(u32, mesh_infos.len),
-        .first_vertex = 0,
-        .primitive_offset = 0,
-        .transform_offset = 0,
-    };
-
-    // todo: make this usable on a per-frame basis
-    try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ &build_info });
+        };
+        vc.device.cmdPipelineBarrier2KHR(command_buffer, vk.DependencyInfoKHR {
+            .dependency_flags = .{},
+            .memory_barrier_count = barriers.len,
+            .p_memory_barriers = &barriers,
+            .buffer_memory_barrier_count = 0,
+            .p_buffer_memory_barriers = undefined,
+            .image_memory_barrier_count = 0,
+            .p_image_memory_barriers = undefined,
+        });
+    }
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {

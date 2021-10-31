@@ -13,12 +13,12 @@ const Self = @This();
 
 handle: *c.GLFWwindow,
 
-pub fn create(size: vk.Extent2D) Error!Self {
+pub fn create(width: u32, height: u32) Error!Self {
     if (c.glfwInit() != c.GLFW_TRUE) return Error.InitFail;
 
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
-    const handle = c.glfwCreateWindow(@intCast(c_int, size.width), @intCast(c_int, size.height), "Chess RTX", null, null) orelse {
+    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), "Chess RTX", null, null) orelse {
         c.glfwTerminate();
         return Error.WindowCreateFail;
     };
@@ -32,11 +32,15 @@ pub fn shouldClose(self: *const Self) bool {
     return c.glfwWindowShouldClose(self.handle) == c.GLFW_TRUE;
 }
 
-pub fn setEngine(self: *const Self, ptr: *Engine) void {
+pub fn setUserPointer(self: *const Self, ptr: *c_void) void {
     c.glfwSetWindowUserPointer(self.handle, ptr);
 }
 
-pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D, *Engine) void) void {
+pub fn getUserPointer(self: *const Self) ?*c_void {
+    return c.glfwGetWindowUserPointer(self.handle).?;
+}
+
+pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D) void) void {
     const Callback = struct {
         fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
             const extent = vk.Extent2D {
@@ -46,9 +50,7 @@ pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, 
             const window = Self {
                 .handle = handle.?,
             };
-            const ptr = c.glfwGetWindowUserPointer(window.handle).?;
-
-            callback(&window, extent, ptr);
+            callback(&window, extent);
         }
     };
     _ = c.glfwSetFramebufferSizeCallback(self.handle, Callback.resizeCallback);
@@ -60,7 +62,7 @@ pub const Action = enum(c_int) {
     repeat = 2,
 };
 
-pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, *Engine) void) void {
+pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action) void) void {
     const Callback = struct {
         fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
             _ = scancode;
@@ -69,9 +71,7 @@ pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32
             const window = Self {
                 .handle = handle.?,
             };
-            const ptr = c.glfwGetWindowUserPointer(window.handle).?;
-            const engine = @ptrCast(*Engine, @alignCast(@alignOf(Engine), ptr));
-            callback(&window, @intCast(u32, key), @intToEnum(Action, action), engine);
+            callback(&window, @intCast(u32, key), @intToEnum(Action, action));
         }
     };
     _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);
@@ -91,14 +91,14 @@ pub fn createSurface(self: *const Self, instance: vk.Instance) Error!vk.SurfaceK
 pub fn getExtent(self: *const Self) vk.Extent2D {
     var width: c_int = undefined;
     var height: c_int = undefined;
-    c.glfwGetWindowSize(self.handle, &width, &height);
+    c.glfwGetFramebufferSize(self.handle, &width, &height);
     return vk.Extent2D {
         .width = @intCast(u32, width),
         .height = @intCast(u32, height),
     };
 }
 
-pub fn destroy(self: *Self) void {
+pub fn destroy(self: *const Self) void {
     c.glfwDestroyWindow(self.handle);
     c.glfwTerminate();
 }

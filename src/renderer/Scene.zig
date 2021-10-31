@@ -11,6 +11,8 @@ const Meshes = @import("../renderer/Meshes.zig");
 const Accel = @import("../renderer/Accel.zig");
 const utils = @import("../renderer/utils.zig");
 
+const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);
+
 pub const Material = struct {
     color: Images.TextureSource,
     roughness: Images.TextureSource,
@@ -26,7 +28,7 @@ pub const GpuMaterial = packed struct {
 };
 
 pub const Instances = Accel.Instances;
-pub const Instance = Accel.Instance;
+pub const InstanceMeshInfo = Accel.MeshInfo;
 
 background: Images,
 
@@ -39,6 +41,8 @@ accel: Accel,
 
 materials_buffer: vk.Buffer,
 materials_memory: vk.DeviceMemory,
+
+instance_info: []InstanceMeshInfo,
 
 const Self = @This();
 
@@ -108,6 +112,8 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     var accel = try Accel.create(vc, allocator, commands, geometry_infos, instances);
     errdefer accel.destroy(vc, allocator);
 
+    const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
+
     return Self {
         .background = background,
 
@@ -120,10 +126,19 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
 
         .meshes = meshes,
         .accel = accel,
+
+        .instance_info = instance_info,
     };
 }
 
+pub fn update(self: *Self, index: u32, new_transform: Mat3x4) !void {
+    self.instance_info[index].transform = new_transform;
+    try self.accel.updateTlas(self.instance_info);
+}
+
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+    allocator.free(self.instance_info);
+
     self.background.destroy(vc, allocator);
     self.color_textures.destroy(vc, allocator);
     self.roughness_textures.destroy(vc, allocator);

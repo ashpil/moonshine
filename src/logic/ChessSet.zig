@@ -38,9 +38,10 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo, allocator: *std.mem.Allocator) !Self {
 
+    const instance_count = 33;
+
     var instances = Scene.Instances {};
-    defer instances.deinit(allocator);
-    try instances.ensureTotalCapacity(allocator, 33);
+    try instances.ensureTotalCapacity(allocator, instance_count);
 
     // board
     instances.appendAssumeCapacity(.{
@@ -300,10 +301,15 @@ pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime ma
     };
 
     const scene = try Scene.create(vc, commands, materials, background_filepath, &mesh_filepaths, instances, allocator);
-        
+
     return Self {
         .scene = scene,
     };
+}
+
+// todo: make this more high level
+pub fn move(self: *Self, index: u32, new_transform: Mat3x4) !void {
+    try self.scene.update(index, new_transform);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {

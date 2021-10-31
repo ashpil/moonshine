@@ -21,14 +21,7 @@ const Scene = @import("./Scene.zig");
 
 const frames_in_flight = 2;
 
-const initial_window_size = vk.Extent2D {
-    .width = 800,
-    .height = 600,
-};
-
 const Self = @This();
-
-window: Window,
 
 context: VulkanContext,
 display: Display,
@@ -40,11 +33,11 @@ num_accumulted_frames: u32,
 
 sampler: vk.Sampler,
 
-pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator) !Self {
+pub fn create(comptime max_textures: comptime_int, window: *const Window, allocator: *std.mem.Allocator) !Self {
 
-    const window = try Window.create(initial_window_size);
+    const initial_window_size = window.getExtent();
 
-    const context = try VulkanContext.create(allocator, &window);
+    const context = try VulkanContext.create(allocator, window);
     var transfer_commands = try ComputeCommands.create(&context);
     const display = try Display.create(&context, allocator, initial_window_size);
     // todo: why transition here?
@@ -154,7 +147,6 @@ pub fn create(comptime max_textures: comptime_int, allocator: *std.mem.Allocator
     const pipeline = try Pipeline.create(&context, allocator, &transfer_commands, descriptor.layout);
 
     return Self {
-        .window = window,
         .context = context,
         .display = display,
         .transfer_commands = transfer_commands,
@@ -213,55 +205,6 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
     });
 }
 
-pub fn setCallbacks(self: *Self) void {
-    self.window.setEngine(self);
-    self.window.setKeyCallback(keyCallback);
-}
-
-fn keyCallback(window: *const Window, key: u32, action: Window.Action, engine: *Self) void {
-    _ = window;
-    if (action == .repeat or action == .press) {
-        var camera_create_info = engine.camera.create_info;
-        if (key == 65 or key == 68 or key == 83 or key == 87) {
-            const move_amount = 1.0 / 18.0;
-            var mat: Mat4 = undefined;
-            if (key == 65) {
-                mat = Mat4.fromAxisAngle(-move_amount, F32x3.new(0.0, 1.0, 0.0));
-            } else if (key == 68) {
-                mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
-            } else if (key == 83) {
-                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-                const axis = camera_create_info.up.cross(target_dir).unit();
-                if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
-                    return;
-                }
-                mat = Mat4.fromAxisAngle(move_amount, axis);
-            } else if (key == 87) {
-                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-                const axis = camera_create_info.up.cross(target_dir).unit();
-                if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
-                    return;
-                }
-                mat = Mat4.fromAxisAngle(-move_amount, axis);
-            } else unreachable;
-
-            camera_create_info.origin = mat.mul_point(camera_create_info.origin.sub(camera_create_info.target)).add(camera_create_info.target);
-        } else if (key == 70 and camera_create_info.aperture > 0.0) {
-            camera_create_info.aperture -= 0.0005;
-        } else if (key == 82) {
-            camera_create_info.aperture += 0.0005;
-        } else if (key == 81) {
-            camera_create_info.focus_distance -= 0.01;
-        } else if (key == 69) {
-            camera_create_info.focus_distance += 0.01;
-        } else return;
-
-        engine.camera = Camera.new(camera_create_info);
-
-        engine.num_accumulted_frames = 0;
-    }
-}
-
 pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
     self.context.device.destroySampler(self.sampler, null);
     self.pipeline.destroy(&self.context);
@@ -269,36 +212,38 @@ pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
     self.transfer_commands.destroy(&self.context);
     self.display.destroy(&self.context, allocator);
     self.context.destroy();
-    self.window.destroy();
 }
 
-pub fn run(self: *Self, allocator: *std.mem.Allocator) !void {
-    while (!self.window.shouldClose()) {
-        var resized = false;
+pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !vk.CommandBuffer {
+    var resized = false;
 
-        const buffer = try self.display.startFrame(&self.context, allocator, &self.window, &self.descriptor, &resized);
-        if (resized) {
-            resized = false;
-            try resize(self);
-        }
-
-        self.camera.push(&self.context, buffer, self.pipeline.layout);
-        const num_accumulted_frames_bytes = std.mem.asBytes(&self.num_accumulted_frames);
-        self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), num_accumulted_frames_bytes.len, num_accumulted_frames_bytes);
-
-        try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
-
-        try self.display.endFrame(&self.context, allocator, &self.window, &resized);
-        if (resized) {
-            try resize(self);
-        }
-
-        if (!resized) {
-            self.num_accumulted_frames += 1;
-        }
-        self.window.pollEvents();
+    const buffer = try self.display.startFrame(&self.context, allocator, window, &self.descriptor, &resized);
+    if (resized) {
+        resized = false;
+        try resize(self);
     }
-    try self.context.device.deviceWaitIdle();
+
+    self.camera.push(&self.context, buffer, self.pipeline.layout);
+    const num_accumulted_frames_bytes = std.mem.asBytes(&self.num_accumulted_frames);
+    self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.PushInfo), num_accumulted_frames_bytes.len, num_accumulted_frames_bytes);
+
+    return buffer;
+}
+
+pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
+    try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
+}
+
+pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {
+    var resized = false;
+    try self.display.endFrame(&self.context, allocator, window, &resized);
+    if (resized) {
+        try resize(self);
+    }
+
+    if (!resized) {
+        self.num_accumulted_frames += 1;
+    }
 }
 
 fn resize(self: *Self) !void {
