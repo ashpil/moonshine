@@ -39,9 +39,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
 
     const context = try VulkanContext.create(allocator, window);
     var transfer_commands = try ComputeCommands.create(&context);
-    const display = try Display.create(&context, allocator, initial_window_size);
-    // todo: why transition here?
-    try transfer_commands.transitionImageLayout(&context, display.accumulation_image.data.items(.image)[0], .@"undefined", .general);
+    const display = try Display.create(&context, allocator, &transfer_commands, initial_window_size);
 
     const descriptor = try Descriptor.create(&context, [_]desc.BindingInfo {
         .{
@@ -217,7 +215,7 @@ pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
 pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !vk.CommandBuffer {
     var resized = false;
 
-    const buffer = try self.display.startFrame(&self.context, allocator, window, &self.descriptor, &resized);
+    const buffer = try self.display.startFrame(&self.context, allocator, &self.transfer_commands, window, &self.descriptor, &resized);
     if (resized) {
         resized = false;
         try resize(self);
@@ -236,7 +234,7 @@ pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {
     var resized = false;
-    try self.display.endFrame(&self.context, allocator, window, &resized);
+    try self.display.endFrame(&self.context, allocator, &self.transfer_commands, window, &resized);
     if (resized) {
         try resize(self);
     }
@@ -247,9 +245,6 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocato
 }
 
 fn resize(self: *Self) !void {
-    // todo: or here
-    try self.transfer_commands.transitionImageLayout(&self.context, self.display.accumulation_image.data.items(.image)[0], .@"undefined", .general);
-
     var camera_create_info = self.camera.create_info;
     camera_create_info.extent = self.display.extent;
     self.camera = Camera.new(camera_create_info);
