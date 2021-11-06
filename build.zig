@@ -29,40 +29,12 @@ pub fn build(b: *std.build.Builder) void {
     const dir_cmd = b.addSystemCommand(&[_][]const u8 {
         "mkdir", "-p", "zig-cache/shaders"
     });
-    const shader_cmd0 = b.addSystemCommand(&[_][]const u8 {
-        "glslc", "src/shaders/shader.rgen",
-        "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/shader_rgen.spv",
-        "-g",
-        "-O",
-    });
-    const shader_cmd1 = b.addSystemCommand(&[_][]const u8 {
-        "glslc", "src/shaders/shader.rchit",
-        "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/shader_rchit.spv",
-        "-g",
-        "-O",
-    });
-    const shader_cmd2 = b.addSystemCommand(&[_][]const u8 {
-        "glslc", "src/shaders/shader.rmiss",
-        "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/shader_rmiss.spv",
-        "-g",
-        "-O",
-    });
-    const shader_cmd3 = b.addSystemCommand(&[_][]const u8 {
-        "glslc", "src/shaders/shadow.rmiss",
-        "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/shadow_rmiss.spv",
-        "-g",
-        "-O",
-    });
 
     exe.step.dependOn(&dir_cmd.step);
-    exe.step.dependOn(&shader_cmd0.step);
-    exe.step.dependOn(&shader_cmd1.step);
-    exe.step.dependOn(&shader_cmd2.step);
-    exe.step.dependOn(&shader_cmd3.step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rgen").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rchit").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rmiss").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "shadow.rmiss").step);
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
@@ -72,4 +44,13 @@ pub fn build(b: *std.build.Builder) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+}
+
+pub fn makeShaderStep(b: *std.build.Builder, mode: std.builtin.Mode, comptime shader_name: []const u8) *std.build.RunStep {
+    return b.addSystemCommand(&[_][]const u8 {
+        "glslc", "src/shaders/" ++ shader_name,
+        "--target-env=vulkan1.2",
+        "-o", "zig-cache/shaders/" ++ shader_name ++ ".spv",
+        if (mode == .Debug) "-g" else "-O",
+    });
 }

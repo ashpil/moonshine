@@ -78,10 +78,10 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *TransferCommands, descriptor_layout: vk.DescriptorSetLayout) !Self {
 
     var shader_info = try ShaderInfo(.{
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader_rgen.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader_rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shadow_rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader_rchit.spv" },
+        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rgen.spv" },
+        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rmiss.spv" },
+        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shadow.rmiss.spv" },
+        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rchit.spv" },
     }).create(vc);
     defer shader_info.destroy(vc);
 
