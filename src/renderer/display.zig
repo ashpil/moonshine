@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const Window = @import("./Window.zig");
+const Window = @import("../utils/Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Images = @import("./Images.zig");
 const TransferCommands = @import("./commands.zig").ComputeCommands;

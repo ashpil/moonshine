@@ -1,8 +1,6 @@
 const c = @import("./c.zig");
 const vk = @import("vulkan");
 
-const Engine = @import("./Engine.zig");
-
 const Error = error {
     InitFail,
     WindowCreateFail,
@@ -10,6 +8,8 @@ const Error = error {
 };
 
 const Self = @This();
+
+pub const getInstanceProcAddress = c.glfwGetInstanceProcAddress;
 
 handle: *c.GLFWwindow,
 
@@ -26,6 +26,13 @@ pub fn create(width: u32, height: u32) Error!Self {
     return Self {
         .handle = handle,
     };
+}
+
+pub fn getRequiredInstanceExtensions(self: *const Self) []const [*:0]const u8 {
+    _ = self; // insure we're initialized
+    var glfw_extension_count: u32 = 0;
+
+    return @ptrCast([*]const [*:0]const u8, c.glfwGetRequiredInstanceExtensions(&glfw_extension_count))[0..glfw_extension_count];
 }
 
 pub fn shouldClose(self: *const Self) bool {
@@ -56,11 +63,55 @@ pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, 
     _ = c.glfwSetFramebufferSizeCallback(self.handle, Callback.resizeCallback);
 }
 
+pub fn setCursorPosCallback(self: *const Self, comptime callback: fn (*const Self, f64, f64) void) void {
+    const Callback = struct {
+        fn cursorPosCallback(handle: ?*c.GLFWwindow, xpos: f64, ypos: f64) callconv(.C) void {
+            const window = Self {
+                .handle = handle.?,
+            };
+            callback(&window, xpos, ypos);
+        }
+    };
+    _ = c.glfwSetCursorPosCallback(self.handle, Callback.cursorPosCallback);
+}
+
+pub fn getCursorPos(self: *const Self) struct { x: f64, y: f64 } {
+    var xpos: f64 = undefined;
+    var ypos: f64 = undefined;
+
+    c.glfwGetCursorPos(self.handle, &xpos, &ypos);
+
+    return .{
+        .x = xpos,
+        .y = ypos,
+    };
+}
+
 pub const Action = enum(c_int) {
     release = 0,
     press = 1,
     repeat = 2,
 };
+
+pub const MouseButton = enum(c_int) {
+    left = 0,
+    right = 1,
+    middle = 2,
+    _,
+};
+
+pub fn setMouseButtonCallback(self: *const Self, comptime callback: fn (*const Self, MouseButton, Action) void) void {
+    const Callback = struct {
+        fn mouseButtonCallback(handle: ?*c.GLFWwindow, button: c_int, action: c_int, mods: c_int) callconv(.C) void {
+            _ = mods;
+            const window = Self {
+                .handle = handle.?,
+            };
+            callback(&window, @intToEnum(MouseButton, button), @intToEnum(Action, action));
+        }
+    };
+    _ = c.glfwSetMouseButtonCallback(self.handle, Callback.mouseButtonCallback);
+}
 
 pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action) void) void {
     const Callback = struct {

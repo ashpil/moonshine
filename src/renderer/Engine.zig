@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const Window = @import("./Window.zig");
+const Window = @import("../utils/Window.zig");
 const Pipeline = @import("./Pipeline.zig");
 const desc = @import("./descriptor.zig");
 const Descriptor = desc.Descriptor(frames_in_flight);
@@ -240,7 +240,7 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Alloca
 }
 
 pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
-    try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, &self.descriptor.sets);
+    try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, self.descriptor.sets);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {

@@ -7,7 +7,7 @@ const utils = @import("./utils.zig");
 
 pub fn RenderCommand(comptime frame_count: comptime_int) type {
     return struct {
-        pub fn record(vc: *const VulkanContext, buffer: vk.CommandBuffer, pipeline: *const Pipeline, display: *const Display(frame_count), descriptor_sets: *[frame_count]vk.DescriptorSet) !void {
+        pub fn record(vc: *const VulkanContext, buffer: vk.CommandBuffer, pipeline: *const Pipeline, display: *const Display(frame_count), descriptor_sets: [frame_count]vk.DescriptorSet) !void {
             // transition swapchain to format we can use
             const swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
                 .{

@@ -5,7 +5,7 @@ const ChessSet = @import("./logic/ChessSet.zig");
 const zug = @import("./utils/zug.zig");
 const F32x3 = zug.Vec3(f32);
 const Mat4 = zug.Mat4(f32);
-const Window = @import("./renderer/Window.zig");
+const Window = @import("./utils/Window.zig");
 const Camera = @import("./renderer/Camera.zig");
 const vk = @import("vulkan");
 
@@ -110,6 +110,7 @@ pub fn main() !void {
 
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
+    window.setMouseButtonCallback(mouseButtonCallback);
 
     try engine.setScene(allocator, &set.scene);
 
@@ -129,6 +130,15 @@ const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
 };
+
+fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
+    const ptr = window.getUserPointer().?;
+    const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
+    _ = window_data;
+    
+    const pos = window.getCursorPos();
+    std.debug.print("Button: {}, action: {}, pos: ({d}, {d})\n", .{button, action, pos.x, pos.y});
+}
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
     const ptr = window.getUserPointer().?;

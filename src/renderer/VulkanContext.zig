@@ -1,8 +1,7 @@
-const c = @import("./c.zig");
 const vk = @import("vulkan");
 const std = @import("std");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
-const Window = @import("./Window.zig");
+const Window = @import("../utils/Window.zig");
 
 const validate = @import("builtin").mode == std.builtin.Mode.Debug;
 
@@ -27,7 +26,7 @@ const Base = struct {
 
     fn new() !Base {
         return Base {
-            .dispatch = try BaseDispatch.load(c.glfwGetInstanceProcAddress),
+            .dispatch = try BaseDispatch.load(Window.getInstanceProcAddress),
         };
     }
 
@@ -35,21 +34,20 @@ const Base = struct {
         return if (validate) (std.mem.Allocator.Error![]const [*:0]const u8) else []const [*:0]const u8;
     }
 
-    fn getRequiredExtensions(allocator: *std.mem.Allocator) getRequiredExtensionsType() {
-        var glfw_extension_count: u32 = 0;
-        const glfw_extensions = @ptrCast([*]const [*:0]const u8, c.glfwGetRequiredInstanceExtensions(&glfw_extension_count))[0..glfw_extension_count];
+    fn getRequiredExtensions(allocator: *std.mem.Allocator, window: *const Window) getRequiredExtensionsType() {
+        const window_extensions = window.getRequiredInstanceExtensions();
         if (validate) {
             const debug_extensions = [_][*:0]const u8{
                 vk.extension_info.ext_debug_utils.name,
             };
-            return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &debug_extensions, glfw_extensions });
+            return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &debug_extensions, window_extensions });
         } else {
-            return glfw_extensions;
+            return window_extensions;
         }
     }
 
-    fn createInstance(self: Base, allocator: *std.mem.Allocator) !Instance {
-        const required_extensions = if (validate) try getRequiredExtensions(allocator) else getRequiredExtensions(allocator);
+    fn createInstance(self: Base, allocator: *std.mem.Allocator, window: *const Window) !Instance {
+        const required_extensions = if (validate) try getRequiredExtensions(allocator, window) else getRequiredExtensions(allocator, window);
         defer if (validate) allocator.free(required_extensions);
 
         if (validate and !(try self.validationLayersAvailable(allocator))) return VulkanContextError.UnavailableValidationLayers;
@@ -65,7 +63,7 @@ const Base = struct {
 
         return try self.dispatch.createInstance(
             Instance,
-            c.glfwGetInstanceProcAddress,
+            Window.getInstanceProcAddress,
             .{
                 .p_application_info = &app_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
@@ -269,7 +267,7 @@ const Self = @This();
 pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
     const base = try Base.new();
 
-    const instance = try base.createInstance(allocator);
+    const instance = try base.createInstance(allocator, window);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(debug_messenger_create_info, null) else undefined;
