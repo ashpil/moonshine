@@ -9,13 +9,12 @@ const Descriptor = desc.Descriptor(frames_in_flight);
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
 const Images = @import("./Images.zig");
+const utils = @import("./utils.zig");
 
 const F32x3 = @import("../utils/zug.zig").Vec3(f32);
 const Mat4 = @import("../utils/zug.zig").Mat4(f32);
 
-const commands = @import("./commands.zig");
-const ComputeCommands = commands.ComputeCommands;
-const RenderCommands = commands.RenderCommand;
+const Commands = @import("./Commands.zig");
 
 const Scene = @import("./Scene.zig");
 
@@ -25,7 +24,7 @@ const Self = @This();
 
 context: VulkanContext,
 display: Display,
-transfer_commands: ComputeCommands,
+transfer_commands: Commands,
 descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
@@ -38,7 +37,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
     const initial_window_size = window.getExtent();
 
     const context = try VulkanContext.create(allocator, window);
-    var transfer_commands = try ComputeCommands.create(&context);
+    var transfer_commands = try Commands.create(&context);
     const display = try Display.create(&context, allocator, &transfer_commands, initial_window_size);
 
     const descriptor = try Descriptor.create(&context, [_]desc.BindingInfo {
@@ -240,7 +239,17 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Alloca
 }
 
 pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
-    try RenderCommands(frames_in_flight).record(&self.context, buffer, &self.pipeline, &self.display, self.descriptor.sets);
+    // bind our stuff
+    self.context.device.cmdBindPipeline(buffer, .ray_tracing_khr, self.pipeline.handle);
+    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, 1, utils.toPointerType(&self.descriptor.sets[self.display.frame_index]), 0, undefined);
+    
+    // trace rays
+    const callable_table = vk.StridedDeviceAddressRegionKHR {
+        .device_address = 0,
+        .stride = 0,
+        .size = 0,
+    };
+    self.context.device.cmdTraceRaysKHR(buffer, self.pipeline.sbt.getRaygenSBT(), self.pipeline.sbt.getMissSBT(), self.pipeline.sbt.getHitSBT(), callable_table, self.display.extent.width, self.display.extent.height, 1);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {

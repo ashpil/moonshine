@@ -1,6 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const Commands = @import("./commands.zig").ComputeCommands;
+const Commands = @import("./Commands.zig");
 const VulkanContext = @import("./VulkanContext.zig");
 const utils = @import("./utils.zig");
 const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);

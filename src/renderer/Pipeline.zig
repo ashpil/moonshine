@@ -1,5 +1,5 @@
 const VulkanContext = @import("./VulkanContext.zig");
-const TransferCommands = @import("./commands.zig").ComputeCommands;
+const Commands = @import("./Commands.zig");
 const CameraSize = @import("./Camera.zig").PushInfo;
 const utils = @import("./utils.zig");
 
@@ -75,7 +75,7 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *TransferCommands, descriptor_layout: vk.DescriptorSetLayout) !Self {
+pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout) !Self {
 
     var shader_info = try ShaderInfo(.{
         .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rgen.spv" },
@@ -151,16 +151,19 @@ fn getRaytracingProperties(vc: *const VulkanContext) vk.PhysicalDeviceRayTracing
 const ShaderBindingTable = struct {
     raygen: vk.Buffer,
     raygen_memory: vk.DeviceMemory,
+    raygen_address: vk.DeviceAddress,
 
     miss: vk.Buffer,
     miss_memory: vk.DeviceMemory,
+    miss_address: vk.DeviceAddress,
 
     hit: vk.Buffer,
     hit_memory: vk.DeviceMemory,
+    hit_address: vk.DeviceAddress,
 
     handle_size_aligned: u32,
 
-    fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *TransferCommands, comptime raygen_entry_count: comptime_int, comptime miss_entry_count: comptime_int, comptime hit_entry_count: comptime_int) !ShaderBindingTable {
+    fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, comptime raygen_entry_count: comptime_int, comptime miss_entry_count: comptime_int, comptime hit_entry_count: comptime_int) !ShaderBindingTable {
 
         const rt_properties = getRaytracingProperties(vc);
         const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
@@ -181,6 +184,9 @@ const ShaderBindingTable = struct {
         errdefer vc.device.freeMemory(raygen_memory, null);
         errdefer vc.device.destroyBuffer(raygen, null);
         try cmd.uploadData(vc, raygen, sbt[0..raygen_size]);
+        const raygen_address = vc.device.getBufferDeviceAddress(.{
+            .buffer = raygen,
+        });
 
         var miss: vk.Buffer = undefined;
         var miss_memory: vk.DeviceMemory = undefined;
@@ -189,6 +195,9 @@ const ShaderBindingTable = struct {
         errdefer vc.device.freeMemory(miss_memory, null);
         errdefer vc.device.destroyBuffer(miss, null);
         try cmd.uploadData(vc, miss, sbt[raygen_size..raygen_size + miss_size]);
+        const miss_address = vc.device.getBufferDeviceAddress(.{
+            .buffer = miss,
+        });
 
         var hit: vk.Buffer = undefined;
         var hit_memory: vk.DeviceMemory = undefined;
@@ -197,42 +206,49 @@ const ShaderBindingTable = struct {
         errdefer vc.device.freeMemory(hit_memory, null);
         errdefer vc.device.destroyBuffer(hit, null);
         try cmd.uploadData(vc, hit, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
+        const hit_address = vc.device.getBufferDeviceAddress(.{
+            .buffer = hit,
+        });
 
         return ShaderBindingTable {
             .raygen = raygen,
             .raygen_memory = raygen_memory,
+            .raygen_address = raygen_address,
 
             .miss = miss,
             .miss_memory = miss_memory,
+            .miss_address = miss_address,
 
             .hit = hit,
             .hit_memory = hit_memory,
+            .hit_address = hit_address,
 
             .handle_size_aligned = handle_size_aligned,
         };
     }
 
-    fn getStridedGroupAddressRegion(self: *const ShaderBindingTable, vc: *const VulkanContext, buffer: vk.Buffer) vk.StridedDeviceAddressRegionKHR {
-        // TODO: cache address
+    pub fn getRaygenSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
         return vk.StridedDeviceAddressRegionKHR {
-            .device_address = vc.device.getBufferDeviceAddress(.{
-                .buffer = buffer,
-            }),
+            .device_address = self.raygen_address,
             .stride = self.handle_size_aligned,
             .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
         }; 
     }
 
-    pub fn getRaygenSBT(self: *const ShaderBindingTable, vc: *const VulkanContext) vk.StridedDeviceAddressRegionKHR {
-        return self.getStridedGroupAddressRegion(vc, self.raygen);
+    pub fn getMissSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
+        return vk.StridedDeviceAddressRegionKHR {
+            .device_address = self.miss_address,
+            .stride = self.handle_size_aligned,
+            .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
+        }; 
     }
 
-    pub fn getMissSBT(self: *const ShaderBindingTable, vc: *const VulkanContext) vk.StridedDeviceAddressRegionKHR {
-        return self.getStridedGroupAddressRegion(vc, self.miss);
-    }
-
-    pub fn getHitSBT(self: *const ShaderBindingTable, vc: *const VulkanContext) vk.StridedDeviceAddressRegionKHR {
-        return self.getStridedGroupAddressRegion(vc, self.hit);
+    pub fn getHitSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
+        return vk.StridedDeviceAddressRegionKHR {
+            .device_address = self.hit_address,
+            .stride = self.handle_size_aligned,
+            .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
+        }; 
     }
 
     fn destroy(self: *ShaderBindingTable, vc: *const VulkanContext) void {

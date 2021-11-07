@@ -5,7 +5,7 @@ const VulkanContext = @import("../renderer/VulkanContext.zig");
 const MeshData = @import("../utils/Object.zig");
 const Images = @import("../renderer/Images.zig");
 
-const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
+const Commands = @import("../renderer/Commands.zig");
 
 const Meshes = @import("../renderer/Meshes.zig");
 const Accel = @import("../renderer/Accel.zig");
@@ -46,7 +46,7 @@ instance_info: []InstanceMeshInfo,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, commands: *TransferCommands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, allocator: *std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, allocator: *std.mem.Allocator) !Self {
     const background = try Images.createTexture(vc, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
             .filepath = background_filepath,

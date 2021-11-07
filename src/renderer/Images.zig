@@ -5,7 +5,7 @@ const utils = @import("./utils.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const F32x3 = @import("../utils/zug.zig").Vec3(f32);
-const TransferCommands = @import("./commands.zig").ComputeCommands;
+const Commands = @import("./Commands.zig");
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-reference
 const DDSPixelFormat = extern struct {
@@ -129,7 +129,7 @@ pub fn createRaw(vc: *const VulkanContext, allocator: *std.mem.Allocator, infos:
 }
 
 // TODO: sources won't be able to be comptime at some point, handle this after we have proper asset loading
-pub fn createTexture(vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime sources: []const TextureSource, commands: *TransferCommands) !Self {
+pub fn createTexture(vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime sources: []const TextureSource, commands: *Commands) !Self {
     var data = Data {};
     try data.ensureTotalCapacity(allocator, sources.len);
     errdefer data.deinit(allocator);

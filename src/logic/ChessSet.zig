@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const VulkanContext = @import("../renderer/VulkanContext.zig");
-const TransferCommands = @import("../renderer/commands.zig").ComputeCommands;
+const TransferCommands = @import("../renderer/Commands.zig");
 const Scene = @import("../renderer/Scene.zig");
 const zug = @import("../utils/zug.zig");
 const Mat3x4 = zug.Mat3x4(f32);

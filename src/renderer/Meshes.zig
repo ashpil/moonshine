@@ -1,7 +1,7 @@
 const vk = @import("vulkan");
 const std = @import("std");
 const utils = @import("./utils.zig");
-const TransferCommands = @import("./commands.zig").ComputeCommands;
+const Commands = @import("./Commands.zig");
 const VulkanContext = @import("./VulkanContext.zig");
 const Object = @import("../utils/Object.zig");
 
@@ -28,7 +28,7 @@ mesh_info_memory: vk.DeviceMemory,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, commands: *TransferCommands, allocator: *std.mem.Allocator, objects: []const Object, geometries: []vk.AccelerationStructureGeometryKHR, build_infos: []vk.AccelerationStructureBuildRangeInfoKHR) !Self {
+pub fn create(vc: *const VulkanContext, commands: *Commands, allocator: *std.mem.Allocator, objects: []const Object, geometries: []vk.AccelerationStructureGeometryKHR, build_infos: []vk.AccelerationStructureBuildRangeInfoKHR) !Self {
     std.debug.assert(objects.len == geometries.len);
     std.debug.assert(objects.len == build_infos.len);
 
