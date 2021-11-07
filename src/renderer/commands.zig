@@ -318,11 +318,14 @@ pub const ComputeCommands = struct {
         try self.endOneTimeCommands(vc);
     }
 
-    pub fn transitionImageLayout(self: *ComputeCommands, vc: *const VulkanContext, image: vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
+    pub fn transitionImageLayout(self: *ComputeCommands, vc: *const VulkanContext, allocator: *std.mem.Allocator, images: []vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
         try self.beginOneTimeCommands(vc);
 
-        const barriers = [_]vk.ImageMemoryBarrier2KHR {
-            .{
+        const barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, images.len);
+        defer allocator.free(barriers);
+        
+        for (images) |image, i| {
+            barriers[i] = .{
                 .src_stage_mask = .{},
                 .src_access_mask = .{},
                 .dst_stage_mask = .{},
@@ -339,16 +342,17 @@ pub const ComputeCommands = struct {
                     .base_array_layer = 0,
                     .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
-            }
-        };
+            };
+        }
+
         vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
             .dependency_flags = .{},
             .memory_barrier_count = 0,
             .p_memory_barriers = undefined,
             .buffer_memory_barrier_count = 0,
             .p_buffer_memory_barriers = undefined,
-            .image_memory_barrier_count = barriers.len,
-            .p_image_memory_barriers = &barriers,
+            .image_memory_barrier_count = @intCast(u32, barriers.len),
+            .p_image_memory_barriers = barriers.ptr,
         });
 
         try self.endOneTimeCommands(vc);

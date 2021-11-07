@@ -120,12 +120,13 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
         .view = display.display_image.data.items(.view)[0],
     };
 
+    const attachment_views = display.attachment_images.data.items(.view);
     const accmululation_image_info = desc.StorageImage {
-        .view = display.accumulation_image.data.items(.view)[0],
+        .view = attachment_views[0],
     };
 
     const object_image_info = desc.StorageImage {
-        .view = display.object_image.data.items(.view)[0],
+        .view = attachment_views[1],
     };
 
     const sampler_info = desc.Sampler {
