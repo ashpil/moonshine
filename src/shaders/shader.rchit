@@ -1,9 +1,8 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
-#extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_scalar_block_layout : require
-#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_nonuniform_qualifier : require
 
 #include "common.glsl"
@@ -11,11 +10,6 @@
 struct Mesh {
     uint64_t vertexAddress;
     uint64_t indexAddress;
-};
-
-struct MaterialData {
-    float metallic;
-    float ior;
 };
 
 struct Instance {
@@ -29,18 +23,14 @@ struct Vertex {
 
 layout(buffer_reference, scalar) readonly buffer Indices { ivec3 i[]; };
 layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
-
-layout(binding = 2, set = 0) uniform sampler textureSampler;
-layout(binding = 5, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
-layout(binding = 6, set = 0, scalar) readonly buffer MaterialDatas { MaterialData materialDatas[]; };
-layout(binding = 7, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
-layout(binding = 8, set = 0) uniform texture2D colorTextures[];
-layout(binding = 9, set = 0) uniform texture2D roughnessTextures[];
-layout(binding = 10, set = 0) uniform texture2D normalTextures[];
+layout(binding = 3, set = 0) uniform sampler textureSampler;
+layout(binding = 6, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 8, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
+layout(binding = 11, set = 0) uniform texture2D normalTextures[];
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 
-hitAttributeEXT vec3 attribs;
+hitAttributeEXT vec2 attribs;
 
 mat3 createTBNMatrix(vec3 normal, vec3 edge0, vec3 edge1, vec2 t0, vec2 t1, vec2 t2) {
     vec2 deltaUV1 = t1 - t0;
@@ -79,14 +69,13 @@ vec3 calculateHitPoint(vec3 barycentrics, vec3 v0, vec3 v1, vec3 v2) {
     return gl_ObjectToWorldEXT * vec4(hitObjectSpace, 1.0);
 }
 
-vec2 calculateTexcoords(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
+vec2 calculateTexcoord(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
     return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
 }
 
 void main() {
     Mesh mesh = meshes[gl_InstanceCustomIndexEXT];
     uint materialIndex = instances[gl_InstanceID].materialIndex;
-    MaterialData materialData = materialDatas[materialIndex];
     Vertices vertices = Vertices(mesh.vertexAddress);
     Indices indices = Indices(mesh.indexAddress);
     ivec3 ind = indices.i[gl_PrimitiveID];
@@ -103,15 +92,12 @@ void main() {
     vec2 t2 = v2.texcoord;
 
     vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
-    vec2 texcoords = calculateTexcoords(barycentrics, t0, t1, t2);
-    vec3 normal = calculateNormal(v0, v1, v2, texcoords, materialIndex);
-    vec3 point = calculateHitPoint(barycentrics, p0, p1, p2);
 
-    payload.point = point;
-    payload.normal = normal;
+    payload.texcoord = calculateTexcoord(barycentrics, t0, t1, t2);
+    payload.normal = calculateNormal(v0, v1, v2, payload.texcoord, materialIndex);
+    payload.point = calculateHitPoint(barycentrics, p0, p1, p2);
+
     payload.done = false;
-    payload.material.metallic = materialData.metallic;
-    payload.material.ior = materialData.ior;
-    payload.material.color = texture(sampler2D(colorTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).rgb;
-    payload.material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).r;
+    payload.materialIndex = materialIndex;
+    payload.index = gl_InstanceID;
 }

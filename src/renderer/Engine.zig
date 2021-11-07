@@ -53,7 +53,12 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
             .count = 1,
         },
         .{
-            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .descriptor_type = .storage_image,
+            .count = 1,
+        },
+        .{
+            .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true },
             .descriptor_type = .sampler,
             .count = 1,
         },
@@ -63,7 +68,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
             .count = 1,
         },
         .{
-            .stage_flags = .{ .miss_bit_khr = true },
+            .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .combined_image_sampler,
             .count = 1,
         },
@@ -73,7 +78,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
             .count = 1,
         },
         .{
-            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .storage_buffer,
             .count = 1,
         },
@@ -83,12 +88,12 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
             .count = 1,
         },
         .{
-            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .sampled_image,
             .count = max_textures,
         },
         .{
-            .stage_flags = .{ .closest_hit_bit_khr = true },
+            .stage_flags = .{ .raygen_bit_khr = true },
             .descriptor_type = .sampled_image,
             .count = max_textures,
         },
@@ -104,7 +109,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
         frames[i] = i;
     };
 
-    comptime var sets: [3]u32 = undefined;
+    comptime var sets: [4]u32 = undefined;
     comptime for (sets) |_, i| {
         sets[i] = i;
     };
@@ -119,6 +124,10 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
         .view = display.accumulation_image.data.items(.view)[0],
     };
 
+    const object_image_info = desc.StorageImage {
+        .view = display.object_image.data.items(.view)[0],
+    };
+
     const sampler_info = desc.Sampler {
         .sampler = sampler,
     };
@@ -126,6 +135,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
     try descriptor.write(&context, allocator, sets, frames, .{
         display_image_info,
         accmululation_image_info,
+        object_image_info,
         sampler_info,
     });
 
@@ -165,7 +175,7 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
 
     comptime var sets: [8]u32 = undefined;
     comptime for (sets) |_, i| {
-        sets[i] = i + 3;
+        sets[i] = i + 4;
     };
 
     const background = desc.Texture {

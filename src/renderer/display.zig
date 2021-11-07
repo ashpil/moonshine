@@ -20,6 +20,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         swapchain: Swapchain,
         display_image: Images,
         accumulation_image: Images,
+        object_image: Images,
 
         extent: vk.Extent2D,
 
@@ -47,6 +48,14 @@ pub fn Display(comptime num_frames: comptime_int) type {
             errdefer accumulation_image.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, accumulation_image.data.items(.image)[0], .@"undefined", .general);
 
+            const object_image_info = Images.ImageCreateRawInfo {
+                .extent = extent,
+                .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
+                .format = .r8_uint,
+            };
+            var object_image = try Images.createRaw(vc, allocator, &.{ object_image_info });
+            errdefer object_image.destroy(vc, allocator);
+
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -60,6 +69,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
                 .display_image = display_image,
                 .accumulation_image = accumulation_image,
+                .object_image = object_image,
 
                 .extent = extent,
 
@@ -71,6 +81,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
             self.display_image.destroy(vc, allocator);
             self.accumulation_image.destroy(vc, allocator);
+            self.object_image.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {

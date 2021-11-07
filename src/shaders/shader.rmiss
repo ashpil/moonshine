@@ -4,12 +4,8 @@
 
 #include "common.glsl"
 
-layout(binding = 4) uniform samplerCube skySampler;
-
 layout(location = 0) rayPayloadInEXT Payload payload;
 
 void main() {
-    vec3 dir = normalize(gl_WorldRayDirectionEXT);
-    payload.material.color = texture(skySampler, dir).xyz;
     payload.done = true;
 }

@@ -1,10 +1,35 @@
-// helper
-float X(float a) {
-    if (a > 0.0) {
-        return 1.0;
-    } else {
-        return 0.0;
-    }
+
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+struct MaterialData {
+    float metallic;
+    float ior;
+};
+
+layout(binding = 3, set = 0) uniform sampler textureSampler;
+layout(binding = 7, set = 0, scalar) readonly buffer MaterialDatas { MaterialData materialDatas[]; };
+layout(binding = 9, set = 0) uniform texture2D colorTextures[];
+layout(binding = 10, set = 0) uniform texture2D roughnessTextures[];
+
+struct Material {
+    vec3 color;        // color; each component is (0, 1)
+    float metallic;    // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
+    float roughness;   // roughness value; (0, 1) exclusive
+    float ior;         // index of refraction; (0, ?) exclusive
+};
+
+Material getMaterial(uint materialIndex, vec2 texcoords) {
+
+    MaterialData materialData = materialDatas[materialIndex];
+
+    Material material;
+    material.metallic = materialData.metallic;
+    material.ior = materialData.ior;
+    material.color = texture(sampler2D(colorTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).rgb;
+    material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).r;
+
+    return material;
 }
 
 // schlick approximation

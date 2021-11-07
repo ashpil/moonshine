@@ -11,7 +11,9 @@
 
 layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
 layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
-layout(binding = 3, set = 0) uniform accelerationStructureEXT TLAS;
+layout(binding = 2, set = 0, rgba32f) uniform image2D objectImage;
+layout(binding = 4, set = 0) uniform accelerationStructureEXT TLAS;
+layout(binding = 5) uniform samplerCube skySampler;
 
 layout(location = 0) rayPayloadEXT Payload payload;
 layout(location = 1) rayPayloadEXT bool inShadow;
@@ -35,7 +37,7 @@ const vec3 SUN_DIR = vec3(-0.494118, 0.406275, -0.768628);
 const vec3 SUN_ILLUMINANCE = vec3(1.0, 1.0, 0.98) * PI;
 
 // explicitly sample our light sources (currently just the sun)
-vec3 sampleLights(Frame frame, vec3 outgoing) {
+vec3 sampleLights(Frame frame, vec3 outgoing, Material material) {
     inShadow = true;
     if (dot(payload.normal, SUN_DIR) > 0.0) { 
         uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
@@ -43,7 +45,7 @@ vec3 sampleLights(Frame frame, vec3 outgoing) {
     }
     if (!inShadow) {
         vec3 frameSunDir = worldToFrame(frame, SUN_DIR);
-        vec3 brdf = f_r(frameSunDir, outgoing, payload.material);
+        vec3 brdf = f_r(frameSunDir, outgoing, material);
         return SUN_ILLUMINANCE * brdf * frameCosTheta(frameSunDir);
     } else {
         return vec3(0.0);
@@ -97,25 +99,27 @@ void main() {
 
             // if finished, add final bounce color to accumulated
             if (payload.done) {
-                accumulatedColor += throughput * payload.material.color;
+                vec3 color = texture(skySampler, direction).rgb;
+                accumulatedColor += throughput * color;
                 break;
             }
+            Material material = getMaterial(payload.materialIndex, payload.texcoord);
             
             Frame frame = createFrame(payload.normal);
             vec3 outgoing = worldToFrame(frame, -direction);
-            accumulatedColor += (throughput * sampleLights(frame, outgoing));
+            accumulatedColor += (throughput * sampleLights(frame, outgoing, material));
             
             // set up info for next bounce
             origin = payload.point;
             float pdf;
             float u = stepAndOutputRNGFloat(rngState);
             float v = stepAndOutputRNGFloat(rngState);
-            vec3 incoming = sample_f_r(outgoing, payload.material, pdf, vec2(u, v));
+            vec3 incoming = sample_f_r(outgoing, material, pdf, vec2(u, v));
             if (!sameHemisphere(outgoing, incoming)) {
                 break;
             }
             direction = frameToWorld(frame, incoming);
-            throughput *= f_r(incoming, outgoing, payload.material) * abs(frameCosTheta(incoming)) / pdf;
+            throughput *= f_r(incoming, outgoing, material) * abs(frameCosTheta(incoming)) / pdf;
         }
     }
 
