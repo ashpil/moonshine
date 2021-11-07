@@ -48,7 +48,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .{
                     .extent = extent,
                     .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                    .format = .r8_uint,
+                    .format = .r16_uint,
                 }
             };
             var attachment_images = try Images.createRaw(vc, allocator, &accumulation_image_info);
@@ -160,6 +160,24 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .layer_count = 1,
                     },
                 },
+                .{
+                    .src_stage_mask = .{},
+                    .src_access_mask = .{},
+                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
+                    .dst_access_mask = .{ .shader_storage_write_bit_khr = true, },
+                    .old_layout = .@"undefined",
+                    .new_layout = .general,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = self.attachment_images.data.items(.image)[1],
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                },
             };
             vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, vk.DependencyInfoKHR {
                 .dependency_flags = .{},
@@ -201,7 +219,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                        .format = .r8_uint,
+                        .format = .r16_uint,
                     }
                 };
                 self.attachment_images = try Images.createRaw(vc, allocator, &accumulation_image_info);

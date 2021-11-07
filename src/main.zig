@@ -106,6 +106,7 @@ pub fn main() !void {
     var window_data = WindowData {
         .engine = &engine,
         .set = &set,
+        .click = null,
     };
 
     window.setUserPointer(&window_data);
@@ -118,7 +119,17 @@ pub fn main() !void {
         const buffer = try engine.startFrame(&window, allocator);
         try set.scene.accel.applyChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
+        var clicked = false;
+        if (window_data.click) |click| {
+            engine.recordGetPixel(buffer, click.x, click.y);
+            window_data.click = null;
+            clicked = true;
+        }
         try engine.endFrame(&window, allocator);
+        if (clicked) {
+            std.debug.print("Instance clicked: {}\n", .{engine.input_buffer_address.*});
+            clicked = false;
+        }
         window.pollEvents();
     }
     try engine.context.device.deviceWaitIdle();
@@ -126,18 +137,28 @@ pub fn main() !void {
     std.log.info("Program completed!.", .{});
 }
 
+const ClickData = struct {
+    x: u32,
+    y: u32,
+};
+
 const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
+    click: ?ClickData,
 };
 
 fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
     const ptr = window.getUserPointer().?;
     const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
-    _ = window_data;
-    
-    const pos = window.getCursorPos();
-    std.debug.print("Button: {}, action: {}, pos: ({d}, {d})\n", .{button, action, pos.x, pos.y});
+
+    if (button == .left and action == .press) {
+        const pos = window.getCursorPos();
+        window_data.click = .{
+            .x = @floatToInt(u32, pos.x),
+            .y = @floatToInt(u32, pos.y),
+        };
+    }
 }
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {

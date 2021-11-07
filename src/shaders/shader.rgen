@@ -11,7 +11,7 @@
 
 layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
 layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
-layout(binding = 2, set = 0, r8ui) uniform writeonly uimage2D objectImage;
+layout(binding = 2, set = 0, r16ui) uniform writeonly uimage2D objectImage;
 layout(binding = 4, set = 0) uniform accelerationStructureEXT TLAS;
 layout(binding = 5) uniform samplerCube skySampler;
 

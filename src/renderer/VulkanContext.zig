@@ -212,6 +212,7 @@ const device_commands = [_]vk.DeviceCommand {
     .getQueryPoolResults,
     .destroyQueryPool,
     .cmdCopyAccelerationStructureKHR,
+    .cmdCopyImageToBuffer,
 };
 
 const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {
