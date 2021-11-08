@@ -15,7 +15,7 @@ const F32x3 = @import("../utils/zug.zig").Vec3(f32);
 const Mat4 = @import("../utils/zug.zig").Mat4(f32);
 
 const Commands = @import("./Commands.zig");
-
+const VkAllocator = @import("./Allocator.zig");
 const Scene = @import("./Scene.zig");
 
 const frames_in_flight = 2;
@@ -29,20 +29,21 @@ descriptor: Descriptor,
 camera: Camera,
 pipeline: Pipeline,
 num_accumulted_frames: u32,
+allocator: VkAllocator,
 
 sampler: vk.Sampler,
 
-input_buffer: vk.Buffer,
-input_buffer_memory: vk.DeviceMemory,
-input_buffer_address: *u16,
+input_buffer: VkAllocator.HostBuffer(u16),
 
 pub fn create(comptime max_textures: comptime_int, window: *const Window, allocator: *std.mem.Allocator) !Self {
 
     const initial_window_size = window.getExtent();
 
     const context = try VulkanContext.create(allocator, window);
+    var vk_allocator = try VkAllocator.create(&context, allocator);
+
     var transfer_commands = try Commands.create(&context);
-    const display = try Display.create(&context, allocator, &transfer_commands, initial_window_size);
+    const display = try Display.create(&context, &vk_allocator, allocator, &transfer_commands, initial_window_size);
 
     const descriptor = try Descriptor.create(&context, [_]desc.BindingInfo {
         .{
@@ -156,12 +157,9 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
         .focus_distance = camera_origin.sub(camera_target).length(),
     });
 
-    const pipeline = try Pipeline.create(&context, allocator, &transfer_commands, descriptor.layout);
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &transfer_commands, descriptor.layout);
 
-    var input_buffer: vk.Buffer = undefined;
-    var input_buffer_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(&context, @sizeOf(u16), .{ .transfer_dst_bit = true }, .{ .host_visible_bit = true, .host_coherent_bit = true }, &input_buffer, &input_buffer_memory);
-    const input_buffer_address = @ptrCast(*u16, @alignCast(@alignOf(*u16), (try context.device.mapMemory(input_buffer_memory, 0, @sizeOf(u16), .{})).?));
+    const input_buffer = try vk_allocator.createHostBuffer(&context, u16, 1, .{ .transfer_dst_bit = true });
 
     return Self {
         .context = context,
@@ -173,9 +171,9 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
         .sampler = sampler,
         .num_accumulted_frames = 0,
 
+        .allocator = vk_allocator,
+
         .input_buffer = input_buffer,
-        .input_buffer_memory = input_buffer_memory,
-        .input_buffer_address = input_buffer_address,
     };
 }
 
@@ -196,13 +194,13 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
         .view = scene.background.data.items(.view)[0],
     };
     const mesh_info = desc.StorageBuffer {
-        .buffer = scene.meshes.mesh_info,
+        .buffer = scene.meshes.mesh_info.handle,
     };
     const materials_info = desc.StorageBuffer {
-        .buffer = scene.materials_buffer,
+        .buffer = scene.materials_buffer.handle,
     };
     const instances_info = desc.StorageBuffer {
-        .buffer = scene.accel.instance_buffer,
+        .buffer = scene.accel.instance_buffer.handle,
     };
     const color_textures = desc.TextureArray {
         .views = scene.color_textures.data.items(.view),
@@ -227,9 +225,8 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
 }
 
 pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
-    self.context.device.destroyBuffer(self.input_buffer, null);
-    self.context.device.unmapMemory(self.input_buffer_memory);
-    self.context.device.freeMemory(self.input_buffer_memory, null);
+    self.input_buffer.destroy(&self.context);
+    self.allocator.destroy(&self.context, allocator);
     self.context.device.destroySampler(self.sampler, null);
     self.pipeline.destroy(&self.context);
     self.descriptor.destroy(&self.context);
@@ -241,7 +238,7 @@ pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
 pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !vk.CommandBuffer {
     var resized = false;
 
-    const buffer = try self.display.startFrame(&self.context, allocator, &self.transfer_commands, window, &self.descriptor, &resized);
+    const buffer = try self.display.startFrame(&self.context, &self.allocator, allocator, &self.transfer_commands, window, &self.descriptor, &resized);
     if (resized) {
         resized = false;
         try resize(self);
@@ -320,12 +317,12 @@ pub fn recordGetPixel(self: *Self, buffer: vk.CommandBuffer, x: u32, y: u32) voi
             .depth = 1,
         },  
     };
-    self.context.device.cmdCopyImageToBuffer(buffer, self.display.attachment_images.data.items(.image)[1], .transfer_src_optimal, self.input_buffer, 1, utils.toPointerType(&copy));
+    self.context.device.cmdCopyImageToBuffer(buffer, self.display.attachment_images.data.items(.image)[1], .transfer_src_optimal, self.input_buffer.handle, 1, utils.toPointerType(&copy));
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {
     var resized = false;
-    try self.display.endFrame(&self.context, allocator, &self.transfer_commands, window, &resized);
+    try self.display.endFrame(&self.context, &self.allocator, allocator, &self.transfer_commands, window, &resized);
     if (resized) {
         try resize(self);
     }

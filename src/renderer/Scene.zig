@@ -6,6 +6,7 @@ const MeshData = @import("../utils/Object.zig");
 const Images = @import("../renderer/Images.zig");
 
 const Commands = @import("../renderer/Commands.zig");
+const VkAllocator = @import("../renderer/Allocator.zig");
 
 const Meshes = @import("../renderer/Meshes.zig");
 const Accel = @import("../renderer/Accel.zig");
@@ -39,15 +40,14 @@ normal_textures: Images,
 meshes: Meshes,
 accel: Accel,
 
-materials_buffer: vk.Buffer,
-materials_memory: vk.DeviceMemory,
+materials_buffer: VkAllocator.DeviceBuffer,
 
 instance_info: []InstanceMeshInfo,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, allocator: *std.mem.Allocator) !Self {
-    const background = try Images.createTexture(vc, allocator, &[_]Images.TextureSource {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances) !Self {
+    const background = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
             .filepath = background_filepath,
         }
@@ -68,17 +68,13 @@ pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials:
         gpu_materials[i].metallic = set.metallic;
     };
 
-    const color_textures = try Images.createTexture(vc, allocator, &color_sources, commands);
-    const roughness_textures = try Images.createTexture(vc, allocator, &roughness_sources, commands);
-    const normal_textures = try Images.createTexture(vc, allocator, &normal_sources, commands);
+    const color_textures = try Images.createTexture(vc, vk_allocator, allocator, &color_sources, commands);
+    const roughness_textures = try Images.createTexture(vc, vk_allocator, allocator, &roughness_sources, commands);
+    const normal_textures = try Images.createTexture(vc, vk_allocator, allocator, &normal_sources, commands);
 
-    var materials_buffer: vk.Buffer = undefined;
-    var materials_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(vc, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }, .{ .device_local_bit = true }, &materials_buffer, &materials_memory);
-    errdefer vc.device.freeMemory(materials_memory, null);
-    errdefer vc.device.destroyBuffer(materials_buffer, null);
-
-    try commands.uploadData(vc, materials_buffer, std.mem.asBytes(&gpu_materials));
+    const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+    errdefer materials_buffer.destroy(vc);
+    try commands.uploadData(vc, vk_allocator, materials_buffer.handle, std.mem.asBytes(&gpu_materials));
 
     var objects: [mesh_filepaths.len]MeshData = undefined;
     
@@ -100,7 +96,7 @@ pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials:
     const geometries = geometry_infos_slice.items(.geometry);
     var build_infos: [mesh_filepaths.len]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
     
-    var meshes = try Meshes.create(vc, commands, allocator, &objects, geometries, &build_infos);
+    var meshes = try Meshes.create(vc, vk_allocator, allocator, commands, &objects, geometries, &build_infos);
     errdefer meshes.destroy(vc, allocator);
 
     var build_infos_ref = geometry_infos_slice.items(.build_info);
@@ -109,7 +105,7 @@ pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials:
         build_infos_ref[i] = &build_infos[i];
     }
 
-    var accel = try Accel.create(vc, allocator, commands, geometry_infos, instances);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, geometry_infos, instances);
     errdefer accel.destroy(vc, allocator);
 
     const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
@@ -122,7 +118,6 @@ pub fn create(vc: *const VulkanContext, commands: *Commands, comptime materials:
         .normal_textures = normal_textures,
 
         .materials_buffer = materials_buffer,
-        .materials_memory = materials_memory,
 
         .meshes = meshes,
         .accel = accel,
@@ -146,6 +141,5 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloca
     self.meshes.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
 
-    vc.device.destroyBuffer(self.materials_buffer, null);
-    vc.device.freeMemory(self.materials_memory, null);
+    self.materials_buffer.destroy(vc);
 }

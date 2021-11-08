@@ -1,5 +1,6 @@
 const VulkanContext = @import("./VulkanContext.zig");
 const Commands = @import("./Commands.zig");
+const VkAllocator = @import("./Allocator.zig");
 const CameraSize = @import("./Camera.zig").PushInfo;
 const utils = @import("./utils.zig");
 
@@ -75,7 +76,7 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout) !Self {
 
     var shader_info = try ShaderInfo(.{
         .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rgen.spv" },
@@ -118,7 +119,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, cmd: *Com
     _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &handle));
     errdefer vc.device.destroyPipeline(handle, null);
 
-    const sbt = try ShaderBindingTable.create(vc, allocator, handle, cmd, 1, 2, 1);
+    const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, 1, 2, 1);
     errdefer sbt.destroy(vc);
 
     return Self {
@@ -149,22 +150,18 @@ fn getRaytracingProperties(vc: *const VulkanContext) vk.PhysicalDeviceRayTracing
 }
 
 const ShaderBindingTable = struct {
-    raygen: vk.Buffer,
-    raygen_memory: vk.DeviceMemory,
+    raygen: VkAllocator.DeviceBuffer,
     raygen_address: vk.DeviceAddress,
 
-    miss: vk.Buffer,
-    miss_memory: vk.DeviceMemory,
+    miss: VkAllocator.DeviceBuffer,
     miss_address: vk.DeviceAddress,
 
-    hit: vk.Buffer,
-    hit_memory: vk.DeviceMemory,
+    hit: VkAllocator.DeviceBuffer,
     hit_address: vk.DeviceAddress,
 
     handle_size_aligned: u32,
 
-    fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, comptime raygen_entry_count: comptime_int, comptime miss_entry_count: comptime_int, comptime hit_entry_count: comptime_int) !ShaderBindingTable {
-
+    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, comptime raygen_entry_count: comptime_int, comptime miss_entry_count: comptime_int, comptime hit_entry_count: comptime_int) !ShaderBindingTable {
         const rt_properties = getRaytracingProperties(vc);
         const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count;
@@ -174,53 +171,34 @@ const ShaderBindingTable = struct {
 
         try vc.device.getRayTracingShaderGroupHandlesKHR(pipeline, 0, group_count, sbt.len, sbt.ptr);
         
-        const buffer_usage_flags = vk.BufferUsageFlags { .shader_binding_table_bit_khr = true, .shader_device_address_bit = true, .transfer_dst_bit = true };
-        const memory_properties = vk.MemoryPropertyFlags { .device_local_bit = true };
+        const buffer_usage_flags = vk.BufferUsageFlags { .shader_binding_table_bit_khr = true, .transfer_dst_bit = true, .shader_device_address_bit = true };
 
-        var raygen: vk.Buffer = undefined;
-        var raygen_memory: vk.DeviceMemory = undefined;
         const raygen_size = handle_size_aligned * raygen_entry_count;
-        try utils.createBuffer(vc, raygen_size, buffer_usage_flags, memory_properties, &raygen, &raygen_memory);
-        errdefer vc.device.freeMemory(raygen_memory, null);
-        errdefer vc.device.destroyBuffer(raygen, null);
-        try cmd.uploadData(vc, raygen, sbt[0..raygen_size]);
-        const raygen_address = vc.device.getBufferDeviceAddress(.{
-            .buffer = raygen,
-        });
+        const raygen = try vk_allocator.createDeviceBuffer(vc, allocator, raygen_size, buffer_usage_flags);
+        errdefer raygen.destroy(vc);
+        try cmd.uploadData(vc, vk_allocator, raygen.handle, sbt[0..raygen_size]);
+        const raygen_address = raygen.getAddress(vc);
 
-        var miss: vk.Buffer = undefined;
-        var miss_memory: vk.DeviceMemory = undefined;
         const miss_size = handle_size_aligned * miss_entry_count;
-        try utils.createBuffer(vc, miss_size, buffer_usage_flags, memory_properties, &miss, &miss_memory);
-        errdefer vc.device.freeMemory(miss_memory, null);
-        errdefer vc.device.destroyBuffer(miss, null);
-        try cmd.uploadData(vc, miss, sbt[raygen_size..raygen_size + miss_size]);
-        const miss_address = vc.device.getBufferDeviceAddress(.{
-            .buffer = miss,
-        });
+        const miss = try vk_allocator.createDeviceBuffer(vc, allocator, miss_size, buffer_usage_flags);
+        errdefer miss.destroy(vc);
+        try cmd.uploadData(vc, vk_allocator, miss.handle, sbt[raygen_size..raygen_size + miss_size]);
+        const miss_address = miss.getAddress(vc);
 
-        var hit: vk.Buffer = undefined;
-        var hit_memory: vk.DeviceMemory = undefined;
         const hit_size = handle_size_aligned * hit_entry_count;
-        try utils.createBuffer(vc, hit_size, buffer_usage_flags, memory_properties, &hit, &hit_memory);
-        errdefer vc.device.freeMemory(hit_memory, null);
-        errdefer vc.device.destroyBuffer(hit, null);
-        try cmd.uploadData(vc, hit, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
-        const hit_address = vc.device.getBufferDeviceAddress(.{
-            .buffer = hit,
-        });
+        const hit = try vk_allocator.createDeviceBuffer(vc, allocator, hit_size, buffer_usage_flags);
+        errdefer hit.destroy(vc);
+        try cmd.uploadData(vc, vk_allocator, hit.handle, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
+        const hit_address = hit.getAddress(vc);
 
         return ShaderBindingTable {
             .raygen = raygen,
-            .raygen_memory = raygen_memory,
             .raygen_address = raygen_address,
 
             .miss = miss,
-            .miss_memory = miss_memory,
             .miss_address = miss_address,
 
             .hit = hit,
-            .hit_memory = hit_memory,
             .hit_address = hit_address,
 
             .handle_size_aligned = handle_size_aligned,
@@ -252,12 +230,8 @@ const ShaderBindingTable = struct {
     }
 
     fn destroy(self: *ShaderBindingTable, vc: *const VulkanContext) void {
-        vc.device.destroyBuffer(self.raygen, null);
-        vc.device.destroyBuffer(self.miss, null);
-        vc.device.destroyBuffer(self.hit, null);
-
-        vc.device.freeMemory(self.raygen_memory, null);
-        vc.device.freeMemory(self.miss_memory, null);
-        vc.device.freeMemory(self.hit_memory, null);
+        self.raygen.destroy(vc);
+        self.miss.destroy(vc);
+        self.hit.destroy(vc);
     }
 };

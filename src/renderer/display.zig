@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
+const VkAllocator = @import("./Allocator.zig");
 const Window = @import("../utils/Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Images = @import("./Images.zig");
@@ -26,7 +27,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         destruction_queue: DestructionQueue,
 
-        pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
             var extent = initial_extent;
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
@@ -36,7 +37,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
                 .format = .r32g32b32a32_sfloat,
             };
-            var display_image = try Images.createRaw(vc, allocator, &.{ display_image_info });
+            var display_image = try Images.createRaw(vc, vk_allocator, allocator, &.{ display_image_info });
             errdefer display_image.destroy(vc, allocator);
 
             const accumulation_image_info = [_]Images.ImageCreateRawInfo {
@@ -51,7 +52,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .format = .r16_uint,
                 }
             };
-            var attachment_images = try Images.createRaw(vc, allocator, &accumulation_image_info);
+            var attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
             errdefer attachment_images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.image), .@"undefined", .general);
 
@@ -87,7 +88,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
@@ -112,7 +113,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             // we can optionally handle swapchain recreation on suboptimal here,
             // but I think for some reason it's better to just do it after presentation
             _ = self.swapchain.acquireNextImage(vc, frame.image_acquired) catch |err| switch (err) {
-                error.OutOfDateKHR => try self.recreate(vc, allocator, commands, window, resized),
+                error.OutOfDateKHR => try self.recreate(vc, vk_allocator, allocator, commands, window, resized),
                 else => return err,
             };
 
@@ -192,7 +193,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
+        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
             var new_extent = window.getExtent();
             try self.destruction_queue.add(allocator, self.swapchain.handle);
             try self.swapchain.recreate(vc, allocator, &new_extent);
@@ -201,7 +202,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 self.extent = new_extent;
 
                 try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image = try Images.createRaw(vc, allocator, &[_]Images.ImageCreateRawInfo {
+                self.display_image = try Images.createRaw(vc, vk_allocator, allocator, &[_]Images.ImageCreateRawInfo {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
@@ -222,7 +223,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .format = .r16_uint,
                     }
                 };
-                self.attachment_images = try Images.createRaw(vc, allocator, &accumulation_image_info);
+                self.attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
                 try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.image), .@"undefined", .general);
 
                 comptime var i = 0;
@@ -232,7 +233,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             }
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
             const frame = self.frames[self.frame_index];
 
             // transition storage image to one we can blit from
@@ -365,7 +366,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
 
             if (present_result == .suboptimal_khr) {
-                try self.recreate(vc, allocator, commands, window, resized);
+                try self.recreate(vc, vk_allocator, allocator, commands, window, resized);
             }
 
             self.frame_index = (self.frame_index + 1) % num_frames;

@@ -100,7 +100,7 @@ pub fn main() !void {
         },
     };
 
-    var set = try ChessSet.create(&engine.context, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", set_info, allocator);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", set_info);
     defer set.destroy(&engine.context, allocator);
 
     var window_data = WindowData {
@@ -127,7 +127,7 @@ pub fn main() !void {
         }
         try engine.endFrame(&window, allocator);
         if (clicked) {
-            std.debug.print("Instance clicked: {}\n", .{engine.input_buffer_address.*});
+            std.debug.print("Instance clicked: {}\n", .{engine.input_buffer.data[0]});
             clicked = false;
         }
         window.pollEvents();

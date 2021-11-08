@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const VulkanContext = @import("./VulkanContext.zig");
+const VkAllocator = @import("./Allocator.zig");
 const Pipeline = @import("./Pipeline.zig");
 const Display = @import("./display.zig").Display;
 const vk = @import("vulkan");
@@ -196,7 +197,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: *
 }
 
 // TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []u64, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
+pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []vk.DeviceSize, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
     std.debug.assert(dst_images.len == src_datas.len);
     std.debug.assert(src_datas.len == sizes.len);
     std.debug.assert(sizes.len == extents.len);
@@ -212,11 +213,12 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, allocator: *std
     const second_barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, len);
     defer allocator.free(second_barriers);
 
-    const staging_buffers = try allocator.alloc(vk.Buffer, len);
+    const staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), len);
     defer allocator.free(staging_buffers);
 
-    const staging_buffers_memory = try allocator.alloc(vk.DeviceMemory, len);
-    defer allocator.free(staging_buffers_memory);
+    defer for (staging_buffers) |staging_buffer| {
+        staging_buffer.destroy(vc);
+    };
 
     for (dst_images) |image, i| {
         first_barriers[i] = .{
@@ -257,17 +259,9 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, allocator: *std
             },
         };
 
-        try utils.createBuffer(vc, sizes[i], .{ .transfer_src_bit = true }, .{ .host_visible_bit = true, .host_coherent_bit = true }, &staging_buffers[i], &staging_buffers_memory[i]);
-
-        const dst = @ptrCast([*]u8, (try vc.device.mapMemory(staging_buffers_memory[i], 0, sizes[i], .{})).?)[0..sizes[i]];
-        std.mem.copy(u8, dst, src_datas[i]);
-        vc.device.unmapMemory(staging_buffers_memory[i]);
+        staging_buffers[i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, sizes[i]), .{ .transfer_src_bit = true });
+        std.mem.copy(u8, staging_buffers[i].data, src_datas[i]);
     }
-
-    defer for (staging_buffers_memory) |_, j| {
-        defer vc.device.destroyBuffer(staging_buffers[j], null);
-        defer vc.device.freeMemory(staging_buffers_memory[j], null);
-    };
 
     vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
         .dependency_flags = .{},
@@ -301,7 +295,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, allocator: *std
                 .depth = 1,
             },  
         };
-        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i], image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
+        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i].handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
     }
 
     vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
@@ -317,17 +311,12 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, allocator: *std
     try self.endOneTimeCommands(vc);
 }
 
-pub fn uploadData(self: *Self, vc: *const VulkanContext, dst_buffer: vk.Buffer, data: []const u8) !void {
+pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, data: []const u8) !void {
 
-    var staging_buffer: vk.Buffer = undefined;
-    var staging_buffer_memory: vk.DeviceMemory = undefined;
-    try utils.createBuffer(vc, data.len, .{ .transfer_src_bit = true }, .{ .host_visible_bit = true, .host_coherent_bit = true}, &staging_buffer, &staging_buffer_memory);
-    defer vc.device.destroyBuffer(staging_buffer, null);
-    defer vc.device.freeMemory(staging_buffer_memory, null);
-
-    const dst = (try vc.device.mapMemory(staging_buffer_memory, 0, data.len, .{})).?;
-    std.mem.copy(u8, @ptrCast([*]u8, dst)[0..data.len], data);
-    vc.device.unmapMemory(staging_buffer_memory);
+    const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, data.len), .{ .transfer_src_bit = true });
+    defer staging_buffer.destroy(vc);
+    
+    std.mem.copy(u8, staging_buffer.data, data);
 
     try self.beginOneTimeCommands(vc);
 
@@ -337,6 +326,6 @@ pub fn uploadData(self: *Self, vc: *const VulkanContext, dst_buffer: vk.Buffer, 
         .size = data.len,
     };
 
-    vc.device.cmdCopyBuffer(self.buffer, staging_buffer, dst_buffer, 1, utils.toPointerType(&region));
+    vc.device.cmdCopyBuffer(self.buffer, staging_buffer.handle, dst_buffer, 1, utils.toPointerType(&region));
     try self.endOneTimeCommands(vc);
 }
