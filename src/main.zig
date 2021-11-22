@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const Engine = @import("./renderer/Engine.zig");
+const Input = @import("./renderer/Input.zig");
 const ChessSet = @import("./logic/ChessSet.zig");
 const zug = @import("./utils/zug.zig");
 const F32x3 = zug.Vec3(f32);
@@ -100,7 +101,7 @@ pub fn main() !void {
         },
     };
 
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.transfer_commands, &texture_sets, "../../assets/textures/skybox.dds", set_info);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox.dds", set_info);
     defer set.destroy(&engine.context, allocator);
 
     var window_data = WindowData {
@@ -108,6 +109,9 @@ pub fn main() !void {
         .set = &set,
         .click = null,
     };
+
+    var input = try Input.create(&engine.context, &engine.allocator, allocator, &engine.commands);
+    defer input.destroy(&engine.context);
 
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
@@ -121,13 +125,13 @@ pub fn main() !void {
         try engine.recordFrame(buffer);
         var clicked = false;
         if (window_data.click) |click| {
-            engine.recordGetPixel(buffer, click.x, click.y);
+            _ = click;
             window_data.click = null;
             clicked = true;
         }
         try engine.endFrame(&window, allocator);
         if (clicked) {
-            std.debug.print("Instance clicked: {}\n", .{engine.input_buffer.data[0]});
+            std.debug.print("Instance clicked: {}\n", .{input.buffer.data[0]});
             clicked = false;
         }
         window.pollEvents();
@@ -167,7 +171,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
     const engine = window_data.engine;
     const set = window_data.set;
     if (action == .repeat or action == .press) {
-        var camera_create_info = engine.camera.create_info;
         if (key == 65 or key == 68 or key == 83 or key == 87) {
             const move_amount = 1.0 / 18.0;
             var mat: Mat4 = undefined;
@@ -176,35 +179,35 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
             } else if (key == 68) {
                 mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
             } else if (key == 83) {
-                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-                const axis = camera_create_info.up.cross(target_dir).unit();
+                const target_dir = engine.camera_create_info.origin.sub(engine.camera_create_info.target);
+                const axis = engine.camera_create_info.up.cross(target_dir).unit();
                 if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                     return;
                 }
                 mat = Mat4.fromAxisAngle(move_amount, axis);
             } else if (key == 87) {
-                const target_dir = camera_create_info.origin.sub(camera_create_info.target);
-                const axis = camera_create_info.up.cross(target_dir).unit();
+                const target_dir = engine.camera_create_info.origin.sub(engine.camera_create_info.target);
+                const axis = engine.camera_create_info.up.cross(target_dir).unit();
                 if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                     return;
                 }
                 mat = Mat4.fromAxisAngle(-move_amount, axis);
             } else unreachable;
 
-            camera_create_info.origin = mat.mul_point(camera_create_info.origin.sub(camera_create_info.target)).add(camera_create_info.target);
-        } else if (key == 70 and camera_create_info.aperture > 0.0) {
-            camera_create_info.aperture -= 0.0005;
+            engine.camera_create_info.origin = mat.mul_point(engine.camera_create_info.origin.sub(engine.camera_create_info.target)).add(engine.camera_create_info.target);
+        } else if (key == 70 and engine.camera_create_info.aperture > 0.0) {
+            engine.camera_create_info.aperture -= 0.0005;
         } else if (key == 82) {
-            camera_create_info.aperture += 0.0005;
+            engine.camera_create_info.aperture += 0.0005;
         } else if (key == 81) {
-            camera_create_info.focus_distance -= 0.01;
+            engine.camera_create_info.focus_distance -= 0.01;
         } else if (key == 69) {
-            camera_create_info.focus_distance += 0.01;
+            engine.camera_create_info.focus_distance += 0.01;
         } else if (key == 32) {
             set.move(5, @import("./logic/coord.zig").Coord.d4.toTransform()) catch unreachable;
         } else return;
 
-        engine.camera = Camera.new(camera_create_info);
+        engine.camera = Camera.new(engine.camera_create_info);
 
         engine.num_accumulted_frames = 0;
     }

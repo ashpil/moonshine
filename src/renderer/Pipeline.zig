@@ -1,23 +1,35 @@
 const VulkanContext = @import("./VulkanContext.zig");
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
-const CameraSize = @import("./Camera.zig").PushInfo;
 const utils = @import("./utils.zig");
 
 const vk = @import("vulkan");
 const std = @import("std");
 
-fn ShaderInfo(comptime infos: anytype) type {
+pub const ShaderInfoCreateInfo = struct {
+    stage: vk.ShaderStageFlags,
+    filepath: []const u8,
+};
+
+fn ShaderInfo(comptime infos: []const ShaderInfoCreateInfo) type {
     return struct {
         const ShaderStruct = @This();
 
         stages: [infos.len]vk.PipelineShaderStageCreateInfo,
         groups: [infos.len]vk.RayTracingShaderGroupCreateInfoKHR,
 
+        raygen_count: u32,
+        miss_count: u32,
+        hit_count: u32,
+
         fn create(vc: *const VulkanContext) !ShaderStruct {
 
             var stages: [infos.len]vk.PipelineShaderStageCreateInfo = undefined;
             var groups: [infos.len]vk.RayTracingShaderGroupCreateInfoKHR = undefined;
+
+            var raygen_count: u32 = 0;
+            var miss_count: u32 = 0;
+            var hit_count: u32 = 0;
 
             inline for (infos) |info, i| {
                 const code = @embedFile(info.filepath);
@@ -36,6 +48,14 @@ fn ShaderInfo(comptime infos: anytype) type {
                     .p_name = "main",
                     .p_specialization_info = null,
                 };
+
+                if (info.stage.contains(.{ .raygen_bit_khr = true })) {
+                    raygen_count += 1;
+                } else if (info.stage.contains(.{ .miss_bit_khr = true })) {
+                    miss_count += 1;
+                } else if (info.stage.contains(.{ .closest_hit_bit_khr = true })) {
+                    hit_count += 1;
+                }
                 
                 // sort underthought for now; needs to be improved for when there are more groups
                 const is_general_shader = comptime info.stage.contains(.{ .raygen_bit_khr = true }) or info.stage.contains(.{ .miss_bit_khr = true });
@@ -59,6 +79,10 @@ fn ShaderInfo(comptime infos: anytype) type {
             return ShaderStruct {
                 .stages = stages,
                 .groups = groups,
+
+                .raygen_count = raygen_count,
+                .miss_count = miss_count,
+                .hit_count = hit_count,
             };
         }
 
@@ -76,28 +100,17 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
 
-    var shader_info = try ShaderInfo(.{
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rgen.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/shadow.rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/shader.rchit.spv" },
-    }).create(vc);
+    var shader_info = try ShaderInfo(shader_info_create_info).create(vc);
     defer shader_info.destroy(vc);
-
-    const push_constant_range = vk.PushConstantRange {
-        .offset = 0,
-        .size = @sizeOf(CameraSize) + @sizeOf(u32),
-        .stage_flags = .{ .raygen_bit_khr = true },
-    };
 
     const layout = try vc.device.createPipelineLayout(.{
         .flags = .{},
         .set_layout_count = 1,
         .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_layout),
-        .push_constant_range_count = 1,
-        .p_push_constant_ranges = @ptrCast([*]const vk.PushConstantRange, &push_constant_range),
+        .push_constant_range_count = @intCast(u32, push_constant_ranges.len),
+        .p_push_constant_ranges = push_constant_ranges.ptr,
     }, null);
     errdefer vc.device.destroyPipelineLayout(layout, null);
 
@@ -119,7 +132,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
     _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &handle));
     errdefer vc.device.destroyPipeline(handle, null);
 
-    const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, 1, 2, 1);
+    const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, shader_info.raygen_count, shader_info.miss_count, shader_info.hit_count);
     errdefer sbt.destroy(vc);
 
     return Self {
@@ -161,7 +174,7 @@ const ShaderBindingTable = struct {
 
     handle_size_aligned: u32,
 
-    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, comptime raygen_entry_count: comptime_int, comptime miss_entry_count: comptime_int, comptime hit_entry_count: comptime_int) !ShaderBindingTable {
+    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32) !ShaderBindingTable {
         const rt_properties = getRaytracingProperties(vc);
         const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count;

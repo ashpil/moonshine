@@ -1,0 +1,45 @@
+// minimal shader for testing
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT TLAS;
+layout(binding = 1, set = 0) writeonly buffer Index { uint index; };
+layout(location = 0) rayPayloadEXT uint payload;
+
+struct Camera {
+    vec3 origin;
+    vec3 lower_left_corner;
+    vec3 horizontal;
+    vec3 vertical;
+};
+
+layout(push_constant, scalar) uniform cam {
+    Camera camera;
+    vec2 coords;
+};
+
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+Ray generateDir(Camera camera) {
+    vec2 uv = coords;
+    uv.y -= 1;
+    uv.y *= -1;
+
+    Ray ray;
+    ray.origin = camera.origin;
+    ray.direction = normalize(camera.lower_left_corner + uv.x * camera.horizontal + uv.y * camera.vertical - camera.origin);
+
+    return ray;
+}
+
+void main() {
+    Ray ray = generateDir(camera);
+
+    traceRayEXT(TLAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0, ray.origin, 0.0001, ray.direction, 10000.0, 0);
+
+    index = payload;
+}

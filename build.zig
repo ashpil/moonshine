@@ -27,14 +27,18 @@ pub fn build(b: *std.build.Builder) void {
 
     // compile shaders
     const dir_cmd = b.addSystemCommand(&[_][]const u8 {
-        "mkdir", "-p", "zig-cache/shaders"
+        "mkdir", "-p", "zig-cache/shaders/primary", "zig-cache/shaders/misc"
     });
-
     exe.step.dependOn(&dir_cmd.step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rgen").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rchit").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "shader.rmiss").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "shadow.rmiss").step);
+
+    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rgen").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rchit").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rmiss").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shadow.rmiss").step);
+
+    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rgen").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rchit").step);
+    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rmiss").step);
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());

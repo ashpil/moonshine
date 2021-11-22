@@ -14,18 +14,21 @@ pub const CreateInfo = struct {
     focus_distance: f32,
 };
 
-pub const PushInfo = struct {
+pub const Desc = struct {
     origin: F32x3,
     lower_left_corner: F32x3,
     horizontal: F32x3,
     vertical: F32x3,
+};
+
+pub const BlurDesc = struct {
     u: F32x3,
     v: F32x3,
     lens_radius: f32,
 };
 
-create_info: CreateInfo,
-push_info: PushInfo,
+desc: Desc,
+blur_desc: BlurDesc,
 
 const Self = @This();
 
@@ -42,23 +45,26 @@ pub fn new(create_info: CreateInfo) Self {
     const horizontal = u.mul_scalar(viewport_width);
     const vertical = v.mul_scalar(viewport_height);
 
-    const push_info = PushInfo {
+    const desc = Desc {
         .origin = create_info.origin,
         .horizontal = horizontal,
         .vertical = vertical,
         .lower_left_corner = create_info.origin.sub(horizontal.div_scalar(2.0)).sub(vertical.div_scalar(2.0)).sub(w.mul_scalar(create_info.focus_distance)),
+    };
+
+    const blur_desc = BlurDesc {
         .u = u,
         .v = v,
         .lens_radius = create_info.aperture / 2,
     };
 
     return Self {
-        .create_info = create_info,
-        .push_info = push_info,
+        .desc = desc,
+        .blur_desc = blur_desc,
     };
 }
 
 pub fn push(self: *const Self, vc: *const VulkanContext, buffer: vk.CommandBuffer, layout: vk.PipelineLayout) void {
-    const bytes = std.mem.asBytes(&self.push_info);
+    const bytes = std.mem.asBytes(self);
     vc.device.cmdPushConstants(buffer, layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 }
