@@ -12,16 +12,16 @@ image_index: u32,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !Self {
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D) !Self {
     return try createFromOld(vc, allocator, extent, .null_handle, null);
 }
 
-fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
+fn createFromOld(vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
     const settings = try SwapSettings.find(vc, allocator, extent);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
-    const handle = try vc.device.createSwapchainKHR(.{
+    const handle = try vc.device.createSwapchainKHR(&.{
         .flags = .{},
         .surface = vc.surface,
         .min_image_count = settings.image_count,
@@ -61,7 +61,7 @@ fn createFromOld(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent
 }
 
 // assumes old handle destruction is handled
-pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !void {
+pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D) !void {
     for (self.images) |image| {
         image.destroy(vc);
     }
@@ -69,7 +69,7 @@ pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloc
 }
 
 pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
-    const result = try vc.device.acquireNextImage2KHR(.{
+    const result = try vc.device.acquireNextImage2KHR(&.{
         .swapchain = self.handle,
         .timeout = std.math.maxInt(u64),
         .semaphore = semaphore,
@@ -81,7 +81,7 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
 }
 
 pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !vk.Result {
-    return try vc.device.queuePresentKHR(queue, .{
+    return try vc.device.queuePresentKHR(queue, &.{
         .wait_semaphore_count = 1,
         .p_wait_semaphores = @ptrCast([*]const vk.Semaphore, &semaphore),
         .swapchain_count = 1,
@@ -91,7 +91,7 @@ pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, sem
     });
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.images) |image| {
         image.destroy(vc);
     }
@@ -105,7 +105,7 @@ const SwapImage = struct {
 
     fn create(vc: *const VulkanContext, handle: vk.Image, format: vk.Format) !SwapImage {
 
-        const view = try vc.device.createImageView(.{
+        const view = try vc.device.createImageView(&.{
             .flags = .{},
             .image = handle,
             .view_type = vk.ImageViewType.@"2d",
@@ -144,7 +144,7 @@ const SwapSettings = struct {
     pre_transform: vk.SurfaceTransformFlagsKHR,
 
     // updates mutable extent
-    pub fn find(vc: *const VulkanContext, allocator: *std.mem.Allocator, extent: *vk.Extent2D) !SwapSettings {
+    pub fn find(vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, vc.surface);
         try updateExtent(extent, caps);
 
@@ -157,7 +157,7 @@ const SwapSettings = struct {
         };
     }
 
-    pub fn findPresentMode(vc: *const VulkanContext, allocator: *std.mem.Allocator) !vk.PresentModeKHR {
+    pub fn findPresentMode(vc: *const VulkanContext, allocator: std.mem.Allocator) !vk.PresentModeKHR {
 
         const ideal = vk.PresentModeKHR.mailbox_khr;
 
@@ -177,7 +177,7 @@ const SwapSettings = struct {
         return present_modes[0];
     }
 
-    pub fn findFormat(vc: *const VulkanContext, allocator: *std.mem.Allocator) !vk.SurfaceFormatKHR {
+    pub fn findFormat(vc: *const VulkanContext, allocator: std.mem.Allocator) !vk.SurfaceFormatKHR {
 
         const ideal = vk.SurfaceFormatKHR {
             .format = .b8g8r8a8_srgb,

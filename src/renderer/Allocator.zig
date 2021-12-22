@@ -13,7 +13,7 @@ const MemoryStorage = std.ArrayListUnmanaged(vk.DeviceMemory);
 memory_type_properties: []vk.MemoryPropertyFlags,
 memory: MemoryStorage,
 
-pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     const properties = vc.instance.getPhysicalDeviceMemoryProperties(vc.physical_device.handle);
 
     var memory_type_properties = try allocator.alloc(vk.MemoryPropertyFlags, properties.memory_type_count);
@@ -29,7 +29,7 @@ pub fn create(vc: *const VulkanContext, allocator: *std.mem.Allocator) !Self {
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.memory.items) |memory| {
         vc.device.freeMemory(memory, null);
     }
@@ -38,7 +38,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloca
 }
 
 fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags, buffer: *vk.Buffer, buffer_memory: *vk.DeviceMemory) !void {
-    buffer.* = try vc.device.createBuffer(.{
+    buffer.* = try vc.device.createBuffer(&.{
             .size = size,
             .usage = usage,
             .sharing_mode = vk.SharingMode.exclusive,
@@ -50,14 +50,16 @@ fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, u
 
     const mem_requirements = vc.device.getBufferMemoryRequirements(buffer.*);
 
-    buffer_memory.* = try vc.device.allocateMemory(.{
+    const allocate_info = vk.MemoryAllocateInfo {
         .allocation_size = mem_requirements.size,
         .memory_type_index = try self.findMemoryType(mem_requirements.memory_type_bits, properties),
         .p_next = if (usage.contains(.{ .shader_device_address_bit = true })) &vk.MemoryAllocateFlagsInfo {
             .device_mask = 0,
             .flags = .{ .device_address_bit = true },
             } else null,
-    }, null);
+    };
+
+    buffer_memory.* = try vc.device.allocateMemory(&allocate_info, null);
     errdefer vc.device.freeMemory(buffer_memory.*, null);
 
     try vc.device.bindBufferMemory(buffer.*, buffer_memory.*, 0);
@@ -72,13 +74,13 @@ pub const DeviceBuffer = struct {
 
     // must've been created with shader device address bit enabled
     pub fn getAddress(self: DeviceBuffer, vc: *const VulkanContext) vk.DeviceAddress {
-        return vc.device.getBufferDeviceAddress(.{
+        return vc.device.getBufferDeviceAddress(&.{
             .buffer = self.handle,
         });
     }
 };
 
-pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, size: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer {
+pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, size: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer {
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;
     try self.createRawBuffer(vc, size, usage, .{ .device_local_bit = true }, &buffer, &memory);
@@ -102,7 +104,7 @@ pub const OwnedDeviceBuffer = struct {
 
     // must've been created with shader device address bit enabled
     pub fn getAddress(self: OwnedDeviceBuffer, vc: *const VulkanContext) vk.DeviceAddress {
-        return vc.device.getBufferDeviceAddress(.{
+        return vc.device.getBufferDeviceAddress(&.{
             .buffer = self.handle,
         });
     }
@@ -146,7 +148,7 @@ pub fn HostBuffer(comptime T: type) type {
 
         // must've been created with shader device address bit enabled
         pub fn getAddress(self: BufferSelf, vc: *const VulkanContext) vk.DeviceAddress {
-            return vc.device.getBufferDeviceAddress(.{
+            return vc.device.getBufferDeviceAddress(&.{
                 .buffer = self.handle,
             });
         }

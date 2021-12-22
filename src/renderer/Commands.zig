@@ -15,14 +15,14 @@ buffer: vk.CommandBuffer,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext) !Self {
-    const pool = try vc.device.createCommandPool(.{
+    const pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
         .flags = .{},
     }, null);
     errdefer vc.device.destroyCommandPool(pool, null);
 
     var buffer: vk.CommandBuffer = undefined;
-    try vc.device.allocateCommandBuffers(.{
+    try vc.device.allocateCommandBuffers(&.{
         .level = vk.CommandBufferLevel.primary,
         .command_pool = pool,
         .command_buffer_count = 1,
@@ -40,7 +40,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
 }
 
 fn beginOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
-    try vc.device.beginCommandBuffer(self.buffer, .{
+    try vc.device.beginCommandBuffer(self.buffer, &.{
         .flags = .{},
         .p_inheritance_info = null,
     });
@@ -70,7 +70,7 @@ fn endOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
 pub fn copyAccelStructs(self: *Self, vc: *const VulkanContext, infos: []const vk.CopyAccelerationStructureInfoKHR) !void {
     try self.beginOneTimeCommands(vc);
     for (infos) |info| {
-        vc.device.cmdCopyAccelerationStructureKHR(self.buffer, info);
+        vc.device.cmdCopyAccelerationStructureKHR(self.buffer, &info);
     }
     try self.endOneTimeCommands(vc);
 }
@@ -89,7 +89,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
     const size = @intCast(u32, geometry_infos.len);
 
 
-    const query_pool = try vc.device.createQueryPool(.{
+    const query_pool = try vc.device.createQueryPool(&.{
         .flags = .{},
         .query_type = .acceleration_structure_compacted_size_khr,
         .query_count = size,
@@ -111,7 +111,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
             .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
         }
     };
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
         .dependency_flags = .{},
         .memory_barrier_count = barriers.len,
         .p_memory_barriers = &barriers,
@@ -156,7 +156,7 @@ pub fn copyBufferToImage(self: *Self, vc: *const VulkanContext, src: vk.Buffer, 
     try self.endOneTimeCommands(vc);
 }
 
-pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, images: []vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
+pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, images: []vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
     try self.beginOneTimeCommands(vc);
 
     const barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, images.len);
@@ -183,7 +183,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: *
         };
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,
@@ -197,7 +197,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: *
 }
 
 // TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []vk.DeviceSize, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
+pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []vk.DeviceSize, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
     std.debug.assert(dst_images.len == src_datas.len);
     std.debug.assert(src_datas.len == sizes.len);
     std.debug.assert(sizes.len == extents.len);
@@ -263,7 +263,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         std.mem.copy(u8, staging_buffers[i].data, src_datas[i]);
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,
@@ -298,7 +298,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i].handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,

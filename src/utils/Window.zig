@@ -39,11 +39,11 @@ pub fn shouldClose(self: *const Self) bool {
     return c.glfwWindowShouldClose(self.handle) == c.GLFW_TRUE;
 }
 
-pub fn setUserPointer(self: *const Self, ptr: *c_void) void {
+pub fn setUserPointer(self: *const Self, ptr: *anyopaque) void {
     c.glfwSetWindowUserPointer(self.handle, ptr);
 }
 
-pub fn getUserPointer(self: *const Self) ?*c_void {
+pub fn getUserPointer(self: *const Self) ?*anyopaque {
     return c.glfwGetWindowUserPointer(self.handle).?;
 }
 

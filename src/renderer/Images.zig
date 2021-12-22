@@ -109,7 +109,7 @@ data: Data,
 
 const Self = @This();
 
-pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, infos: []const ImageCreateRawInfo) !Self {
+pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, infos: []const ImageCreateRawInfo) !Self {
     var data = Data {};
     try data.ensureTotalCapacity(allocator, infos.len);
     errdefer data.deinit(allocator);
@@ -130,7 +130,7 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
 }
 
 // TODO: sources won't be able to be comptime at some point, handle this after we have proper asset loading
-pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, comptime sources: []const TextureSource, commands: *Commands) !Self {
+pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, comptime sources: []const TextureSource, commands: *Commands) !Self {
     var data = Data {};
     try data.ensureTotalCapacity(allocator, sources.len);
     errdefer data.deinit(allocator);
@@ -197,7 +197,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     };      
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     const data_slice = self.data.slice();
     const views = data_slice.items(.view);
     const images = data_slice.items(.image);
@@ -213,7 +213,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloca
 }
 
 pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
-    return try vc.device.createSampler(.{
+    return try vc.device.createSampler(&.{
         .flags = .{},
         .mag_filter = .linear,
         .min_filter = .linear,
@@ -247,7 +247,7 @@ const Image = struct {
             .depth = 1,
         };
 
-        const handle = try vc.device.createImage(.{
+        const image_create_info = vk.ImageCreateInfo {
             .flags = if (is_cubemap) .{ .cube_compatible_bit = true } else .{},
             .image_type = .@"2d",
             .format = format,
@@ -261,12 +261,14 @@ const Image = struct {
             .queue_family_index_count = 0,
             .p_queue_family_indices = undefined,
             .initial_layout = .@"undefined",
-        }, null);
+        };
+
+        const handle = try vc.device.createImage(&image_create_info, null);
         errdefer vc.device.destroyImage(handle, null);
 
         const mem_requirements = vc.device.getImageMemoryRequirements(handle);
 
-        const memory = try vc.device.allocateMemory(.{
+        const memory = try vc.device.allocateMemory(&.{
             .allocation_size = mem_requirements.size,
             .memory_type_index = try vk_allocator.findMemoryType(mem_requirements.memory_type_bits, .{ .device_local_bit = true }),
         }, null);
@@ -274,7 +276,7 @@ const Image = struct {
 
         try vc.device.bindImageMemory(handle, memory, 0);
 
-        const view = try vc.device.createImageView(.{
+        const view_create_info = vk.ImageViewCreateInfo {
             .flags = .{},
             .image = handle,
             .view_type = if (is_cubemap) .cube else .@"2d",
@@ -292,7 +294,9 @@ const Image = struct {
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        }, null);
+        };
+
+        const view = try vc.device.createImageView(&view_create_info, null);
         errdefer vc.device.destroyImageView(view, null);
 
         return Image {

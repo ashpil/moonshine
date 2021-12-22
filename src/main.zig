@@ -13,7 +13,7 @@ const vk = @import("vulkan");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
-    const allocator = &gpa.allocator;
+    const allocator = gpa.allocator();
 
     const texture_sets = comptime [_]ChessSet.Material {
         ChessSet.Material {

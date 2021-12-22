@@ -51,7 +51,7 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     };
 }
 
-pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8) !Self {
+pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
     const sizes = getObjSizes(contents);
     const positions = try allocator.alloc(f32x3, sizes.num_positions);
     defer allocator.free(positions);
@@ -126,7 +126,7 @@ pub fn fromObj(allocator: *std.mem.Allocator, contents: []const u8) !Self {
     };
 }
 
-pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     allocator.free(self.vertices);
     allocator.free(self.indices);
 }

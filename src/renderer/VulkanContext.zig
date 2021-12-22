@@ -18,7 +18,7 @@ const VulkanContextError = error {
 const Base = struct {
     dispatch: BaseDispatch,
 
-    const BaseDispatch = vk.BaseWrapper(.{
+    const BaseDispatch = vk.BaseWrapper(&.{
         .createInstance,
         .enumerateInstanceLayerProperties,
         .enumerateInstanceExtensionProperties,
@@ -34,7 +34,7 @@ const Base = struct {
         return if (validate) (std.mem.Allocator.Error![]const [*:0]const u8) else []const [*:0]const u8;
     }
 
-    fn getRequiredExtensions(allocator: *std.mem.Allocator, window: *const Window) getRequiredExtensionsType() {
+    fn getRequiredExtensions(allocator: std.mem.Allocator, window: *const Window) getRequiredExtensionsType() {
         const window_extensions = window.getRequiredInstanceExtensions();
         if (validate) {
             const debug_extensions = [_][*:0]const u8{
@@ -46,7 +46,7 @@ const Base = struct {
         }
     }
 
-    fn createInstance(self: Base, allocator: *std.mem.Allocator, window: *const Window) !Instance {
+    fn createInstance(self: Base, allocator: std.mem.Allocator, window: *const Window) !Instance {
         const required_extensions = if (validate) try getRequiredExtensions(allocator, window) else getRequiredExtensions(allocator, window);
         defer if (validate) allocator.free(required_extensions);
 
@@ -64,7 +64,7 @@ const Base = struct {
         return try self.dispatch.createInstance(
             Instance,
             Window.getInstanceProcAddress,
-            .{
+            &.{
                 .p_application_info = &app_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
@@ -77,7 +77,7 @@ const Base = struct {
         );
     }
 
-    fn validationLayersAvailable(self: Base, allocator: *std.mem.Allocator) !bool {
+    fn validationLayersAvailable(self: Base, allocator: std.mem.Allocator) !bool {
         var layer_count: u32 = 0;
         _ = try self.dispatch.enumerateInstanceLayerProperties(&layer_count, null);
 
@@ -96,7 +96,7 @@ const Base = struct {
         return true;
     }
 
-    fn instanceExtensionsAvailable(self: Base, allocator: *std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
+    fn instanceExtensionsAvailable(self: Base, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
         var extension_count: u32 = 0;
         _ = try self.dispatch.enumerateInstanceExtensionProperties(null, &extension_count, null);
 
@@ -137,7 +137,7 @@ const debug_instance_cmds = instance_cmds ++ [_]vk.InstanceCommand {
     .destroyDebugUtilsMessengerEXT,
 };
 
-const Instance = vk.InstanceWrapper(if (validate) debug_instance_cmds else instance_cmds);
+const Instance = vk.InstanceWrapper(&(if (validate) debug_instance_cmds else instance_cmds));
 
 const device_commands = [_]vk.DeviceCommand {
     .getDeviceQueue,
@@ -219,13 +219,13 @@ const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {
     .setDebugUtilsObjectNameEXT,
 };
 
-const Device = vk.DeviceWrapper(if (validate) debug_device_commands else device_commands);
+const Device = vk.DeviceWrapper(&(if (validate) debug_device_commands else device_commands));
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,
     message_type: vk.DebugUtilsMessageTypeFlagsEXT.IntType,
-    callback_data: *const vk.DebugUtilsMessengerCallbackDataEXT,
-    user_data: *c_void,
+    callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
+    user_data: ?*anyopaque,
     ) callconv(.C) vk.Bool32 {
     _ = message_type;
     _ = user_data;
@@ -240,7 +240,7 @@ fn debugCallback(
         error_severity => 31,
         else => unreachable,
     };
-    std.debug.print("\x1b[{}m{s}\x1b[0m\n", .{ color, callback_data.p_message });
+    std.debug.print("\x1b[{}m{s}\x1b[0m\n", .{ color, callback_data.?.p_message });
     return 0;
 }
 
@@ -265,13 +265,13 @@ queue: vk.Queue,
 
 const Self = @This();
 
-pub fn create(allocator: *std.mem.Allocator, window: *const Window) !Self {
+pub fn create(allocator: std.mem.Allocator, window: *const Window) !Self {
     const base = try Base.new();
 
     const instance = try base.createInstance(allocator, window);
     errdefer instance.destroyInstance(null);
 
-    const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(debug_messenger_create_info, null) else undefined;
+    const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
     const surface = try window.createSurface(instance.handle);
@@ -317,7 +317,7 @@ const PhysicalDevice = struct {
     queue_family_index: u32,
     mem_properties: vk.PhysicalDeviceMemoryProperties,
 
-    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !u32 {
+    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !u32 {
         var family_count: u32 = 0;
         instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, null);
 
@@ -337,7 +337,7 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableQueues;
     }
 
-    fn pick(instance: Instance, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !PhysicalDevice {
+    fn pick(instance: Instance, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !PhysicalDevice {
         var device_count: u32 = 0;
         _ = try instance.enumeratePhysicalDevices(&device_count, null);
 
@@ -359,13 +359,13 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn isDeviceSuitable(instance: Instance, device: vk.PhysicalDevice, allocator: *std.mem.Allocator, surface: vk.SurfaceKHR) !bool {
+    fn isDeviceSuitable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !bool {
         const extensions_available = try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator);
         const surface_supported = try PhysicalDevice.surfaceSupported(instance, device, surface);
         return extensions_available and surface_supported;
     }
 
-    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: *std.mem.Allocator) !bool {
+    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator) !bool {
         var extension_count: u32 = 0;
         _ = try instance.enumerateDeviceExtensionProperties(device, null, &extension_count, null);
 
@@ -434,7 +434,7 @@ const PhysicalDevice = struct {
             Device,
             instance.dispatch.vkGetDeviceProcAddr,
             self.handle,
-            .{
+            &.{
                 .queue_create_info_count = queue_create_info.len,
                 .p_queue_create_infos = &queue_create_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,

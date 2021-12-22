@@ -27,7 +27,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         destruction_queue: DestructionQueue,
 
-        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
             var extent = initial_extent;
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
@@ -77,7 +77,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
         }
 
-        pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+        pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
             self.display_image.destroy(vc, allocator);
             self.attachment_images.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);
@@ -88,7 +88,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
@@ -118,7 +118,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
 
             try vc.device.resetCommandPool(frame.command_pool, .{});
-            try vc.device.beginCommandBuffer(frame.command_buffer, .{
+            try vc.device.beginCommandBuffer(frame.command_buffer, &.{
                 .flags = .{ .one_time_submit_bit = true },
                 .p_inheritance_info = null,
             });
@@ -180,7 +180,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 },
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -193,7 +193,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
+        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
             var new_extent = window.getExtent();
             try self.destruction_queue.add(allocator, self.swapchain.handle);
             try self.swapchain.recreate(vc, allocator, &new_extent);
@@ -233,7 +233,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             }
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
             const frame = self.frames[self.frame_index];
 
             // transition storage image to one we can blit from
@@ -257,7 +257,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 }
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -325,7 +325,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 }
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -383,28 +383,28 @@ pub fn Display(comptime num_frames: comptime_int) type {
             command_buffer: vk.CommandBuffer,
 
             fn create(vc: *const VulkanContext) !Frame {
-                const image_acquired = try vc.device.createSemaphore(.{
+                const image_acquired = try vc.device.createSemaphore(&.{
                     .flags = .{},
                 }, null);
                 errdefer vc.device.destroySemaphore(image_acquired, null);
 
-                const command_completed = try vc.device.createSemaphore(.{
+                const command_completed = try vc.device.createSemaphore(&.{
                     .flags = .{},
                 }, null);
                 errdefer vc.device.destroySemaphore(command_completed, null);
 
-                const fence = try vc.device.createFence(.{
+                const fence = try vc.device.createFence(&.{
                     .flags = .{ .signaled_bit = true },
                 }, null);
 
-                const command_pool = try vc.device.createCommandPool(.{
+                const command_pool = try vc.device.createCommandPool(&.{
                     .queue_family_index = vc.physical_device.queue_family_index,
                     .flags = .{ .transient_bit = true },
                 }, null);
                 errdefer vc.device.destroyCommandPool(command_pool, null);
 
                 var command_buffer: vk.CommandBuffer = undefined;
-                try vc.device.allocateCommandBuffers(.{
+                try vc.device.allocateCommandBuffers(&.{
                     .level = vk.CommandBufferLevel.primary,
                     .command_pool = command_pool,
                     .command_buffer_count = 1,

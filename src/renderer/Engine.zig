@@ -34,7 +34,7 @@ allocator: VkAllocator,
 
 sampler: vk.Sampler,
 
-pub fn create(comptime max_textures: comptime_int, window: *const Window, allocator: *std.mem.Allocator) !Self {
+pub fn create(comptime max_textures: comptime_int, window: *const Window, allocator: std.mem.Allocator) !Self {
 
     const initial_window_size = window.getExtent();
 
@@ -186,7 +186,7 @@ pub fn create(comptime max_textures: comptime_int, window: *const Window, alloca
     };
 }
 
-pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene) !void {
+pub fn setScene(self: *Self, allocator: std.mem.Allocator, scene: *const Scene) !void {
 
     comptime var frames: [frames_in_flight]u32 = undefined;
     comptime for (frames) |_, i| {
@@ -233,7 +233,7 @@ pub fn setScene(self: *Self, allocator: *std.mem.Allocator, scene: *const Scene)
     });
 }
 
-pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.allocator.destroy(&self.context, allocator);
     self.context.device.destroySampler(self.sampler, null);
     self.pipeline.destroy(&self.context);
@@ -243,7 +243,7 @@ pub fn destroy(self: *Self, allocator: *std.mem.Allocator) void {
     self.context.destroy();
 }
 
-pub fn startFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !vk.CommandBuffer {
+pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !vk.CommandBuffer {
     var resized = false;
 
     const buffer = try self.display.startFrame(&self.context, &self.allocator, allocator, &self.commands, window, &self.descriptor, &resized);
@@ -270,10 +270,10 @@ pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
         .stride = 0,
         .size = 0,
     };
-    self.context.device.cmdTraceRaysKHR(buffer, self.pipeline.sbt.getRaygenSBT(), self.pipeline.sbt.getMissSBT(), self.pipeline.sbt.getHitSBT(), callable_table, self.display.extent.width, self.display.extent.height, 1);
+    self.context.device.cmdTraceRaysKHR(buffer, &self.pipeline.sbt.getRaygenSBT(), &self.pipeline.sbt.getMissSBT(), &self.pipeline.sbt.getHitSBT(), &callable_table, self.display.extent.width, self.display.extent.height, 1);
 }
 
-pub fn endFrame(self: *Self, window: *const Window, allocator: *std.mem.Allocator) !void {
+pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !void {
     var resized = false;
     try self.display.endFrame(&self.context, &self.allocator, allocator, &self.commands, window, &resized);
     if (resized) {

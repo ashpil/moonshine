@@ -25,7 +25,7 @@ mesh_info: VkAllocator.DeviceBuffer,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, objects: []const Object, geometries: []vk.AccelerationStructureGeometryKHR, build_infos: []vk.AccelerationStructureBuildRangeInfoKHR) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, objects: []const Object, geometries: []vk.AccelerationStructureGeometryKHR, build_infos: []vk.AccelerationStructureBuildRangeInfoKHR) !Self {
     std.debug.assert(objects.len == geometries.len);
     std.debug.assert(objects.len == build_infos.len);
 
@@ -101,7 +101,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     const slice = self.buffers.slice();
     const vertex_buffers = slice.items(.vertex_buffer);
     const index_buffers = slice.items(.index_buffer);

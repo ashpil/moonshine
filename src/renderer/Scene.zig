@@ -46,7 +46,7 @@ instance_info: []InstanceMeshInfo,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances) !Self {
     const background = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
             .filepath = background_filepath,
@@ -131,7 +131,7 @@ pub fn update(self: *Self, index: u32, new_transform: Mat3x4) !void {
     try self.accel.updateTlas(self.instance_info);
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     allocator.free(self.instance_info);
 
     self.background.destroy(vc, allocator);

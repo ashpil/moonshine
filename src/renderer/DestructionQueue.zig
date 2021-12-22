@@ -10,7 +10,7 @@ const Item = union(enum) {
     swapchain: vk.SwapchainKHR,
     image: Images,
 
-    fn destroy(self: *Item, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+    fn destroy(self: *Item, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .swapchain => |swapchain| vc.device.destroySwapchainKHR(swapchain, null),
             .image => |*image| image.destroy(vc, allocator),
@@ -30,7 +30,7 @@ pub fn create() Self {
     };
 }
 
-pub fn add(self: *Self, allocator: *std.mem.Allocator, item: anytype) !void {
+pub fn add(self: *Self, allocator: std.mem.Allocator, item: anytype) !void {
     if (@TypeOf(item) == Images) {
         try self.queue.append(allocator, .{ .image = item });
     } else if (@TypeOf(item) == vk.SwapchainKHR) {
@@ -38,7 +38,7 @@ pub fn add(self: *Self, allocator: *std.mem.Allocator, item: anytype) !void {
     } else @compileError("Unknown destruction type: " ++ @typeName(@TypeOf(item)));
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.queue.items) |*item| item.destroy(vc, allocator);
     self.queue.deinit(allocator);
 }

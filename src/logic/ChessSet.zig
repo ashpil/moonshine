@@ -37,7 +37,7 @@ scene: Scene,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo) !Self {
 
     const instance_count = 33;
 
@@ -313,6 +313,6 @@ pub fn move(self: *Self, index: u32, new_transform: Mat3x4) !void {
     try self.scene.update(index, new_transform);
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.scene.destroy(vc, allocator);
 }

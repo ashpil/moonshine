@@ -67,7 +67,7 @@ pub const TextureArray = struct {
         return @intCast(u32, self.views.len);
     }
 
-    fn toDescriptor(self: TextureArray, allocator: *std.mem.Allocator) ![]vk.DescriptorImageInfo {
+    fn toDescriptor(self: TextureArray, allocator: std.mem.Allocator) ![]vk.DescriptorImageInfo {
         const infos = try allocator.alloc(vk.DescriptorImageInfo, self.views.len);
         for (self.views) |view, i| {
             infos[i] = vk.DescriptorImageInfo {
@@ -158,7 +158,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 };
             };
 
-            const layout = try vc.device.createDescriptorSetLayout(.{
+            const layout = try vc.device.createDescriptorSetLayout(&.{
                 .flags = .{},
                 .binding_count = bindings.len,
                 .p_bindings = &bindings,
@@ -174,7 +174,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
                 };
             };
 
-            const pool = try vc.device.createDescriptorPool(.{
+            const pool = try vc.device.createDescriptorPool(&.{
                 .flags = .{},
                 .max_sets = set_count,
                 .pool_size_count = pool_sizes.len,
@@ -191,7 +191,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
 
             var descriptor_sets: [set_count]vk.DescriptorSet = undefined;
 
-            try vc.device.allocateDescriptorSets(.{
+            try vc.device.allocateDescriptorSets(&.{
                 .descriptor_pool = pool,
                 .descriptor_set_count = set_count,
                 .p_set_layouts = &descriptor_set_layouts,
@@ -208,7 +208,7 @@ pub fn Descriptor(comptime set_count: comptime_int) type {
         // expects `dst_bindings` is an array of `comptime_int`s specifying their respective write info dst binding
         // expects `dst_sets` is an array of `u32`s specifying their respective set index
         // currently only supports images I think
-        pub fn write(self: *const Self, vc: *const VulkanContext, allocator: *std.mem.Allocator, comptime dst_bindings: anytype, dst_sets: anytype, write_infos: anytype) !void {
+        pub fn write(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, comptime dst_bindings: anytype, dst_sets: anytype, write_infos: anytype) !void {
             comptime if (dst_bindings.len != write_infos.len) @compileError("`dst_bindings` and `write_info` must have same length!");
 
             comptime var descriptor_write: [dst_bindings.len]vk.WriteDescriptorSet = undefined;

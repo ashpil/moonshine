@@ -34,7 +34,7 @@ fn ShaderInfo(comptime infos: []const ShaderInfoCreateInfo) type {
             inline for (infos) |info, i| {
                 const code = @embedFile(info.filepath);
 
-                const module = try vc.device.createShaderModule(.{
+                const module = try vc.device.createShaderModule(&.{
                     .flags = .{},
                     .code_size = code.len,
                     .p_code = @ptrCast([*]const u32, code),
@@ -100,12 +100,12 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
 
     var shader_info = try ShaderInfo(shader_info_create_info).create(vc);
     defer shader_info.destroy(vc);
 
-    const layout = try vc.device.createPipelineLayout(.{
+    const layout = try vc.device.createPipelineLayout(&.{
         .flags = .{},
         .set_layout_count = 1,
         .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_layout),
@@ -174,7 +174,7 @@ const ShaderBindingTable = struct {
 
     handle_size_aligned: u32,
 
-    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32) !ShaderBindingTable {
+    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32) !ShaderBindingTable {
         const rt_properties = getRaytracingProperties(vc);
         const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count;

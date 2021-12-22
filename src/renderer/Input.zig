@@ -22,7 +22,7 @@ descriptor: Descriptor,
 command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, u16, 1, .{ .storage_buffer_bit = true });
 
     const descriptor = try Descriptor.create(vc, [_]desc.BindingInfo {
@@ -50,14 +50,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
         }
     });
 
-    const command_pool = try vc.device.createCommandPool(.{
+    const command_pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
         .flags = .{ .transient_bit = true },
     }, null);
     errdefer vc.device.destroyCommandPool(command_pool, null);
 
     var command_buffer: vk.CommandBuffer = undefined;
-    try vc.device.allocateCommandBuffers(.{
+    try vc.device.allocateCommandBuffers(&.{
         .level = vk.CommandBufferLevel.primary,
         .command_pool = command_pool,
         .command_buffer_count = 1,

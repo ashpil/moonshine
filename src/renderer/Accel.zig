@@ -45,7 +45,7 @@ changed: bool,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *std.mem.Allocator, commands: *Commands, geometry_infos: GeometryInfos, instances: Instances) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, geometry_infos: GeometryInfos, instances: Instances) !Self {
 
     const instance_count = @intCast(u32, instances.len);
     const geometry_infos_slice = geometry_infos.slice();
@@ -87,7 +87,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
                 .pp_geometries = null,
                 .scratch_data = undefined,
             };
-            const size_info = getBuildSizesInfo(vc, build_geometry_infos[i], build_infos[i].primitive_count);
+            const size_info = getBuildSizesInfo(vc, &build_geometry_infos[i], build_infos[i].primitive_count);
 
             scratch_buffers[i] = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
             errdefer scratch_buffers[i].destroy(vc);
@@ -96,7 +96,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
             buffers[i] = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
             errdefer buffers[i].destroy(vc);
 
-            build_geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
+            build_geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
                 .create_flags = .{},
                 .buffer = buffers[i].handle,
                 .offset = 0,
@@ -124,7 +124,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
             const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, compactedSize, .{ .acceleration_structure_storage_bit_khr = true });
             errdefer buffer.destroy(vc);
 
-            const handle = try vc.device.createAccelerationStructureKHR(.{
+            const handle = try vc.device.createAccelerationStructureKHR(&.{
                 .create_flags = .{},
                 .buffer = buffer.handle,
                 .offset = 0,
@@ -142,7 +142,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
             blases.appendAssumeCapacity(.{
                 .handle = handle,
                 .buffer = buffer,
-                .address = vc.device.getAccelerationStructureDeviceAddressKHR(.{
+                .address = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
                     .acceleration_structure = handle,
                 }),
             });
@@ -183,7 +183,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
         .scratch_data = undefined,
     };
 
-    const size_info = getBuildSizesInfo(vc, geometry_info, instance_count);
+    const size_info = getBuildSizesInfo(vc, &geometry_info, instance_count);
 
     const scratch_buffer = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     defer scratch_buffer.destroy(vc);
@@ -191,7 +191,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: *
     const tlas_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
     errdefer tlas_buffer.destroy(vc);
 
-    geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(.{
+    geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
         .create_flags = .{},
         .buffer = tlas_buffer.handle,
         .offset = 0,
@@ -314,7 +314,7 @@ pub fn applyChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.Co
                 .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
             }
         };
-        vc.device.cmdPipelineBarrier2KHR(command_buffer, vk.DependencyInfoKHR {
+        vc.device.cmdPipelineBarrier2KHR(command_buffer, &vk.DependencyInfoKHR {
             .dependency_flags = .{},
             .memory_barrier_count = barriers.len,
             .p_memory_barriers = &barriers,
@@ -326,7 +326,7 @@ pub fn applyChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.Co
     }
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instance_infos.destroy(vc);
 
     self.instance_buffer.destroy(vc);
@@ -347,7 +347,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: *std.mem.Alloca
     self.tlas_buffer.destroy(vc);
 }
 
-fn getBuildSizesInfo(vc: *const VulkanContext, geometry_info: vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_count: u32) vk.AccelerationStructureBuildSizesInfoKHR {
+fn getBuildSizesInfo(vc: *const VulkanContext, geometry_info: *const vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_count: u32) vk.AccelerationStructureBuildSizesInfoKHR {
     var size_info: vk.AccelerationStructureBuildSizesInfoKHR = undefined;
     size_info.s_type = .acceleration_structure_build_sizes_info_khr;
     size_info.p_next = null;
