@@ -4,7 +4,7 @@ const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../utils/Window.zig");
 const Pipeline = @import("./Pipeline.zig");
-const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout;
+const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout(3);
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
 const utils = @import("./utils.zig");
@@ -45,11 +45,6 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
     comptime var frames: [frames_in_flight]u32 = undefined;
     comptime for (frames) |_, i| {
         frames[i] = i;
-    };
-
-    comptime var sets: [4]u32 = undefined;
-    comptime for (sets) |_, i| {
-        sets[i] = i;
     };
 
     const camera_origin = F32x3.new(0.4, 0.3, -0.4);

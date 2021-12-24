@@ -102,7 +102,7 @@ pub fn main() !void {
         },
     };
 
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &engine.scene_descriptor_layout, &texture_sets, "../../assets/textures/skybox.dds", set_info);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox.dds", set_info, &engine.scene_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
     var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);

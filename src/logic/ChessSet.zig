@@ -38,7 +38,7 @@ scene: Scene,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const SceneDescriptorLayout, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo, descriptor_layout: *const SceneDescriptorLayout(materials.len)) !Self {
 
     const instance_count = 33;
 
@@ -302,7 +302,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, descriptor_layout, materials, background_filepath, &mesh_filepaths, instances);
+    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_filepath, &mesh_filepaths, instances, descriptor_layout);
 
     return Self {
         .scene = scene,
