@@ -9,7 +9,7 @@ const F32x2 = zug.Vec2(f32);
 const Mat4 = zug.Mat4(f32);
 const Window = @import("./utils/Window.zig");
 const Camera = @import("./renderer/Camera.zig");
-const vk = @import("vulkan");
+const Coord = @import("./logic/coord.zig").Coord;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -137,9 +137,9 @@ pub fn main() !void {
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
         engine.setScene(&set.scene, buffer);
-        try set.scene.accel.recordChanges(&engine.context, buffer);
-        if (window_data.clicked) |instance_index| {
-            if (instance_index > 0) {
+        if (window_data.clicked) |click_data| {
+            if (click_data.instance_index > 0) {
+                const instance_index = @intCast(u16, click_data.instance_index);
                 if (active_piece) |active_piece_index| {
                     if (instance_index == active_piece_index) {
                         active_piece = null;
@@ -157,9 +157,30 @@ pub fn main() !void {
                     active_piece = instance_index;
                 }
                 engine.num_accumulted_frames = 0;
+            } else if (click_data.instance_index == 0 and (click_data.primitive_index == 11 or click_data.primitive_index == 5)) {
+                if (active_piece) |active_piece_index| {
+                    const barycentrics = F32x3.new(1.0 - click_data.barycentrics.x - click_data.barycentrics.y, click_data.barycentrics.x, click_data.barycentrics.y);
+
+                    var p1: F32x3 = undefined;
+                    var p2: F32x3 = undefined;
+
+                    if (click_data.primitive_index == 11) {
+                        p1 = F32x3.new(-0.2, 0.2, 0.2);
+                        p2 = F32x3.new(-0.2, -0.2, 0.2);
+                    } else if (click_data.primitive_index == 5) {
+                        p1 = F32x3.new(-0.2, 0.2, -0.2);
+                        p2 = F32x3.new(-0.2, 0.2, 0.2);
+                    }
+
+                    const location = F32x2.new(p1.dot(barycentrics), p2.dot(barycentrics));
+                    const coord = Coord.fromLocation(location);
+                    try set.move(active_piece_index, coord.toTransform());
+                    engine.num_accumulted_frames = 0;
+                }
             }
             window_data.clicked = null;
         }
+        try set.scene.accel.recordChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
         try engine.endFrame(&window, allocator);
         window.pollEvents();
@@ -173,7 +194,7 @@ const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
     input: *Input,
-    clicked: ?u16,
+    clicked: ?Input.ClickData,
 };
 
 fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
@@ -184,10 +205,7 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
         const pos = window.getCursorPos();
         const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.extent.width);
         const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.extent.height);
-        const instance = window_data.input.getPixel(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
-        if (instance != -1) {
-            window_data.clicked = @intCast(u16, instance);
-        }
+        window_data.clicked = window_data.input.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
     }
 }
 

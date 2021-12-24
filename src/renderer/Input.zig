@@ -7,12 +7,19 @@ const Pipeline = @import("./Pipeline.zig");
 const InputDescriptorLayout = @import("./descriptor.zig").InputDescriptorLayout;
 const Commands = @import("./Commands.zig");
 const Camera = @import("./Camera.zig");
-const F32x2 = @import("../utils/zug.zig").Vec2(f32);
+const zug = @import("../utils/zug.zig");
+const F32x2 = zug.Vec2(f32);
 const utils = @import("./utils.zig");
 
 const Self = @This();
 
-buffer: VkAllocator.HostBuffer(i32),
+pub const ClickData = struct {
+    instance_index: i32,
+    primitive_index: u32,
+    barycentrics: F32x2,
+};
+
+buffer: VkAllocator.HostBuffer(ClickData),
 pipeline: Pipeline,
 
 descriptor_layout: InputDescriptorLayout,
@@ -23,7 +30,7 @@ command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, accel_layout: vk.DescriptorSetLayout, commands: *Commands) !Self {
-    const buffer = try vk_allocator.createHostBuffer(vc, i32, 1, .{ .storage_buffer_bit = true });
+    const buffer = try vk_allocator.createHostBuffer(vc, ClickData, 1, .{ .storage_buffer_bit = true });
 
     const descriptor_layout = try InputDescriptorLayout.create(vc, 1);
 
@@ -69,7 +76,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .command_buffer_count = 1,
     }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-
     const ready_fence = try vc.device.createFence(&.{
         .flags = .{},
     }, null);
@@ -87,7 +93,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn getPixel(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet) !i32 {
+pub fn getClick(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet) !ClickData {
     // begin
     try vc.device.beginCommandBuffer(self.command_buffer, &.{
         .flags = .{},
@@ -99,7 +105,7 @@ pub fn getPixel(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2,
     vc.device.cmdBindDescriptorSets(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 2, &[_]vk.DescriptorSet { self.descriptor_set, tlas_descriptor_set }, 0, undefined);
 
     // push constants
-    const bytes = std.mem.asBytes(&.{ .camera = camera.desc, .normalized_coords = normalized_coords });
+    const bytes = std.mem.asBytes(&.{ camera.desc, normalized_coords });
     vc.device.cmdPushConstants(self.command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace rays

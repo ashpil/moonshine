@@ -1,8 +1,18 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 0) rayPayloadInEXT int payload;
+struct ClickData {
+    int instance_index;
+    uint primitive_index;
+    vec2 barycentrics;
+};
+
+hitAttributeEXT vec2 barycentrics;
+
+layout(location = 0) rayPayloadInEXT ClickData payload;
 
 void main() {
-    payload = gl_InstanceID;
+    payload.instance_index = gl_InstanceID;
+    payload.primitive_index = gl_PrimitiveID;
+    payload.barycentrics = barycentrics;
 }
