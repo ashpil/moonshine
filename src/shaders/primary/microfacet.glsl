@@ -7,10 +7,10 @@ struct MaterialData {
     float ior;
 };
 
-layout(binding = 3, set = 0) uniform sampler textureSampler;
-layout(binding = 7, set = 0, scalar) readonly buffer MaterialDatas { MaterialData materialDatas[]; };
-layout(binding = 9, set = 0) uniform texture2D colorTextures[];
-layout(binding = 10, set = 0) uniform texture2D roughnessTextures[];
+layout(binding = 2, set = 0) uniform sampler textureSampler;
+layout(binding = 3, set = 0, scalar) readonly buffer MaterialDatas { MaterialData materialDatas[]; };
+layout(binding = 4, set = 0) uniform texture2D colorTextures[];
+layout(binding = 5, set = 0) uniform texture2D roughnessTextures[];
 
 struct Material {
     vec3 color;        // color; each component is (0, 1)

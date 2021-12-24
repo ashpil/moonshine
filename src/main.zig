@@ -60,7 +60,7 @@ pub fn main() !void {
     const window = try Window.create(800, 600);
     defer window.destroy();
 
-    var engine = try Engine.create(texture_sets.len, &window, allocator);
+    var engine = try Engine.create(&window, allocator);
     defer engine.destroy(allocator);
 
     const set_info = ChessSet.SetInfo {
@@ -101,7 +101,7 @@ pub fn main() !void {
         },
     };
 
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox.dds", set_info);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &engine.scene_descriptor_layout, &texture_sets, "../../assets/textures/skybox.dds", set_info);
     defer set.destroy(&engine.context, allocator);
 
     var window_data = WindowData {
@@ -110,17 +110,18 @@ pub fn main() !void {
         .click = null,
     };
 
-    var input = try Input.create(&engine.context, &engine.allocator, allocator, &engine.commands);
+    var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
     defer input.destroy(&engine.context);
 
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
     window.setMouseButtonCallback(mouseButtonCallback);
 
-    try engine.setScene(allocator, &set.scene);
+    // try engine.setScene(allocator, &set.scene);
 
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
+        engine.setScene(&set.scene, buffer);
         try set.scene.accel.applyChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
         var clicked = false;

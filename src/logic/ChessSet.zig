@@ -4,6 +4,7 @@ const VulkanContext = @import("../renderer/VulkanContext.zig");
 const VkAllocator = @import("../renderer/Allocator.zig");
 const Commands = @import("../renderer/Commands.zig");
 const Scene = @import("../renderer/Scene.zig");
+const SceneDescriptorLayout = @import("../renderer/descriptor.zig").SceneDescriptorLayout;
 const zug = @import("../utils/zug.zig");
 const Mat3x4 = zug.Mat3x4(f32);
 const Vec3 = zug.Vec3(f32);
@@ -37,7 +38,7 @@ scene: Scene,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const SceneDescriptorLayout, comptime materials: []const Material, comptime background_filepath: []const u8, comptime chess_set: SetInfo) !Self {
 
     const instance_count = 33;
 
@@ -301,7 +302,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_filepath, &mesh_filepaths, instances);
+    const scene = try Scene.create(vc, vk_allocator, allocator, commands, descriptor_layout, materials, background_filepath, &mesh_filepaths, instances);
 
     return Self {
         .scene = scene,

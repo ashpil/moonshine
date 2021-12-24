@@ -23,10 +23,10 @@ struct Vertex {
 
 layout(buffer_reference, scalar) readonly buffer Indices { ivec3 i[]; };
 layout(buffer_reference, scalar) readonly buffer Vertices { Vertex v[]; };
-layout(binding = 3, set = 0) uniform sampler textureSampler;
-layout(binding = 6, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
+layout(binding = 2, set = 0) uniform sampler textureSampler;
+layout(binding = 6, set = 0) uniform texture2D normalTextures[];
+layout(binding = 7, set = 0, scalar) readonly buffer Meshes { Mesh meshes[]; };
 layout(binding = 8, set = 0, scalar) readonly buffer Instances { Instance instances[]; };
-layout(binding = 11, set = 0) uniform texture2D normalTextures[];
 
 layout(location = 0) rayPayloadInEXT Payload payload;
 

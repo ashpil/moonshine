@@ -100,15 +100,15 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, descriptor_layout: vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: []const vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
 
     var shader_info = try ShaderInfo(shader_info_create_info).create(vc);
     defer shader_info.destroy(vc);
 
     const layout = try vc.device.createPipelineLayout(&.{
         .flags = .{},
-        .set_layout_count = 1,
-        .p_set_layouts = @ptrCast([*]const vk.DescriptorSetLayout, &descriptor_layout),
+        .set_layout_count = @intCast(u32, set_layouts.len),
+        .p_set_layouts = set_layouts.ptr,
         .push_constant_range_count = @intCast(u32, push_constant_ranges.len),
         .p_push_constant_ranges = push_constant_ranges.ptr,
     }, null);

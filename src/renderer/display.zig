@@ -7,8 +7,7 @@ const Window = @import("../utils/Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Images = @import("./Images.zig");
 const Commands = @import("./Commands.zig");
-const desc = @import("./descriptor.zig");
-const Descriptor = desc.Descriptor;
+const DescriptorLayout = @import("./descriptor.zig").DisplayDescriptorLayout;
 const DestructionQueue = @import("./DestructionQueue.zig");
 const utils = @import("./utils.zig");
 
@@ -18,6 +17,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         frames: [num_frames]Frame,
         frame_index: u8,
+        descriptor_layout: DescriptorLayout,
 
         swapchain: Swapchain,
         display_image: Images,
@@ -46,26 +46,55 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .usage = .{ .storage_bit = true, },
                     .format = .r32g32b32a32_sfloat,
                 },
-                .{
-                    .extent = extent,
-                    .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                    .format = .r16_uint,
-                }
             };
             var attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
             errdefer attachment_images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.image), .@"undefined", .general);
 
+            const descriptor_layout = try DescriptorLayout.create(vc, num_frames);
+
+            const sets = try descriptor_layout.allocate_sets(vc, num_frames, [_]vk.WriteDescriptorSet {
+                vk.WriteDescriptorSet {
+                    .dst_set = undefined,
+                    .dst_binding = 0,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = .storage_image,
+                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                        .sampler = .null_handle,
+                        .image_view = display_image.data.items(.view)[0],
+                        .image_layout = .general,
+                    }),
+                    .p_buffer_info = undefined,
+                    .p_texel_buffer_view = undefined,
+                },
+                vk.WriteDescriptorSet {
+                    .dst_set = undefined,
+                    .dst_binding = 1,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = .storage_image,
+                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                        .sampler = .null_handle,
+                        .image_view = attachment_images.data.items(.view)[0],
+                        .image_layout = .general,
+                    }),
+                    .p_buffer_info = undefined,
+                    .p_texel_buffer_view = undefined,
+                },
+            });
+
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
-                frames[i] = try Frame.create(vc);
+                frames[i] = try Frame.create(vc, sets[i]);
             }
 
             return Self {
                 .swapchain = swapchain,
                 .frames = frames,
                 .frame_index = 0,
+                .descriptor_layout = descriptor_layout,
 
                 .display_image = display_image,
                 .attachment_images = attachment_images,
@@ -78,6 +107,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+            self.descriptor_layout.destroy(vc);
             self.display_image.destroy(vc, allocator);
             self.attachment_images.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);
@@ -88,25 +118,45 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, descriptor: *Descriptor(num_frames), resized: *bool) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
 
             if (frame.needs_rebind) {
-                const attachment_views = self.attachment_images.data.items(.view);
-                try descriptor.write(vc, allocator, .{ 0, 1, 2 }, .{ self.frame_index }, [_]desc.StorageImage {
-                    desc.StorageImage {
-                        .view = self.display_image.data.items(.view)[0],
+                const descriptor_writes = [2]vk.WriteDescriptorSet {
+                    vk.WriteDescriptorSet {
+                        .dst_set = self.frames[self.frame_index].set,
+                        .dst_binding = 0,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .storage_image,
+                        .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                            .sampler = .null_handle,
+                            .image_view = self.display_image.data.items(.view)[0],
+                            .image_layout = .general,
+                        }),
+                        .p_buffer_info = undefined,
+                        .p_texel_buffer_view = undefined,
                     },
-                    desc.StorageImage {
-                        .view = attachment_views[0],
+                    vk.WriteDescriptorSet {
+                        .dst_set = self.frames[self.frame_index].set,
+                        .dst_binding = 1,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .storage_image,
+                        .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                            .sampler = .null_handle,
+                            .image_view = self.attachment_images.data.items(.view)[0],
+                            .image_layout = .general,
+                        }),
+                        .p_buffer_info = undefined,
+                        .p_texel_buffer_view = undefined,
                     },
-                    desc.StorageImage {
-                        .view = attachment_views[1],
-                    }
-                });
+                };
+
+                vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);
                 self.frames[self.frame_index].needs_rebind = false;
             }
 
@@ -161,24 +211,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .layer_count = 1,
                     },
                 },
-                .{
-                    .src_stage_mask = .{},
-                    .src_access_mask = .{},
-                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
-                    .dst_access_mask = .{ .shader_storage_write_bit_khr = true, },
-                    .old_layout = .@"undefined",
-                    .new_layout = .general,
-                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.attachment_images.data.items(.image)[1],
-                    .subresource_range = .{
-                        .aspect_mask = .{ .color_bit = true },
-                        .base_mip_level = 0,
-                        .level_count = 1,
-                        .base_array_layer = 0,
-                        .layer_count = 1,
-                    },
-                },
             };
             vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
                 .dependency_flags = .{},
@@ -217,11 +249,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .usage = .{ .storage_bit = true, },
                         .format = .r32g32b32a32_sfloat,
                     },
-                    .{
-                        .extent = self.extent,
-                        .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                        .format = .r16_uint,
-                    }
                 };
                 self.attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
                 try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.image), .@"undefined", .general);
@@ -376,13 +403,14 @@ pub fn Display(comptime num_frames: comptime_int) type {
             image_acquired: vk.Semaphore,
             command_completed: vk.Semaphore,
             fence: vk.Fence,
+            set: vk.DescriptorSet,
 
             needs_rebind: bool,
 
             command_pool: vk.CommandPool,
             command_buffer: vk.CommandBuffer,
 
-            fn create(vc: *const VulkanContext) !Frame {
+            fn create(vc: *const VulkanContext, set: vk.DescriptorSet) !Frame {
                 const image_acquired = try vc.device.createSemaphore(&.{
                     .flags = .{},
                 }, null);
@@ -414,6 +442,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .image_acquired = image_acquired,
                     .command_completed = command_completed,
                     .fence = fence,
+                    .set = set,
 
                     .needs_rebind = false,
 

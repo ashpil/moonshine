@@ -9,11 +9,14 @@
 #include "random.glsl"
 #include "microfacet.glsl"
 
-layout(binding = 0, set = 0, rgba32f) uniform writeonly image2D displayImage;
-layout(binding = 1, set = 0, rgba32f) uniform image2D accumulationImage;
-layout(binding = 2, set = 0, r16ui) uniform writeonly uimage2D objectImage;
-layout(binding = 4, set = 0) uniform accelerationStructureEXT TLAS;
-layout(binding = 5) uniform samplerCube skySampler;
+// set 0 - scene
+// set 1 - display
+
+layout(binding = 0, set = 1, rgba32f) uniform writeonly image2D displayImage;
+layout(binding = 1, set = 1, rgba32f) uniform image2D accumulationImage;
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT TLAS;
+layout(binding = 1, set = 0) uniform samplerCube skySampler;
 
 layout(location = 0) rayPayloadEXT Payload payload;
 layout(location = 1) rayPayloadEXT bool inShadow;
@@ -126,7 +129,6 @@ void main() {
     ivec2 imageCoords = ivec2(gl_LaunchIDEXT.xy);
     vec3 previouslyAccumulated;
     if (numAccumulatedFrames == 0) {
-        imageStore(objectImage, imageCoords, uvec4(payload.index));
         previouslyAccumulated = vec3(0);
     } else {
         previouslyAccumulated = imageLoad(accumulationImage, imageCoords).rgb;

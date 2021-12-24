@@ -1,16 +1,17 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("../renderer/VulkanContext.zig");
+const VulkanContext = @import("./VulkanContext.zig");
 const MeshData = @import("../utils/Object.zig");
-const Images = @import("../renderer/Images.zig");
+const Images = @import("./Images.zig");
 
-const Commands = @import("../renderer/Commands.zig");
-const VkAllocator = @import("../renderer/Allocator.zig");
+const Commands = @import("./Commands.zig");
+const VkAllocator = @import("./Allocator.zig");
+const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout;
 
-const Meshes = @import("../renderer/Meshes.zig");
-const Accel = @import("../renderer/Accel.zig");
-const utils = @import("../renderer/utils.zig");
+const Meshes = @import("./Meshes.zig");
+const Accel = @import("./Accel.zig");
+const utils = @import("./utils.zig");
 
 const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);
 
@@ -44,9 +45,12 @@ materials_buffer: VkAllocator.DeviceBuffer,
 
 instance_info: []InstanceMeshInfo,
 
+sampler: vk.Sampler,
+descriptor_set: vk.DescriptorSet,
+
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const SceneDescriptorLayout, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances) !Self {
     const background = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
             .filepath = background_filepath,
@@ -58,6 +62,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
 
     comptime var gpu_materials: [materials.len]GpuMaterial = undefined;
+
+    var color_image_info: [materials.len]vk.DescriptorImageInfo = undefined;
+    var roughness_image_info: [materials.len]vk.DescriptorImageInfo = undefined;
+    var normal_image_info: [materials.len]vk.DescriptorImageInfo = undefined;
 
     comptime for (materials) |set, i| {
         color_sources[i] = set.color;
@@ -72,12 +80,34 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const roughness_textures = try Images.createTexture(vc, vk_allocator, allocator, &roughness_sources, commands);
     const normal_textures = try Images.createTexture(vc, vk_allocator, allocator, &normal_sources, commands);
 
+    const color_views = color_textures.data.items(.view);
+    const roughness_views = roughness_textures.data.items(.view);
+    const normal_views = normal_textures.data.items(.view);
+
+    inline for (materials) |_, i| {
+        color_image_info[i] = .{
+            .sampler = .null_handle,
+            .image_view = color_views[i],
+            .image_layout = .shader_read_only_optimal,
+        };
+        roughness_image_info[i] = .{
+            .sampler = .null_handle,
+            .image_view = roughness_views[i],
+            .image_layout = .shader_read_only_optimal,
+        };
+        normal_image_info[i] = .{
+            .sampler = .null_handle,
+            .image_view = normal_views[i],
+            .image_layout = .shader_read_only_optimal,
+        };
+    }
+
     const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
     errdefer materials_buffer.destroy(vc);
     try commands.uploadData(vc, vk_allocator, materials_buffer.handle, std.mem.asBytes(&gpu_materials));
 
     var objects: [mesh_filepaths.len]MeshData = undefined;
-    
+
     inline for (mesh_filepaths) |mesh_filepath, i| {
         objects[i] = try MeshData.fromObj(allocator, @embedFile(mesh_filepath));
     }
@@ -110,6 +140,125 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
 
+    const sampler = try Images.createSampler(vc);
+
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 0,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .acceleration_structure_khr,
+            .p_image_info = undefined,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
+                .acceleration_structure_count = 1,
+                .p_acceleration_structures = utils.toPointerType(&accel.tlas_handle),
+            },
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .combined_image_sampler,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = sampler,
+                .image_view = background.data.items(.view)[0],
+                .image_layout = .shader_read_only_optimal,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 2,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .sampler,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = sampler,
+                .image_view = .null_handle,
+                .image_layout = undefined,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 3,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = materials_buffer.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 4,
+            .dst_array_element = 0,
+            .descriptor_count = color_image_info.len,
+            .descriptor_type = .sampled_image,
+            .p_image_info = &color_image_info,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 5,
+            .dst_array_element = 0,
+            .descriptor_count = roughness_image_info.len,
+            .descriptor_type = .sampled_image,
+            .p_image_info = &roughness_image_info,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 6,
+            .dst_array_element = 0,
+            .descriptor_count = normal_image_info.len,
+            .descriptor_type = .sampled_image,
+            .p_image_info = &normal_image_info,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 7,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = meshes.mesh_info.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 8,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = accel.instance_buffer.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+    }))[0];
+
     return Self {
         .background = background,
 
@@ -123,6 +272,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .accel = accel,
 
         .instance_info = instance_info,
+
+        .sampler = sampler,
+        .descriptor_set = descriptor_set,
     };
 }
 
@@ -133,6 +285,8 @@ pub fn update(self: *Self, index: u32, new_transform: Mat3x4) !void {
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     allocator.free(self.instance_info);
+
+    vc.device.destroySampler(self.sampler, null);
 
     self.background.destroy(vc, allocator);
     self.color_textures.destroy(vc, allocator);
