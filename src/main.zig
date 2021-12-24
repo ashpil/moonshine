@@ -5,6 +5,7 @@ const Input = @import("./renderer/Input.zig");
 const ChessSet = @import("./logic/ChessSet.zig");
 const zug = @import("./utils/zug.zig");
 const F32x3 = zug.Vec3(f32);
+const F32x2 = zug.Vec2(f32);
 const Mat4 = zug.Mat4(f32);
 const Window = @import("./utils/Window.zig");
 const Camera = @import("./renderer/Camera.zig");
@@ -104,37 +105,25 @@ pub fn main() !void {
     var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &engine.scene_descriptor_layout, &texture_sets, "../../assets/textures/skybox.dds", set_info);
     defer set.destroy(&engine.context, allocator);
 
+    var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
+    defer input.destroy(&engine.context);
+
     var window_data = WindowData {
         .engine = &engine,
         .set = &set,
-        .click = null,
+        .input = &input,
     };
-
-    var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
-    defer input.destroy(&engine.context);
 
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
     window.setMouseButtonCallback(mouseButtonCallback);
-
-    // try engine.setScene(allocator, &set.scene);
 
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
         engine.setScene(&set.scene, buffer);
         try set.scene.accel.applyChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
-        var clicked = false;
-        if (window_data.click) |click| {
-            _ = click;
-            window_data.click = null;
-            clicked = true;
-        }
         try engine.endFrame(&window, allocator);
-        if (clicked) {
-            std.debug.print("Instance clicked: {}\n", .{input.buffer.data[0]});
-            clicked = false;
-        }
         window.pollEvents();
     }
     try engine.context.device.deviceWaitIdle();
@@ -142,15 +131,10 @@ pub fn main() !void {
     std.log.info("Program completed!.", .{});
 }
 
-const ClickData = struct {
-    x: u32,
-    y: u32,
-};
-
 const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
-    click: ?ClickData,
+    input: *Input,
 };
 
 fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
@@ -159,10 +143,10 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
 
     if (button == .left and action == .press) {
         const pos = window.getCursorPos();
-        window_data.click = .{
-            .x = @floatToInt(u32, pos.x),
-            .y = @floatToInt(u32, pos.y),
-        };
+        const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.extent.width);
+        const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.extent.height);
+        const instance = window_data.input.getPixel(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
+        std.debug.print("Instance clicked: {}\n", .{instance});
     }
 }
 
