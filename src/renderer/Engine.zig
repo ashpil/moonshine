@@ -4,7 +4,7 @@ const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../utils/Window.zig");
 const Pipeline = @import("./Pipeline.zig");
-const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout(3);
+const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout(4);
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
 const utils = @import("./utils.zig");
@@ -111,10 +111,6 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
         try resize(self);
     }
 
-    self.camera.push(&self.context, buffer, self.pipeline.layout);
-    const num_accumulted_frames_bytes = std.mem.asBytes(&self.num_accumulted_frames);
-    self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, @sizeOf(Camera.Desc) + @sizeOf(Camera.BlurDesc), num_accumulted_frames_bytes.len, num_accumulted_frames_bytes);
-
     return buffer;
 }
 
@@ -123,7 +119,11 @@ pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
     self.context.device.cmdBindPipeline(buffer, .ray_tracing_khr, self.pipeline.handle);
     self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 1, 1, utils.toPointerType(&self.display.frames[self.display.frame_index].set), 0, undefined);
     
-    // trace rays
+    // push our stuff
+    const bytes = std.mem.asBytes(&.{self.camera.desc, self.camera.blur_desc, self.num_accumulted_frames});
+    self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+
+    // trace our stuff
     const callable_table = vk.StridedDeviceAddressRegionKHR {
         .device_address = 0,
         .stride = 0,

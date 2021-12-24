@@ -56,6 +56,19 @@ pub fn main() !void {
             .metallic = 0.2,
             .ior = 1.5,
         },
+        ChessSet.Material {
+            .color = .{
+                .color = F32x3.new(0.901, 0.722, 0.271)
+            },
+            .roughness = .{
+                .greyscale = 0.15,
+            },
+            .normal = .{
+                .color = F32x3.new(0.5, 0.5, 1.0)
+            },
+            .metallic = 0.2,
+            .ior = 1.5,
+        },
     };
 
     const window = try Window.create(800, 600);
@@ -112,16 +125,41 @@ pub fn main() !void {
         .engine = &engine,
         .set = &set,
         .input = &input,
+        .clicked = null,
     };
 
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
     window.setMouseButtonCallback(mouseButtonCallback);
 
+    var active_piece: ?u16 = null;
+
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
         engine.setScene(&set.scene, buffer);
-        try set.scene.accel.applyChanges(&engine.context, buffer);
+        try set.scene.accel.recordChanges(&engine.context, buffer);
+        if (window_data.clicked) |instance_index| {
+            if (instance_index > 0) {
+                if (active_piece) |active_piece_index| {
+                    if (instance_index == active_piece_index) {
+                        active_piece = null;
+                    } else {
+                        set.scene.accel.recordInstanceUpdate(&engine.context, buffer, instance_index, 3);
+                        active_piece = instance_index;
+                    }
+                    if (active_piece_index < 9 or active_piece_index == 17 or active_piece_index == 21 or active_piece_index == 25 or active_piece_index == 31 or active_piece_index == 29 or active_piece_index == 26 or active_piece_index == 22 or active_piece_index == 18) {
+                        set.scene.accel.recordInstanceUpdate(&engine.context, buffer, active_piece_index, 1);
+                    } else {
+                        set.scene.accel.recordInstanceUpdate(&engine.context, buffer, active_piece_index, 2);
+                    }
+                } else {
+                    set.scene.accel.recordInstanceUpdate(&engine.context, buffer, instance_index, 3);
+                    active_piece = instance_index;
+                }
+                engine.num_accumulted_frames = 0;
+            }
+            window_data.clicked = null;
+        }
         try engine.recordFrame(buffer);
         try engine.endFrame(&window, allocator);
         window.pollEvents();
@@ -135,6 +173,7 @@ const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
     input: *Input,
+    clicked: ?u16,
 };
 
 fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
@@ -146,7 +185,9 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
         const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.extent.width);
         const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.extent.height);
         const instance = window_data.input.getPixel(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
-        std.debug.print("Instance clicked: {}\n", .{instance});
+        if (instance != -1) {
+            window_data.clicked = @intCast(u16, instance);
+        }
     }
 }
 

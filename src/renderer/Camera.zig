@@ -63,8 +63,3 @@ pub fn new(create_info: CreateInfo) Self {
         .blur_desc = blur_desc,
     };
 }
-
-pub fn push(self: *const Self, vc: *const VulkanContext, buffer: vk.CommandBuffer, layout: vk.PipelineLayout) void {
-    const bytes = std.mem.asBytes(self);
-    vc.device.cmdPushConstants(buffer, layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
-}

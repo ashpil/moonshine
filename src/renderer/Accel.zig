@@ -266,7 +266,32 @@ pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) !void {
     self.changed = true;
 }
 
-pub fn applyChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
+pub fn recordInstanceUpdate(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_index: u32, new_value: u32) void {
+    vc.device.cmdUpdateBuffer(command_buffer, self.instance_buffer.handle, @sizeOf(u32) * instance_index, @sizeOf(u32), &new_value);
+
+    const barrier = vk.BufferMemoryBarrier2KHR {
+        .src_stage_mask = .{ .copy_bit_khr = true },
+        .src_access_mask = .{ .transfer_write_bit_khr = true },
+        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+        .dst_access_mask = .{ .shader_storage_read_bit_khr = true },
+        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+        .buffer = self.instance_buffer.handle,
+        .offset = @sizeOf(u32) * instance_index,
+        .size = @sizeOf(u32),
+    };
+    vc.device.cmdPipelineBarrier2KHR(command_buffer, &vk.DependencyInfoKHR {
+        .dependency_flags = .{},
+        .memory_barrier_count = 0,
+        .p_memory_barriers = undefined,
+        .buffer_memory_barrier_count = 1,
+        .p_buffer_memory_barriers = utils.toPointerType(&barrier),
+        .image_memory_barrier_count = 0,
+        .p_image_memory_barriers = undefined,
+    });
+}
+
+pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
     if (self.changed) {
         const geometry = vk.AccelerationStructureGeometryKHR {
             .geometry_type = .instances_khr,
