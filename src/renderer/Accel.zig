@@ -14,6 +14,7 @@ pub const Instances = std.MultiArrayList(struct {
 pub const MeshInfo = struct {
     transform: Mat3x4,
     mesh_index: u24,
+    visible: bool = true,
 };
 
 pub const GeometryInfos = std.MultiArrayList(struct {
@@ -229,7 +230,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 
     const instance_data = instances.items(.mesh_info);
-    try accel.updateInstanceBuffer(instance_data);
+    accel.updateInstanceBuffer(instance_data);
 
     const build_info = .{
         .primitive_count = instance_count,
@@ -242,7 +243,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     return accel;
 }
 
-pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) !void {
+pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) void {
     const blas_addresses = self.blases.items(.address);
 
     for (mesh_infos) |mesh_info, i| {
@@ -252,7 +253,7 @@ pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) !void {
                 .matrix = @bitCast([3][4]f32, mesh_info.transform),
             },
             .instance_custom_index = mesh_index,
-            .mask = 0xFF,
+            .mask = if (mesh_info.visible) 0xFF else 0x00,
             .instance_shader_binding_table_record_offset = 0,
             .flags = 0,
             .acceleration_structure_reference = blas_addresses[mesh_index],
@@ -260,8 +261,8 @@ pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) !void {
     } 
 }
 
-pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) !void {
-    try self.updateInstanceBuffer(mesh_infos);
+pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) void {
+    self.updateInstanceBuffer(mesh_infos);
 
     self.changed = true;
 }

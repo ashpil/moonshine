@@ -310,8 +310,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 }
 
 // todo: make this more high level
-pub fn move(self: *Self, index: u32, new_transform: Mat3x4) !void {
-    try self.scene.update(index, new_transform);
+pub fn move(self: *Self, index: u32, new_transform: Mat3x4) void {
+    self.scene.updateTransform(index, new_transform);
+}
+
+pub fn changeVisibility(self: *Self, index: u32, visible: bool) void {
+    self.scene.updateVisibility(index, visible);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

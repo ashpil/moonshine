@@ -278,9 +278,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn update(self: *Self, index: u32, new_transform: Mat3x4) !void {
+pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
     self.instance_info[index].transform = new_transform;
-    try self.accel.updateTlas(self.instance_info);
+    self.accel.updateTlas(self.instance_info);
+}
+
+pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
+    self.instance_info[index].visible = visible;
+    self.accel.updateTlas(self.instance_info);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

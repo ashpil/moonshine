@@ -174,7 +174,13 @@ pub fn main() !void {
 
                     const location = F32x2.new(p1.dot(barycentrics), p2.dot(barycentrics));
                     const coord = Coord.fromLocation(location);
-                    try set.move(active_piece_index, coord.toTransform());
+                    set.move(active_piece_index, coord.toTransform());
+                    engine.num_accumulted_frames = 0;
+                }
+            } else if (click_data.instance_index == -1) {
+                if (active_piece) |active_piece_index| {
+                    set.changeVisibility(active_piece_index, false);
+                    active_piece = null;
                     engine.num_accumulted_frames = 0;
                 }
             }
@@ -213,7 +219,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
     const ptr = window.getUserPointer().?;
     const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
     const engine = window_data.engine;
-    const set = window_data.set;
     if (action == .repeat or action == .press) {
         if (key == 65 or key == 68 or key == 83 or key == 87) {
             const move_amount = 1.0 / 18.0;
@@ -247,8 +252,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
             engine.camera_create_info.focus_distance -= 0.01;
         } else if (key == 69) {
             engine.camera_create_info.focus_distance += 0.01;
-        } else if (key == 32) {
-            set.move(5, @import("./logic/coord.zig").Coord.d4.toTransform()) catch unreachable;
         } else return;
 
         engine.camera = Camera.new(engine.camera_create_info);
