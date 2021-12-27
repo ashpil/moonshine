@@ -10,13 +10,14 @@
 #include "microfacet.glsl"
 
 // set 0 - scene
-// set 1 - display
+// set 1 - background
+// set 2 - display
 
-layout(binding = 0, set = 1, rgba32f) uniform writeonly image2D displayImage;
-layout(binding = 1, set = 1, rgba32f) uniform image2D accumulationImage;
+layout(binding = 0, set = 2, rgba32f) uniform writeonly image2D displayImage;
+layout(binding = 1, set = 2, rgba32f) uniform image2D accumulationImage;
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT TLAS;
-layout(binding = 1, set = 0) uniform samplerCube skySampler;
+layout(binding = 0, set = 1) uniform samplerCube backgroundSampler;
 
 layout(location = 0) rayPayloadEXT Payload payload;
 layout(location = 1) rayPayloadEXT bool inShadow;
@@ -102,7 +103,7 @@ void main() {
 
             // if finished, add final bounce color to accumulated
             if (payload.done) {
-                vec3 color = texture(skySampler, direction).rgb;
+                vec3 color = texture(backgroundSampler, direction).rgb;
                 accumulatedColor += throughput * color;
                 break;
             }

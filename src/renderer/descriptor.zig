@@ -29,6 +29,16 @@ pub const DisplayDescriptorLayout = DescriptorLayout(&.{
     },
 });
 
+pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
+    .{
+        .binding = 0,
+        .descriptor_type = .combined_image_sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+});
+
 pub fn SceneDescriptorLayout(comptime max_textures: comptime_int) type {
     return DescriptorLayout(&.{
         .{
@@ -40,22 +50,22 @@ pub fn SceneDescriptorLayout(comptime max_textures: comptime_int) type {
         },
         .{
             .binding = 1,
-            .descriptor_type = .combined_image_sampler,
-            .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 2,
             .descriptor_type = .sampler,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true },
             .p_immutable_samplers = null,
         },
         .{
-            .binding = 3,
+            .binding = 2,
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .p_immutable_samplers = null,
+        },
+        .{
+            .binding = 3,
+            .descriptor_type = .sampled_image,
+            .descriptor_count = max_textures,
             .stage_flags = .{ .raygen_bit_khr = true },
             .p_immutable_samplers = null,
         },
@@ -70,25 +80,18 @@ pub fn SceneDescriptorLayout(comptime max_textures: comptime_int) type {
             .binding = 5,
             .descriptor_type = .sampled_image,
             .descriptor_count = max_textures,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 6,
-            .descriptor_type = .sampled_image,
-            .descriptor_count = max_textures,
             .stage_flags = .{ .closest_hit_bit_khr = true },
             .p_immutable_samplers = null,
         },
         .{
-            .binding = 7,
+            .binding = 6,
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .closest_hit_bit_khr = true },
             .p_immutable_samplers = null,
         },
         .{
-            .binding = 8,
+            .binding = 7,
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .closest_hit_bit_khr = true },

@@ -7,8 +7,11 @@ const Images = @import("./Images.zig");
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
-const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout;
+const descriptor = @import("./descriptor.zig");
+const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 
+const Background = @import("./Background.zig");
 const Meshes = @import("./Meshes.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
@@ -32,7 +35,7 @@ pub const GpuMaterial = packed struct {
 pub const Instances = Accel.Instances;
 pub const InstanceMeshInfo = Accel.MeshInfo;
 
-background: Images,
+background: Background,
 
 color_textures: Images,
 roughness_textures: Images,
@@ -50,13 +53,7 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout(materials.len)) !Self {
-    const background = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
-        Images.TextureSource {
-            .filepath = background_filepath,
-        }
-    }, commands);
-
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout(materials.len), background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     comptime var color_sources: [materials.len]Images.TextureSource = undefined;
     comptime var roughness_sources: [materials.len]Images.TextureSource = undefined;
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
@@ -142,7 +139,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const sampler = try Images.createSampler(vc);
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+    const background = try Background.create(vc, vk_allocator, allocator, commands, background_filepath, background_descriptor_layout, sampler);
+
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [8]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -162,20 +161,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_binding = 1,
             .dst_array_element = 0,
             .descriptor_count = 1,
-            .descriptor_type = .combined_image_sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                .sampler = sampler,
-                .image_view = background.data.items(.view)[0],
-                .image_layout = .shader_read_only_optimal,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
             .descriptor_type = .sampler,
             .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = sampler,
@@ -187,7 +172,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 3,
+            .dst_binding = 2,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
@@ -201,7 +186,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 4,
+            .dst_binding = 3,
             .dst_array_element = 0,
             .descriptor_count = color_image_info.len,
             .descriptor_type = .sampled_image,
@@ -211,7 +196,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 5,
+            .dst_binding = 4,
             .dst_array_element = 0,
             .descriptor_count = roughness_image_info.len,
             .descriptor_type = .sampled_image,
@@ -221,7 +206,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 6,
+            .dst_binding = 5,
             .dst_array_element = 0,
             .descriptor_count = normal_image_info.len,
             .descriptor_type = .sampled_image,
@@ -231,7 +216,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 7,
+            .dst_binding = 6,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
@@ -245,7 +230,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 8,
+            .dst_binding = 7,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,

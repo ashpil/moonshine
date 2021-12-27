@@ -4,7 +4,9 @@ const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../utils/Window.zig");
 const Pipeline = @import("./Pipeline.zig");
-const SceneDescriptorLayout = @import("./descriptor.zig").SceneDescriptorLayout(4);
+const descriptor = @import("./descriptor.zig");
+const SceneDescriptorLayout = descriptor.SceneDescriptorLayout(4);
+const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
 const utils = @import("./utils.zig");
@@ -24,6 +26,7 @@ context: VulkanContext,
 display: Display,
 commands: Commands,
 scene_descriptor_layout: SceneDescriptorLayout,
+background_descriptor_layout: BackgroundDescriptorLayout,
 camera_create_info: Camera.CreateInfo,
 camera: Camera,
 pipeline: Pipeline,
@@ -41,6 +44,7 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
     const display = try Display.create(&context, &vk_allocator, allocator, &commands, initial_window_size);
 
     const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1);
+    const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1);
 
     comptime var frames: [frames_in_flight]u32 = undefined;
     comptime for (frames) |_, i| {
@@ -62,7 +66,7 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
 
     var camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]Pipeline.ShaderInfoCreateInfo {
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]Pipeline.ShaderInfoCreateInfo {
         .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shader.rgen.spv" },
         .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shader.rmiss.spv" },
         .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shadow.rmiss.spv" },
@@ -80,6 +84,7 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
         .display = display,
         .commands = commands,
         .scene_descriptor_layout = scene_descriptor_layout,
+        .background_descriptor_layout = background_descriptor_layout,
         .camera_create_info = camera_create_info,
         .camera = camera,
         .pipeline = pipeline,
@@ -90,12 +95,13 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
 }
 
 pub fn setScene(self: *Self, scene: *const Scene, buffer: vk.CommandBuffer) void {
-    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, 1, utils.toPointerType(&scene.descriptor_set), 0, undefined);
+    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, self.display.frames[self.display.frame_index].set }, 0, undefined);
 }
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.allocator.destroy(&self.context, allocator);
     self.scene_descriptor_layout.destroy(&self.context);
+    self.background_descriptor_layout.destroy(&self.context);
     self.pipeline.destroy(&self.context);
     self.commands.destroy(&self.context);
     self.display.destroy(&self.context, allocator);
@@ -117,7 +123,6 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
 pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
     // bind our stuff
     self.context.device.cmdBindPipeline(buffer, .ray_tracing_khr, self.pipeline.handle);
-    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 1, 1, utils.toPointerType(&self.display.frames[self.display.frame_index].set), 0, undefined);
     
     // push our stuff
     const bytes = std.mem.asBytes(&.{self.camera.desc, self.camera.blur_desc, self.num_accumulted_frames});
