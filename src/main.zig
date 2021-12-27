@@ -61,12 +61,12 @@ pub fn main() !void {
                 .color = F32x3.new(0.901, 0.722, 0.271)
             },
             .roughness = .{
-                .greyscale = 0.15,
+                .greyscale = 0.05,
             },
             .normal = .{
                 .color = F32x3.new(0.5, 0.5, 1.0)
             },
-            .metallic = 0.2,
+            .metallic = 0.6,
             .ior = 1.5,
         },
     };
