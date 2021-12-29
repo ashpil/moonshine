@@ -9,12 +9,7 @@
 * Better memory/buffers
 * Create homebrew version of `std.MultiArrayList` that has len as a `u32`, as that's what a `DeviceSize` is
 
-## Misc TODO:
-* better SBT
-* better build command for shaders
-* more DOD image interface
-
-## Some stuff I'd like to implement
+## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
 - [Multiple importance sampling](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)

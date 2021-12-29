@@ -25,20 +25,22 @@ pub fn build(b: *std.build.Builder) void {
     exe.linkLibC();
     exe.linkSystemLibrary("glfw");
 
-    // compile shaders
-    const dir_cmd = b.addSystemCommand(&[_][]const u8 {
-        "mkdir", "-p", "zig-cache/shaders/primary", "zig-cache/shaders/misc"
-    });
-    exe.step.dependOn(&dir_cmd.step);
+    const shader_cmd = [_][]const u8 {
+        "glslc",
+        "--target-env=vulkan1.2",
+        if (mode == .Debug) "-g" else "-O",
+    };
+    const shader_comp = vkgen.ShaderCompileStep.init(b, &shader_cmd, "");
+    exe.step.dependOn(&shader_comp.step);
 
-    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rgen").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rchit").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shader.rmiss").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "primary/shadow.rmiss").step);
+    _ = shader_comp.add("shaders/primary/shader.rgen");
+    _ = shader_comp.add("shaders/primary/shader.rchit");
+    _ = shader_comp.add("shaders/primary/shader.rmiss");
+    _ = shader_comp.add("shaders/primary/shadow.rmiss");
 
-    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rgen").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rchit").step);
-    exe.step.dependOn(&makeShaderStep(b, mode, "misc/input.rmiss").step);
+    _ = shader_comp.add("shaders/misc/input.rgen");
+    _ = shader_comp.add("shaders/misc/input.rchit");
+    _ = shader_comp.add("shaders/misc/input.rmiss");
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
@@ -48,13 +50,4 @@ pub fn build(b: *std.build.Builder) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-}
-
-pub fn makeShaderStep(b: *std.build.Builder, mode: std.builtin.Mode, comptime shader_name: []const u8) *std.build.RunStep {
-    return b.addSystemCommand(&[_][]const u8 {
-        "glslc", "src/shaders/" ++ shader_name,
-        "--target-env=vulkan1.2",
-        "-o", "zig-cache/shaders/" ++ shader_name ++ ".spv",
-        if (mode == .Debug) "-g" else "-O",
-    });
 }
