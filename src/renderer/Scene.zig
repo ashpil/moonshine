@@ -53,7 +53,7 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_filepath: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout(materials.len), background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout(materials.len), background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     comptime var color_sources: [materials.len]Images.TextureSource = undefined;
     comptime var roughness_sources: [materials.len]Images.TextureSource = undefined;
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
@@ -139,7 +139,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const sampler = try Images.createSampler(vc);
 
-    const background = try Background.create(vc, vk_allocator, allocator, commands, background_filepath, background_descriptor_layout, sampler);
+    const background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
 
     const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [8]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {

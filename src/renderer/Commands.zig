@@ -197,7 +197,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
 }
 
 // TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []vk.Image, src_datas: [][]const u8, sizes: []vk.DeviceSize, extents: []vk.Extent2D, is_cubemaps: []bool) !void {
+pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, sizes: []const vk.DeviceSize, extents: []const vk.Extent2D, is_cubemaps: []const bool, dst_layouts: []const vk.ImageLayout) !void {
     std.debug.assert(dst_images.len == src_datas.len);
     std.debug.assert(src_datas.len == sizes.len);
     std.debug.assert(sizes.len == extents.len);
@@ -246,7 +246,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
             .dst_stage_mask = .{},
             .dst_access_mask = .{},
             .old_layout = .transfer_dst_optimal,
-            .new_layout = .shader_read_only_optimal,
+            .new_layout = dst_layouts[i],
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = image,

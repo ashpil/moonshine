@@ -9,18 +9,56 @@ const Commands = @import("./Commands.zig");
 
 const utils = @import("./utils.zig");
 
-image: Images,
+images: Images,
 descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime image_filepath: []const u8, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime texture_dir: []const u8, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler) !Self {
 
-    const image = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
+    const images = try Images.createTexture(vc, vk_allocator, allocator, &[_]Images.TextureSource {
         Images.TextureSource {
-            .filepath = image_filepath,
-        }
+            .dds_filepath = texture_dir ++ "color.dds",
+        },
+        Images.TextureSource {
+            .raw_file = .{
+                .filepath = texture_dir ++ "conditional_pdfs.raw",
+                .width = 1024,
+                .height = 512,
+                .format = .r32_sfloat,
+                .usage = .{ .storage_bit = true },
+            },
+        },
+        Images.TextureSource {
+            .raw_file = .{
+                .filepath = texture_dir ++ "conditional_cdfs.raw",
+                .width = 1025,
+                .height = 512,
+                .format = .r32_sfloat,
+                .usage = .{ .storage_bit = true },
+            },
+        },
+        Images.TextureSource {
+            .raw_file = .{
+                .filepath = texture_dir ++ "marginal_pdf.raw",
+                .width = 512,
+                .height = 1,
+                .format = .r32_sfloat,
+                .usage = .{ .storage_bit = true },
+            },
+        },
+        Images.TextureSource {
+            .raw_file = .{
+                .filepath = texture_dir ++ "marginal_cdf.raw",
+                .width = 513,
+                .height = 1,
+                .format = .r32_sfloat,
+                .usage = .{ .storage_bit = true },
+            },
+        },
     }, commands);
+
+    const views = images.data.items(.view);
 
     const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
@@ -31,8 +69,64 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .combined_image_sampler,
             .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = sampler,
-                .image_view = image.data.items(.view)[0],
+                .image_view = views[0],
                 .image_layout = .shader_read_only_optimal,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = undefined,
+                .image_view = views[1],
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 2,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = undefined,
+                .image_view = views[2],
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 3,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = undefined,
+                .image_view = views[3],
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 4,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = undefined,
+                .image_view = views[4],
+                .image_layout = .general,
             }),
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
@@ -40,11 +134,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     }))[0];
     
     return Self {
-        .image = image,
+        .images = images,
         .descriptor_set = descriptor_set,
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.image.destroy(vc, allocator);
+    self.images.destroy(vc, allocator);
 }

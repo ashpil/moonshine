@@ -37,6 +37,34 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
+    .{
+        .binding = 1,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 2,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 3,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 4,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
 });
 
 pub fn SceneDescriptorLayout(comptime max_textures: comptime_int) type {

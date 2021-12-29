@@ -78,6 +78,8 @@ const DDSFileInfo = extern struct {
             71 => .bc1_rgb_srgb_block,
             80 => .bc4_unorm_block,
             83 => .bc5_unorm_block,
+            95 => .bc6h_ufloat_block,
+            96 => .bc6h_sfloat_block,
             else => unreachable, // TODO
         };
     }
@@ -93,8 +95,17 @@ pub const ImageCreateRawInfo = struct {
     format: vk.Format,
 };
 
-pub const TextureSource = union(enum) {
+pub const RawSource = struct {
     filepath: []const u8,
+    width: u32,
+    height: u32,
+    format: vk.Format,
+    usage: vk.ImageUsageFlags,
+};
+
+pub const TextureSource = union(enum) {
+    dds_filepath: []const u8,
+    raw_file: RawSource,
     color: F32x3,
     greyscale: comptime_float,
 };
@@ -147,17 +158,32 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     const is_cubemaps = try allocator.alloc(bool, sources.len);
     defer allocator.free(is_cubemaps);
 
+    const dst_layouts = try allocator.alloc(vk.ImageLayout, sources.len);
+    defer allocator.free(dst_layouts);
+
     inline for (sources) |source, i| {
         const image = switch (source) {
-            .filepath => |filepath| blk: {
+            .dds_filepath => |filepath| blk: {
                 const dds_file = @embedFile(filepath);
                 const dds_info = @ptrCast(*const DDSFileInfo, dds_file[0..@sizeOf(DDSFileInfo)]);
                 dds_info.verify(); // this could be comptime but compiler glitches out for some reason
                 extents[i] = dds_info.getExtent();
                 is_cubemaps[i] = dds_info.isCubemap();
+                dst_layouts[i] = .shader_read_only_optimal;
                 bytes[i] = dds_file[@sizeOf(DDSFileInfo)..];
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
+            },
+            .raw_file => |raw_info| blk: {
+                extents[i] = vk.Extent2D {
+                    .width = raw_info.width,
+                    .height = raw_info.height,
+                };
+                is_cubemaps[i] = false;
+                bytes[i] = @embedFile(raw_info.filepath);
+                dst_layouts[i] = .general;
+
+                break :blk try Image.create(vc, vk_allocator, extents[i], raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemaps[i]);
             },
             .color => |color| blk: {
                 bytes[i] = comptime std.mem.asBytes(&color);
@@ -166,6 +192,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                     .height = 1,
                 };
                 is_cubemaps[i] = false;
+                dst_layouts[i] = .shader_read_only_optimal;
                 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
@@ -176,6 +203,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                     .height = 1,
                 };
                 is_cubemaps[i] = false;
+                dst_layouts[i] = .shader_read_only_optimal;
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
@@ -190,7 +218,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
     const images = data.items(.image);
 
-    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, sizes, extents, is_cubemaps);
+    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, sizes, extents, is_cubemaps, dst_layouts);
 
     return Self {
         .data = data,
@@ -215,12 +243,12 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
 pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
     return try vc.device.createSampler(&.{
         .flags = .{},
-        .mag_filter = .linear,
-        .min_filter = .linear,
-        .mipmap_mode = .linear,
-        .address_mode_u = .clamp_to_edge,
-        .address_mode_v = .clamp_to_edge,
-        .address_mode_w = .clamp_to_edge,
+        .mag_filter = .nearest,
+        .min_filter = .nearest,
+        .mipmap_mode = .nearest,
+        .address_mode_u = .clamp_to_border,
+        .address_mode_v = .clamp_to_border,
+        .address_mode_w = .clamp_to_border,
         .mip_lod_bias = 0.0,
         .anisotropy_enable = vk.FALSE,
         .max_anisotropy = 0.0,
@@ -249,7 +277,7 @@ const Image = struct {
 
         const image_create_info = vk.ImageCreateInfo {
             .flags = if (is_cubemap) .{ .cube_compatible_bit = true } else .{},
-            .image_type = .@"2d",
+            .image_type = if (extent.height == 1 and extent.width != 1) .@"1d" else .@"2d",
             .format = format,
             .extent = extent,
             .mip_levels = 1,
@@ -279,7 +307,7 @@ const Image = struct {
         const view_create_info = vk.ImageViewCreateInfo {
             .flags = .{},
             .image = handle,
-            .view_type = if (is_cubemap) .cube else .@"2d",
+            .view_type = if (is_cubemap) vk.ImageViewType.cube else if (extent.height == 1 and extent.width != 1) vk.ImageViewType.@"1d" else vk.ImageViewType.@"2d",
             .format = format, 
             .components = .{
                 .r = .identity,

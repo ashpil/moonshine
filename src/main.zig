@@ -19,13 +19,13 @@ pub fn main() !void {
     const texture_sets = comptime [_]ChessSet.Material {
         ChessSet.Material {
             .color = .{
-                .filepath = "../../assets/textures/board/color.dds",
+                .dds_filepath = "../../assets/textures/board/color.dds",
             },
             .roughness = .{
                 .greyscale = 0.3,
             },
             .normal = .{
-                .filepath = "../../assets/textures/board/normal.dds"
+                .dds_filepath = "../../assets/textures/board/normal.dds"
             },
             .metallic = 0.4,
             .ior = 1.35,
@@ -115,7 +115,7 @@ pub fn main() !void {
         },
     };
 
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox.dds", set_info, &engine.scene_descriptor_layout, &engine.background_descriptor_layout);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox/", set_info, &engine.scene_descriptor_layout, &engine.background_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
     var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
