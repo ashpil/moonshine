@@ -51,14 +51,14 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
         frames[i] = i;
     };
 
-    const camera_origin = F32x3.new(0.4, 0.3, -0.4);
+    const camera_origin = F32x3.new(0.6, 0.5, -0.6);
     const camera_target = F32x3.new(0.0, 0.0, 0.0);
 
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 50.0,
+        .vfov = 35.0,
         .extent = initial_window_size,
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),

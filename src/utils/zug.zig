@@ -281,7 +281,7 @@ pub fn Mat4(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) != .Float) struct {} else struct {
-            pub fn fromAxisAngle(radians: T, axis: Vec3T) Self {
+            pub fn fromAxisAngle(axis: Vec3T, radians: T) Self {
                 const axis_sin = axis.mul_scalar(math.sin(radians));
                 const cos = math.cos(radians);
                 const axis_sq = axis.mul(axis);

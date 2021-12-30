@@ -7,6 +7,8 @@ const zug = @import("./utils/zug.zig");
 const F32x3 = zug.Vec3(f32);
 const F32x2 = zug.Vec2(f32);
 const Mat4 = zug.Mat4(f32);
+const Mat3x4 = zug.Mat3x4(f32);
+const Vec3 = zug.Vec3(f32);
 const Window = @import("./utils/Window.zig");
 const Camera = @import("./renderer/Camera.zig");
 const Coord = @import("./logic/coord.zig").Coord;
@@ -147,7 +149,7 @@ pub fn main() !void {
                         set.scene.accel.recordInstanceUpdate(&engine.context, buffer, instance_index, 3);
                         active_piece = instance_index;
                     }
-                    if (active_piece_index < 9 or active_piece_index == 17 or active_piece_index == 21 or active_piece_index == 25 or active_piece_index == 31 or active_piece_index == 29 or active_piece_index == 26 or active_piece_index == 22 or active_piece_index == 18) {
+                    if (Color.fromIndex(active_piece_index) == .white) {
                         set.scene.accel.recordInstanceUpdate(&engine.context, buffer, active_piece_index, 1);
                     } else {
                         set.scene.accel.recordInstanceUpdate(&engine.context, buffer, active_piece_index, 2);
@@ -164,17 +166,21 @@ pub fn main() !void {
                     var p1: F32x3 = undefined;
                     var p2: F32x3 = undefined;
 
+                    const edge = Coord.board_size / 2.0;
                     if (click_data.primitive_index == 11) {
-                        p1 = F32x3.new(-0.2, 0.2, 0.2);
-                        p2 = F32x3.new(-0.2, -0.2, 0.2);
+                        p1 = F32x3.new(-edge, edge, edge);
+                        p2 = F32x3.new(-edge, -edge, edge);
                     } else if (click_data.primitive_index == 5) {
-                        p1 = F32x3.new(-0.2, 0.2, -0.2);
-                        p2 = F32x3.new(-0.2, 0.2, 0.2);
+                        p1 = F32x3.new(-edge, edge, -edge);
+                        p2 = F32x3.new(-edge, edge, edge);
                     }
 
                     const location = F32x2.new(p1.dot(barycentrics), p2.dot(barycentrics));
-                    const coord = Coord.fromLocation(location);
-                    set.move(active_piece_index, coord.toTransform());
+                    var transform = Coord.fromLocation(location).toTransform();
+                    if (Color.fromIndex(active_piece_index) == .black) {
+                        transform = transform.mul(Mat3x4.from_rotation(Vec3.new(0.0, 1.0, 0.0), std.math.pi));
+                    }
+                    set.move(active_piece_index, transform);
                     engine.num_accumulted_frames = 0;
                 }
             } else if (click_data.instance_index == -1) {
@@ -195,6 +201,19 @@ pub fn main() !void {
 
     std.log.info("Program completed!.", .{});
 }
+
+pub const Color = enum {
+    black,
+    white,
+
+    pub fn fromIndex(index: u32) Color {
+        if (index < 9 or index == 17 or index == 21 or index == 25 or index == 31 or index == 29 or index == 26 or index == 22 or index == 18) {
+            return .white;
+        } else {
+            return .black;
+        }
+    }
+};
 
 const WindowData = struct {
     engine: *Engine,
@@ -224,23 +243,23 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
             const move_amount = 1.0 / 18.0;
             var mat: Mat4 = undefined;
             if (key == 65) {
-                mat = Mat4.fromAxisAngle(-move_amount, F32x3.new(0.0, 1.0, 0.0));
+                mat = Mat4.fromAxisAngle(F32x3.new(0.0, 1.0, 0.0), -move_amount);
             } else if (key == 68) {
-                mat = Mat4.fromAxisAngle(move_amount, F32x3.new(0.0, 1.0, 0.0));
+                mat = Mat4.fromAxisAngle(F32x3.new(0.0, 1.0, 0.0), move_amount);
             } else if (key == 83) {
                 const target_dir = engine.camera_create_info.origin.sub(engine.camera_create_info.target);
                 const axis = engine.camera_create_info.up.cross(target_dir).unit();
                 if (F32x3.new(0.0, -1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                     return;
                 }
-                mat = Mat4.fromAxisAngle(move_amount, axis);
+                mat = Mat4.fromAxisAngle(axis, move_amount);
             } else if (key == 87) {
                 const target_dir = engine.camera_create_info.origin.sub(engine.camera_create_info.target);
                 const axis = engine.camera_create_info.up.cross(target_dir).unit();
                 if (F32x3.new(0.0, 1.0, 0.0).dot(target_dir.unit()) > 0.99) {
                     return;
                 }
-                mat = Mat4.fromAxisAngle(-move_amount, axis);
+                mat = Mat4.fromAxisAngle(axis, -move_amount);
             } else unreachable;
 
             engine.camera_create_info.origin = mat.mul_point(engine.camera_create_info.origin.sub(engine.camera_create_info.target)).add(engine.camera_create_info.target);

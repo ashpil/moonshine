@@ -71,7 +71,9 @@ pub const Coord = enum {
     h7,
     h8,
 
-    const half_tile_size = 0.025;
+    pub const board_size = 0.5;
+
+    const half_tile_size = board_size / 16.0;
 
     const a = half_tile_size * 7.0;
     const b = half_tile_size * 5.0;
