@@ -89,8 +89,10 @@ void main() {
             Frame frame = createFrame(payload.normal);
             vec3 outgoing = worldToFrame(frame, -direction);
             
-            vec3 lightSample1 = estimateBackgroundDirect(frame, outgoing, material, vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState)));
-            vec3 lightSample2 = estimateBackgroundDirect(frame, outgoing, material, vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState)));
+            vec4 rand1 = vec4(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
+            vec3 lightSample1 = estimateBackgroundDirect(frame, outgoing, material, rand1);
+            vec4 rand2 = vec4(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
+            vec3 lightSample2 = estimateBackgroundDirect(frame, outgoing, material, rand2);
             accumulatedColor += (throughput * (lightSample1 + lightSample2) / 2.0);
             
             // set up info for next bounce

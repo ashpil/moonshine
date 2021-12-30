@@ -78,27 +78,20 @@ float sampleEnv(vec2 rand_uv, out vec3 dir, inout vec2 uv) {
     return mapPdf / (2.0 * PI * PI * sinPhi);
 }
 
-// float backgroundPDF(vec3 w_o, vec3 w_i) {
+float backgroundPDF(vec3 w_i) {
+    ivec2 size = imageSize(conditionalCdfs);
+    int width = size.x - 1;
+    int height = size.y;
 
-// }
+    vec2 theta_phi = vec2(atan(w_i.z, w_i.x), asin(w_i.y));
+    float sin_phi = sin(theta_phi.y);
+    theta_phi /= vec2(2.0 * PI, PI);
 
-vec3 estimateBackgroundDirect(Frame frame, vec3 outgoing, Material material, vec2 rand_uv) {
-    vec3 dir;
-    vec2 uv;
-    float pdf = sampleEnv(rand_uv, dir, uv);
-    inShadow = true;
-    if (dot(payload.normal, dir) > 0.0) { 
-        uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-        traceRayEXT(TLAS, flags, 0xFF, 0, 0, 1, payload.point, 0.001, dir, 10000.0, 1);
-    }
-    if (!inShadow) {
-        vec3 frameSunDir = worldToFrame(frame, dir);
-        vec3 brdf = f_r(frameSunDir, outgoing, material);
-        vec3 color = texture(backgroundSampler, uv).rgb;
-        return color * brdf * abs(frameCosTheta(frameSunDir)) / pdf;
-    } else {
-        return vec3(0.0);
-    }
+    vec2 uv = theta_phi + vec2(0.5, 0.0);
+    ivec2 coords = clamp(ivec2(uv * vec2(width, height)), ivec2(0), ivec2(width - 1, height - 1));
+
+    float pdf = imageLoad(conditionalPdfsIntegrals, coords).r / imageLoad(marginalPdfIntegral, height).r;
+    return pdf / (2.0 * PI * PI * sin_phi);
 }
 
 vec3 getBackgroundColor(vec3 direction) {
@@ -106,4 +99,58 @@ vec3 getBackgroundColor(vec3 direction) {
     uv /= vec2(2.0 * PI, PI);
     uv += vec2(0.5);
     return texture(backgroundSampler, uv).rgb;
+}
+
+float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
+    float f = numf * fPdf;
+    float g = numg * gPdf;
+
+    float f2 = f * f;
+    return (f2 / (f2 + g * g));
+}
+
+vec3 estimateBackgroundDirect(Frame frame, vec3 outgoing, Material material, vec4 rand) {
+    vec3 directLighting = vec3(0.0);
+
+    float scatteringPdf;
+
+    // sample env
+    vec3 dir;
+    vec2 uv;
+    float lightPdf = sampleEnv(rand.xy, dir, uv);
+
+    inShadow = true;
+    if (dot(payload.normal, dir) > 0.0) { 
+        uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+        traceRayEXT(TLAS, flags, 0xFF, 0, 0, 1, payload.point, 0.001, dir, 10000.0, 1);
+    }
+    if (!inShadow) {
+        vec3 frameSunDir = worldToFrame(frame, dir);
+        scatteringPdf = scatteringPDF(frameSunDir, outgoing, material);
+        if (scatteringPdf > 0) {
+            vec3 frameSunDir = worldToFrame(frame, dir);
+            vec3 brdf = f_r(frameSunDir, outgoing, material);
+            vec3 li = texture(backgroundSampler, uv).rgb;
+            float weight = powerHeuristic(1, lightPdf, 1, scatteringPdf);
+            directLighting += li * brdf * abs(frameCosTheta(frameSunDir)) * weight / lightPdf;
+        }
+    }
+
+    // sample material
+    dir = sample_f_r(outgoing, material, scatteringPdf, rand.zw);
+    inShadow = true;
+    vec3 dir_world = frameToWorld(frame, dir);
+    if (dot(payload.normal, dir_world) > 0.0) { 
+        uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+        traceRayEXT(TLAS, flags, 0xFF, 0, 0, 1, payload.point, 0.001, dir_world, 10000.0, 1);
+    }
+    if (!inShadow) {
+        lightPdf = backgroundPDF(dir_world);
+        float weight = powerHeuristic(1, scatteringPdf, 1, lightPdf);
+        vec3 li = min(getBackgroundColor(dir_world), 1.0);
+        vec3 brdf = f_r(dir, outgoing, material);
+        directLighting += li * brdf * weight * abs(frameCosTheta(dir)) / scatteringPdf;
+    }
+
+    return directLighting;
 }

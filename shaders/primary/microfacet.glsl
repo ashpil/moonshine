@@ -157,7 +157,7 @@ vec3 sample_f_r(vec3 w_o, Material material, inout float pdf, vec2 square) {
     }
 }
 
-float scatteringPDF(vec3 w_o, vec3 w_i, Material material) {
+float scatteringPDF(vec3 w_i, vec3 w_o, Material material) {
     float pdf1 = lambertPDF(w_i, w_o, material);
     float pdf2 = cookTorrancePDF(w_i, w_o, material);
 
