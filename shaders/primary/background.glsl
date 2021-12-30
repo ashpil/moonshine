@@ -1,7 +1,7 @@
 layout(binding = 0, set = 1) uniform sampler2D backgroundSampler;
-layout(binding = 1, set = 1, r32f) uniform readonly image2D conditionalPdfs;
+layout(binding = 1, set = 1, r32f) uniform readonly image2D conditionalPdfsIntegrals;
 layout(binding = 2, set = 1, r32f) uniform readonly image2D conditionalCdfs;
-layout(binding = 3, set = 1, r32f) uniform readonly image1D marginalPdf;
+layout(binding = 3, set = 1, r32f) uniform readonly image1D marginalPdfIntegral;
 layout(binding = 4, set = 1, r32f) uniform readonly image1D marginalCdf;
 
 layout(location = 0) rayPayloadEXT Payload payload;
@@ -9,7 +9,7 @@ layout(location = 1) rayPayloadEXT bool inShadow;
 
 float sample2D(vec2 uv, out vec2 result) {
     ivec2 size = imageSize(conditionalCdfs);
-    int width = size.x;
+    int width = size.x - 1;
     int height = size.y;
 
     // get y
@@ -29,8 +29,9 @@ float sample2D(vec2 uv, out vec2 result) {
     }
 
     int offset_v = clamp(first - 1, 0, height - 2);
-    float dv = (uv.y - imageLoad(marginalCdf, offset_v).r) / (imageLoad(marginalCdf, offset_v + 1).r - imageLoad(marginalCdf, offset_v).r);
-    float pdf_v = imageLoad(marginalPdf, offset_v).r;
+    float valv = imageLoad(marginalCdf, offset_v).r;
+    float dv = (uv.y - valv) / (imageLoad(marginalCdf, offset_v + 1).r - valv);
+    float pdf_v = imageLoad(marginalPdfIntegral, offset_v).r / imageLoad(marginalPdfIntegral, height).r;
     result.y = (offset_v + dv) / height;
 
     // get x
@@ -49,8 +50,9 @@ float sample2D(vec2 uv, out vec2 result) {
         }
     }
     int offset_u = clamp(first - 1, 0, width - 2);
-    float du = (uv.x - imageLoad(conditionalCdfs, ivec2(offset_u, offset_v)).r) / (imageLoad(conditionalCdfs, ivec2(offset_u + 1, offset_v)).r - imageLoad(conditionalCdfs, ivec2(offset_u, offset_v)).r);
-    float pdf_u = imageLoad(conditionalPdfs, ivec2(offset_u, offset_v)).r;
+    float valu = imageLoad(conditionalCdfs, ivec2(offset_u, offset_v)).r;
+    float du = (uv.x - valu) / (imageLoad(conditionalCdfs, ivec2(offset_u + 1, offset_v)).r - valu);
+    float pdf_u = imageLoad(conditionalPdfsIntegrals, ivec2(offset_u, offset_v)).r / imageLoad(conditionalPdfsIntegrals, ivec2(width, offset_v)).r;
     result.x = (offset_u + du) / width;
 
     return pdf_v * pdf_u;
@@ -75,6 +77,10 @@ float sampleEnv(vec2 rand_uv, out vec3 dir, inout vec2 uv) {
     dir = vec3(cosPhi * cosTheta, sinPhi, cosPhi * sinTheta);
     return mapPdf / (2.0 * PI * PI * sinPhi);
 }
+
+// float backgroundPDF(vec3 w_o, vec3 w_i) {
+
+// }
 
 vec3 estimateBackgroundDirect(Frame frame, vec3 outgoing, Material material, vec2 rand_uv) {
     vec3 dir;

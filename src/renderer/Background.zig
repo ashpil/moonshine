@@ -22,9 +22,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         Images.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "conditional_pdfs.raw",
-                .width = 1024,
-                .height = 512,
+                .filepath = texture_dir ++ "conditional_pdfs_integrals.raw",
+                .width = 257,
+                .height = 128,
                 .format = .r32_sfloat,
                 .usage = .{ .storage_bit = true },
             },
@@ -32,16 +32,16 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         Images.TextureSource {
             .raw_file = .{
                 .filepath = texture_dir ++ "conditional_cdfs.raw",
-                .width = 1025,
-                .height = 512,
+                .width = 257,
+                .height = 128,
                 .format = .r32_sfloat,
                 .usage = .{ .storage_bit = true },
             },
         },
         Images.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "marginal_pdf.raw",
-                .width = 512,
+                .filepath = texture_dir ++ "marginal_pdf_integral.raw",
+                .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,
                 .usage = .{ .storage_bit = true },
@@ -50,7 +50,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         Images.TextureSource {
             .raw_file = .{
                 .filepath = texture_dir ++ "marginal_cdf.raw",
-                .width = 513,
+                .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,
                 .usage = .{ .storage_bit = true },

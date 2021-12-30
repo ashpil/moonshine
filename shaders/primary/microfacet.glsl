@@ -157,6 +157,13 @@ vec3 sample_f_r(vec3 w_o, Material material, inout float pdf, vec2 square) {
     }
 }
 
+float scatteringPDF(vec3 w_o, vec3 w_i, Material material) {
+    float pdf1 = lambertPDF(w_i, w_o, material);
+    float pdf2 = cookTorrancePDF(w_i, w_o, material);
+
+    return mix(pdf1, pdf2, material.metallic);
+}
+
 vec3 f_r(vec3 w_i, vec3 w_o, Material material) {
     vec3 microfacet = cookTorrance(w_i, w_o, material);
     vec3 lambertian = lambert(w_i, w_o, material);
