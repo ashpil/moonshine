@@ -37,12 +37,12 @@ struct Ray {
     vec3 direction;
 };
 
-Ray generateDir(Camera camera, inout uint rngState) {
-    vec2 randomInUnitDisk = squareToUniformDiskConcentric(vec2(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState)));
-    vec2 rd = camera.lens_radius * randomInUnitDisk;
+Ray generateDir(Camera camera, vec4 rand) {
+    vec2 sampled_rand = squareToUniformDiskConcentric(rand.xy);
+    vec2 rd = camera.lens_radius * sampled_rand;
     vec3 defocusOffset = camera.u * rd.x + camera.v * rd.y;
     
-    vec2 randomCenter = vec2(0.5) + 0.25 * randomGaussian(rngState);
+    vec2 randomCenter = vec2(0.5) + 0.5 * randomGaussian(rand.zw);
     vec2 uv = (vec2(gl_LaunchIDEXT.xy) + randomCenter) / vec2(gl_LaunchSizeEXT.xy);
     uv.y -= 1;
     uv.y *= -1;
@@ -66,7 +66,8 @@ void main() {
         vec3 throughput = vec3(1.0);
         
         // set up initial directions for first bounce
-        Ray initialRay = generateDir(camera, rngState);
+        vec4 rand = vec4(stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState), stepAndOutputRNGFloat(rngState));
+        Ray initialRay = generateDir(camera, rand);
         vec3 direction = initialRay.direction;
         vec3 origin = initialRay.origin;
 

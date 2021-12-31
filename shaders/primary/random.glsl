@@ -16,9 +16,9 @@ vec3 randomDirection(inout uint rngState) {
     return vec3(r * cos(theta), r * sin(theta), u);
 }
 
-vec2 randomGaussian(inout uint rngState) {
-    const float u1 = max(1e-38, stepAndOutputRNGFloat(rngState));
-    const float u2 = stepAndOutputRNGFloat(rngState);
+vec2 randomGaussian(vec2 rand) {
+    const float u1 = max(1e-38, rand.x);
+    const float u2 = rand.y;
     const float r = sqrt(-2.0 * log(u1));
     const float theta = 2 * PI * u2;
     return r * vec2(cos(theta), sin(theta));
