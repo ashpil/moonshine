@@ -12,6 +12,9 @@
 ### Random thoughts
 * Orthographic projection might look visually interesting in this context 
 
+### // TODO
+* Make sure we have all necessary `errdefer`s
+
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)

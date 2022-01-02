@@ -218,6 +218,7 @@ const device_commands = [_]vk.DeviceCommand {
 
 const debug_device_commands = device_commands ++ [_]vk.DeviceCommand {
     .setDebugUtilsObjectNameEXT,
+    .cmdWriteTimestamp2KHR,
 };
 
 const Device = vk.DeviceWrapper(&(if (validate) debug_device_commands else device_commands));
@@ -316,7 +317,9 @@ const device_extensions = [_][*:0]const u8{
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     queue_family_index: u32,
+    properties: vk.PhysicalDeviceProperties,
     mem_properties: vk.PhysicalDeviceMemoryProperties,
+    raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR,
 
     fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !u32 {
         var family_count: u32 = 0;
@@ -350,10 +353,24 @@ const PhysicalDevice = struct {
             if (try PhysicalDevice.isDeviceSuitable(instance, device, allocator, surface)) {
                 if (pickQueueFamily(instance, device, allocator, surface)) |index| {
                     const mem_properties = instance.getPhysicalDeviceMemoryProperties(device);
+
+                    var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
+                    raytracing_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
+                    raytracing_properties.p_next = null;
+
+                    var properties2 = vk.PhysicalDeviceProperties2 {
+                        .properties = undefined,
+                        .p_next = &raytracing_properties,
+                    };
+
+                    instance.getPhysicalDeviceProperties2(device, &properties2);
+
                     break PhysicalDevice {
                         .handle = device,
                         .queue_family_index = index,
+                        .properties = properties2.properties,
                         .mem_properties = mem_properties,
+                        .raytracing_properties = raytracing_properties,
                     };
                 } else |err| return err;
             }

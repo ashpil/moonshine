@@ -149,19 +149,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     vc.device.destroyPipeline(self.handle, null);
 }
 
-fn getRaytracingProperties(vc: *const VulkanContext) vk.PhysicalDeviceRayTracingPipelinePropertiesKHR {
-    var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
-    raytracing_properties.s_type = vk.StructureType.physical_device_ray_tracing_pipeline_properties_khr;
-    raytracing_properties.p_next = null;
-
-    vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &.{
-        .properties = undefined,
-        .p_next = &raytracing_properties,
-    });
-
-    return raytracing_properties;
-}
-
 const ShaderBindingTable = struct {
     raygen: VkAllocator.DeviceBuffer,
     raygen_address: vk.DeviceAddress,
@@ -175,8 +162,7 @@ const ShaderBindingTable = struct {
     handle_size_aligned: u32,
 
     fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32) !ShaderBindingTable {
-        const rt_properties = getRaytracingProperties(vc);
-        const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
+        const handle_size_aligned = std.mem.alignForwardGeneric(u32, vc.physical_device.raytracing_properties.shader_group_handle_size, vc.physical_device.raytracing_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count;
         const sbt_size = group_count * handle_size_aligned;
         const sbt = try allocator.alloc(u8, sbt_size);
