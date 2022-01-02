@@ -14,6 +14,9 @@
 
 ### // TODO
 * Make sure we have all necessary `errdefer`s
+* Proper asset system - imports, file loading, etc
+* Differentiate game and render logic better
+* Swap off of GLFW or use better Zig GLFW wrapper
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
