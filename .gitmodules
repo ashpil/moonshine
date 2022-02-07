@@ -1,3 +1,6 @@
 [submodule "deps/vulkan-zig"]
 	path = deps/vulkan-zig
 	url = https://github.com/ashpil/vulkan-zig.git
+[submodule "deps/glfw"]
+	path = deps/glfw
+	url = https://github.com/glfw/glfw.git

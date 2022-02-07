@@ -1,5 +1,6 @@
 const c = @import("./c.zig");
 const vk = @import("vulkan");
+const std = @import("std");
 
 const Error = error {
     InitFail,
@@ -14,6 +15,13 @@ pub const getInstanceProcAddress = c.glfwGetInstanceProcAddress;
 handle: *c.GLFWwindow,
 
 pub fn create(width: u32, height: u32) Error!Self {
+    const Callback = struct {
+        fn callback(code: c_int, message: [*c]const u8) callconv(.C) void {
+            std.debug.panic("GLFW ERROR: {}: {s}", .{code, message});
+        }
+    };
+    _ = c.glfwSetErrorCallback(Callback.callback);
+
     if (c.glfwInit() != c.GLFW_TRUE) return Error.InitFail;
 
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);

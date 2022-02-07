@@ -2,7 +2,6 @@
 
 ### Build dependencies:
 * Zig
-* GLFW
 * glslc on your path
 
 ### Possible optimizations
@@ -17,6 +16,7 @@
 * Proper asset system - imports, file loading, etc
 * Differentiate game and render logic better
 * Swap off of GLFW or use better Zig GLFW wrapper
+* Update GLFW after [this](https://github.com/glfw/glfw/issues/2044) is fixed.
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
