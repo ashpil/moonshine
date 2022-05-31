@@ -400,7 +400,7 @@ const PhysicalDevice = struct {
             } else false;
 
             if (!extension_found) {
-                std.log.warn("Couldn't find necessary extension {s}!", .{extension_name});
+                std.log.err("Couldn't find necessary extension {s}!", .{extension_name});
                 return false;
             }
         }

@@ -17,7 +17,7 @@ handle: *c.GLFWwindow,
 pub fn create(width: u32, height: u32) Error!Self {
     const Callback = struct {
         fn callback(code: c_int, message: [*c]const u8) callconv(.C) void {
-            std.debug.panic("GLFW ERROR: {}: {s}", .{code, message});
+            std.log.warn("glfw: {}: {s}", .{code, message});
         }
     };
     _ = c.glfwSetErrorCallback(Callback.callback);
