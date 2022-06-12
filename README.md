@@ -12,6 +12,8 @@
 * Orthographic projection might look visually interesting in this context 
 
 ### // TODO
+* Full HLSL conversion
+* Proper support for shaders with multiple entry points
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - imports, file loading, etc
 * Differentiate game and render logic better

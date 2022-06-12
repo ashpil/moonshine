@@ -52,9 +52,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     }))[0];
 
     const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, &.{ descriptor_layout.handle, accel_layout }, &[_]Pipeline.ShaderInfoCreateInfo {
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.rgen.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.rchit.spv" },
+        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "raygen" },
+        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "miss" },
+        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "chit" },
     }, &[_]vk.PushConstantRange {
         .{
             .offset = 0,

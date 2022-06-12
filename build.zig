@@ -27,6 +27,7 @@ pub fn build(b: *std.build.Builder) void {
     exe.linkLibrary(glfw);
     exe.addIncludeDir(glfw_dir ++ "include");
     
+    // glsl
     const shader_cmd = [_][]const u8 {
         "glslc",
         "--target-env=vulkan1.2",
@@ -44,6 +45,18 @@ pub fn build(b: *std.build.Builder) void {
     _ = shader_comp.add("shaders/misc/input.rchit");
     _ = shader_comp.add("shaders/misc/input.rmiss");
 
+    // hlsl
+    const hlsl_shader_cmd = [_][]const u8 {
+        "dxc",
+        "-T", "lib_6_7",
+        "-spirv",
+        "-fspv-target-env=vulkan1.2",
+        "-fvk-use-scalar-layout",
+    };
+    const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
+    exe.step.dependOn(&hlsl_comp.step);
+    _ = hlsl_comp.add("shaders/misc/input.hlsl");
+
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
@@ -59,17 +72,6 @@ const Lws = enum {
     x11,
     all,
 };
-
-// 
-//generate() {
-//  protocol_path=$1
-//  output_name=$2
-//
-//  rm -f "$gen_dir"/wayland-"$output_name"-client-protocol.{h,c}
-//
-//  wayland-scanner private-code wayland-protocols/"$protocol_path".xml "$gen_dir"/wayland-"$output_name"-client-protocol.c
-//  wayland-scanner client-header wayland-protocols/"$protocol_path".xml "$gen_dir"/wayland-"$output_name"-client-protocol.h
-//}
 
 fn genWaylandHeader(b: *std.build.Builder, exe: *std.build.LibExeObjStep, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
     const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
@@ -310,3 +312,77 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
 
     return lib;
 }
+
+// adapted from vk-zig
+pub const HlslCompileStep = struct {
+    /// Structure representing a shader to be compiled.
+    const Shader = struct {
+        /// The path to the shader, relative to the current build root.
+        source_path: []const u8,
+
+        /// The full output path where the compiled shader binary is placed.
+        full_out_path: []const u8,
+    };
+
+    step: std.build.Step,
+    builder: *std.build.Builder,
+
+    /// The command and optional arguments used to invoke the shader compiler.
+    glslc_cmd: []const []const u8,
+
+    /// The directory within `zig-cache/` that the compiled shaders are placed in.
+    output_dir: []const u8,
+
+    /// List of shaders that are to be compiled.
+    shaders: std.ArrayList(Shader),
+
+    /// Create a ShaderCompilerStep for `builder`. When this step is invoked by the build
+    /// system, `<glcl_cmd...> <shader_source> -o <dst_addr>` is invoked for each shader.
+    pub fn init(builder: *std.build.Builder, glslc_cmd: []const []const u8, output_dir: []const u8) *HlslCompileStep {
+        const self = builder.allocator.create(HlslCompileStep) catch unreachable;
+        self.* = .{
+            .step = std.build.Step.init(.custom, "shader-compile", builder.allocator, make),
+            .builder = builder,
+            .output_dir = output_dir,
+            .glslc_cmd = builder.dupeStrings(glslc_cmd),
+            .shaders = std.ArrayList(Shader).init(builder.allocator),
+        };
+        return self;
+    }
+
+    /// Add a shader to be compiled. `src` is shader source path, relative to the project root.
+    /// Returns the full path where the compiled binary will be stored upon successful compilation.
+    /// This path can then be used to include the binary into an executable, for example by passing it
+    /// to @embedFile via an additional generated file.
+    pub fn add(self: *HlslCompileStep, src: []const u8) []const u8 {
+        const output_filename = std.fmt.allocPrint(self.builder.allocator, "{s}.spv", .{ src }) catch unreachable;
+        const full_out_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{
+            self.builder.build_root,
+            self.builder.cache_root,
+            self.output_dir,
+            output_filename,
+        }) catch unreachable;
+        self.shaders.append(.{ .source_path = src, .full_out_path = full_out_path }) catch unreachable;
+        return full_out_path;
+    }
+
+    /// Internal build function.
+    fn make(step: *std.build.Step) !void {
+        const self = @fieldParentPtr(HlslCompileStep, "step", step);
+        const cwd = std.fs.cwd();
+
+        const cmd = try self.builder.allocator.alloc([]const u8, self.glslc_cmd.len + 3);
+        for (self.glslc_cmd) |part, i| {
+            cmd[i] = part;
+        }
+        cmd[cmd.len - 2] = "-Fo";
+
+        for (self.shaders.items) |shader| {
+            const dir = std.fs.path.dirname(shader.full_out_path).?;
+            try cwd.makePath(dir);
+            cmd[cmd.len - 3] = shader.source_path;
+            cmd[cmd.len - 1] = shader.full_out_path;
+            try self.builder.spawnChild(cmd);
+        }
+    }
+};

@@ -9,6 +9,7 @@ const std = @import("std");
 pub const ShaderInfoCreateInfo = struct {
     stage: vk.ShaderStageFlags,
     filepath: []const u8,
+    entrypoint: [*:0]const u8 = "main",
 };
 
 fn ShaderInfo(comptime infos: []const ShaderInfoCreateInfo) type {
@@ -45,7 +46,7 @@ fn ShaderInfo(comptime infos: []const ShaderInfoCreateInfo) type {
                     .flags = .{},
                     .stage = info.stage,
                     .module = module,
-                    .p_name = "main",
+                    .p_name = info.entrypoint,
                     .p_specialization_info = null,
                 };
 
