@@ -51,10 +51,17 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
     }))[0];
 
-    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, &.{ descriptor_layout.handle, accel_layout }, &[_]Pipeline.ShaderInfoCreateInfo {
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "raygen" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "miss" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/misc/input.hlsl.spv", .entrypoint = "chit" },
+    const shader_module = try Pipeline.makeEmbeddedShaderModule(vc, "../../zig-cache/shaders/misc/input.hlsl.spv",);
+    defer vc.device.destroyShaderModule(shader_module, null);
+
+    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, &.{ descriptor_layout.handle, accel_layout }, &[_]vk.PipelineShaderStageCreateInfo {
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = shader_module, .p_name = "raygen", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shader_module, .p_name = "miss", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = shader_module, .p_name = "chit", .p_specialization_info = null, },
+    }, &[_]vk.RayTracingShaderGroupCreateInfoKHR {
+        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 2, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
     }, &[_]vk.PushConstantRange {
         .{
             .offset = 0,

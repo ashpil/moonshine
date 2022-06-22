@@ -6,94 +6,45 @@ const utils = @import("./utils.zig");
 const vk = @import("vulkan");
 const std = @import("std");
 
-pub const ShaderInfoCreateInfo = struct {
-    stage: vk.ShaderStageFlags,
-    filepath: []const u8,
-    entrypoint: [*:0]const u8 = "main",
-};
+// helper, returns shader module given filename, embeds shader contents into binary
+pub fn makeEmbeddedShaderModule(vc: *const VulkanContext, comptime filepath: []const u8) !vk.ShaderModule {
+    const code = @embedFile(filepath);
 
-fn ShaderInfo(comptime infos: []const ShaderInfoCreateInfo) type {
-    return struct {
-        const ShaderStruct = @This();
-
-        stages: [infos.len]vk.PipelineShaderStageCreateInfo,
-        groups: [infos.len]vk.RayTracingShaderGroupCreateInfoKHR,
-
-        raygen_count: u32,
-        miss_count: u32,
-        hit_count: u32,
-
-        fn create(vc: *const VulkanContext) !ShaderStruct {
-
-            var stages: [infos.len]vk.PipelineShaderStageCreateInfo = undefined;
-            var groups: [infos.len]vk.RayTracingShaderGroupCreateInfoKHR = undefined;
-
-            var raygen_count: u32 = 0;
-            var miss_count: u32 = 0;
-            var hit_count: u32 = 0;
-
-            inline for (infos) |info, i| {
-                const code = @embedFile(info.filepath);
-
-                const module = try vc.device.createShaderModule(&.{
-                    .flags = .{},
-                    .code_size = code.len,
-                    .p_code = @ptrCast([*]const u32, code),
-                }, null);
-                errdefer vc.device.destroyShaderModule(module, null);
-
-                stages[i] = vk.PipelineShaderStageCreateInfo {
-                    .flags = .{},
-                    .stage = info.stage,
-                    .module = module,
-                    .p_name = info.entrypoint,
-                    .p_specialization_info = null,
-                };
-
-                if (info.stage.contains(.{ .raygen_bit_khr = true })) {
-                    raygen_count += 1;
-                } else if (info.stage.contains(.{ .miss_bit_khr = true })) {
-                    miss_count += 1;
-                } else if (info.stage.contains(.{ .closest_hit_bit_khr = true })) {
-                    hit_count += 1;
-                }
-                
-                // sort underthought for now; needs to be improved for when there are more groups
-                const is_general_shader = comptime info.stage.contains(.{ .raygen_bit_khr = true }) or info.stage.contains(.{ .miss_bit_khr = true });
-                const is_closest_hit_shader = comptime info.stage.contains(.{ .closest_hit_bit_khr = true });
-                groups[i] = vk.RayTracingShaderGroupCreateInfoKHR {
-                    .@"type" = comptime if (is_general_shader) .general_khr
-                        else if (is_closest_hit_shader) .triangles_hit_group_khr
-                        else @compileError("Unknown shader stage!"),
-                    .general_shader = comptime if (is_general_shader) i
-                        else if (is_closest_hit_shader) vk.SHADER_UNUSED_KHR
-                        else @compileError("Unknown shader stage!"),
-                    .closest_hit_shader = comptime if (is_general_shader) vk.SHADER_UNUSED_KHR
-                        else if (is_closest_hit_shader) i
-                        else @compileError("Unknown shader stage!"),
-                    .any_hit_shader = vk.SHADER_UNUSED_KHR,
-                    .intersection_shader = vk.SHADER_UNUSED_KHR,
-                    .p_shader_group_capture_replay_handle = null,
-                };
-            }
-
-            return ShaderStruct {
-                .stages = stages,
-                .groups = groups,
-
-                .raygen_count = raygen_count,
-                .miss_count = miss_count,
-                .hit_count = hit_count,
-            };
-        }
-
-        fn destroy(self: *ShaderStruct, vc: *const VulkanContext) void {
-            for (self.stages) |stage| {
-                vc.device.destroyShaderModule(stage.module, null);
-            }
-        }
-    };
+    return try vc.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = code.len,
+        .p_code = @ptrCast([*]const u32, code),
+    }, null);
 }
+
+const ShaderInfo = struct {
+    raygen_count: u32,
+    miss_count: u32,
+    hit_count: u32,
+
+    fn find(stages: []const vk.PipelineShaderStageCreateInfo) ShaderInfo {
+
+        var raygen_count: u32 = 0;
+        var miss_count: u32 = 0;
+        var hit_count: u32 = 0;
+
+        for (stages) |stage| {
+            if (stage.stage.contains(.{ .raygen_bit_khr = true })) {
+                raygen_count += 1;
+            } else if (stage.stage.contains(.{ .miss_bit_khr = true })) {
+                miss_count += 1;
+            } else if (stage.stage.contains(.{ .closest_hit_bit_khr = true })) {
+                hit_count += 1;
+            }
+        }
+
+        return ShaderInfo {
+            .raygen_count = raygen_count,
+            .miss_count = miss_count,
+            .hit_count = hit_count,
+        };
+    }
+};
 
 layout: vk.PipelineLayout,
 handle: vk.Pipeline,
@@ -101,10 +52,9 @@ sbt: ShaderBindingTable,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: []const vk.DescriptorSetLayout, comptime shader_info_create_info: []const ShaderInfoCreateInfo, push_constant_ranges: []const vk.PushConstantRange) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: []const vk.DescriptorSetLayout, stages: []const vk.PipelineShaderStageCreateInfo, groups: []const vk.RayTracingShaderGroupCreateInfoKHR, push_constant_ranges: []const vk.PushConstantRange) !Self {
 
-    var shader_info = try ShaderInfo(shader_info_create_info).create(vc);
-    defer shader_info.destroy(vc);
+    var shader_info = ShaderInfo.find(stages);
 
     const layout = try vc.device.createPipelineLayout(&.{
         .flags = .{},
@@ -118,10 +68,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var handle: vk.Pipeline = undefined;
     const createInfo = vk.RayTracingPipelineCreateInfoKHR {
         .flags = .{},
-        .stage_count = shader_info.stages.len,
-        .p_stages = &shader_info.stages,
-        .group_count = shader_info.groups.len,
-        .p_groups = &shader_info.groups,
+        .stage_count = @intCast(u32, stages.len),
+        .p_stages = stages.ptr,
+        .group_count = @intCast(u32, groups.len),
+        .p_groups = groups.ptr,
         .max_pipeline_ray_recursion_depth = 1,
         .p_library_info = null,
         .p_library_interface = null,

@@ -66,11 +66,25 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
 
     var camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]Pipeline.ShaderInfoCreateInfo {
-        .{ .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shader.rgen.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shader.rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shadow.rmiss.spv" },
-        .{ .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .filepath = "../../zig-cache/shaders/primary/shader.rchit.spv" },
+    const rgen_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rgen.spv");
+    defer context.device.destroyShaderModule(rgen_module, null);
+    const rmiss_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rmiss.spv");
+    defer context.device.destroyShaderModule(rmiss_module, null);
+    const shadow_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shadow.rmiss.spv");
+    defer context.device.destroyShaderModule(shadow_module, null);
+    const rchit_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rchit.spv");
+    defer context.device.destroyShaderModule(rchit_module, null);
+
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = rmiss_module, .p_name = "main", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shadow_module, .p_name = "main", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = rchit_module, .p_name = "main", .p_specialization_info = null, },
+    }, &[_]vk.RayTracingShaderGroupCreateInfoKHR {
+        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .general_khr, .general_shader = 2, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 3, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
     }, &[_]vk.PushConstantRange {
         .{
             .offset = 0,
