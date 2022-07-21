@@ -199,7 +199,7 @@ pub fn main() !void {
     }
     try engine.context.device.deviceWaitIdle();
 
-    std.log.info("Program completed!.", .{});
+    std.log.info("Program completed!", .{});
 }
 
 pub const Color = enum {

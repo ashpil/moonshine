@@ -1,17 +1,28 @@
-uint stepRNG(uint rngState) {
-    return rngState * 747796405 + 1;
+struct Rng {
+    uint state;
+};
+
+Rng InitRng(uint initialState) {
+    Rng rng;
+    rng.state = initialState;
+    return rng;
 }
 
-float stepAndOutputRNGFloat(inout uint rngState) {
-    rngState = stepRNG(rngState);
-    uint word = ((rngState >> ((rngState >> 28) + 4)) ^ rngState) * 277803737;
+void stepState(inout Rng rng) {
+    rng.state = rng.state * 747796405 + 1;
+}
+
+float getFloat(inout Rng rng) {
+    stepState(rng);
+
+    uint word = ((rng.state >> ((rng.state >> 28) + 4)) ^ rng.state) * 277803737;
     word = (word >> 22) ^ word;
     return float(word) / 4294967295.0;
 }
 
-vec3 randomDirection(inout uint rngState) {
-    const float theta = 2 * PI * stepAndOutputRNGFloat(rngState);
-    const float u = 2.0 * stepAndOutputRNGFloat(rngState) - 1.0;
+vec3 randomDirection(inout Rng rng) {
+    const float theta = 2 * PI * getFloat(rng);
+    const float u = 2.0 * getFloat(rng) - 1.0;
     const float r = sqrt(1.0 - u * u);
     return vec3(r * cos(theta), r * sin(theta), u);
 }
