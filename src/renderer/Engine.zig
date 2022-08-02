@@ -66,13 +66,13 @@ pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
 
     var camera = Camera.new(camera_create_info);
 
-    const rgen_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rgen.spv");
+    const rgen_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary_hlsl/shader.rgen.hlsl.spv");
     defer context.device.destroyShaderModule(rgen_module, null);
-    const rmiss_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rmiss.spv");
+    const rmiss_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary_hlsl/shader.rmiss.hlsl.spv");
     defer context.device.destroyShaderModule(rmiss_module, null);
-    const shadow_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shadow.rmiss.spv");
+    const shadow_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary_hlsl/shadow.rmiss.hlsl.spv");
     defer context.device.destroyShaderModule(shadow_module, null);
-    const rchit_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rchit.spv");
+    const rchit_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary_hlsl/shader.rchit.hlsl.spv");
     defer context.device.destroyShaderModule(rchit_module, null);
 
     const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {

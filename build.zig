@@ -47,7 +47,7 @@ pub fn build(b: *std.build.Builder) void {
 
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
-        "dxc",
+        "/home/andrei/Documents/Random/DirectXShaderCompiler/build/bin/dxc",
         "-T", "lib_6_7",
         "-spirv",
         "-fspv-target-env=vulkan1.2",
@@ -56,6 +56,10 @@ pub fn build(b: *std.build.Builder) void {
     const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
     exe.step.dependOn(&hlsl_comp.step);
     _ = hlsl_comp.add("shaders/misc/input.hlsl");
+    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rgen.hlsl");
+    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rchit.hlsl");
+    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rmiss.hlsl");
+    _ = hlsl_comp.add("shaders/primary_hlsl/shadow.rmiss.hlsl");
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());

@@ -56,9 +56,9 @@ mat3 createTBNMatrix(vec3 normal, vec3 edge0, vec3 edge1, vec2 t0, vec2 t1, vec2
 vec3 calculateNormal(Vertex v0, Vertex v1, Vertex v2, vec2 texcoords, uint textureIndex) {
     vec3 edge0 = v1.position - v0.position;
     vec3 edge1 = v2.position - v0.position;
-    vec3 positionNormalObjectSpace = normalize(cross(edge0, edge1));
+    vec3 vertexNormalObjectSpace = normalize(cross(edge0, edge1));
 
-    mat3 tangentToObjectMat = createTBNMatrix(positionNormalObjectSpace, edge0, edge1, v0.texcoord, v1.texcoord, v2.texcoord);
+    mat3 tangentToObjectMat = createTBNMatrix(vertexNormalObjectSpace, edge0, edge1, v0.texcoord, v1.texcoord, v2.texcoord);
     vec2 textureNormal = (texture(sampler2D(normalTextures[nonuniformEXT(textureIndex)], textureSampler), texcoords).rg * 2.0) - 1.0;
     vec3 normalTangentSpace = vec3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((gl_WorldToObject3x4EXT * tangentToObjectMat * normalTangentSpace).xyz);
@@ -76,9 +76,11 @@ vec2 calculateTexcoord(vec3 barycentrics, vec2 t0, vec2 t1, vec2 t2) {
 void main() {
     Mesh mesh = meshes[gl_InstanceCustomIndexEXT];
     uint materialIndex = instances[gl_InstanceID].materialIndex;
-    Vertices vertices = Vertices(mesh.vertexAddress);
+    
     Indices indices = Indices(mesh.indexAddress);
     ivec3 ind = indices.i[gl_PrimitiveID];
+    
+    Vertices vertices = Vertices(mesh.vertexAddress);
     Vertex v0 = vertices.v[ind.x];
     Vertex v1 = vertices.v[ind.y];
     Vertex v2 = vertices.v[ind.z];

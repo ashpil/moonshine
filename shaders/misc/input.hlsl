@@ -8,7 +8,7 @@ RWStructuredBuffer<ClickData> click_data : register(u0, space0);
 RaytracingAccelerationStructure TLAS : register(t0, space1);
 
 struct [raypayload] Payload {
-    [[vk::location(0)]] ClickData click_data : read(caller) : write(closesthit, miss);
+    ClickData click_data : read(caller) : write(closesthit, miss);
 };
 
 struct Camera {

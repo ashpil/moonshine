@@ -37,8 +37,8 @@ struct Ray {
     vec3 direction;
 };
 
-const uint SAMPLES_PER_FRAME = 2;
-const uint MAX_BOUNCES = 8;
+const uint SAMPLES_PER_FRAME = 1;
+const uint MAX_BOUNCES = 4;
 
 Ray generateDir(Camera camera, vec4 rand) {
     vec2 sampled_rand = squareToUniformDiskConcentric(rand.xy);
