@@ -3,7 +3,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 struct MaterialData {
-    float metallic;
+    float metalness;
     float ior;
 };
 
@@ -14,7 +14,7 @@ layout(binding = 4, set = 0) uniform texture2D roughnessTextures[];
 
 struct Material {
     vec3 color;        // color; each component is (0, 1)
-    float metallic;    // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
+    float metalness;    // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
     float roughness;   // roughness value; (0, 1) exclusive
     float ior;         // index of refraction; (0, ?) exclusive
 };
@@ -24,7 +24,7 @@ Material getMaterial(uint materialIndex, vec2 texcoords) {
     MaterialData materialData = materialDatas[materialIndex];
 
     Material material;
-    material.metallic = materialData.metallic;
+    material.metalness = materialData.metalness;
     material.ior = materialData.ior;
     material.color = texture(sampler2D(colorTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).rgb;
     material.roughness = texture(sampler2D(roughnessTextures[nonuniformEXT(materialIndex)], textureSampler), texcoords).r;
@@ -35,7 +35,7 @@ Material getMaterial(uint materialIndex, vec2 texcoords) {
 // schlick approximation
 vec3 F(vec3 w_i, vec3 m, Material material) {
     float R_0 = pow((1 - material.ior) / (1 + material.ior), 2);
-    vec3 mixed = mix(vec3(R_0), material.color, material.metallic);
+    vec3 mixed = mix(vec3(R_0), material.color, material.metalness);
     return mixed + (vec3(1.0) - mixed) * pow((1 - dot(w_i, m)), 5);
 }
 
@@ -138,21 +138,21 @@ float cookTorrancePDF(vec3 w_i, vec3 w_o, Material material) {
 }
 
 vec3 sample_f_r(vec3 w_o, Material material, inout float pdf, vec2 square) {
-    if (square.x < material.metallic) {
-        square.x /= material.metallic;
+    if (square.x < material.metalness) {
+        square.x /= material.metalness;
         vec3 w_i = sampleCookTorrance(w_o, material, pdf, square);
 
         float pdf2 = lambertPDF(w_i, w_o, material);
 
-        pdf = mix(pdf2, pdf, material.metallic);
+        pdf = mix(pdf2, pdf, material.metalness);
         return w_i;
     } else {
-        square.x = (1 / (1.0 - material.metallic)) * (square.x - material.metallic);
+        square.x = (1 / (1.0 - material.metalness)) * (square.x - material.metalness);
         vec3 w_i = sampleLambert(w_o, material, pdf, square);
 
         float pdf2 = cookTorrancePDF(w_i, w_o, material);
 
-        pdf = mix(pdf, pdf2, material.metallic);
+        pdf = mix(pdf, pdf2, material.metalness);
         return w_i;
     }
 }
@@ -161,11 +161,11 @@ float scatteringPDF(vec3 w_i, vec3 w_o, Material material) {
     float pdf1 = lambertPDF(w_i, w_o, material);
     float pdf2 = cookTorrancePDF(w_i, w_o, material);
 
-    return mix(pdf1, pdf2, material.metallic);
+    return mix(pdf1, pdf2, material.metalness);
 }
 
 vec3 f_r(vec3 w_i, vec3 w_o, Material material) {
     vec3 microfacet = cookTorrance(w_i, w_o, material);
     vec3 lambertian = lambert(w_i, w_o, material);
-    return ((1.0 - material.metallic) * lambertian) + (material.metallic * microfacet);
+    return ((1.0 - material.metalness) * lambertian) + (material.metalness * microfacet);
 }

@@ -1,5 +1,13 @@
 struct Frame {
     float3x3 toFrame;
+
+    float3 worldToFrame(float3 v) {
+        return mul(this.toFrame, v);
+    }
+
+    float3 frameToWorld(float3 v) {
+        return mul(transpose(this.toFrame), v);
+    }
 };
 
 // takes in a normalized vector, returns a frame where x,y,z are bitangent, tangent and normal respectively
@@ -19,14 +27,6 @@ Frame createFrame(float3 n) {
     Frame frame;
     frame.toFrame = toFrame;
     return frame;
-}
-
-float3 worldToFrame(Frame frame, float3 v) {
-    return mul(frame.toFrame, v);
-}
-
-float3 frameToWorld(Frame frame, float3 v) {
-    return mul(transpose(frame.toFrame), v);
 }
 
 float frameCosTheta(float3 v) {

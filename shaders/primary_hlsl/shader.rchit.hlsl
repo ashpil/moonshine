@@ -1,4 +1,4 @@
-#include "common.hlsl"
+#include "payload.hlsl"
 
 struct Mesh {
     uint64_t vertexAddress;

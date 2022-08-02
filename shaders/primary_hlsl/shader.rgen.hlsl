@@ -6,7 +6,8 @@ RaytracingAccelerationStructure TLAS : register(t0, space0);
 RWTexture2D<float4> displayImage : register(u0, space2);
 RWTexture2D<float4> accumulationImage : register(u1, space2);
 
-#include "common.hlsl"
+#include "math.hlsl"
+#include "payload.hlsl"
 #include "reflection_frame.hlsl"
 #include "random.hlsl"
 #include "microfacet.hlsl"
@@ -35,7 +36,7 @@ RayDesc generateDir(Camera camera, float4 rand) {
     float2 rd = camera.lens_radius * sampled_rand;
     float3 defocusOffset = camera.u * rd.x + camera.v * rd.y;
     
-    float2 randomCenter = float2(0.5, 0.5) + 0.5 * randomGaussian(rand.zw);
+    float2 randomCenter = float2(0.5, 0.5) + 0.5 * squareToGaussian(rand.zw);
     float2 uv = (float2(DispatchRaysIndex().xy) + randomCenter) / float2(DispatchRaysDimensions().xy);
     uv.y -= 1;
     uv.y *= -1;
@@ -64,25 +65,25 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             Material material = getMaterial(payload.materialIndex, payload.texcoord);
             
             Frame frame = createFrame(payload.normal);
-            float3 outgoing = worldToFrame(frame, -ray.Direction);
+            float3 outgoing = frame.worldToFrame(-ray.Direction);
             
-            float4 rand1 = float4(getFloat(rng), getFloat(rng), getFloat(rng), getFloat(rng));
+            float4 rand1 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
             float3 lightSample1 = estimateBackgroundDirect(frame, outgoing, material, rand1, payload);
-            float4 rand2 = float4(getFloat(rng), getFloat(rng), getFloat(rng), getFloat(rng));
+            float4 rand2 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
             float3 lightSample2 = estimateBackgroundDirect(frame, outgoing, material, rand2, payload);
             accumulatedColor += (throughput * (lightSample1 + lightSample2) / 2.0);
             
             // set up info for next bounce
             ray.Origin = payload.position;
             float pdf;
-            float u = getFloat(rng);
-            float v = getFloat(rng);
-            float3 incoming = sample_f_r(outgoing, material, pdf, float2(u, v));
+            float u = rng.getFloat();
+            float v = rng.getFloat();
+            float3 incoming = material.sample(outgoing, pdf, float2(u, v));
             if (!sameHemisphere(outgoing, incoming)) {
                 break;
             }
-            ray.Direction = frameToWorld(frame, incoming);
-            throughput *= f_r(incoming, outgoing, material) * abs(frameCosTheta(incoming)) / pdf;
+            ray.Direction = frame.frameToWorld(incoming);
+            throughput *= material.f_r(incoming, outgoing) * abs(frameCosTheta(incoming)) / pdf;
         } else {
             // no hit, we're done
             if (bounceCount == 0) {
@@ -117,7 +118,7 @@ void main() {
 
     for (uint sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
         // set up initial directions for first bounce
-        float4 rand = float4(getFloat(rng), getFloat(rng), getFloat(rng), getFloat(rng));
+        float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
         RayDesc initialRay = generateDir(pushConsts.camera, rand);
 
         color += pathTrace(rng, initialRay);

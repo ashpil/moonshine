@@ -1,4 +1,4 @@
-#include "common.hlsl"
+#include "payload.hlsl"
 
 [shader("miss")]
 void main(inout Payload payload) {

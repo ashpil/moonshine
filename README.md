@@ -3,6 +3,7 @@
 ### Build dependencies:
 * Zig
 * glslc on your path
+* dxc on your path
 
 ### Possible optimizations
 * Better memory/buffers
@@ -12,13 +13,11 @@
 * Orthographic projection might look visually interesting in this context 
 
 ### // TODO
-* Full HLSL conversion
-* Proper support for shaders with multiple entry points
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - imports, file loading, etc
 * Differentiate game and render logic better
 * Swap off of GLFW or use better Zig GLFW wrapper
-* Update GLFW after [this](https://github.com/glfw/glfw/issues/2044) is fixed.
+* **Add UI**
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)

@@ -1,6 +1,3 @@
-static const float PI = 3.14159265;
-static const float EPSILON = 0.000000119;
-
 struct [raypayload] Payload {
     bool done : read(caller) : write(closesthit, miss);
 

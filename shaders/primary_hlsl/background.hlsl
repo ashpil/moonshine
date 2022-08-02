@@ -140,11 +140,11 @@ float3 estimateBackgroundDirect(Frame frame, float3 outgoing, Material material,
         TraceRay(TLAS, shadowTraceFlags, 0xFF, 0, 0, 1, ray, shadowPayload);
     }
     if (!shadowPayload.inShadow) {
-        float3 frameSunDir = worldToFrame(frame, dir);
-        scatteringPdf = scatteringPDF(frameSunDir, outgoing, material);
+        float3 frameSunDir = frame.worldToFrame(dir);
+        scatteringPdf = material.pdf(frameSunDir, outgoing);
         if (scatteringPdf > 0) {
-            float3 frameSunDir = worldToFrame(frame, dir);
-            float3 brdf = f_r(frameSunDir, outgoing, material);
+            float3 frameSunDir = frame.worldToFrame(dir);
+            float3 brdf = material.f_r(frameSunDir, outgoing);
             float3 li = backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
             float weight = powerHeuristic(1, lightPdf, 1, scatteringPdf);
             directLighting += li * brdf * abs(frameCosTheta(frameSunDir)) * weight / lightPdf;
@@ -152,9 +152,9 @@ float3 estimateBackgroundDirect(Frame frame, float3 outgoing, Material material,
     }
 
     // sample material
-    dir = sample_f_r(outgoing, material, scatteringPdf, rand.zw);
+    dir = material.sample(outgoing, scatteringPdf, rand.zw);
     shadowPayload.inShadow = true;
-    float3 dir_world = frameToWorld(frame, dir);
+    float3 dir_world = frame.frameToWorld(dir);
     if (dot(payload.normal, dir_world) > 0.0) { 
         RayDesc ray;
         ray.Origin = payload.position;
@@ -167,7 +167,7 @@ float3 estimateBackgroundDirect(Frame frame, float3 outgoing, Material material,
         lightPdf = backgroundPDF(dir_world);
         float weight = powerHeuristic(1, scatteringPdf, 1, lightPdf);
         float3 li = min(getBackgroundColor(dir_world), 1.0);
-        float3 brdf = f_r(dir, outgoing, material);
+        float3 brdf = material.f_r(dir, outgoing);
         directLighting += li * brdf * weight * abs(frameCosTheta(dir)) / scatteringPdf;
     }
 

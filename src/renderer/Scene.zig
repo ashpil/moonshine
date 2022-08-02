@@ -23,12 +23,12 @@ pub const Material = struct {
     roughness: Images.TextureSource,
     normal: Images.TextureSource,
 
-    metallic: f32,
+    metalness: f32,
     ior: f32,
 };
 
 pub const GpuMaterial = packed struct {
-    metallic: f32,
+    metalness: f32,
     ior: f32,
 };
 
@@ -70,7 +70,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         normal_sources[i] = set.normal;
 
         gpu_materials[i].ior = set.ior;
-        gpu_materials[i].metallic = set.metallic;
+        gpu_materials[i].metalness = set.metalness;
     };
 
     const color_textures = try Images.createTexture(vc, vk_allocator, allocator, &color_sources, commands);
