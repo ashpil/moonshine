@@ -2,7 +2,6 @@
 
 ### Build dependencies:
 * Zig
-* glslc on your path
 * dxc on your path
 
 ### Possible optimizations

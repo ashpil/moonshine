@@ -26,28 +26,10 @@ pub fn build(b: *std.build.Builder) void {
     const glfw = createGlfwLib(b, glfw_dir, target, mode, exe) catch unreachable;
     exe.linkLibrary(glfw);
     exe.addIncludeDir(glfw_dir ++ "include");
-    
-    // glsl
-    const shader_cmd = [_][]const u8 {
-        "glslc",
-        "--target-env=vulkan1.2",
-        if (mode == .Debug) "-g" else "-O",
-    };
-    const shader_comp = vkgen.ShaderCompileStep.init(b, &shader_cmd, "");
-    exe.step.dependOn(&shader_comp.step);
-
-    _ = shader_comp.add("shaders/primary/shader.rgen");
-    _ = shader_comp.add("shaders/primary/shader.rchit");
-    _ = shader_comp.add("shaders/primary/shader.rmiss");
-    _ = shader_comp.add("shaders/primary/shadow.rmiss");
-
-    _ = shader_comp.add("shaders/misc/input.rgen");
-    _ = shader_comp.add("shaders/misc/input.rchit");
-    _ = shader_comp.add("shaders/misc/input.rmiss");
 
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
-        "/home/andrei/Documents/Random/DirectXShaderCompiler/build/bin/dxc",
+        "dxc",
         "-T", "lib_6_7",
         "-spirv",
         "-fspv-target-env=vulkan1.2",
@@ -56,10 +38,10 @@ pub fn build(b: *std.build.Builder) void {
     const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
     exe.step.dependOn(&hlsl_comp.step);
     _ = hlsl_comp.add("shaders/misc/input.hlsl");
-    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rgen.hlsl");
-    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rchit.hlsl");
-    _ = hlsl_comp.add("shaders/primary_hlsl/shader.rmiss.hlsl");
-    _ = hlsl_comp.add("shaders/primary_hlsl/shadow.rmiss.hlsl");
+    _ = hlsl_comp.add("shaders/primary/shader.rgen.hlsl");
+    _ = hlsl_comp.add("shaders/primary/shader.rchit.hlsl");
+    _ = hlsl_comp.add("shaders/primary/shader.rmiss.hlsl");
+    _ = hlsl_comp.add("shaders/primary/shadow.rmiss.hlsl");
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
