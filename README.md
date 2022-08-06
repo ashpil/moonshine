@@ -13,11 +13,15 @@
 
 ### // TODO
 * Make sure we have all necessary `errdefer`s
-* Proper asset system - imports, file loading, etc
+* Proper asset system - load scene from file rather than hardcoded
 * Differentiate game and render logic better
 * Swap off of GLFW or use better Zig GLFW wrapper
 * **Add UI**
-
+  * Q: Render inside UI or have UI as seperate console?
+  * What does UI do?
+    * Set scene
+    * Set background
+    * Set sample rate
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
