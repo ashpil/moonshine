@@ -18,10 +18,15 @@
 * Swap off of GLFW or use better Zig GLFW wrapper
 * **Add UI**
   * Q: Render inside UI or have UI as seperate console?
-  * What does UI do?
+  * What does UI set?
     * Set scene
     * Set background
     * Set sample rate
+    * Set camera settings (ortho vs persp)
+  * What does UI Display?
+    * Perf stuff
+    * Current camera settings
+    * Current scene info
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
