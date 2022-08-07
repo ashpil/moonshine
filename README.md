@@ -15,18 +15,26 @@
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - load scene from file rather than hardcoded
 * Differentiate game and render logic better
-* Swap off of GLFW or use better Zig GLFW wrapper
-* **Add UI**
-  * Q: Render inside UI or have UI as seperate console?
-  * What does UI set?
-    * Set scene
-    * Set background
-    * Set sample rate
-    * Set camera settings (ortho vs persp)
-  * What does UI Display?
+* Swap off of GLFW?
+* Add dev interface:
+  * UI vs CLI?
+    * UI prettier, better for demos
+    * UI better learning curve 
+    * CLI easier to get set up
+    * Probably do CLI first then UI after if still want
+  * Set:
+    * Scene
+    * Background
+    * Samples per pixel, light samples, etc
+    * Camera settings (ortho vs persp)
+    * Max samples
+  * Display:
     * Perf stuff
     * Current camera settings
     * Current scene info
+  * Commands:
+    * Refresh frame count
+
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
