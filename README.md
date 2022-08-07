@@ -34,6 +34,7 @@
     * Current scene info
   * Commands:
     * Refresh frame count
+* Decouple game and engine better
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
