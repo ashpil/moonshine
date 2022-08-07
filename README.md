@@ -14,7 +14,6 @@
 ### // TODO
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - load scene from file rather than hardcoded
-* Differentiate game and render logic better
 * Swap off of GLFW?
 * Add dev interface:
   * UI vs CLI?
@@ -34,7 +33,7 @@
     * Current scene info
   * Commands:
     * Refresh frame count
-* Decouple game and engine better
+* Decouple game itself and engine
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
