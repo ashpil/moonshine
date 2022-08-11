@@ -329,14 +329,15 @@ const PhysicalDevice = struct {
         defer allocator.free(families);
         instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, families.ptr);
 
-        var ideal_family: ?u32 = null;
+        var picked_family: ?u32 = null;
         for (families) |family, i| {
             const index = @intCast(u32, i);
-            if (family.queue_flags.compute_bit and (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE) ideal_family = index;
-            if (!family.queue_flags.graphics_bit) break;
+            if (family.queue_flags.compute_bit and
+                family.queue_flags.graphics_bit and
+                (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE) picked_family = index;
         }
 
-        if (ideal_family) |index| {
+        if (picked_family) |index| {
             return index;
         } else return VulkanContextError.UnavailableQueues;
     }
