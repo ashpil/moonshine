@@ -130,7 +130,7 @@ fn genWaylandHeaders(b: *std.build.Builder, exe: *std.build.LibExeObjStep) !void
 // adapted from mach glfw
 fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe: *std.build.LibExeObjStep) !*std.build.LibExeObjStep {
     const maybe_lws = b.option([]const u8, "target-lws", "Target linux window system to use, omit to build all.\n                               Ignored for Windows builds. (options: X11, Wayland)");
-    var lws: Lws = undefined;
+    var lws: Lws = .all;
     if (maybe_lws) |str_lws| {
         if (std.mem.eql(u8, str_lws, "Wayland")) {
             try genWaylandHeaders(b, exe);
@@ -138,11 +138,10 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
         } else if (std.mem.eql(u8, str_lws, "X11")) {
             lws = .x11;
         } else {
-            return error.unsupportedLinuxWindowSystem;
+            return error.UnsupportedLinuxWindowSystem;
         }
-    } else {
+    } else if (target.isLinux()) {
         try genWaylandHeaders(b, exe);
-        lws = .all;
     }
 
     const lib = b.addStaticLibrary("glfw", null);
@@ -270,7 +269,7 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
             }
         }
     } else {
-        try flags.append("-GLFW_WIN32");
+        try flags.append("-D_GLFW_WIN32");
     }
 
     lib.addCSourceFiles(sources.items, flags.items);
