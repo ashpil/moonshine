@@ -49,10 +49,10 @@ fn beginOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
 fn endOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.endCommandBuffer(self.buffer);
 
-    const submit_info = vk.SubmitInfo2KHR {
+    const submit_info = vk.SubmitInfo2 {
         .flags = .{},
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
+        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.buffer,
             .device_mask = 0,
         }),
@@ -62,7 +62,7 @@ fn endOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
         .p_signal_semaphore_infos = undefined,
     };
 
-    try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
+    try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
     try vc.device.queueWaitIdle(vc.queue);
     try vc.device.resetCommandPool(self.pool, .{});
 }
@@ -103,7 +103,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
 
     vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
 
-    const barriers = [_]vk.MemoryBarrier2KHR {
+    const barriers = [_]vk.MemoryBarrier2 {
         .{
             .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
@@ -111,7 +111,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
             .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
         }
     };
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
         .dependency_flags = .{},
         .memory_barrier_count = barriers.len,
         .p_memory_barriers = &barriers,
@@ -159,7 +159,7 @@ pub fn copyBufferToImage(self: *Self, vc: *const VulkanContext, src: vk.Buffer, 
 pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, images: []vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
     try self.beginOneTimeCommands(vc);
 
-    const barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, images.len);
+    const barriers = try allocator.alloc(vk.ImageMemoryBarrier2, images.len);
     defer allocator.free(barriers);
     
     for (images) |image, i| {
@@ -183,7 +183,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
         };
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,
@@ -207,10 +207,10 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
 
     const len = @intCast(u32, dst_images.len);
 
-    const first_barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, len);
+    const first_barriers = try allocator.alloc(vk.ImageMemoryBarrier2, len);
     defer allocator.free(first_barriers);
 
-    const second_barriers = try allocator.alloc(vk.ImageMemoryBarrier2KHR, len);
+    const second_barriers = try allocator.alloc(vk.ImageMemoryBarrier2, len);
     defer allocator.free(second_barriers);
 
     const staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), len);
@@ -224,8 +224,8 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         first_barriers[i] = .{
             .src_stage_mask = .{},
             .src_access_mask = .{},
-            .dst_stage_mask = .{ .copy_bit_khr = true },
-            .dst_access_mask = .{ .transfer_write_bit_khr = true },
+            .dst_stage_mask = .{ .copy_bit = true },
+            .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .@"undefined",
             .new_layout = .transfer_dst_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -241,8 +241,8 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         };
 
         second_barriers[i] = .{
-            .src_stage_mask = .{ .copy_bit_khr = true },
-            .src_access_mask = .{ .transfer_write_bit_khr = true },
+            .src_stage_mask = .{ .copy_bit = true },
+            .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{},
             .dst_access_mask = .{},
             .old_layout = .transfer_dst_optimal,
@@ -263,7 +263,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         std.mem.copy(u8, staging_buffers[i].data, src_datas[i]);
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,
@@ -298,7 +298,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i].handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
     }
 
-    vc.device.cmdPipelineBarrier2KHR(self.buffer, &vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,

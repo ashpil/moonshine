@@ -186,15 +186,15 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .p_inheritance_info = null,
             });
 
-            if (debug_mode) vc.device.cmdWriteTimestamp2KHR(frame.command_buffer, .{ .top_of_pipe_bit_khr = true }, frame.query_pool, 0);
+            if (debug_mode) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .top_of_pipe_bit = true }, frame.query_pool, 0);
 
             // transition swapchain to format we can use
-            const swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+            const swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
                 .{
                     .src_stage_mask = .{},
                     .src_access_mask = .{},
-                    .dst_stage_mask = .{ .blit_bit_khr = true, },
-                    .dst_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .dst_stage_mask = .{ .blit_bit = true, },
+                    .dst_access_mask = .{ .transfer_write_bit = true, },
                     .old_layout = .@"undefined",
                     .new_layout = .transfer_dst_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -212,7 +212,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .src_stage_mask = .{},
                     .src_access_mask = .{},
                     .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
-                    .dst_access_mask = .{ .shader_storage_write_bit_khr = true, },
+                    .dst_access_mask = .{ .shader_storage_write_bit = true, },
                     .old_layout = .@"undefined",
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -227,7 +227,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 },
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2(frame.command_buffer, &vk.DependencyInfo {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -279,12 +279,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
             const frame = self.frames[self.frame_index];
 
             // transition storage image to one we can blit from
-            const image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+            const image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
                 .{
                     .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
-                    .src_access_mask = .{ .shader_storage_write_bit_khr = true, },
-                    .dst_stage_mask = .{ .blit_bit_khr = true, },
-                    .dst_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .src_access_mask = .{ .shader_storage_write_bit = true, },
+                    .dst_stage_mask = .{ .blit_bit = true, },
+                    .dst_access_mask = .{ .transfer_write_bit = true, },
                     .old_layout = .general,
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -299,7 +299,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 }
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2(frame.command_buffer, &vk.DependencyInfo {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -347,10 +347,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
             vc.device.cmdBlitImage(frame.command_buffer, self.display_image.data.items(.image)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
-            const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2KHR {
+            const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
                 .{
-                    .src_stage_mask = .{ .blit_bit_khr = true, },
-                    .src_access_mask = .{ .transfer_write_bit_khr = true, },
+                    .src_stage_mask = .{ .blit_bit = true, },
+                    .src_access_mask = .{ .transfer_write_bit = true, },
                     .dst_stage_mask = .{},
                     .dst_access_mask = .{},
                     .old_layout = .transfer_dst_optimal,
@@ -367,7 +367,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 }
             };
-            vc.device.cmdPipelineBarrier2KHR(frame.command_buffer, &vk.DependencyInfoKHR {
+            vc.device.cmdPipelineBarrier2(frame.command_buffer, &vk.DependencyInfo {
                 .dependency_flags = .{},
                 .memory_barrier_count = 0,
                 .p_memory_barriers = undefined,
@@ -377,21 +377,21 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .p_image_memory_barriers = &return_swap_image_memory_barriers,
             });
 
-            if (debug_mode) vc.device.cmdWriteTimestamp2KHR(frame.command_buffer, .{ .bottom_of_pipe_bit_khr = true }, frame.query_pool, 1);
+            if (debug_mode) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
-            try vc.device.queueSubmit2KHR(vc.queue, 1, &[_]vk.SubmitInfo2KHR { .{
+            try vc.device.queueSubmit2(vc.queue, 1, &[_]vk.SubmitInfo2 { .{
                 .flags = .{},
                 .wait_semaphore_info_count = 1,
                 .p_wait_semaphore_infos = @ptrCast([*]const vk.SemaphoreSubmitInfoKHR, &vk.SemaphoreSubmitInfoKHR{
                     .semaphore = frame.image_acquired,
                     .value = 0,
-                    .stage_mask = .{ .color_attachment_output_bit_khr = true },
+                    .stage_mask = .{ .color_attachment_output_bit = true },
                     .device_index = 0,
                 }),
                 .command_buffer_info_count = 1,
-                .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfoKHR, &vk.CommandBufferSubmitInfoKHR {
+                .p_command_buffer_infos = @ptrCast([*]const vk.CommandBufferSubmitInfo, &vk.CommandBufferSubmitInfo {
                     .command_buffer = frame.command_buffer,
                     .device_mask = 0,
                 }),
@@ -399,7 +399,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .p_signal_semaphore_infos = @ptrCast([*]const vk.SemaphoreSubmitInfoKHR, &vk.SemaphoreSubmitInfoKHR {
                     .semaphore = frame.command_completed,
                     .value = 0,
-                    .stage_mask =  .{ .color_attachment_output_bit_khr = true },
+                    .stage_mask =  .{ .color_attachment_output_bit = true },
                     .device_index = 0,
                 }),
             }}, frame.fence);

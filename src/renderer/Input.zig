@@ -126,10 +126,10 @@ pub fn getClick(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2,
     // end
     try vc.device.endCommandBuffer(self.command_buffer);
 
-    const submit_info = vk.SubmitInfo2KHR {
+    const submit_info = vk.SubmitInfo2 {
         .flags = .{},
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfoKHR {
+        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.command_buffer,
             .device_mask = 0,
         }),
@@ -139,7 +139,7 @@ pub fn getClick(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2,
         .p_signal_semaphore_infos = undefined,
     };
 
-    try vc.device.queueSubmit2KHR(vc.queue, 1, utils.toPointerType(&submit_info), self.ready_fence);
+    try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), self.ready_fence);
     _ = try vc.device.waitForFences(1, utils.toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
     try vc.device.resetFences(1, utils.toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});

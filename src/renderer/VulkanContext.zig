@@ -58,7 +58,7 @@ const Base = struct {
             .application_version = 0,
             .p_engine_name = "engine? i barely know 'in",
             .engine_version = 0,
-            .api_version = vk.API_VERSION_1_2,
+            .api_version = vk.API_VERSION_1_3,
         };
 
         return try self.dispatch.createInstance(
@@ -193,14 +193,14 @@ const device_commands = vk.DeviceCommandFlags {
     .bindImageMemory = true,
     .getRayTracingShaderGroupHandlesKHR = true,
     .cmdTraceRaysKHR = true,
-    .cmdPipelineBarrier2KHR = true,
+    .cmdPipelineBarrier2 = true,
     .cmdBlitImage = true,
     .deviceWaitIdle = true,
     .createFence = true,
     .destroyFence = true,
     .waitForFences = true,
     .resetFences = true,
-    .queueSubmit2KHR = true,
+    .queueSubmit2 = true,
     .acquireNextImage2KHR = true,
     .cmdPushConstants = true,
     .cmdCopyBufferToImage = true,
@@ -218,7 +218,7 @@ const device_commands = vk.DeviceCommandFlags {
 
 const debug_device_commands = vk.DeviceCommandFlags {
     .setDebugUtilsObjectNameEXT = true,
-    .cmdWriteTimestamp2KHR = true,
+    .cmdWriteTimestamp2 = true,
 };
 
 const Device = vk.DeviceWrapper(if (validate) debug_device_commands.merge(device_commands) else device_commands);

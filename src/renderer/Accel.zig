@@ -270,18 +270,18 @@ pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) void {
 pub fn recordInstanceUpdate(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_index: u32, new_value: u32) void {
     vc.device.cmdUpdateBuffer(command_buffer, self.instance_buffer.handle, @sizeOf(u32) * instance_index, @sizeOf(u32), &new_value);
 
-    const barrier = vk.BufferMemoryBarrier2KHR {
-        .src_stage_mask = .{ .copy_bit_khr = true },
-        .src_access_mask = .{ .transfer_write_bit_khr = true },
+    const barrier = vk.BufferMemoryBarrier2 {
+        .src_stage_mask = .{ .copy_bit = true },
+        .src_access_mask = .{ .transfer_write_bit = true },
         .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-        .dst_access_mask = .{ .shader_storage_read_bit_khr = true },
+        .dst_access_mask = .{ .shader_storage_read_bit = true },
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .buffer = self.instance_buffer.handle,
         .offset = @sizeOf(u32) * instance_index,
         .size = @sizeOf(u32),
     };
-    vc.device.cmdPipelineBarrier2KHR(command_buffer, &vk.DependencyInfoKHR {
+    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
         .dependency_flags = .{},
         .memory_barrier_count = 0,
         .p_memory_barriers = undefined,
@@ -332,7 +332,7 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
 
         vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
 
-        const barriers = [_]vk.MemoryBarrier2KHR {
+        const barriers = [_]vk.MemoryBarrier2 {
             .{
                 .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
                 .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
@@ -340,7 +340,7 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
                 .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
             }
         };
-        vc.device.cmdPipelineBarrier2KHR(command_buffer, &vk.DependencyInfoKHR {
+        vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
             .dependency_flags = .{},
             .memory_barrier_count = barriers.len,
             .p_memory_barriers = &barriers,
