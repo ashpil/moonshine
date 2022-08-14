@@ -1,15 +1,14 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./VulkanContext.zig");
-const VkAllocator = @import("./Allocator.zig");
-const Pipeline = @import("./Pipeline.zig");
-const InputDescriptorLayout = @import("./descriptor.zig").InputDescriptorLayout;
-const Commands = @import("./Commands.zig");
-const Camera = @import("./Camera.zig");
-const zug = @import("../utils/zug.zig");
-const F32x2 = zug.Vec2(f32);
-const utils = @import("./utils.zig");
+const VulkanContext = @import("./rendersystem/VulkanContext.zig");
+const VkAllocator = @import("./rendersystem/Allocator.zig");
+const Pipeline = @import("./rendersystem/Pipeline.zig");
+const InputDescriptorLayout = @import("./rendersystem/descriptor.zig").InputDescriptorLayout;
+const Commands = @import("./rendersystem/Commands.zig");
+const Camera = @import("./rendersystem/Camera.zig");
+const F32x2 = @import("./vector.zig").Vec2(f32);
+const utils = @import("./rendersystem/utils.zig");
 
 const Self = @This();
 

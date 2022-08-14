@@ -2,7 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const MeshData = @import("../utils/Object.zig");
+const MeshData = @import("../Object.zig");
 const Images = @import("./Images.zig");
 
 const Commands = @import("./Commands.zig");
@@ -16,7 +16,7 @@ const Meshes = @import("./Meshes.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
 
-const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);
+const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
 pub const Material = struct {
     color: Images.TextureSource,
@@ -37,6 +37,8 @@ pub const InstanceMeshInfo = Accel.MeshInfo;
 
 background: Background,
 
+// TODO: should be some sort of one texture array with indices or something?
+// handle to ImageManager or something instead
 color_textures: Images,
 roughness_textures: Images,
 normal_textures: Images,

@@ -2,17 +2,15 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const Window = @import("../utils/Window.zig");
+const Window = @import("../Window.zig");
 const Pipeline = @import("./Pipeline.zig");
 const descriptor = @import("./descriptor.zig");
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout(4);
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
-const utils = @import("./utils.zig");
 
-const F32x3 = @import("../utils/zug.zig").Vec3(f32);
-const Mat4 = @import("../utils/zug.zig").Mat4(f32);
+const F32x3 = @import("../vector.zig").Vec3(f32);
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");

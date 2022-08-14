@@ -1,3 +1,5 @@
+// Thin wrapper for GLFW atm
+
 const c = @import("./c.zig");
 const vk = @import("vulkan");
 const std = @import("std");

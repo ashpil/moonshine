@@ -1,17 +1,19 @@
 const std = @import("std");
 
-const Engine = @import("./renderer/Engine.zig");
-const Input = @import("./renderer/Input.zig");
-const ChessSet = @import("./logic/ChessSet.zig");
-const zug = @import("./utils/zug.zig");
-const F32x3 = zug.Vec3(f32);
-const F32x2 = zug.Vec2(f32);
-const Mat4 = zug.Mat4(f32);
-const Mat3x4 = zug.Mat3x4(f32);
-const Vec3 = zug.Vec3(f32);
-const Window = @import("./utils/Window.zig");
-const Camera = @import("./renderer/Camera.zig");
-const Coord = @import("./logic/coord.zig").Coord;
+const Engine = @import("engine").rendersystem.Engine;
+const ObjectPicker = @import("engine").ObjectPicker;
+const Window = @import("engine").Window;
+const Camera = @import("engine").rendersystem.Camera;
+
+const vector = @import("engine").vector;
+const F32x3 = vector.Vec3(f32);
+const F32x2 = vector.Vec2(f32);
+const Mat4 = vector.Mat4(f32);
+const Mat3x4 = vector.Mat3x4(f32);
+const Vec3 = vector.Vec3(f32);
+
+const ChessSet = @import("./ChessSet.zig");
+const Coord = @import("./coord.zig").Coord;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -120,13 +122,13 @@ pub fn main() !void {
     var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "../../assets/textures/skybox/", set_info, &engine.scene_descriptor_layout, &engine.background_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
-    var input = try Input.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
-    defer input.destroy(&engine.context);
+    var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
+    defer object_picker.destroy(&engine.context);
 
     var window_data = WindowData {
         .engine = &engine,
         .set = &set,
-        .input = &input,
+        .object_picker = &object_picker,
         .clicked = null,
     };
 
@@ -218,8 +220,8 @@ pub const Color = enum {
 const WindowData = struct {
     engine: *Engine,
     set: *ChessSet,
-    input: *Input,
-    clicked: ?Input.ClickData,
+    object_picker: *ObjectPicker,
+    clicked: ?ObjectPicker.ClickData,
 };
 
 fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action: Window.Action) void {
@@ -230,7 +232,7 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
         const pos = window.getCursorPos();
         const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.extent.width);
         const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.extent.height);
-        window_data.clicked = window_data.input.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
+        window_data.clicked = window_data.object_picker.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
     }
 }
 

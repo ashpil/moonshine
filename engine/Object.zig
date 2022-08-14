@@ -1,17 +1,20 @@
-const std = @import("std");
-const zug = @import("./zug.zig");
+// Stores vertex data, ready to be loaded into system
+// TODO: make this obsolete, load immediately from disk to GPU memory
 
-const u32x3 = zug.Vec3(u32);
-const f32x3 = zug.Vec3(f32);
-const f32x2 = zug.Vec2(f32);
+const std = @import("std");
+const vector = @import("./vector.zig");
+
+const U32x3 = vector.Vec3(u32);
+const F32x3 = vector.Vec3(f32);
+const F32x2 = vector.Vec2(f32);
 
 const Vertex = struct {
-    position: f32x3,
-    texture: f32x2,
+    position: F32x3,
+    texture: F32x2,
 };
 
 vertices: []Vertex,
-indices: []u32x3,
+indices: []U32x3,
 
 const Self = @This();
 
@@ -53,11 +56,11 @@ pub fn getObjSizes(contents: []const u8) Sizes {
 
 pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
     const sizes = getObjSizes(contents);
-    const positions = try allocator.alloc(f32x3, sizes.num_positions);
+    const positions = try allocator.alloc(F32x3, sizes.num_positions);
     defer allocator.free(positions);
-    const textures = try allocator.alloc(f32x2, sizes.num_textures);
+    const textures = try allocator.alloc(F32x2, sizes.num_textures);
     defer allocator.free(textures);
-    const indices = try allocator.alloc(u32x3, sizes.num_indices);
+    const indices = try allocator.alloc(U32x3, sizes.num_indices);
     var vertices = try allocator.alloc(Vertex, sizes.num_indices * 3);
 
     var lines = std.mem.tokenize(u8, contents, "\n");
@@ -80,7 +83,7 @@ pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
             },
             .index => {
                 var i: u32 = 0;
-                var index = u32x3.new(0, 0, 0);
+                var index = U32x3.new(0, 0, 0);
                 while (i < 3) : (i += 1) {
                     const index_str = iter.next() orelse return Error.MissingIndex;
                     var numbers = std.mem.tokenize(u8, index_str, "/");
@@ -153,23 +156,23 @@ fn categorizeLine(first_token: []const u8) LineType {
     }
 }
 
-fn textureFromIter(iter: *std.mem.TokenIterator(u8)) !f32x2 {
+fn textureFromIter(iter: *std.mem.TokenIterator(u8)) !F32x2 {
     const x = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingTexture;
     const y = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingTexture;
-    return f32x2.new(x, y);
+    return F32x2.new(x, y);
 }
 
-fn positionFromIter(iter: *std.mem.TokenIterator(u8)) !f32x3 {
+fn positionFromIter(iter: *std.mem.TokenIterator(u8)) !F32x3 {
     const x = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingPosition;
     const y = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingPosition;
     const z = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingPosition;
-    return f32x3.new(x, y, z);
+    return F32x3.new(x, y, z);
 }
 
-fn indexFromIter(iter: *std.mem.TokenIterator(u8)) !u32x3 {
+fn indexFromIter(iter: *std.mem.TokenIterator(u8)) !U32x3 {
     const x = if (iter.next()) |val| try std.fmt.parseInt(u32, val, 10) else return Error.MissingIndex;
     const y = if (iter.next()) |val| try std.fmt.parseInt(u32, val, 10) else return Error.MissingIndex;
     const z = if (iter.next()) |val| try std.fmt.parseInt(u32, val, 10) else return Error.MissingIndex;
-    return u32x3.new(x - 1, y - 1, z - 1);
+    return U32x3.new(x - 1, y - 1, z - 1);
 }
 

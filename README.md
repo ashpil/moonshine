@@ -15,6 +15,7 @@
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - load scene from file rather than hardcoded
 * Swap off of GLFW?
+* Offline image generator -- would be healthy two have two consumers of engine library code
 * Add dev interface:
   * UI vs CLI?
     * UI prettier, better for demos
@@ -33,7 +34,6 @@
     * Current scene info
   * Commands:
     * Refresh frame count
-* Decouple game itself and engine
 
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)

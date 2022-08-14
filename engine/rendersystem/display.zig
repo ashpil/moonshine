@@ -3,7 +3,7 @@ const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
-const Window = @import("../utils/Window.zig");
+const Window = @import("../Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Images = @import("./Images.zig");
 const Commands = @import("./Commands.zig");

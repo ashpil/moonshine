@@ -1,13 +1,9 @@
 const vk = @import("vulkan");
 const std = @import("std");
-const utils = @import("./utils.zig");
 const Commands = @import("./Commands.zig");
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
-const Object = @import("../utils/Object.zig");
-
-const f32x3 = @import("../utils/zug.zig").Vec3(f32);
-const u32x3 = @import("../utils/zug.zig").Vec3(u32);
+const Object = @import("../Object.zig");
 
 const MeshInfo = struct {
     vertex_address: vk.DeviceAddress,

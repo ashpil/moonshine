@@ -5,7 +5,7 @@ const utils = @import("./utils.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
-const F32x3 = @import("../utils/zug.zig").Vec3(f32);
+const F32x3 = @import("../vector.zig").Vec3(f32);
 const Commands = @import("./Commands.zig");
 
 // https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-reference

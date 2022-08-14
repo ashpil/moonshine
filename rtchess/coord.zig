@@ -1,10 +1,9 @@
-const zug = @import("../utils/zug.zig");
-const Mat3x4 = zug.Mat3x4(f32);
-const F32x3 = zug.Vec3(f32);
-const F32x2 = zug.Vec2(f32);
+const vector = @import("engine").vector;
+const Mat3x4 = vector.Mat3x4(f32);
+const F32x3 = vector.Vec3(f32);
+const F32x2 = vector.Vec2(f32);
 
-// this could theoretically be deduplicated but I think it provides the most
-// conceptually simple interface
+// TODO: make this struct with column/row
 pub const Coord = enum {
     a1,
     a2,

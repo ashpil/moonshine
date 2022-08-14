@@ -1,3 +1,5 @@
+// TODO: should this be replaced by/use @Vector?
+
 const math = @import("std").math;
 
 fn checkValidVecT(comptime T: type) void {

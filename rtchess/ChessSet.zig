@@ -1,15 +1,15 @@
 const std = @import("std");
 
-const VulkanContext = @import("../renderer/VulkanContext.zig");
-const VkAllocator = @import("../renderer/Allocator.zig");
-const Commands = @import("../renderer/Commands.zig");
-const Scene = @import("../renderer/Scene.zig");
-const descriptor = @import("../renderer/descriptor.zig");
+const VulkanContext = @import("engine").rendersystem.VulkanContext;
+const VkAllocator = @import("engine").rendersystem.Allocator;
+const Commands = @import("engine").rendersystem.Commands;
+const Scene = @import("engine").rendersystem.Scene;
+const descriptor = @import("engine").rendersystem.descriptor;
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const zug = @import("../utils/zug.zig");
-const Mat3x4 = zug.Mat3x4(f32);
-const Vec3 = zug.Vec3(f32);
+const vector = @import("engine").vector;
+const Mat3x4 = vector.Mat3x4(f32);
+const F32x3 = vector.Vec3(f32);
 const Coord = @import("./coord.zig").Coord;
 
 pub const Material = Scene.Material;
@@ -56,7 +56,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .material_index = 0,
     });
 
-    const black_rotation = Mat3x4.from_rotation(Vec3.new(0.0, 1.0, 0.0), std.math.pi);
+    const black_rotation = Mat3x4.from_rotation(F32x3.new(0.0, 1.0, 0.0), std.math.pi);
 
     // pawns
     instances.appendAssumeCapacity(.{

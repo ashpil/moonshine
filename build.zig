@@ -12,14 +12,23 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("chess_rtx", "src/main.zig");
+    const exe = b.addExecutable("rtchess", "rtchess/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
 
+
     // vulkan bindings
-    const gen = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig");
-    exe.addPackage(gen.package);
+    const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
+    exe.addPackage(vk);
+
+    // Link engine to exe
+    const engine = std.build.Pkg{
+        .name = "engine",
+        .source = .{ .path = "engine/engine.zig" },
+        .dependencies = &[_]std.build.Pkg{ vk },
+    };
+    exe.addPackage(engine);
 
     // glfw stuff
     const glfw_dir = "./deps/glfw/";

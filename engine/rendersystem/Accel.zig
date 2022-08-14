@@ -4,7 +4,7 @@ const Commands = @import("./Commands.zig");
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const utils = @import("./utils.zig");
-const Mat3x4 = @import("../utils/zug.zig").Mat3x4(f32);
+const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
 pub const Instances = std.MultiArrayList(struct {
     mesh_info: MeshInfo,
