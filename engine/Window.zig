@@ -16,7 +16,7 @@ pub const getInstanceProcAddress = c.glfwGetInstanceProcAddress;
 
 handle: *c.GLFWwindow,
 
-pub fn create(width: u32, height: u32) Error!Self {
+pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
     const Callback = struct {
         fn callback(code: c_int, message: [*c]const u8) callconv(.C) void {
             std.log.warn("glfw: {}: {s}", .{code, message});
@@ -28,7 +28,7 @@ pub fn create(width: u32, height: u32) Error!Self {
 
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
-    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), "Chess RTX", null, null) orelse {
+    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), app_name, null, null) orelse {
         c.glfwTerminate();
         return Error.WindowCreateFail;
     };

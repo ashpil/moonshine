@@ -31,11 +31,11 @@ pipeline: Pipeline,
 num_accumulted_frames: u32,
 allocator: VkAllocator,
 
-pub fn create(window: *const Window, allocator: std.mem.Allocator) !Self {
+pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:0]const u8) !Self {
 
     const initial_window_size = window.getExtent();
 
-    const context = try VulkanContext.create(allocator, window);
+    const context = try VulkanContext.create(allocator, window, app_name);
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
     var commands = try Commands.create(&context);

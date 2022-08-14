@@ -46,7 +46,7 @@ const Base = struct {
         }
     }
 
-    fn createInstance(self: Base, allocator: std.mem.Allocator, window: *const Window) !Instance {
+    fn createInstance(self: Base, allocator: std.mem.Allocator, window: *const Window, app_name: [*:0]const u8) !Instance {
         const required_extensions = if (validate) try getRequiredExtensions(allocator, window) else getRequiredExtensions(allocator, window);
         defer if (validate) allocator.free(required_extensions);
 
@@ -54,7 +54,7 @@ const Base = struct {
         if (!try self.instanceExtensionsAvailable(allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
 
         const app_info = .{
-            .p_application_name = "Chess RTX",
+            .p_application_name = app_name,
             .application_version = 0,
             .p_engine_name = "engine? i barely know 'in",
             .engine_version = 0,
@@ -267,10 +267,10 @@ queue: vk.Queue,
 
 const Self = @This();
 
-pub fn create(allocator: std.mem.Allocator, window: *const Window) !Self {
+pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:0]const u8) !Self {
     const base = try Base.new();
 
-    const instance = try base.createInstance(allocator, window);
+    const instance = try base.createInstance(allocator, window, app_name);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;

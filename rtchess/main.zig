@@ -75,10 +75,10 @@ pub fn main() !void {
         },
     };
 
-    const window = try Window.create(800, 600);
+    const window = try Window.create(800, 600, "rtchess");
     defer window.destroy();
 
-    var engine = try Engine.create(&window, allocator);
+    var engine = try Engine.create(allocator, &window, "rtchess");
     defer engine.destroy(allocator);
 
     const set_info = ChessSet.SetInfo {
