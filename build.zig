@@ -17,40 +17,53 @@ pub fn build(b: *std.build.Builder) void {
     exe.setBuildMode(mode);
     exe.install();
 
-
     // vulkan bindings
     const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
     exe.addPackage(vk);
 
     // Link engine to exe
-    const engine = std.build.Pkg{
-        .name = "engine",
-        .source = .{ .path = "engine/engine.zig" },
-        .dependencies = &[_]std.build.Pkg{ vk },
-    };
-    exe.addPackage(engine);
+    {
+        const build_options = b.addOptions();
+        build_options.addOption(bool, "vk_enable_validation", false);
+        build_options.addOption(bool, "vk_measure_perf", false);
 
-    // glfw stuff
-    const glfw_dir = "./deps/glfw/";
-    const glfw = createGlfwLib(b, glfw_dir, target, mode, exe) catch unreachable;
-    exe.linkLibrary(glfw);
-    exe.addIncludeDir(glfw_dir ++ "include");
+        const engine = std.build.Pkg{
+            .name = "engine",
+            .source = .{ .path = "engine/engine.zig" },
+            .dependencies = &[_]std.build.Pkg{
+                vk,
+                build_options.getPackage("build_options"),
+            },
+        };
+        exe.addPackage(engine);
+    }
 
-    // hlsl
-    const hlsl_shader_cmd = [_][]const u8 {
-        "dxc",
-        "-T", "lib_6_7",
-        "-spirv",
-        "-fspv-target-env=vulkan1.2",
-        "-fvk-use-scalar-layout",
-    };
-    const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
-    exe.step.dependOn(&hlsl_comp.step);
-    _ = hlsl_comp.add("shaders/misc/input.hlsl");
-    _ = hlsl_comp.add("shaders/primary/shader.rgen.hlsl");
-    _ = hlsl_comp.add("shaders/primary/shader.rchit.hlsl");
-    _ = hlsl_comp.add("shaders/primary/shader.rmiss.hlsl");
-    _ = hlsl_comp.add("shaders/primary/shadow.rmiss.hlsl");
+    // GLFW stuff
+    {
+        const glfw_dir = "./deps/glfw/";
+        const glfw = createGlfwLib(b, glfw_dir, target, mode, exe) catch unreachable;
+        exe.linkLibrary(glfw);
+        exe.addIncludeDir(glfw_dir ++ "include");
+    }
+
+    // HLSL compilation
+    {
+        const hlsl_shader_cmd = [_][]const u8 {
+            "dxc",
+            "-T", "lib_6_7",
+            "-spirv",
+            "-fspv-target-env=vulkan1.2",
+            "-fvk-use-scalar-layout",
+        };
+        const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
+        _ = hlsl_comp.add("shaders/misc/input.hlsl");
+        _ = hlsl_comp.add("shaders/primary/shader.rgen.hlsl");
+        _ = hlsl_comp.add("shaders/primary/shader.rchit.hlsl");
+        _ = hlsl_comp.add("shaders/primary/shader.rmiss.hlsl");
+        _ = hlsl_comp.add("shaders/primary/shadow.rmiss.hlsl");
+
+        exe.step.dependOn(&hlsl_comp.step);
+    }
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
@@ -322,7 +335,7 @@ pub const HlslCompileStep = struct {
     builder: *std.build.Builder,
 
     /// The command and optional arguments used to invoke the shader compiler.
-    glslc_cmd: []const []const u8,
+    cmd: []const []const u8,
 
     /// The directory within `zig-cache/` that the compiled shaders are placed in.
     output_dir: []const u8,
@@ -331,14 +344,14 @@ pub const HlslCompileStep = struct {
     shaders: std.ArrayList(Shader),
 
     /// Create a ShaderCompilerStep for `builder`. When this step is invoked by the build
-    /// system, `<glcl_cmd...> <shader_source> -o <dst_addr>` is invoked for each shader.
-    pub fn init(builder: *std.build.Builder, glslc_cmd: []const []const u8, output_dir: []const u8) *HlslCompileStep {
+    /// system, `<cmd...> <shader_source> -o <dst_addr>` is invoked for each shader.
+    pub fn init(builder: *std.build.Builder, cmd: []const []const u8, output_dir: []const u8) *HlslCompileStep {
         const self = builder.allocator.create(HlslCompileStep) catch unreachable;
         self.* = .{
             .step = std.build.Step.init(.custom, "shader-compile", builder.allocator, make),
             .builder = builder,
             .output_dir = output_dir,
-            .glslc_cmd = builder.dupeStrings(glslc_cmd),
+            .cmd = builder.dupeStrings(cmd),
             .shaders = std.ArrayList(Shader).init(builder.allocator),
         };
         return self;
@@ -365,8 +378,8 @@ pub const HlslCompileStep = struct {
         const self = @fieldParentPtr(HlslCompileStep, "step", step);
         const cwd = std.fs.cwd();
 
-        const cmd = try self.builder.allocator.alloc([]const u8, self.glslc_cmd.len + 3);
-        for (self.glslc_cmd) |part, i| {
+        const cmd = try self.builder.allocator.alloc([]const u8, self.cmd.len + 3);
+        for (self.cmd) |part, i| {
             cmd[i] = part;
         }
         cmd[cmd.len - 2] = "-Fo";
@@ -380,3 +393,4 @@ pub const HlslCompileStep = struct {
         }
     }
 };
+

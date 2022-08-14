@@ -11,7 +11,7 @@ const DescriptorLayout = @import("./descriptor.zig").DisplayDescriptorLayout;
 const DestructionQueue = @import("./DestructionQueue.zig");
 const utils = @import("./utils.zig");
 
-const debug_mode = @import("builtin").mode == std.builtin.Mode.Debug;
+const measure_perf = @import("build_options").vk_measure_perf;
 
 pub fn Display(comptime num_frames: comptime_int) type {
     return struct {
@@ -126,14 +126,13 @@ pub fn Display(comptime num_frames: comptime_int) type {
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
 
-            if (debug_mode) {
+            if (measure_perf) {
                 var timestamps: [2]u64 = undefined;
                 const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
                 const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * vc.physical_device.properties.limits.timestamp_period) / 1_000_000.0;
                 _ = result;
                 _ = time;
-                // this can be used to check frame time - no more sophisticated method as of yet than just uncommenting this line
-                // std.debug.print("{}: {d}\n", .{result, time});
+                std.debug.print("{}: {d}\n", .{result, time});
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
             }
 
@@ -186,7 +185,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .p_inheritance_info = null,
             });
 
-            if (debug_mode) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .top_of_pipe_bit = true }, frame.query_pool, 0);
+            if (measure_perf) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .top_of_pipe_bit = true }, frame.query_pool, 0);
 
             // transition swapchain to format we can use
             const swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
@@ -377,7 +376,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .p_image_memory_barriers = &return_swap_image_memory_barriers,
             });
 
-            if (debug_mode) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
+            if (measure_perf) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
@@ -425,7 +424,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             command_pool: vk.CommandPool,
             command_buffer: vk.CommandBuffer,
 
-            query_pool: if (debug_mode) vk.QueryPool else void,
+            query_pool: if (measure_perf) vk.QueryPool else void,
 
             needs_rebind: bool,
 
@@ -457,14 +456,14 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .command_buffer_count = 1,
                 }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-                const query_pool = if (debug_mode) try vc.device.createQueryPool(&.{
+                const query_pool = if (measure_perf) try vc.device.createQueryPool(&.{
                     .flags = .{},
                     .query_type = .timestamp,
                     .query_count = 2,
                     .pipeline_statistics = .{},
                 }, null) else undefined;
-                errdefer if (debug_mode) vc.device.destroyQueryPool(query_pool, null);
-                if (debug_mode) vc.device.resetQueryPool(query_pool, 0, 2);
+                errdefer if (measure_perf) vc.device.destroyQueryPool(query_pool, null);
+                if (measure_perf) vc.device.resetQueryPool(query_pool, 0, 2);
 
                 return Frame {
                     .image_acquired = image_acquired,
@@ -486,7 +485,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 vc.device.destroySemaphore(self.command_completed, null);
                 vc.device.destroyFence(self.fence, null);
                 vc.device.destroyCommandPool(self.command_pool, null);
-                if (debug_mode) vc.device.destroyQueryPool(self.query_pool, null);
+                if (measure_perf) vc.device.destroyQueryPool(self.query_pool, null);
             }
         };
     };

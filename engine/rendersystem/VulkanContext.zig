@@ -3,7 +3,8 @@ const std = @import("std");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
 const Window = @import("../Window.zig");
 
-const validate = @import("builtin").mode == std.builtin.Mode.Debug;
+const validate = @import("build_options").vk_enable_validation;
+const measure_perf = @import("build_options").vk_measure_perf;
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
@@ -132,12 +133,12 @@ const instance_cmds = vk.InstanceCommandFlags {
     .getPhysicalDeviceProperties2 = true,
 };
 
-const debug_instance_cmds = vk.InstanceCommandFlags {
+const validation_instance_cmds = vk.InstanceCommandFlags {
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
 };
 
-const Instance = vk.InstanceWrapper(if (validate) instance_cmds.merge(debug_instance_cmds) else instance_cmds);
+const Instance = vk.InstanceWrapper(if (validate) instance_cmds.merge(validation_instance_cmds) else instance_cmds);
 
 const device_commands = vk.DeviceCommandFlags {
     .getDeviceQueue = true,
@@ -216,12 +217,11 @@ const device_commands = vk.DeviceCommandFlags {
     .cmdUpdateBuffer = true,
 };
 
-const debug_device_commands = vk.DeviceCommandFlags {
-    .setDebugUtilsObjectNameEXT = true,
+const perf_device_commands = vk.DeviceCommandFlags {
     .cmdWriteTimestamp2 = true,
 };
 
-const Device = vk.DeviceWrapper(if (validate) debug_device_commands.merge(device_commands) else device_commands);
+const Device = vk.DeviceWrapper(if (measure_perf) perf_device_commands.merge(device_commands) else device_commands);
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,
