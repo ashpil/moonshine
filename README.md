@@ -4,7 +4,7 @@
 * `zig`
 * `dxc`
 * For Linux:
-    * For Wayland: `wayland-client` & `wayland-protocols`
+    * For Wayland: `wayland-client`, `wayland-protocols` and `wayland-scanner`
     * For X11: `X11`
 
 ### Possible optimizations
