@@ -27,7 +27,8 @@ pub fn build(b: *std.build.Builder) void {
 
         rtchess_exe.addPackage(vk);
         rtchess_exe.addPackage(engine);
-        rtchess_exe.linkLibrary(glfw);
+        rtchess_exe.linkLibrary(glfw.library);
+        rtchess_exe.addIncludePath(glfw.include_path);
 
         const run_chess = rtchess_exe.run();
         run_chess.step.dependOn(b.getInstallStep());
@@ -150,8 +151,13 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
 }
 
+const CLibrary = struct {
+    include_path: []const u8,
+    library: *std.build.LibExeObjStep,
+};
+
 // adapted from mach glfw
-fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode) !*std.build.LibExeObjStep {
+fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode) !CLibrary {
     const lib = b.addStaticLibrary("glfw", null);
     lib.setBuildMode(mode);
     lib.setTarget(target);
@@ -313,10 +319,10 @@ fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.
         lib.linkSystemLibrary("gdi32"); 
     }
 
-    // includes
-    lib.addIncludePath(dir ++ "include");
-
-    return lib;
+    return CLibrary {
+        .include_path = dir ++ "include",
+        .library = lib,
+    };
 }
 
 // adapted from vk-zig
