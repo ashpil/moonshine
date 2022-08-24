@@ -6,17 +6,6 @@ const utils = @import("./utils.zig");
 const vk = @import("vulkan");
 const std = @import("std");
 
-// helper, returns shader module given filename, embeds shader contents into binary
-pub fn makeEmbeddedShaderModule(vc: *const VulkanContext, comptime filepath: []const u8) !vk.ShaderModule {
-    const code = @embedFile(filepath);
-
-    return try vc.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = code.len,
-        .p_code = @ptrCast([*]const u32, code),
-    }, null);
-}
-
 const ShaderInfo = struct {
     raygen_count: u32,
     miss_count: u32,

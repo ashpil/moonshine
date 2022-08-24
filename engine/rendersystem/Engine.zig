@@ -1,5 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const shaders = @import("shaders");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../Window.zig");
@@ -64,13 +65,32 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
     var camera = Camera.new(camera_create_info);
 
-    const rgen_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rgen.hlsl.spv");
+    const rgen_module = try context.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = shaders.raygen.len,
+        .p_code = @ptrCast([*]const u32, shaders.raygen),
+    }, null);
     defer context.device.destroyShaderModule(rgen_module, null);
-    const rmiss_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rmiss.hlsl.spv");
+
+    const rmiss_module = try context.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = shaders.raymiss.len,
+        .p_code = @ptrCast([*]const u32, shaders.raymiss),
+    }, null);
     defer context.device.destroyShaderModule(rmiss_module, null);
-    const shadow_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shadow.rmiss.hlsl.spv");
-    defer context.device.destroyShaderModule(shadow_module, null);
-    const rchit_module = try Pipeline.makeEmbeddedShaderModule(&context, "../../zig-cache/shaders/primary/shader.rchit.hlsl.spv");
+
+    const rchit_module = try context.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = shaders.raymiss.len,
+        .p_code = @ptrCast([*]const u32, shaders.rayhit),
+    }, null);
+    defer context.device.destroyShaderModule(rchit_module, null);
+
+    const shadow_module = try context.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = shaders.shadowmiss.len,
+        .p_code = @ptrCast([*]const u32, shaders.shadowmiss),
+    }, null);
     defer context.device.destroyShaderModule(rchit_module, null);
 
     const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {

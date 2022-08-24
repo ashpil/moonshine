@@ -1,5 +1,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const shaders = @import("shaders");
 
 const VulkanContext = @import("./rendersystem/VulkanContext.zig");
 const VkAllocator = @import("./rendersystem/Allocator.zig");
@@ -50,7 +51,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
     }))[0];
 
-    const shader_module = try Pipeline.makeEmbeddedShaderModule(vc, "../../zig-cache/shaders/misc/input.hlsl.spv",);
+    const shader_module = try vc.device.createShaderModule(&.{
+        .flags = .{},
+        .code_size = shaders.input.len,
+        .p_code = @ptrCast([*]const u32, shaders.input),
+    }, null);
     defer vc.device.destroyShaderModule(shader_module, null);
 
     const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, &.{ descriptor_layout.handle, accel_layout }, &[_]vk.PipelineShaderStageCreateInfo {

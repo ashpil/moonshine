@@ -2,6 +2,7 @@ const std = @import("std");
 const vkgen = @import("./deps/vulkan-zig/generator/index.zig");
 
 pub fn build(b: *std.build.Builder) void {
+
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -12,67 +13,69 @@ pub fn build(b: *std.build.Builder) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("rtchess", "rtchess/main.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-    exe.install();
-
-    // vulkan bindings
+    // packages/libraries we'll need below
     const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
-    exe.addPackage(vk);
+    const glfw = makeGlfwLibrary(b, "./deps/glfw/", target, mode) catch unreachable;
+    const engine = makeEnginePackage(b, vk) catch unreachable;
 
-    // Link engine to exe
+    // chess exe
     {
-        const build_options = b.addOptions();
-        build_options.addOption(bool, "vk_enable_validation", false);
-        build_options.addOption(bool, "vk_measure_perf", false);
+        const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
+        rtchess_exe.setTarget(target);
+        rtchess_exe.setBuildMode(mode);
+        rtchess_exe.install();
 
-        const engine = std.build.Pkg{
-            .name = "engine",
-            .source = .{ .path = "engine/engine.zig" },
-            .dependencies = &[_]std.build.Pkg{
-                vk,
-                build_options.getPackage("build_options"),
-            },
-        };
-        exe.addPackage(engine);
+        rtchess_exe.addPackage(vk);
+        rtchess_exe.addPackage(engine);
+        rtchess_exe.linkLibrary(glfw);
+
+        const run_chess = rtchess_exe.run();
+        run_chess.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_chess.addArgs(args);
+        }
+
+        b.step("run-chess", "Run chess").dependOn(&run_chess.step);
     }
+}
 
-    // GLFW stuff
-    {
-        const glfw_dir = "./deps/glfw/";
-        const glfw = createGlfwLib(b, glfw_dir, target, mode, exe) catch unreachable;
-        exe.linkLibrary(glfw);
-        exe.addIncludeDir(glfw_dir ++ "include");
-    }
+fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg) !std.build.Pkg {
+    // hlsl
+    const hlsl_shader_cmd = [_][]const u8 {
+        "dxc",
+        "-T", "lib_6_7",
+        "-spirv",
+        "-fspv-target-env=vulkan1.2",
+        "-fvk-use-scalar-layout",
+    };
+    const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
+    hlsl_comp.add("input", "shaders/misc/input.hlsl");
+    hlsl_comp.add("raygen", "shaders/primary/shader.rgen.hlsl");
+    hlsl_comp.add("rayhit", "shaders/primary/shader.rchit.hlsl");
+    hlsl_comp.add("raymiss", "shaders/primary/shader.rmiss.hlsl");
+    hlsl_comp.add("shadowmiss", "shaders/primary/shadow.rmiss.hlsl");
 
-    // HLSL compilation
-    {
-        const hlsl_shader_cmd = [_][]const u8 {
-            "dxc",
-            "-T", "lib_6_7",
-            "-spirv",
-            "-fspv-target-env=vulkan1.2",
-            "-fvk-use-scalar-layout",
-        };
-        const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
-        _ = hlsl_comp.add("shaders/misc/input.hlsl");
-        _ = hlsl_comp.add("shaders/primary/shader.rgen.hlsl");
-        _ = hlsl_comp.add("shaders/primary/shader.rchit.hlsl");
-        _ = hlsl_comp.add("shaders/primary/shader.rmiss.hlsl");
-        _ = hlsl_comp.add("shaders/primary/shadow.rmiss.hlsl");
+    // actual engine
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "vk_enable_validation", false);
+    build_options.addOption(bool, "vk_measure_perf", false);
 
-        exe.step.dependOn(&hlsl_comp.step);
-    }
+    const deps_local = [_]std.build.Pkg {
+        vk,
+        build_options.getPackage("build_options"),
+        hlsl_comp.package,
+    };
 
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    const engine_deps = try b.allocator.create([deps_local.len]std.build.Pkg);
+    engine_deps.* = deps_local;
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    const engine = std.build.Pkg{
+        .name = "engine",
+        .source = .{ .path = "engine/engine.zig" },
+        .dependencies = engine_deps,
+    };
+
+    return engine;
 }
 
 const Lws = enum {
@@ -81,7 +84,7 @@ const Lws = enum {
     all,
 };
 
-fn genWaylandHeader(b: *std.build.Builder, exe: *std.build.LibExeObjStep, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
+fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
     const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
         protocol_path,
         xml,
@@ -105,12 +108,11 @@ fn genWaylandHeader(b: *std.build.Builder, exe: *std.build.LibExeObjStep, protoc
         "wayland-scanner", "client-header", xml_path, out_header,
     });
 
-    exe.step.dependOn(&source_cmd.step);
-    exe.step.dependOn(&header_cmd.step);
+    step.dependOn(&source_cmd.step);
+    step.dependOn(&header_cmd.step);
 }
 
-fn genWaylandHeaders(b: *std.build.Builder, exe: *std.build.LibExeObjStep) !void {
-
+fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
     const pkg_config_result = try std.ChildProcess.exec(.{
         .allocator = b.allocator,
         .argv =  &[_][]const u8 {
@@ -140,21 +142,25 @@ fn genWaylandHeaders(b: *std.build.Builder, exe: *std.build.LibExeObjStep) !void
       else => |e| return e,
     }
 
-    try genWaylandHeader(b, exe, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
-    try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
-    try genWaylandHeader(b, exe, protocol_path, header_path, "stable/viewporter/viewporter.xml", "viewporter");
-    try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/relative-pointer/relative-pointer-unstable-v1.xml", "relative-pointer-unstable-v1");
-    try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/pointer-constraints/pointer-constraints-unstable-v1.xml", "pointer-constraints-unstable-v1");
-    try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
+    try genWaylandHeader(b, step, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
+    try genWaylandHeader(b, step, protocol_path, header_path, "stable/viewporter/viewporter.xml", "viewporter");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/relative-pointer/relative-pointer-unstable-v1.xml", "relative-pointer-unstable-v1");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/pointer-constraints/pointer-constraints-unstable-v1.xml", "pointer-constraints-unstable-v1");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
 }
 
 // adapted from mach glfw
-fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode, exe: *std.build.LibExeObjStep) !*std.build.LibExeObjStep {
+fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode) !*std.build.LibExeObjStep {
+    const lib = b.addStaticLibrary("glfw", null);
+    lib.setBuildMode(mode);
+    lib.setTarget(target);
+
     const maybe_lws = b.option([]const u8, "target-lws", "Target linux window system to use, omit to build all.\n                               Ignored for Windows builds. (options: X11, Wayland)");
     var lws: Lws = .all;
     if (maybe_lws) |str_lws| {
         if (std.mem.eql(u8, str_lws, "Wayland")) {
-            try genWaylandHeaders(b, exe);
+            try genWaylandHeaders(b, &lib.step);
             lws = .wayland;
         } else if (std.mem.eql(u8, str_lws, "X11")) {
             lws = .x11;
@@ -162,12 +168,8 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
             return error.UnsupportedLinuxWindowSystem;
         }
     } else if (target.isLinux()) {
-        try genWaylandHeaders(b, exe);
+        try genWaylandHeaders(b, &lib.step);
     }
-
-    const lib = b.addStaticLibrary("glfw", null);
-    lib.setBuildMode(mode);
-    lib.setTarget(target);
 
     // collect source files
     var sources = std.ArrayList([]const u8).init(b.allocator);
@@ -311,35 +313,35 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
         lib.linkSystemLibrary("gdi32"); 
     }
 
+    // includes
+    lib.addIncludePath(dir ++ "include");
+
     return lib;
 }
 
 // adapted from vk-zig
 pub const HlslCompileStep = struct {
-    /// Structure representing a shader to be compiled.
     const Shader = struct {
-        /// The path to the shader, relative to the current build root.
         source_path: []const u8,
-
-        /// The full output path where the compiled shader binary is placed.
         full_out_path: []const u8,
     };
 
     step: std.build.Step,
     builder: *std.build.Builder,
-
-    /// The command and optional arguments used to invoke the shader compiler.
     cmd: []const []const u8,
-
-    /// The directory within `zig-cache/` that the compiled shaders are placed in.
     output_dir: []const u8,
-
-    /// List of shaders that are to be compiled.
     shaders: std.ArrayList(Shader),
+    file_text: std.ArrayList(u8),
+    package: std.build.Pkg,
+    output_file: std.build.GeneratedFile,
 
-    /// Create a ShaderCompilerStep for `builder`. When this step is invoked by the build
-    /// system, `<cmd...> <shader_source> -o <dst_addr>` is invoked for each shader.
     pub fn init(builder: *std.build.Builder, cmd: []const []const u8, output_dir: []const u8) *HlslCompileStep {
+        const full_out_path = std.fs.path.join(builder.allocator, &[_][]const u8{
+            builder.build_root,
+            builder.cache_root,
+            "shaders.zig",
+        }) catch unreachable;
+
         const self = builder.allocator.create(HlslCompileStep) catch unreachable;
         self.* = .{
             .step = std.build.Step.init(.custom, "shader-compile", builder.allocator, make),
@@ -347,15 +349,21 @@ pub const HlslCompileStep = struct {
             .output_dir = output_dir,
             .cmd = builder.dupeStrings(cmd),
             .shaders = std.ArrayList(Shader).init(builder.allocator),
+            .file_text = std.ArrayList(u8).init(builder.allocator),
+            .package = .{
+                .name = "shaders",
+                .source = .{ .generated = &self.output_file },
+                .dependencies = null,
+            },
+            .output_file = .{
+                .step = &self.step,
+                .path = full_out_path,
+            },
         };
         return self;
     }
 
-    /// Add a shader to be compiled. `src` is shader source path, relative to the project root.
-    /// Returns the full path where the compiled binary will be stored upon successful compilation.
-    /// This path can then be used to include the binary into an executable, for example by passing it
-    /// to @embedFile via an additional generated file.
-    pub fn add(self: *HlslCompileStep, src: []const u8) []const u8 {
+    pub fn add(self: *HlslCompileStep, import_name: []const u8, src: []const u8) void {
         const output_filename = std.fmt.allocPrint(self.builder.allocator, "{s}.spv", .{ src }) catch unreachable;
         const full_out_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{
             self.builder.build_root,
@@ -364,10 +372,10 @@ pub const HlslCompileStep = struct {
             output_filename,
         }) catch unreachable;
         self.shaders.append(.{ .source_path = src, .full_out_path = full_out_path }) catch unreachable;
-        return full_out_path;
+
+        self.file_text.writer().print("pub const {s} = @embedFile(\"{s}\");\n", .{ import_name, full_out_path }) catch unreachable;
     }
 
-    /// Internal build function.
     fn make(step: *std.build.Step) !void {
         const self = @fieldParentPtr(HlslCompileStep, "step", step);
         const cwd = std.fs.cwd();
@@ -385,6 +393,10 @@ pub const HlslCompileStep = struct {
             cmd[cmd.len - 1] = shader.full_out_path;
             try self.builder.spawnChild(cmd);
         }
+
+        const dir = std.fs.path.dirname(self.output_file.path.?).?;
+        try cwd.makePath(dir);
+        try cwd.writeFile(self.output_file.path.?, self.file_text.items);
     }
 };
 
