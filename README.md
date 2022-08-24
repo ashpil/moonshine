@@ -1,8 +1,11 @@
 # Chess with ray tracing - please think of a better name
 
 ### Build dependencies:
-* Zig
-* dxc on your path
+* `zig`
+* `dxc`
+* For Linux:
+    * For Wayland: `wayland-client` & `wayland-protocols`
+    * For X11: `X11`
 
 ### Possible optimizations
 * Better memory/buffers

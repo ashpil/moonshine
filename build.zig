@@ -110,36 +110,28 @@ fn genWaylandHeader(b: *std.build.Builder, exe: *std.build.LibExeObjStep, protoc
 }
 
 fn genWaylandHeaders(b: *std.build.Builder, exe: *std.build.LibExeObjStep) !void {
-    const clone_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+
+    const pkg_config_result = try std.ChildProcess.exec(.{
+        .allocator = b.allocator,
+        .argv =  &[_][]const u8 {
+            "pkg-config", "wayland-protocols", "--variable=pkgdatadir"
+        },
+    });
+
+    if (pkg_config_result.term == .Exited and pkg_config_result.term.Exited != 0) {
+        return error.WaylandProtocolsNotFound;
+    }
+
+    const protocol_path = std.mem.trimRight(u8, pkg_config_result.stdout, " \n");
+
+    const cache_dir = try std.fs.path.join(b.allocator, &[_][]const u8{
         b.build_root,
         b.cache_root,
     });
-
-    const protocol_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        clone_path,
-        "wayland-protocols"
-    });
-
     const header_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        clone_path,
+        cache_dir,
         "wayland-gen-headers",
     });
-
-    if (std.fs.openDirAbsolute(protocol_path, .{})) |_| {
-        const protocol_pull = b.addSystemCommand(&[_][]const u8 {
-            "git", "-C", protocol_path, "pull", "--quiet"
-        });
-        exe.step.dependOn(&protocol_pull.step);
-    } else |_| {
-        const protocol_clone = b.addSystemCommand(&[_][]const u8 {
-            "git", "-C", clone_path, "clone", "https://github.com/wayland-project/wayland-protocols"
-        });
-        const mkdir = b.addSystemCommand(&[_][]const u8 {
-            "mkdir", header_path,
-        });
-        exe.step.dependOn(&protocol_clone.step);
-        exe.step.dependOn(&mkdir.step);
-    }
 
     try genWaylandHeader(b, exe, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
     try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
@@ -306,12 +298,7 @@ fn createGlfwLib(b: *std.build.Builder, comptime dir: []const u8, target: std.zi
                 lib.linkSystemLibrary("wayland-client");
             },
             .x11 => lib.linkSystemLibrary("X11"),
-            .wayland => {
-                lib.linkSystemLibrary("wayland-client");
-                lib.linkSystemLibrary("wayland-cursor");
-                lib.linkSystemLibrary("wayland-egl");
-                lib.linkSystemLibrary("xkbcommon");
-            }
+            .wayland => lib.linkSystemLibrary("wayland-client"),
         }
     } else if (target.isWindows()) {
         lib.linkSystemLibrary("gdi32"); 
