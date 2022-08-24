@@ -133,6 +133,13 @@ fn genWaylandHeaders(b: *std.build.Builder, exe: *std.build.LibExeObjStep) !void
         "wayland-gen-headers",
     });
 
+    const header_mkdir = std.fs.makeDirAbsolute(header_path);
+    if (header_mkdir) |_| {
+    } else |err| switch (err) {
+      error.PathAlreadyExists => {},
+      else => |e| return e,
+    }
+
     try genWaylandHeader(b, exe, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
     try genWaylandHeader(b, exe, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
     try genWaylandHeader(b, exe, protocol_path, header_path, "stable/viewporter/viewporter.xml", "viewporter");
