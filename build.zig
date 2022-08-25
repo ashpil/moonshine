@@ -57,9 +57,12 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg) !std.build.Pkg {
     hlsl_comp.add("shadowmiss", "shaders/primary/shadow.rmiss.hlsl");
 
     // actual engine
+    const vk_validation = b.option(bool, "vk-validation", "Enable vulkan validation");
+    const vk_measure_perf = b.option(bool, "vk-measure-perf", "Report frame times");
+
     const build_options = b.addOptions();
-    build_options.addOption(bool, "vk_enable_validation", false);
-    build_options.addOption(bool, "vk_measure_perf", false);
+    build_options.addOption(bool, "vk_validation", vk_validation orelse false);
+    build_options.addOption(bool, "vk_measure_perf", vk_measure_perf orelse false);
 
     const deps_local = [_]std.build.Pkg {
         vk,

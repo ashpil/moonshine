@@ -3,7 +3,7 @@ const std = @import("std");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
 const Window = @import("../Window.zig");
 
-const validate = @import("build_options").vk_enable_validation;
+const validate = @import("build_options").vk_validation;
 const measure_perf = @import("build_options").vk_measure_perf;
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
