@@ -3,9 +3,9 @@
 ### Build dependencies:
 * `zig`
 * `dxc`
-* For Linux:
-    * For Wayland: `wayland-client`, `wayland-protocols` and `wayland-scanner`
-    * For X11: `X11`
+* For Linux (Ubuntu, similar on others):
+    * For Wayland: `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
+    * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
 
 ### Possible optimizations
 * Better memory/buffers
@@ -18,6 +18,7 @@
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - load scene from file rather than hardcoded
 * Swap off of GLFW?
+* Make building Linux for both X11 and Wayland together work
 * Offline image generator -- would be healthy two have two consumers of engine library code
 * Add dev interface:
   * UI vs CLI?
