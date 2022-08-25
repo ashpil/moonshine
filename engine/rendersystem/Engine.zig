@@ -81,7 +81,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
     const rchit_module = try context.device.createShaderModule(&.{
         .flags = .{},
-        .code_size = shaders.raymiss.len,
+        .code_size = shaders.rayhit.len,
         .p_code = @ptrCast([*]const u32, shaders.rayhit),
     }, null);
     defer context.device.destroyShaderModule(rchit_module, null);
@@ -91,7 +91,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
         .code_size = shaders.shadowmiss.len,
         .p_code = @ptrCast([*]const u32, shaders.shadowmiss),
     }, null);
-    defer context.device.destroyShaderModule(rchit_module, null);
+    defer context.device.destroyShaderModule(shadow_module, null);
 
     const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = null, },
