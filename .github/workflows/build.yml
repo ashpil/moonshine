@@ -1,0 +1,36 @@
+name: Build
+
+on:
+  push:
+    branches: [ trunk ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo & submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Install system dependencies
+      run: |
+        sudo apt update
+        sudo apt install wayland-protocols libwayland-dev libxkbcommon-dev # Wayland
+        sudo apt install libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev # X11
+
+    - name: Install dxc
+      run: |
+        wget -q "https://ci.appveyor.com/api/projects/dnovillo/directxshadercompiler/artifacts/build%2Fdxc-artifacts.tar.gz?branch=main&pr=false&job=image%3A%20Ubuntu" -O dxc-artifacts.tar.gz 
+        tar xvf dxc-artifacts.tar.gz
+        echo "$(pwd)/dxc-artifacts/bin/" >> $GITHUB_PATH
+
+    - name: Setup Zig
+      uses: goto-bus-stop/setup-zig@v1.3.0
+      with:
+        version: master
+
+    - name: Build with latest zig (X11)
+      run: zig build -fstage1 -Dtarget-lws=X11
+
