@@ -96,7 +96,7 @@ fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path:
 
     const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
         header_path,
-        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.c", .{out_name}),
+        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol-code.h", .{out_name}),
     });
 
     const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
@@ -117,18 +117,18 @@ fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path:
 }
 
 fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
-    const pkg_config_result = try std.ChildProcess.exec(.{
+    const pkg_config_protocols_result = try std.ChildProcess.exec(.{
         .allocator = b.allocator,
         .argv =  &[_][]const u8 {
             "pkg-config", "wayland-protocols", "--variable=pkgdatadir"
         },
     });
 
-    if (pkg_config_result.term == .Exited and pkg_config_result.term.Exited != 0) {
+    if (pkg_config_protocols_result.term == .Exited and pkg_config_protocols_result.term.Exited != 0) {
         return error.WaylandProtocolsNotFound;
     }
 
-    const protocol_path = std.mem.trimRight(u8, pkg_config_result.stdout, " \n");
+    const protocol_path = std.mem.trimRight(u8, pkg_config_protocols_result.stdout, " \n");
 
     const cache_dir = try std.fs.path.join(b.allocator, &[_][]const u8{
         b.build_root,
@@ -139,11 +139,10 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
         "wayland-gen-headers",
     });
 
-    const header_mkdir = std.fs.makeDirAbsolute(header_path);
-    if (header_mkdir) |_| {
+    if (std.fs.makeDirAbsolute(header_path)) |_| {
     } else |err| switch (err) {
-      error.PathAlreadyExists => {},
-      else => |e| return e,
+        error.PathAlreadyExists => {},
+        else => |e| return e,
     }
 
     try genWaylandHeader(b, step, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
@@ -152,6 +151,49 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/relative-pointer/relative-pointer-unstable-v1.xml", "relative-pointer-unstable-v1");
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/pointer-constraints/pointer-constraints-unstable-v1.xml", "pointer-constraints-unstable-v1");
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
+
+    {
+        const pkg_config_wayland_result = try std.ChildProcess.exec(.{
+            .allocator = b.allocator,
+            .argv =  &[_][]const u8 {
+                "pkg-config", "wayland-client", "--variable=pkgdatadir"
+            },
+        });
+
+        if (pkg_config_wayland_result.term == .Exited and pkg_config_wayland_result.term.Exited != 0) {
+            return error.WaylandClientNotFound;
+        }
+
+        const wayland_path = std.mem.trimRight(u8, pkg_config_wayland_result.stdout, " \n");
+        const wayland_xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+            wayland_path,
+            "wayland.xml",
+        });
+
+        {
+            const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
+                header_path,
+                "wayland-client-protocol-code.h",
+            });
+            const source_cmd = b.addSystemCommand(&[_][]const u8 {
+                "wayland-scanner", "private-code", wayland_xml_path, out_source,
+            });
+            step.dependOn(&source_cmd.step);
+        }
+       
+        {
+            const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
+                header_path,
+                "wayland-client-protocol.h",
+            });
+
+            const header_cmd = b.addSystemCommand(&[_][]const u8 {
+                "wayland-scanner", "client-header", wayland_xml_path, out_header,
+            });
+
+            step.dependOn(&header_cmd.step);
+        }
+    }
 }
 
 const CLibrary = struct {
@@ -194,11 +236,19 @@ fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.
             "window.c",
             "egl_context.c",
             "osmesa_context.c",
+            "platform.c",
+            "null_init.c",
+            "null_window.c",
+            "null_joystick.c",
+            "null_monitor.c",
+            "null_monitor.c",
         };
 
         const linux_sources = [_][]const u8 {
             "posix_time.c",
             "posix_thread.c",
+            "posix_module.c",
+            "posix_poll.c",
             "xkb_unicode.c",
             "linux_joystick.c",
         };
@@ -224,15 +274,16 @@ fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.
             "win32_time.c",
             "win32_joystick.c",
             "win32_window.c",
+            "win32_module.c",
         };
 
         const wayland_lib_sources = [_][]const u8 {
-            "./zig-cache/wayland-gen-headers/wayland-idle-inhibit-unstable-v1-client-protocol.c",
-            "./zig-cache/wayland-gen-headers/wayland-pointer-constraints-unstable-v1-client-protocol.c",
-            "./zig-cache/wayland-gen-headers/wayland-relative-pointer-unstable-v1-client-protocol.c",
-            "./zig-cache/wayland-gen-headers/wayland-viewporter-client-protocol.c",
-            "./zig-cache/wayland-gen-headers/wayland-xdg-decoration-client-protocol.c",
-            "./zig-cache/wayland-gen-headers/wayland-xdg-shell-client-protocol.c",
+            "./zig-cache/wayland-gen-headers/wayland-idle-inhibit-unstable-v1-client-protocol-code.h",
+            "./zig-cache/wayland-gen-headers/wayland-pointer-constraints-unstable-v1-client-protocol-code.h",
+            "./zig-cache/wayland-gen-headers/wayland-relative-pointer-unstable-v1-client-protocol-code.h",
+            "./zig-cache/wayland-gen-headers/wayland-viewporter-client-protocol-code.h",
+            "./zig-cache/wayland-gen-headers/wayland-xdg-decoration-client-protocol-code.h",
+            "./zig-cache/wayland-gen-headers/wayland-xdg-shell-client-protocol-code.h",
         };
 
         inline for (general_sources) |source| {
