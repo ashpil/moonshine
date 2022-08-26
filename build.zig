@@ -16,10 +16,13 @@ pub fn build(b: *std.build.Builder) void {
     // packages/libraries we'll need below
     const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
     const glfw = makeGlfwLibrary(b, "./deps/glfw/", target, mode) catch unreachable;
-    const engine = makeEnginePackage(b, vk) catch unreachable;
+    const default_engine_options = EngineOptions.fromCli(b);
 
     // chess exe
     {
+        var engine_options = default_engine_options;
+        engine_options.windowing = true;
+        const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
         const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
         rtchess_exe.setTarget(target);
         rtchess_exe.setBuildMode(mode);
@@ -38,9 +41,52 @@ pub fn build(b: *std.build.Builder) void {
 
         b.step("run-chess", "Run chess").dependOn(&run_chess.step);
     }
+
+    // offline exe
+    {
+        var engine_options = default_engine_options;
+        engine_options.windowing = false;
+        const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
+        const offline_exe = b.addExecutable("offline", "offline/main.zig");
+        offline_exe.setTarget(target);
+        offline_exe.setBuildMode(mode);
+        offline_exe.install();
+
+        offline_exe.addPackage(vk);
+        offline_exe.addPackage(engine);
+        offline_exe.linkLibC();
+
+        const run_offline = offline_exe.run();
+        run_offline.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_offline.addArgs(args);
+        }
+
+        b.step("run-offline", "Run offline").dependOn(&run_offline.step);
+    }
 }
 
-fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg) !std.build.Pkg {
+pub const EngineOptions = struct {
+    vk_validation: bool = false,
+    vk_measure_perf: bool = false,
+    windowing: bool = false,
+
+    fn fromCli(b: *std.build.Builder) EngineOptions {
+        var options = EngineOptions {};
+
+        if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
+            options.vk_validation = vk_validation;
+        }
+
+        if (b.option(bool, "vk-measure-perf", "Report frame times")) |vk_measure_perf| {
+            options.vk_measure_perf = vk_measure_perf;
+        }
+
+        return options;
+    }
+};
+
+fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOptions) !std.build.Pkg {
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
         "dxc",
@@ -57,12 +103,10 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg) !std.build.Pkg {
     hlsl_comp.add("shadowmiss", "shaders/primary/shadow.rmiss.hlsl");
 
     // actual engine
-    const vk_validation = b.option(bool, "vk-validation", "Enable vulkan validation");
-    const vk_measure_perf = b.option(bool, "vk-measure-perf", "Report frame times");
-
     const build_options = b.addOptions();
-    build_options.addOption(bool, "vk_validation", vk_validation orelse false);
-    build_options.addOption(bool, "vk_measure_perf", vk_measure_perf orelse false);
+    build_options.addOption(bool, "vk_validation", options.vk_validation);
+    build_options.addOption(bool, "vk_measure_perf", options.vk_measure_perf);
+    build_options.addOption(bool, "windowing", options.windowing);
 
     const deps_local = [_]std.build.Pkg {
         vk,

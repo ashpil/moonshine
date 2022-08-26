@@ -36,7 +36,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
     const initial_window_size = window.getExtent();
 
-    const context = try VulkanContext.create(allocator, window, app_name);
+    const context = try VulkanContext.create(.{ .allocator = allocator, .window = window, .app_name = app_name });
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
     var commands = try Commands.create(&context);

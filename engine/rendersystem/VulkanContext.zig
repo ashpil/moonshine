@@ -1,14 +1,19 @@
 const vk = @import("vulkan");
 const std = @import("std");
+const builtin = @import("builtin");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
-const Window = @import("../Window.zig");
+const Window = if (windowing) @import("../Window.zig");
 
 const validate = @import("build_options").vk_validation;
 const measure_perf = @import("build_options").vk_measure_perf;
+const windowing = @import("build_options").windowing;
+const Surface = if (windowing) vk.SurfaceKHR else void;
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
 const VulkanContextError = error {
+    VulkanDynLibLoadFail,
+    InstanceProcAddrNotFound,
     UnavailableValidationLayers,
     UnavailableInstanceExtensions,
     UnavailableDevices,
@@ -18,6 +23,8 @@ const VulkanContextError = error {
 
 const Base = struct {
     dispatch: BaseDispatch,
+    pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
+    vulkan_lib: if (windowing) void else std.DynLib, // if no glfw, must load vulkan dynlib ourselves
 
     const BaseDispatch = vk.BaseWrapper(.{
         .createInstance = true,
@@ -26,17 +33,28 @@ const Base = struct {
     });
 
     fn new() !Base {
+        var pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr = undefined;
+        var vulkan_lib: if (windowing) void else std.DynLib = undefined;
+        if (windowing) {
+            pfn_get_instance_proc_addr = Window.getInstanceProcAddress;
+        } else {
+            const vulkan_lib_name = if (builtin.os.tag == .windows) "vulkan-1.dll" else "libvulkan.so.1";
+            vulkan_lib = std.DynLib.open(vulkan_lib_name) catch std.DynLib.open("libvulkan.so") catch return VulkanContextError.VulkanDynLibLoadFail;
+            pfn_get_instance_proc_addr = vulkan_lib.lookup(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr") orelse return VulkanContextError.InstanceProcAddrNotFound;
+        }
         return Base {
-            .dispatch = try BaseDispatch.load(Window.getInstanceProcAddress),
+            .dispatch = try BaseDispatch.load(pfn_get_instance_proc_addr),
+            .pfn_get_instance_proc_addr = pfn_get_instance_proc_addr,
+            .vulkan_lib = vulkan_lib,
         };
     }
 
-    fn getRequiredExtensionsType() type {
-        return if (validate) (std.mem.Allocator.Error![]const [*:0]const u8) else []const [*:0]const u8;
+    fn destroy(self: *Base) void {
+        if (!windowing) self.vulkan_lib.close();
     }
 
-    fn getRequiredExtensions(allocator: std.mem.Allocator, window: *const Window) getRequiredExtensionsType() {
-        const window_extensions = window.getRequiredInstanceExtensions();
+    fn getRequiredExtensions(allocator: std.mem.Allocator, window: if (windowing) *const Window else void) std.mem.Allocator.Error![]const [*:0]const u8 {
+        const window_extensions = if (windowing) window.getRequiredInstanceExtensions() else &[_] [*:0]const u8{};
         if (validate) {
             const debug_extensions = [_][*:0]const u8{
                 vk.extension_info.ext_debug_utils.name,
@@ -47,15 +65,15 @@ const Base = struct {
         }
     }
 
-    fn createInstance(self: Base, allocator: std.mem.Allocator, window: *const Window, app_name: [*:0]const u8) !Instance {
-        const required_extensions = if (validate) try getRequiredExtensions(allocator, window) else getRequiredExtensions(allocator, window);
-        defer if (validate) allocator.free(required_extensions);
+    fn createInstance(self: Base, args: if (windowing) WindowingArgs else NoWindowingArgs) !Instance {
+        const required_extensions = try getRequiredExtensions(args.allocator, if (windowing) args.window else {});
+        defer if (validate) args.allocator.free(required_extensions);
 
-        if (validate and !(try self.validationLayersAvailable(allocator))) return VulkanContextError.UnavailableValidationLayers;
-        if (!try self.instanceExtensionsAvailable(allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
+        if (validate and !(try self.validationLayersAvailable(args.allocator))) return VulkanContextError.UnavailableValidationLayers;
+        if (!try self.instanceExtensionsAvailable(args.allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
 
         const app_info = .{
-            .p_application_name = app_name,
+            .p_application_name = args.app_name,
             .application_version = 0,
             .p_engine_name = "engine? i barely know 'in",
             .engine_version = 0,
@@ -64,7 +82,7 @@ const Base = struct {
 
         return try self.dispatch.createInstance(
             Instance,
-            Window.getInstanceProcAddress,
+            self.pfn_get_instance_proc_addr,
             &.{
                 .p_application_info = &app_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
@@ -119,34 +137,34 @@ const Base = struct {
 
 const instance_cmds = vk.InstanceCommandFlags {
     .destroyInstance = true,
-    .destroySurfaceKHR = true,
     .enumeratePhysicalDevices = true,
     .enumerateDeviceExtensionProperties = true,
-    .getPhysicalDeviceSurfacePresentModesKHR = true,
-    .getPhysicalDeviceSurfaceFormatsKHR = true,
     .getPhysicalDeviceQueueFamilyProperties = true,
-    .getPhysicalDeviceSurfaceSupportKHR = true,
     .getDeviceProcAddr = true,
     .createDevice = true,
-    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
     .getPhysicalDeviceMemoryProperties = true,
     .getPhysicalDeviceProperties2 = true,
 };
 
-const validation_instance_cmds = vk.InstanceCommandFlags {
+const windowing_instance_cmds = if (windowing) vk.InstanceCommandFlags {
+    .destroySurfaceKHR = true,
+    .getPhysicalDeviceSurfacePresentModesKHR = true,
+    .getPhysicalDeviceSurfaceFormatsKHR = true,
+    .getPhysicalDeviceSurfaceSupportKHR = true,
+    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
+} else .{};
+
+const validation_instance_cmds = if (validate) vk.InstanceCommandFlags {
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
-};
+} else .{};
 
-const Instance = vk.InstanceWrapper(if (validate) instance_cmds.merge(validation_instance_cmds) else instance_cmds);
+const Instance = vk.InstanceWrapper(instance_cmds.merge(validation_instance_cmds).merge(windowing_instance_cmds));
 
 const device_commands = vk.DeviceCommandFlags {
     .getDeviceQueue = true,
-    .getSwapchainImagesKHR = true,
-    .createSwapchainKHR = true,
     .createImageView = true,
     .destroyDevice = true,
-    .destroySwapchainKHR = true,
     .destroyImageView = true,
     .createBuffer = true,
     .getBufferMemoryRequirements = true,
@@ -182,7 +200,6 @@ const device_commands = vk.DeviceCommandFlags {
     .getAccelerationStructureBuildSizesKHR = true,
     .getAccelerationStructureDeviceAddressKHR = true,
     .createSemaphore = true,
-    .queuePresentKHR = true,
     .destroySemaphore = true,
     .allocateDescriptorSets = true,
     .createDescriptorPool = true,
@@ -202,7 +219,6 @@ const device_commands = vk.DeviceCommandFlags {
     .waitForFences = true,
     .resetFences = true,
     .queueSubmit2 = true,
-    .acquireNextImage2KHR = true,
     .cmdPushConstants = true,
     .cmdCopyBufferToImage = true,
     .createSampler = true,
@@ -217,11 +233,19 @@ const device_commands = vk.DeviceCommandFlags {
     .cmdUpdateBuffer = true,
 };
 
-const perf_device_commands = vk.DeviceCommandFlags {
-    .cmdWriteTimestamp2 = true,
-};
+const windowing_device_commands = if (windowing) vk.DeviceCommandFlags {
+    .getSwapchainImagesKHR = true,
+    .createSwapchainKHR = true,
+    .acquireNextImage2KHR = true,
+    .queuePresentKHR = true,
+    .destroySwapchainKHR = true,
+} else .{};
 
-const Device = vk.DeviceWrapper(if (measure_perf) perf_device_commands.merge(device_commands) else device_commands);
+const perf_device_commands = if (measure_perf) vk.DeviceCommandFlags {
+    .cmdWriteTimestamp2 = true,
+} else .{};
+
+const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(perf_device_commands).merge(windowing_device_commands);});
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,
@@ -259,7 +283,7 @@ instance: Instance,
 device: Device,
 
 physical_device: PhysicalDevice,
-surface: vk.SurfaceKHR,
+surface: Surface,
 
 debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
@@ -267,19 +291,31 @@ queue: vk.Queue,
 
 const Self = @This();
 
-pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:0]const u8) !Self {
-    const base = try Base.new();
+const WindowingArgs = struct {
+    allocator: std.mem.Allocator,
+    window: *const Window,
+    app_name: [*:0]const u8
+};
 
-    const instance = try base.createInstance(allocator, window, app_name);
+const NoWindowingArgs = struct {
+    allocator: std.mem.Allocator,
+    app_name: [*:0]const u8
+};
+
+pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
+    var base = try Base.new();
+    errdefer base.destroy();
+
+    const instance = try base.createInstance(args);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const surface = try window.createSurface(instance.handle);
-    errdefer instance.destroySurfaceKHR(surface, null);
+    const surface = if (windowing) try args.window.createSurface(instance.handle) else {};
+    errdefer if (windowing) instance.destroySurfaceKHR(surface, null);
 
-    const physical_device = try PhysicalDevice.pick(instance, allocator, surface);
+    const physical_device = try PhysicalDevice.pick(instance, args.allocator, surface);
     const device = try physical_device.createLogicalDevice(instance);
     errdefer device.destroyDevice(null);
 
@@ -300,20 +336,14 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
 pub fn destroy(self: *Self) void {
     self.device.destroyDevice(null);
-    self.instance.destroySurfaceKHR(self.surface, null);
+    if (windowing) self.instance.destroySurfaceKHR(self.surface, null);
 
     if (validate) self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
     self.instance.destroyInstance(null);
+    self.base.destroy();
 }
 
-const device_extensions = [_][*:0]const u8{
-    vk.extension_info.khr_swapchain.name,
-    vk.extension_info.khr_deferred_host_operations.name,
-    vk.extension_info.khr_acceleration_structure.name,
-    vk.extension_info.khr_ray_tracing_pipeline.name,
-    vk.extension_info.khr_synchronization_2.name,
-};
-
+// TODO: do we actually need all these fields? seem to be carrying around a lot
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     queue_family_index: u32,
@@ -321,7 +351,20 @@ const PhysicalDevice = struct {
     mem_properties: vk.PhysicalDeviceMemoryProperties,
     raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR,
 
-    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !u32 {
+    const base_device_extensions = [_][*:0]const u8{
+        vk.extension_info.khr_deferred_host_operations.name,
+        vk.extension_info.khr_acceleration_structure.name,
+        vk.extension_info.khr_ray_tracing_pipeline.name,
+        vk.extension_info.khr_synchronization_2.name,
+    };
+
+    const windowing_device_extensions = [_][*:0]const u8{
+        vk.extension_info.khr_swapchain.name,
+    };
+
+    const device_extensions = if (windowing) base_device_extensions ++ windowing_device_extensions else base_device_extensions;
+
+    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: Surface) !u32 {
         var family_count: u32 = 0;
         instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, null);
 
@@ -334,7 +377,7 @@ const PhysicalDevice = struct {
             const index = @intCast(u32, i);
             if (family.queue_flags.compute_bit and
                 family.queue_flags.graphics_bit and
-                (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE) picked_family = index;
+                if (windowing) (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE else true) picked_family = index;
         }
 
         if (picked_family) |index| {
@@ -342,7 +385,7 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableQueues;
     }
 
-    fn pick(instance: Instance, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !PhysicalDevice {
+    fn pick(instance: Instance, allocator: std.mem.Allocator, surface: Surface) !PhysicalDevice {
         var device_count: u32 = 0;
         _ = try instance.enumeratePhysicalDevices(&device_count, null);
 
@@ -378,9 +421,9 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn isDeviceSuitable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: vk.SurfaceKHR) !bool {
+    fn isDeviceSuitable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: Surface) !bool {
         const extensions_available = try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator);
-        const surface_supported = try PhysicalDevice.surfaceSupported(instance, device, surface);
+        const surface_supported = if (windowing) try PhysicalDevice.surfaceSupported(instance, device, surface) else true;
         return extensions_available and surface_supported;
     }
 
