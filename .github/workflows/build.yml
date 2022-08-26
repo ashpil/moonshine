@@ -31,6 +31,6 @@ jobs:
       with:
         version: master
 
-    - name: Build with latest zig (X11)
-      run: zig build -fstage1 -Dtarget-lws=X11
+    - name: Build with latest zig
+      run: zig build -fstage1
 
