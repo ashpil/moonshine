@@ -18,7 +18,6 @@
 * Make sure we have all necessary `errdefer`s
 * Proper asset system - load scene from file rather than hardcoded
 * Swap off of GLFW?
-* Make building Linux for both X11 and Wayland together work
 * Offline image generator -- would be healthy two have two consumers of engine library code
 * Add dev interface:
   * UI vs CLI?
