@@ -7,7 +7,7 @@ const Window = @import("../Window.zig");
 const Swapchain = @import("./Swapchain.zig");
 const Images = @import("./Images.zig");
 const Commands = @import("./Commands.zig");
-const DescriptorLayout = @import("./descriptor.zig").DisplayDescriptorLayout;
+const DescriptorLayout = @import("./descriptor.zig").OutputDescriptorLayout;
 const DestructionQueue = @import("./DestructionQueue.zig");
 const utils = @import("./utils.zig");
 
@@ -19,7 +19,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         frames: [num_frames]Frame,
         frame_index: u8,
-        descriptor_layout: DescriptorLayout,
 
         swapchain: Swapchain,
         display_image: Images,
@@ -29,7 +28,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         destruction_queue: DestructionQueue,
 
-        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
+        // descriptor layout must have enough room for num_frames sets
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, initial_extent: vk.Extent2D) !Self {
             var extent = initial_extent;
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
@@ -52,8 +52,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
             errdefer attachment_images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.image), .@"undefined", .general);
-
-            const descriptor_layout = try DescriptorLayout.create(vc, num_frames);
 
             const sets = try descriptor_layout.allocate_sets(vc, num_frames, [_]vk.WriteDescriptorSet {
                 vk.WriteDescriptorSet {
@@ -96,7 +94,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .swapchain = swapchain,
                 .frames = frames,
                 .frame_index = 0,
-                .descriptor_layout = descriptor_layout,
 
                 .display_image = display_image,
                 .attachment_images = attachment_images,
@@ -109,7 +106,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-            self.descriptor_layout.destroy(vc);
             self.display_image.destroy(vc, allocator);
             self.attachment_images.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);

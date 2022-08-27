@@ -6,8 +6,9 @@ const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../Window.zig");
 const Pipeline = @import("./Pipeline.zig");
 const descriptor = @import("./descriptor.zig");
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout(4);
+const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
+const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
 
@@ -26,6 +27,7 @@ display: Display,
 commands: Commands,
 scene_descriptor_layout: SceneDescriptorLayout,
 background_descriptor_layout: BackgroundDescriptorLayout,
+output_descriptor_layout: OutputDescriptorLayout,
 camera_create_info: Camera.CreateInfo,
 camera: Camera,
 pipeline: Pipeline,
@@ -39,20 +41,15 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     const context = try VulkanContext.create(.{ .allocator = allocator, .window = window, .app_name = app_name });
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
-    var commands = try Commands.create(&context);
-    const display = try Display.create(&context, &vk_allocator, allocator, &commands, initial_window_size);
-
     const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1);
     const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1);
+    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight);
 
-    comptime var frames: [frames_in_flight]u32 = undefined;
-    comptime for (frames) |_, i| {
-        frames[i] = i;
-    };
+    var commands = try Commands.create(&context);
+    const display = try Display.create(&context, &vk_allocator, allocator, &commands, &output_descriptor_layout, initial_window_size);
 
     const camera_origin = F32x3.new(0.6, 0.5, -0.6);
     const camera_target = F32x3.new(0.0, 0.0, 0.0);
-
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,
@@ -62,54 +59,9 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),
     };
+    const camera = Camera.new(camera_create_info);
 
-    var camera = Camera.new(camera_create_info);
-
-    const rgen_module = try context.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.raygen.len,
-        .p_code = @ptrCast([*]const u32, shaders.raygen),
-    }, null);
-    defer context.device.destroyShaderModule(rgen_module, null);
-
-    const rmiss_module = try context.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.raymiss.len,
-        .p_code = @ptrCast([*]const u32, shaders.raymiss),
-    }, null);
-    defer context.device.destroyShaderModule(rmiss_module, null);
-
-    const rchit_module = try context.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.rayhit.len,
-        .p_code = @ptrCast([*]const u32, shaders.rayhit),
-    }, null);
-    defer context.device.destroyShaderModule(rchit_module, null);
-
-    const shadow_module = try context.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.shadowmiss.len,
-        .p_code = @ptrCast([*]const u32, shaders.shadowmiss),
-    }, null);
-    defer context.device.destroyShaderModule(shadow_module, null);
-
-    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, display.descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = rmiss_module, .p_name = "main", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shadow_module, .p_name = "main", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = rchit_module, .p_name = "main", .p_specialization_info = null, },
-    }, &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 2, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 3, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-    }, &[_]vk.PushConstantRange {
-        .{
-            .offset = 0,
-            .size = @sizeOf(Camera.Desc) + @sizeOf(Camera.BlurDesc) + @sizeOf(u32),
-            .stage_flags = .{ .raygen_bit_khr = true },
-        }
-    });
+    const pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout);
 
     return Self {
         .context = context,
@@ -117,6 +69,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
         .commands = commands,
         .scene_descriptor_layout = scene_descriptor_layout,
         .background_descriptor_layout = background_descriptor_layout,
+        .output_descriptor_layout = output_descriptor_layout,
         .camera_create_info = camera_create_info,
         .camera = camera,
         .pipeline = pipeline,
@@ -134,6 +87,7 @@ pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.allocator.destroy(&self.context, allocator);
     self.scene_descriptor_layout.destroy(&self.context);
     self.background_descriptor_layout.destroy(&self.context);
+    self.output_descriptor_layout.destroy(&self.context);
     self.pipeline.destroy(&self.context);
     self.commands.destroy(&self.context);
     self.display.destroy(&self.context, allocator);

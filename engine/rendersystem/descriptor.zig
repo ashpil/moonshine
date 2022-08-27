@@ -12,7 +12,7 @@ pub const InputDescriptorLayout = DescriptorLayout(&.{
     },
 });
 
-pub const DisplayDescriptorLayout = DescriptorLayout(&.{
+pub const OutputDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
         .descriptor_type = .storage_image,
@@ -67,66 +67,65 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
     },
 });
 
-pub fn SceneDescriptorLayout(comptime max_textures: comptime_int) type {
-    return DescriptorLayout(&.{
-        .{
-            .binding = 0,
-            .descriptor_type = .acceleration_structure_khr,
-            .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 1,
-            .descriptor_type = .sampler,
-            .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 2,
-            .descriptor_type = .storage_buffer,
-            .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 3,
-            .descriptor_type = .sampled_image,
-            .descriptor_count = max_textures,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 4,
-            .descriptor_type = .sampled_image,
-            .descriptor_count = max_textures,
-            .stage_flags = .{ .raygen_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 5,
-            .descriptor_type = .sampled_image,
-            .descriptor_count = max_textures,
-            .stage_flags = .{ .closest_hit_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 6,
-            .descriptor_type = .storage_buffer,
-            .descriptor_count = 1,
-            .stage_flags = .{ .closest_hit_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-        .{
-            .binding = 7,
-            .descriptor_type = .storage_buffer,
-            .descriptor_count = 1,
-            .stage_flags = .{ .closest_hit_bit_khr = true },
-            .p_immutable_samplers = null,
-        },
-    });
-}
+const max_textures = 4; // TODO: think about this more
+pub const SceneDescriptorLayout = DescriptorLayout(&.{
+    .{
+        .binding = 0,
+        .descriptor_type = .acceleration_structure_khr,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 1,
+        .descriptor_type = .sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 2,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 3,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = max_textures,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 4,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = max_textures,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 5,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = max_textures,
+        .stage_flags = .{ .closest_hit_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 6,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .closest_hit_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 7,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .closest_hit_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+});
 
 pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding) type {
     return struct {

@@ -55,7 +55,7 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout(materials.len), background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     comptime var color_sources: [materials.len]Images.TextureSource = undefined;
     comptime var roughness_sources: [materials.len]Images.TextureSource = undefined;
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
