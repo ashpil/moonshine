@@ -26,6 +26,8 @@
     * CLI easier to get set up
     * Probably do CLI first then UI after if still want
   * Set:
+    * certain debug modes
+    * whether certain path tracing techniques are used
     * Scene
     * Background
     * Samples per pixel, light samples, etc
