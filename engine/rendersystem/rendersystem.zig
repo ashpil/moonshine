@@ -13,4 +13,5 @@ pub const Scene = @import("Scene.zig");
 pub const Swapchain = @import("Swapchain.zig");
 pub const VulkanContext = @import("VulkanContext.zig");
 
+pub const utils = @import("utils.zig");
 pub const display = @import("display.zig");
