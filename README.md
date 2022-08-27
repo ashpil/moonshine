@@ -19,6 +19,8 @@
 * Proper asset system - load scene from file rather than hardcoded
 * Swap off of GLFW?
 * Offline image generator -- would be healthy two have two consumers of engine library code
+* Add tonemapping
+* Add bloom
 * Add dev interface:
   * UI vs CLI?
     * UI prettier, better for demos
