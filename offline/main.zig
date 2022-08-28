@@ -78,7 +78,6 @@ pub fn main() !void {
     };
     var accumulation_image = try Images.createRaw(&context, &vk_allocator, allocator, &accumulation_image_info);
     defer accumulation_image.destroy(&context, allocator);
-    try commands.transitionImageLayout(&context, allocator, accumulation_image.data.items(.image), .@"undefined", .general);
 
     const output_sets = try output_descriptor_layout.allocate_sets(&context, 1, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
@@ -160,11 +159,61 @@ pub fn main() !void {
         .command_buffer_count = 1,
     }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-    // actual ray tracing here
+    // record command buffer
     {
         try context.device.beginCommandBuffer(command_buffer, &.{
             .flags = .{ .one_time_submit_bit = true },
             .p_inheritance_info = null,
+        });
+
+        // transition images to general layout
+        const barriers = [_]vk.ImageMemoryBarrier2 {
+            .{
+                .src_stage_mask = .{},
+                .src_access_mask = .{},
+                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                .dst_access_mask = .{ .shader_write_bit = true },
+                .old_layout = .@"undefined",
+                .new_layout = .general,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = accumulation_image.data.items(.image)[0],
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            },
+            .{
+                .src_stage_mask = .{},
+                .src_access_mask = .{},
+                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                .dst_access_mask = .{ .shader_write_bit = true },
+                .old_layout = .@"undefined",
+                .new_layout = .general,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = display_image.data.items(.image)[0],
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            },
+        };
+
+        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+            .dependency_flags = .{},
+            .memory_barrier_count = 0,
+            .p_memory_barriers = undefined,
+            .buffer_memory_barrier_count = 0,
+            .p_buffer_memory_barriers = undefined,
+            .image_memory_barrier_count = @intCast(u32, barriers.len),
+            .p_image_memory_barriers = &barriers,
         });
 
         // bind our stuff
@@ -182,9 +231,23 @@ pub fn main() !void {
             .size = 0,
         };
         context.device.cmdTraceRaysKHR(command_buffer, &pipeline.sbt.getRaygenSBT(), &pipeline.sbt.getMissSBT(), &pipeline.sbt.getHitSBT(), &callable_table, extent.width, extent.height, 1);
-    }
-   
 
+        try context.device.endCommandBuffer(command_buffer);
+    }
+
+    try context.device.queueSubmit2(context.queue, 1, &[_]vk.SubmitInfo2 { .{
+        .flags = .{},
+        .command_buffer_info_count = 1,
+        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
+            .command_buffer = command_buffer,
+            .device_mask = 0,
+        }),
+        .wait_semaphore_info_count = 0,
+        .p_wait_semaphore_infos = undefined,
+        .signal_semaphore_info_count = 0,
+        .p_signal_semaphore_infos = undefined,
+    }}, vk.Fence.null_handle);
+   
     try context.device.deviceWaitIdle();
     std.log.info("Program completed!", .{});
 }
