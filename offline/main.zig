@@ -9,6 +9,8 @@ const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.Pipeline;
 const Images = engine.rendersystem.Images;
 const Camera = engine.rendersystem.Camera;
+const Scene = engine.rendersystem.Scene;
+const Material = engine.rendersystem.Scene.Material;
 const utils = engine.rendersystem.utils;
 
 const descriptor = engine.rendersystem.descriptor;
@@ -18,6 +20,7 @@ const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 
 const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
+const Mat3x4 = vector.Mat3x4(f32);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -107,8 +110,43 @@ pub fn main() !void {
             .p_texel_buffer_view = undefined,
         },
     });
-    _ = output_sets;
 
+    var scene = blk: {
+        const materials = comptime [_]Material {
+            .{
+                .color = .{
+                    .color = F32x3.new(0.0004, 0.0025, 0.0096)
+                },
+                .roughness = .{
+                    .greyscale = 0.15,
+                },
+                .normal = .{
+                    .color = F32x3.new(0.5, 0.5, 1.0)
+                },
+                .metalness = 0.2,
+                .ior = 1.5,
+            },
+        };
+
+        const mesh_filepaths = [_][]const u8 {
+            "../../assets/models/pawn.obj",
+        };
+
+        var instances = Scene.Instances {};
+        try instances.ensureTotalCapacity(allocator, 1);
+
+        instances.appendAssumeCapacity(.{
+            .mesh_info = .{
+                .transform = Mat3x4.identity,
+                .mesh_index = 0,
+            },
+            .material_index = 0,
+        });
+
+        break :blk try Scene.create(&context, &vk_allocator, allocator, &commands, &materials, "../../assets/textures/skybox/", &mesh_filepaths, instances, &scene_descriptor_layout, &background_descriptor_layout);
+    };
+    defer scene.destroy(&context, allocator);
+    
     const command_pool = try context.device.createCommandPool(&.{
         .queue_family_index = context.physical_device.queue_family_index,
         .flags = .{ .transient_bit = true },
@@ -131,6 +169,7 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, pipeline.handle);
+        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output_sets[0] }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});

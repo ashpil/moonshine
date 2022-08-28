@@ -245,7 +245,11 @@ const perf_device_commands = if (measure_perf) vk.DeviceCommandFlags {
     .cmdWriteTimestamp2 = true,
 } else .{};
 
-const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(perf_device_commands).merge(windowing_device_commands);});
+const validation_device_commands = if (validate) vk.DeviceCommandFlags {
+    .setDebugUtilsObjectNameEXT = true,
+} else .{};
+
+const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(perf_device_commands).merge(windowing_device_commands).merge(validation_device_commands);});
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,

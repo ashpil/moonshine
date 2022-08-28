@@ -246,6 +246,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
     }))[0];
 
+    try utils.setDebugName(vc, descriptor_set, "Scene");
+
     return Self {
         .background = background,
 
