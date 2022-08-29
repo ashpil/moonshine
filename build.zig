@@ -15,7 +15,7 @@ pub fn build(b: *std.build.Builder) void {
 
     // packages/libraries we'll need below
     const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
-    const glfw = makeGlfwLibrary(b, "./deps/glfw/", target, mode) catch unreachable;
+    const glfw = makeGlfwLibrary(b, target, mode) catch unreachable;
     const default_engine_options = EngineOptions.fromCli(b);
 
     // chess exe
@@ -246,7 +246,8 @@ const CLibrary = struct {
 };
 
 // adapted from mach glfw
-fn makeGlfwLibrary(b: *std.build.Builder, comptime dir: []const u8, target: std.zig.CrossTarget, mode: std.builtin.Mode) !CLibrary {
+fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) !CLibrary {
+    const dir = "./deps/glfw/";
     const lib = b.addStaticLibrary("glfw", null);
     lib.setBuildMode(mode);
     lib.setTarget(target);
