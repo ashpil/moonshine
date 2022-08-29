@@ -14,7 +14,13 @@ pub fn build(b: *std.build.Builder) void {
     const mode = b.standardReleaseOptions();
 
     // packages/libraries we'll need below
-    const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
+    const vk = blk: {
+        const vk_xml_path = std.fs.path.join(b.allocator, &[_][]const u8{
+            b.build_root,
+            "deps/vk.xml",
+        }) catch unreachable;
+        break :blk vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig").package;
+    };
     const glfw = makeGlfwLibrary(b, target, mode) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target, mode);
     const default_engine_options = EngineOptions.fromCli(b);
@@ -503,7 +509,11 @@ pub const HlslCompileStep = struct {
             self.output_path,
             output_filename,
         }) catch unreachable;
-        self.shaders.append(.{ .source_path = src, .full_out_path = full_out_path }) catch unreachable;
+        const src_full_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{
+            self.builder.build_root,
+            src,
+        }) catch unreachable;
+        self.shaders.append(.{ .source_path = src_full_path, .full_out_path = full_out_path }) catch unreachable;
 
         self.file_text.writer().print("pub const {s} = @embedFile(\"{s}\");\n", .{ import_name, full_out_path }) catch unreachable;
     }
