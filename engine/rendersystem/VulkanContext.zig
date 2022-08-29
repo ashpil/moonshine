@@ -2,7 +2,7 @@ const vk = @import("vulkan");
 const std = @import("std");
 const builtin = @import("builtin");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
-const Window = if (windowing) @import("../Window.zig");
+const Window = @import("../Window.zig");
 
 const validate = @import("build_options").vk_validation;
 const measure_perf = @import("build_options").vk_measure_perf;

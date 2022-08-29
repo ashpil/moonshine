@@ -11,7 +11,9 @@ const Images = engine.rendersystem.Images;
 const Camera = engine.rendersystem.Camera;
 const Scene = engine.rendersystem.Scene;
 const Material = engine.rendersystem.Scene.Material;
+
 const utils = engine.rendersystem.utils;
+const exr = engine.exr;
 
 const descriptor = engine.rendersystem.descriptor;
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;

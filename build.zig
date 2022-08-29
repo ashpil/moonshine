@@ -16,12 +16,14 @@ pub fn build(b: *std.build.Builder) void {
     // packages/libraries we'll need below
     const vk = vkgen.VkGenerateStep.init(b, "./deps/vk.xml", "vk.zig").package;
     const glfw = makeGlfwLibrary(b, target, mode) catch unreachable;
+    const tinyexr = makeTinyExrLibrary(b, target, mode);
     const default_engine_options = EngineOptions.fromCli(b);
 
     // chess exe
     {
         var engine_options = default_engine_options;
         engine_options.windowing = true;
+        engine_options.exr = false;
         const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
         const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
         rtchess_exe.setTarget(target);
@@ -46,6 +48,7 @@ pub fn build(b: *std.build.Builder) void {
     {
         var engine_options = default_engine_options;
         engine_options.windowing = false;
+        engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
         const offline_exe = b.addExecutable("offline", "offline/main.zig");
         offline_exe.setTarget(target);
@@ -55,6 +58,8 @@ pub fn build(b: *std.build.Builder) void {
         offline_exe.addPackage(vk);
         offline_exe.addPackage(engine);
         offline_exe.linkLibC();
+        offline_exe.linkLibrary(tinyexr.library);
+        offline_exe.addIncludePath(tinyexr.include_path);
 
         const run_offline = offline_exe.run();
         run_offline.step.dependOn(b.getInstallStep());
@@ -70,6 +75,7 @@ pub const EngineOptions = struct {
     vk_validation: bool = false,
     vk_measure_perf: bool = false,
     windowing: bool = false,
+    exr: bool = false,
 
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
@@ -107,6 +113,7 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOp
     build_options.addOption(bool, "vk_validation", options.vk_validation);
     build_options.addOption(bool, "vk_measure_perf", options.vk_measure_perf);
     build_options.addOption(bool, "windowing", options.windowing);
+    build_options.addOption(bool, "exr", options.exr);
 
     const deps_local = [_]std.build.Pkg {
         vk,
@@ -126,128 +133,34 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOp
     return engine;
 }
 
-const Lws = enum {
-    wayland,
-    x11,
-    all,
-};
-
-fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
-    const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        protocol_path,
-        xml,
-    });
-
-    const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
-        header_path,
-        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol-code.h", .{out_name}),
-    });
-
-    const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
-        header_path,
-        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.h", .{out_name}),
-    });
-
-    const source_cmd = b.addSystemCommand(&[_][]const u8 {
-        "wayland-scanner", "private-code", xml_path, out_source,
-    });
-
-    const header_cmd = b.addSystemCommand(&[_][]const u8 {
-        "wayland-scanner", "client-header", xml_path, out_header,
-    });
-
-    step.dependOn(&source_cmd.step);
-    step.dependOn(&header_cmd.step);
-}
-
-fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
-    const pkg_config_protocols_result = try std.ChildProcess.exec(.{
-        .allocator = b.allocator,
-        .argv =  &[_][]const u8 {
-            "pkg-config", "wayland-protocols", "--variable=pkgdatadir"
-        },
-    });
-
-    if (pkg_config_protocols_result.term == .Exited and pkg_config_protocols_result.term.Exited != 0) {
-        return error.WaylandProtocolsNotFound;
-    }
-
-    const protocol_path = std.mem.trimRight(u8, pkg_config_protocols_result.stdout, " \n");
-
-    const cache_dir = try std.fs.path.join(b.allocator, &[_][]const u8{
-        b.build_root,
-        b.cache_root,
-    });
-    const header_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        cache_dir,
-        "wayland-gen-headers",
-    });
-
-    if (std.fs.makeDirAbsolute(header_path)) |_| {
-    } else |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => |e| return e,
-    }
-
-    try genWaylandHeader(b, step, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
-    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
-    try genWaylandHeader(b, step, protocol_path, header_path, "stable/viewporter/viewporter.xml", "viewporter");
-    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/relative-pointer/relative-pointer-unstable-v1.xml", "relative-pointer-unstable-v1");
-    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/pointer-constraints/pointer-constraints-unstable-v1.xml", "pointer-constraints-unstable-v1");
-    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
-
-    {
-        const pkg_config_wayland_result = try std.ChildProcess.exec(.{
-            .allocator = b.allocator,
-            .argv =  &[_][]const u8 {
-                "pkg-config", "wayland-client", "--variable=pkgdatadir"
-            },
-        });
-
-        if (pkg_config_wayland_result.term == .Exited and pkg_config_wayland_result.term.Exited != 0) {
-            return error.WaylandClientNotFound;
-        }
-
-        const wayland_path = std.mem.trimRight(u8, pkg_config_wayland_result.stdout, " \n");
-        const wayland_xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-            wayland_path,
-            "wayland.xml",
-        });
-
-        {
-            const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
-                header_path,
-                "wayland-client-protocol-code.h",
-            });
-            const source_cmd = b.addSystemCommand(&[_][]const u8 {
-                "wayland-scanner", "private-code", wayland_xml_path, out_source,
-            });
-            step.dependOn(&source_cmd.step);
-        }
-       
-        {
-            const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
-                header_path,
-                "wayland-client-protocol.h",
-            });
-
-            const header_cmd = b.addSystemCommand(&[_][]const u8 {
-                "wayland-scanner", "client-header", wayland_xml_path, out_header,
-            });
-
-            step.dependOn(&header_cmd.step);
-        }
-    }
-}
-
 const CLibrary = struct {
     include_path: []const u8,
     library: *std.build.LibExeObjStep,
 };
 
+fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) CLibrary {
+    const tinyexr_path = "./deps/tinyexr/";
+    const miniz_path = tinyexr_path ++ "deps/miniz/";
+
+    const lib = b.addStaticLibrary("tinyexr", null);
+    lib.setBuildMode(mode);
+    lib.setTarget(target);
+    lib.linkLibCpp();
+    lib.addIncludePath(miniz_path);
+    lib.addCSourceFiles(&.{
+        tinyexr_path ++ "tinyexr.cc",
+        miniz_path ++ "miniz.c",
+    }, &.{});
+
+    return CLibrary {
+        .include_path = tinyexr_path,
+        .library = lib,
+    };
+}
+
 // adapted from mach glfw
 fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) !CLibrary {
-    const dir = "./deps/glfw/";
+    const path = "./deps/glfw/";
     const lib = b.addStaticLibrary("glfw", null);
     lib.setBuildMode(mode);
     lib.setTarget(target);
@@ -270,7 +183,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
     // collect source files
     var sources = std.ArrayList([]const u8).init(b.allocator);
     {
-        const source_dir = dir ++ "src/";
+        const source_path = path ++ "src/";
 
         const general_sources = [_][]const u8 {
             "context.c",
@@ -332,17 +245,17 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
         };
 
         inline for (general_sources) |source| {
-            try sources.append(source_dir ++ source);
+            try sources.append(source_path ++ source);
         }
 
         if (target.isLinux()) {
             inline for (linux_sources) |source| {
-                try sources.append(source_dir ++ source);
+                try sources.append(source_path ++ source);
             }
             switch (lws) {
                 .all => {
                     inline for (x11_sources ++ wayland_sources) |source| {
-                        try sources.append(source_dir ++ source);
+                        try sources.append(source_path ++ source);
                     }
                     inline for (wayland_lib_sources) |source| {
                         try sources.append(source);
@@ -350,12 +263,12 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
                 },
                 .x11 => {
                     inline for (x11_sources) |source| {
-                        try sources.append(source_dir ++ source);
+                        try sources.append(source_path ++ source);
                     }
                 },
                 .wayland => {
                     inline for (wayland_sources) |source| {
-                        try sources.append(source_dir ++ source);
+                        try sources.append(source_path ++ source);
                     }
                     inline for (wayland_lib_sources) |source| {
                         try sources.append(source);
@@ -364,7 +277,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
             }
         } else if (target.isWindows()) {
             inline for (windows_sources) |source| {
-                try sources.append(source_dir ++ source);
+                try sources.append(source_path ++ source);
             }
         }
     }
@@ -419,9 +332,123 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
     }
 
     return CLibrary {
-        .include_path = dir ++ "include",
+        .include_path = path ++ "include",
         .library = lib,
     };
+}
+
+const Lws = enum {
+    wayland,
+    x11,
+    all,
+};
+
+fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
+    const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+        protocol_path,
+        xml,
+    });
+
+    const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
+        header_path,
+        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol-code.h", .{out_name}),
+    });
+
+    const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
+        header_path,
+        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.h", .{out_name}),
+    });
+
+    const source_cmd = b.addSystemCommand(&[_][]const u8 {
+        "wayland-scanner", "private-code", xml_path, out_source,
+    });
+
+    const header_cmd = b.addSystemCommand(&[_][]const u8 {
+        "wayland-scanner", "client-header", xml_path, out_header,
+    });
+
+    step.dependOn(&source_cmd.step);
+    step.dependOn(&header_cmd.step);
+}
+
+fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
+    const pkg_config_protocols_result = try std.ChildProcess.exec(.{
+        .allocator = b.allocator,
+        .argv =  &[_][]const u8 {
+            "pkg-config", "wayland-protocols", "--variable=pkgdatadir"
+        },
+    });
+
+    if (pkg_config_protocols_result.term == .Exited and pkg_config_protocols_result.term.Exited != 0) {
+        return error.WaylandProtocolsNotFound;
+    }
+
+    const protocol_path = std.mem.trimRight(u8, pkg_config_protocols_result.stdout, " \n");
+
+    const cache_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+        b.build_root,
+        b.cache_root,
+    });
+    const header_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+        cache_path,
+        "wayland-gen-headers",
+    });
+
+    if (std.fs.makeDirAbsolute(header_path)) |_| {
+    } else |err| switch (err) {
+        error.PathAlreadyExists => {},
+        else => |e| return e,
+    }
+
+    try genWaylandHeader(b, step, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
+    try genWaylandHeader(b, step, protocol_path, header_path, "stable/viewporter/viewporter.xml", "viewporter");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/relative-pointer/relative-pointer-unstable-v1.xml", "relative-pointer-unstable-v1");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/pointer-constraints/pointer-constraints-unstable-v1.xml", "pointer-constraints-unstable-v1");
+    try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
+
+    {
+        const pkg_config_wayland_result = try std.ChildProcess.exec(.{
+            .allocator = b.allocator,
+            .argv =  &[_][]const u8 {
+                "pkg-config", "wayland-client", "--variable=pkgdatadir"
+            },
+        });
+
+        if (pkg_config_wayland_result.term == .Exited and pkg_config_wayland_result.term.Exited != 0) {
+            return error.WaylandClientNotFound;
+        }
+
+        const wayland_path = std.mem.trimRight(u8, pkg_config_wayland_result.stdout, " \n");
+        const wayland_xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
+            wayland_path,
+            "wayland.xml",
+        });
+
+        {
+            const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
+                header_path,
+                "wayland-client-protocol-code.h",
+            });
+            const source_cmd = b.addSystemCommand(&[_][]const u8 {
+                "wayland-scanner", "private-code", wayland_xml_path, out_source,
+            });
+            step.dependOn(&source_cmd.step);
+        }
+       
+        {
+            const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
+                header_path,
+                "wayland-client-protocol.h",
+            });
+
+            const header_cmd = b.addSystemCommand(&[_][]const u8 {
+                "wayland-scanner", "client-header", wayland_xml_path, out_header,
+            });
+
+            step.dependOn(&header_cmd.step);
+        }
+    }
 }
 
 // adapted from vk-zig
@@ -434,13 +461,13 @@ pub const HlslCompileStep = struct {
     step: std.build.Step,
     builder: *std.build.Builder,
     cmd: []const []const u8,
-    output_dir: []const u8,
+    output_path: []const u8,
     shaders: std.ArrayList(Shader),
     file_text: std.ArrayList(u8),
     package: std.build.Pkg,
     output_file: std.build.GeneratedFile,
 
-    pub fn init(builder: *std.build.Builder, cmd: []const []const u8, output_dir: []const u8) *HlslCompileStep {
+    pub fn init(builder: *std.build.Builder, cmd: []const []const u8, output_path: []const u8) *HlslCompileStep {
         const full_out_path = std.fs.path.join(builder.allocator, &[_][]const u8{
             builder.build_root,
             builder.cache_root,
@@ -451,7 +478,7 @@ pub const HlslCompileStep = struct {
         self.* = .{
             .step = std.build.Step.init(.custom, "shader-compile", builder.allocator, make),
             .builder = builder,
-            .output_dir = output_dir,
+            .output_path = output_path,
             .cmd = builder.dupeStrings(cmd),
             .shaders = std.ArrayList(Shader).init(builder.allocator),
             .file_text = std.ArrayList(u8).init(builder.allocator),
@@ -473,7 +500,7 @@ pub const HlslCompileStep = struct {
         const full_out_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{
             self.builder.build_root,
             self.builder.cache_root,
-            self.output_dir,
+            self.output_path,
             output_filename,
         }) catch unreachable;
         self.shaders.append(.{ .source_path = src, .full_out_path = full_out_path }) catch unreachable;
@@ -492,15 +519,15 @@ pub const HlslCompileStep = struct {
         cmd[cmd.len - 2] = "-Fo";
 
         for (self.shaders.items) |shader| {
-            const dir = std.fs.path.dirname(shader.full_out_path).?;
-            try cwd.makePath(dir);
+            const path = std.fs.path.dirname(shader.full_out_path).?;
+            try cwd.makePath(path);
             cmd[cmd.len - 3] = shader.source_path;
             cmd[cmd.len - 1] = shader.full_out_path;
             try self.builder.spawnChild(cmd);
         }
 
-        const dir = std.fs.path.dirname(self.output_file.path.?).?;
-        try cwd.makePath(dir);
+        const path = std.fs.path.dirname(self.output_file.path.?).?;
+        try cwd.makePath(path);
         try cwd.writeFile(self.output_file.path.?, self.file_text.items);
     }
 };
