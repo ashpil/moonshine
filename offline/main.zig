@@ -161,6 +161,8 @@ pub fn main() !void {
         .command_buffer_count = 1,
     }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
+    const display_image_bytes = try vk_allocator.createHostBuffer(&context, u8, @intCast(u32, display_image.data.items(.size_in_bytes)[0]), .{ .transfer_dst_bit = true });
+    defer display_image_bytes.destroy(&context);
     // record command buffer
     {
         try context.device.beginCommandBuffer(command_buffer, &.{
@@ -179,7 +181,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = accumulation_image.data.items(.image)[0],
+                .image = accumulation_image.data.items(.handle)[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -197,7 +199,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = display_image.data.items(.image)[0],
+                .image = display_image.data.items(.handle)[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -233,6 +235,59 @@ pub fn main() !void {
             .size = 0,
         };
         context.device.cmdTraceRaysKHR(command_buffer, &pipeline.sbt.getRaygenSBT(), &pipeline.sbt.getMissSBT(), &pipeline.sbt.getHitSBT(), &callable_table, extent.width, extent.height, 1);
+
+        // transfer output image to transfer_src_optimal layout
+        const barrier = vk.ImageMemoryBarrier2 {
+            .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .src_access_mask = .{ .shader_write_bit = true },
+            .dst_stage_mask = .{ .copy_bit = true },
+            .dst_access_mask = .{ .transfer_read_bit = true },
+            .old_layout = .general,
+            .new_layout = .transfer_src_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = display_image.data.items(.handle)[0],
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = vk.REMAINING_ARRAY_LAYERS,
+            },
+        };
+        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+            .dependency_flags = .{},
+            .memory_barrier_count = 0,
+            .p_memory_barriers = undefined,
+            .buffer_memory_barrier_count = 0,
+            .p_buffer_memory_barriers = undefined,
+            .image_memory_barrier_count = 1,
+            .p_image_memory_barriers = utils.toPointerType(&barrier),
+        });
+
+        // copy output image to host-visible staging buffer
+        const copy = vk.BufferImageCopy {
+            .buffer_offset = 0,
+            .buffer_row_length = 0,
+            .buffer_image_height = 0,
+            .image_subresource = .{
+                .aspect_mask = .{ .color_bit = true },
+                .mip_level = 0,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+            .image_offset = .{
+                .x = 0,
+                .y = 0,
+                .z = 0,
+            },
+            .image_extent = .{
+                .width = extent.width,
+                .height = extent.height,
+                .depth = 1,
+            },  
+        };
+        context.device.cmdCopyImageToBuffer(command_buffer, display_image.data.items(.handle)[0], .transfer_src_optimal, display_image_bytes.handle, 1, utils.toPointerType(&copy));
 
         try context.device.endCommandBuffer(command_buffer);
     }

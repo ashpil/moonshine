@@ -51,7 +51,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             };
             var attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
             errdefer attachment_images.destroy(vc, allocator);
-            try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.image), .@"undefined", .general);
+            try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.handle), .@"undefined", .general);
 
             const sets = try descriptor_layout.allocate_sets(vc, num_frames, [_]vk.WriteDescriptorSet {
                 vk.WriteDescriptorSet {
@@ -212,7 +212,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.display_image.data.items(.image)[0],
+                    .image = self.display_image.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -261,7 +261,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     },
                 };
                 self.attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
-                try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.image), .@"undefined", .general);
+                try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.handle), .@"undefined", .general);
 
                 comptime var i = 0;
                 inline while (i < num_frames) : (i += 1) {
@@ -284,7 +284,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.display_image.data.items(.image)[0],
+                    .image = self.display_image.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -339,7 +339,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(frame.command_buffer, self.display_image.data.items(.image)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+            vc.device.cmdBlitImage(frame.command_buffer, self.display_image.data.items(.handle)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {

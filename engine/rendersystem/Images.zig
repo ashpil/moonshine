@@ -110,11 +110,7 @@ pub const TextureSource = union(enum) {
     greyscale: comptime_float,
 };
 
-const Data = std.MultiArrayList(struct {
-    image: vk.Image,
-    view: vk.ImageView,
-    memory: vk.DeviceMemory,
-});
+const Data = std.MultiArrayList(Image);
 
 data: Data,
 
@@ -128,11 +124,7 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
     for (infos) |info| {
         const image = try Image.create(vc, vk_allocator, info.extent, info.usage, info.format, false);
 
-        data.appendAssumeCapacity(.{
-            .image = image.handle,
-            .view = image.view,
-            .memory = image.memory,
-        });
+        data.appendAssumeCapacity(image);
     }
 
     return Self {
@@ -151,9 +143,6 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
     const bytes = try allocator.alloc([]const u8, sources.len);
     defer allocator.free(bytes);
-
-    const sizes = try allocator.alloc(u64, sources.len);
-    defer allocator.free(sizes);
 
     const is_cubemaps = try allocator.alloc(bool, sources.len);
     defer allocator.free(is_cubemaps);
@@ -208,15 +197,11 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
         };
-        data.appendAssumeCapacity(.{
-            .image = image.handle,
-            .view = image.view,
-            .memory = image.memory,
-        });
-        sizes[i] = image.size;
+        data.appendAssumeCapacity(image);
     }
 
-    const images = data.items(.image);
+    const images = data.items(.handle);
+    const sizes = data.items(.size_in_bytes);
 
     try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, sizes, extents, is_cubemaps, dst_layouts);
 
@@ -228,7 +213,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     const data_slice = self.data.slice();
     const views = data_slice.items(.view);
-    const images = data_slice.items(.image);
+    const images = data_slice.items(.handle);
     const memories = data_slice.items(.memory);
 
     var i: u32 = 0;
@@ -266,7 +251,7 @@ const Image = struct {
     handle: vk.Image,
     view: vk.ImageView,
     memory: vk.DeviceMemory,
-    size: vk.DeviceSize,
+    size_in_bytes: vk.DeviceSize,
 
     fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, is_cubemap: bool) !Image {
         const extent = vk.Extent3D {
@@ -331,7 +316,7 @@ const Image = struct {
             .memory = memory,
             .handle = handle,
             .view = view,
-            .size = mem_requirements.size,
+            .size_in_bytes = mem_requirements.size,
         };
     }
 };
