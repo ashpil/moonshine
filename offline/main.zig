@@ -306,7 +306,8 @@ pub fn main() !void {
     }}, vk.Fence.null_handle);
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    _ = exr.helpers.save;
+    try exr.helpers.save(allocator, @ptrCast([]const f32, display_image_bytes.data), extent, "out.exr");
+
     try context.device.deviceWaitIdle();
     std.log.info("Program completed!", .{});
 }
