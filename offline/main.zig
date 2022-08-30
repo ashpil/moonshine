@@ -304,7 +304,9 @@ pub fn main() !void {
         .signal_semaphore_info_count = 0,
         .p_signal_semaphore_infos = undefined,
     }}, vk.Fence.null_handle);
-   
+
+    // now done with GPU stuff/all rendering; can write from output buffer to exr
+    _ = exr.helpers.save;
     try context.device.deviceWaitIdle();
     std.log.info("Program completed!", .{});
 }

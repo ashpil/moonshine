@@ -1,3 +1,5 @@
+// at top level this just has ziggified C API -- but also have a higher-level helpers namespace
+
 const c = @import("./c.zig");
 const std = @import("std");
 
@@ -20,6 +22,13 @@ pub const TinyExrError = error {
 
 pub const Image = c.EXRImage;
 pub const Header = c.EXRHeader;
+pub const ChannelInfo = c.EXRChannelInfo;
+
+pub const PixelType = enum(c_int) {
+    uint = 0,
+    half = 1,
+    float = 2,
+};
 
 fn getErr(err_code: c_int) TinyExrError!void {
     return switch (err_code) {
@@ -51,3 +60,89 @@ pub fn saveExrImageToFile(image: *const Image, header: *const Header, filename: 
     };
 }
 
+pub fn initExrHeader(header: *Header) void {
+    c.InitEXRHeader(header);
+}
+
+pub fn initExrImage(image: *Image) void {
+    c.InitEXRImage(image);
+}
+
+pub const helpers = struct {
+    const vk = @import("vulkan");
+
+    // make out_filename this not sentinel terminated
+    pub fn save(allocator: std.mem.Allocator, r32g32b32: []const f32, size: vk.Extent2D, out_filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!void {
+        const channel_count = 3;
+
+        var header: Header = undefined;
+        initExrHeader(&header);
+
+        var image: Image = undefined;
+        initExrImage(&image);
+
+        const pixel_count = size.width * size.height;
+
+        const ImageChannels = std.MultiArrayList(struct {
+            r: f32,
+            g: f32,
+            b: f32,
+        });
+        var image_channels = ImageChannels {};
+        defer image_channels.deinit(allocator);
+
+        try image_channels.ensureUnusedCapacity(allocator, pixel_count);
+
+        {
+            var i: usize = 0;
+            while (i < pixel_count) : (i += 1) {
+                image_channels.appendAssumeCapacity(.{
+                    .r = r32g32b32[3 * i + 0],
+                    .g = r32g32b32[3 * i + 1],
+                    .b = r32g32b32[3 * i + 2],
+                });
+            }
+        }
+
+        const image_channels_slice = image_channels.slice();
+        image.num_channels = channel_count;
+        image.images = &[3][*c]u8 {
+            image_channels_slice.ptrs[0],
+            image_channels_slice.ptrs[1],
+            image_channels_slice.ptrs[2],
+        };
+        image.width = @intCast(c_int, size.width);
+        image.height = @intCast(c_int, size.height);
+
+        var header_channels = try allocator.alloc(ChannelInfo, channel_count);
+        defer allocator.free(header_channels);
+
+        var pixel_types = try allocator.alloc(c_int, channel_count);
+        defer allocator.free(pixel_types);
+        var requested_pixel_types = try allocator.alloc(c_int, channel_count);
+        defer allocator.free(requested_pixel_types);
+
+        header.num_channels = channel_count;
+        header.channels = header_channels.ptr;
+
+        header.channels[0].name[0] = 'B';
+        header.channels[0].name[1] = 0;
+        header.channels[1].name[0] = 'G';
+        header.channels[1].name[1] = 0;
+        header.channels[2].name[0] = 'R';
+        header.channels[2].name[1] = 0;
+
+        header.pixel_types = pixel_types.ptr;
+        header.requested_pixel_types = requested_pixel_types.ptr;
+
+        {
+            comptime var i: usize = 0;
+            inline while (i < channel_count) : (i += 1) {
+                header.pixel_types[i] = @enumToInt(PixelType.float);
+                header.requested_pixel_types[i] = @enumToInt(PixelType.float);
+            }
+        }
+
+        try saveExrImageToFile(&image, &header, out_filename);
+    }
+};
