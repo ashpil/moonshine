@@ -72,7 +72,7 @@ pub const helpers = struct {
     const vk = @import("vulkan");
 
     // make out_filename this not sentinel terminated
-    pub fn save(allocator: std.mem.Allocator, r32g32b32: []const f32, size: vk.Extent2D, out_filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!void {
+    pub fn save(allocator: std.mem.Allocator, packed_channels: []const f32, packed_channel_count: u32, size: vk.Extent2D, out_filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!void {
         const channel_count = 3;
 
         var header: Header = undefined;
@@ -97,9 +97,9 @@ pub const helpers = struct {
             var i: usize = 0;
             while (i < pixel_count) : (i += 1) {
                 image_channels.appendAssumeCapacity(.{
-                    .r = r32g32b32[3 * i + 0],
-                    .g = r32g32b32[3 * i + 1],
-                    .b = r32g32b32[3 * i + 2],
+                    .r = packed_channels[packed_channel_count * i + 0],
+                    .g = packed_channels[packed_channel_count * i + 1],
+                    .b = packed_channels[packed_channel_count * i + 2],
                 });
             }
         }
