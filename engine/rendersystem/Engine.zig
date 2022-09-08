@@ -41,9 +41,9 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     const context = try VulkanContext.create(.{ .allocator = allocator, .window = window, .app_name = app_name });
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
-    const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1);
-    const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1);
-    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight);
+    const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, null);
+    const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, null);
+    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight, null);
 
     var commands = try Commands.create(&context);
     const display = try Display.create(&context, &vk_allocator, allocator, &commands, &output_descriptor_layout, initial_window_size);

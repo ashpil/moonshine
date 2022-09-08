@@ -134,12 +134,19 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int) !Self {
-            const handle = try vc.device.createDescriptorSetLayout(&.{
+        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int, binding_flags: ?[bindings.len]vk.DescriptorBindingFlags) !Self {
+            
+            const binding_flags_create_info = if (binding_flags) |flags| (&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
+                .binding_count = bindings.len,
+                .p_binding_flags = &flags,
+            }) else null;
+            const create_info = vk.DescriptorSetLayoutCreateInfo {
                 .flags = .{},
                 .binding_count = bindings.len,
                 .p_bindings = bindings.ptr,
-            }, null);
+                .p_next = binding_flags_create_info,
+            };
+            const handle = try vc.device.createDescriptorSetLayout(&create_info, null);
             errdefer vc.device.destroyDescriptorSetLayout(handle, null);
 
             comptime var pool_sizes: [bindings.len]vk.DescriptorPoolSize = undefined;

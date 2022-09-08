@@ -496,6 +496,7 @@ const PhysicalDevice = struct {
             .scalar_block_layout = vk.TRUE,
             .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
             .runtime_descriptor_array = vk.TRUE,
+            .descriptor_binding_partially_bound = vk.TRUE,
             .host_query_reset = vk.TRUE,
         };
 
