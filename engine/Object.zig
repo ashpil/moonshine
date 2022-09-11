@@ -93,27 +93,14 @@ pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
                         .position = positions[position_index],
                         .texture = textures[texture_index],
                     };
-                    var j: u32 = 0;
-                    while (j < current_vertex) : (j += 1) {
-                        if (std.meta.eql(vertex, vertices[j])) {
-                            switch (i) {
-                                0 => index.x = j,
-                                1 => index.y = j,
-                                2 => index.z = j,
-                                else => unreachable,
-                            }
-                            break;
-                        }
-                    } else {
-                        switch (i) {
-                            0 => index.x = current_vertex,
-                            1 => index.y = current_vertex,
-                            2 => index.z = current_vertex,
-                            else => unreachable,
-                        }
-                        vertices[current_vertex] = vertex;
-                        current_vertex += 1;     
+                    switch (i) {
+                        0 => index.x = current_vertex,
+                        1 => index.y = current_vertex,
+                        2 => index.z = current_vertex,
+                        else => unreachable,
                     }
+                    vertices[current_vertex] = vertex;
+                    current_vertex += 1;
                 }
                 indices[current_index] = index;
                 current_index += 1;
