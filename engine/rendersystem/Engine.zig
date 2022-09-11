@@ -106,21 +106,16 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
     return buffer;
 }
 
-pub fn recordFrame(self: *Self, buffer: vk.CommandBuffer) !void {
+pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     // bind our stuff
-    self.context.device.cmdBindPipeline(buffer, .ray_tracing_khr, self.pipeline.handle);
+    self.context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.pipeline.handle);
     
     // push our stuff
     const bytes = std.mem.asBytes(&.{self.camera.desc, self.camera.blur_desc, self.num_accumulted_frames});
-    self.context.device.cmdPushConstants(buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+    self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace our stuff
-    const callable_table = vk.StridedDeviceAddressRegionKHR {
-        .device_address = 0,
-        .stride = 0,
-        .size = 0,
-    };
-    self.context.device.cmdTraceRaysKHR(buffer, &self.pipeline.sbt.getRaygenSBT(), &self.pipeline.sbt.getMissSBT(), &self.pipeline.sbt.getHitSBT(), &callable_table, self.display.extent.width, self.display.extent.height, 1);
+    self.pipeline.traceRays(&self.context, command_buffer, self.display.extent);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !void {

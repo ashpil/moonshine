@@ -238,12 +238,7 @@ pub fn main() !void {
         context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        const callable_table = vk.StridedDeviceAddressRegionKHR {
-            .device_address = 0,
-            .stride = 0,
-            .size = 0,
-        };
-        context.device.cmdTraceRaysKHR(command_buffer, &pipeline.sbt.getRaygenSBT(), &pipeline.sbt.getMissSBT(), &pipeline.sbt.getHitSBT(), &callable_table, extent.width, extent.height, 1);
+        pipeline.traceRays(&context, command_buffer, extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {

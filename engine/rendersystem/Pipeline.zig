@@ -95,6 +95,15 @@ const ShaderInfo = struct {
     }
 };
 
+pub fn traceRays(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, extent: vk.Extent2D) void {
+    const callable_table = vk.StridedDeviceAddressRegionKHR {
+        .device_address = 0,
+        .stride = 0,
+        .size = 0,
+    };
+    vc.device.cmdTraceRaysKHR(command_buffer, &self.sbt.getRaygenSBT(), &self.sbt.getMissSBT(), &self.sbt.getHitSBT(), &callable_table, extent.width, extent.height, 1);
+}
+
 layout: vk.PipelineLayout,
 handle: vk.Pipeline,
 sbt: ShaderBindingTable,
