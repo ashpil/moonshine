@@ -7,87 +7,7 @@ const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const F32x3 = @import("../vector.zig").Vec3(f32);
 const Commands = @import("./Commands.zig");
-
-// https://docs.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-reference
-const DDSPixelFormat = extern struct {
-    size: u32,                  // expected to be 32
-    flags: u32,                 // flags for pixel format
-    four_cc: u32,               // four characters indicating format type - for us, expected to be "DX10"
-    rgb_bit_count: u32,         // "Number of bits in an RGB (possibly including alpha) format"
-    r_bit_mask: u32,            // mask for red data
-    g_bit_mask: u32,            // mask for green data
-    b_bit_mask: u32,            // mask for blue data
-    a_bit_mask: u32,            // mask for alpha data
-
-    fn verify(self: *const DDSPixelFormat) void {
-        std.debug.assert(self.size == 32);
-        std.debug.assert(self.four_cc == @ptrCast(*const u32, "DX10").*);
-    }
-};
-
-const DDSHeader = extern struct {
-    size: u32,                  // expected to be 124
-    flags: u32,                 // flags indicating which fields below have valid data
-    height: u32,                // height of image
-    width: u32,                 // width of image
-    pitch_or_linear_size: u32,  // "The pitch or number of bytes per scan line in an uncompressed texture"
-    depth: u32,                 // depth of image
-    mip_map_count: u32,         // number of mipmaps in image
-    reserved_1: [11]u32,        // unused
-    ddspf: DDSPixelFormat,      // details about pixels
-    caps: u32,                  // "Specifies the complexity of the surfaces stored."
-    caps2: u32,                 // "Additional detail about the surfaces stored."
-    caps3: u32,                 // unused
-    caps4: u32,                 // unused
-    reserved_2: u32,            // unused
-
-    fn verify(self: *const DDSHeader) void {
-        std.debug.assert(self.size == 124);
-        self.ddspf.verify();
-    }
-};
-
-const DDSHeaderDXT10 = extern struct {
-    dxgi_format: u32,           // the surface pixel format; this should probably be an enum
-    resource_dimension: u32,    // texture dimension
-    misc_flag: u32,             // misc flags
-    array_size: u32,            // number of elements in array
-    misc_flags_2: u32,          // additional metadata
-};
-
-const DDSFileInfo = extern struct {
-    magic: u32,                 // expected to be 542327876, hex for "DDS"
-    header: DDSHeader,          // first header
-    header_10: DDSHeaderDXT10,  // second header
-
-    // just some random sanity checks to make sure we actually are getting a DDS file
-    fn verify(self: *const DDSFileInfo) void {
-        std.debug.assert(self.magic == 542327876);
-        self.header.verify();
-    }
-
-    fn getExtent(self: *const DDSFileInfo) vk.Extent2D {
-        return vk.Extent2D {
-            .width = self.header.width,
-            .height = self.header.height,
-        };
-    }
-
-    fn getFormat(self: *const DDSFileInfo) vk.Format {
-        return switch (self.header_10.dxgi_format) {
-            71 => .bc1_rgb_srgb_block,
-            80 => .bc4_unorm_block,
-            83 => .bc5_unorm_block,
-            95 => .bc6h_ufloat_block,
-            96 => .bc6h_sfloat_block,
-            else => unreachable, // TODO
-        };
-    }
-
-    fn isCubemap(self: *const DDSFileInfo) bool {
-        return self.header_10.misc_flag == 4;
-    }
-};
+const dds = @import("../fileformats/dds.zig");
 
 pub const ImageCreateRawInfo = struct {
     extent: vk.Extent2D,
@@ -154,12 +74,12 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
         const image = switch (source) {
             .dds_filepath => |filepath| blk: {
                 const dds_file = @embedFile(filepath);
-                const dds_info = @ptrCast(*const DDSFileInfo, dds_file[0..@sizeOf(DDSFileInfo)]);
+                const dds_info = @ptrCast(*const dds.FileInfo, dds_file[0..@sizeOf(dds.FileInfo)]);
                 dds_info.verify(); // this could be comptime but compiler glitches out for some reason
                 extents[i] = dds_info.getExtent();
                 is_cubemaps[i] = dds_info.isCubemap();
                 dst_layouts[i] = .shader_read_only_optimal;
-                bytes[i] = dds_file[@sizeOf(DDSFileInfo)..];
+                bytes[i] = dds_file[@sizeOf(dds.FileInfo)..];
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
             },

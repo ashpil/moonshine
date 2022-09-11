@@ -13,7 +13,7 @@ const Scene = engine.rendersystem.Scene;
 const Material = engine.rendersystem.Scene.Material;
 
 const utils = engine.rendersystem.utils;
-const exr = engine.exr;
+const exr = engine.fileformats.exr;
 
 const descriptor = engine.rendersystem.descriptor;
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;

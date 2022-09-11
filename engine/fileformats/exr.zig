@@ -1,6 +1,6 @@
 // at top level this just has ziggified C API -- but also have a higher-level helpers namespace
 
-const c = @import("./c.zig");
+const c = @import("../c.zig");
 const std = @import("std");
 
 pub const TinyExrError = error {
