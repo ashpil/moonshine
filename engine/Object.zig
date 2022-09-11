@@ -54,6 +54,10 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     };
 }
 
+// not super efficient as the idea is that this won't be used all that much
+// since obj is a stupid format anyway
+// by not efficient, this means it doesn't do vertex deduplication, which is quite crucial for obj files
+// it loads stuff relatively efficiently, but the stuff it loads may not be efficient
 pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
     const sizes = getObjSizes(contents);
     const positions = try allocator.alloc(F32x3, sizes.num_positions);
@@ -61,7 +65,7 @@ pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
     const textures = try allocator.alloc(F32x2, sizes.num_textures);
     defer allocator.free(textures);
     const indices = try allocator.alloc(U32x3, sizes.num_indices);
-    var vertices = try allocator.alloc(Vertex, sizes.num_indices * 3);
+    const vertices = try allocator.alloc(Vertex, sizes.num_indices * 3);
 
     var lines = std.mem.tokenize(u8, contents, "\n");
     var current_position: u32 = 0;
@@ -107,8 +111,6 @@ pub fn fromObj(allocator: std.mem.Allocator, contents: []const u8) !Self {
             }
         }
     }
-
-    vertices = try allocator.realloc(vertices, current_vertex);
 
     return Self {
         .vertices = vertices,
