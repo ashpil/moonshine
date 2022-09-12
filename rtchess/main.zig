@@ -84,38 +84,38 @@ pub fn main() !void {
     const set_info = ChessSet.SetInfo {
         .board = .{
             .material_index = 0,
-            .model_path = "../../assets/models/board.obj"
+            .model_path = "./assets/models/board.obj"
         },
 
         .pawn = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/pawn.obj"
+            .model_path = "./assets/models/pawn.obj"
         },
         .rook = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/rook.obj"
+            .model_path = "./assets/models/rook.obj"
         },
         .knight = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/knight.obj"
+            .model_path = "./assets/models/knight.obj"
         },
         .bishop = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/bishop.obj"
+            .model_path = "./assets/models/bishop.obj"
         },
         .king = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/king.obj"
+            .model_path = "./assets/models/king.obj"
         },
         .queen = .{
             .white_material_index = 1,
             .black_material_index = 2,
-            .model_path = "../../assets/models/queen.obj"
+            .model_path = "./assets/models/queen.obj"
         },
     };
 

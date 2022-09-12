@@ -15,6 +15,7 @@ const Background = @import("./Background.zig");
 const Meshes = @import("./Meshes.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
+const asset = @import("../asset.zig");
 
 const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
@@ -55,7 +56,7 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, comptime mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     comptime var color_sources: [materials.len]Images.TextureSource = undefined;
     comptime var roughness_sources: [materials.len]Images.TextureSource = undefined;
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
@@ -109,17 +110,17 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         };
     }
 
-    var objects: [mesh_filepaths.len]MeshData = undefined;
+    const objects = try allocator.alloc(MeshData, mesh_filepaths.len);
+    defer allocator.free(objects);
+    defer for (objects) |*object| object.destroy(allocator);
 
-    inline for (mesh_filepaths) |mesh_filepath, i| {
-        objects[i] = try MeshData.fromObj(allocator, @embedFile(mesh_filepath));
+    for (mesh_filepaths) |mesh_filepath, i| {
+        const file = try asset.openAsset(allocator, mesh_filepath);
+        defer file.close();
+
+        objects[i] = try MeshData.fromObj(allocator, file);
     }
 
-    defer for (objects) |*object| {
-        object.destroy(allocator);
-    };
-
-    // set it all to undefined to it can be filled below
     var geometry_infos = Accel.GeometryInfos {};
     defer geometry_infos.deinit(allocator);
     try geometry_infos.ensureTotalCapacity(allocator, mesh_filepaths.len);
@@ -127,14 +128,15 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const geometry_infos_slice = geometry_infos.slice();
     const geometries = geometry_infos_slice.items(.geometry);
-    var build_infos: [mesh_filepaths.len]vk.AccelerationStructureBuildRangeInfoKHR = undefined;
-    
-    var meshes = try Meshes.create(vc, vk_allocator, allocator, commands, &objects, geometries, &build_infos);
+    const build_infos = try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, mesh_filepaths.len);
+    defer allocator.free(build_infos);
+
+    var meshes = try Meshes.create(vc, vk_allocator, allocator, commands, objects, geometries, build_infos);
     errdefer meshes.destroy(vc, allocator);
 
     var build_infos_ref = geometry_infos_slice.items(.build_info);
-    comptime var i = 0;
-    inline while (i < mesh_filepaths.len) : (i += 1) {
+    var i: u32 = 0;
+    while (i < mesh_filepaths.len) : (i += 1) {
         build_infos_ref[i] = &build_infos[i];
     }
 

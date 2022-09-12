@@ -139,7 +139,7 @@ pub fn main() !void {
         };
 
         const mesh_filepaths = [_][]const u8 {
-            "../../assets/models/pawn.obj",
+            "./assets/models/pawn.obj",
         };
 
         var instances = Scene.Instances {};
