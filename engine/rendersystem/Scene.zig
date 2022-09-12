@@ -84,9 +84,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     commands.recordUploadBuffer(GpuMaterial, vc, materials_buffer, gpu_materials);
     try commands.submitAndIdleUntilDone(vc);
 
-    const color_textures = try Images.createTexture(vc, vk_allocator, allocator, &color_sources, commands);
-    const roughness_textures = try Images.createTexture(vc, vk_allocator, allocator, &roughness_sources, commands);
-    const normal_textures = try Images.createTexture(vc, vk_allocator, allocator, &normal_sources, commands);
+    var color_textures = try Images.createTexture(vc, vk_allocator, allocator, &color_sources, commands);
+    var roughness_textures = try Images.createTexture(vc, vk_allocator, allocator, &roughness_sources, commands);
+    var normal_textures = try Images.createTexture(vc, vk_allocator, allocator, &normal_sources, commands);
+
+    errdefer color_textures.destroy(vc, allocator);
+    errdefer roughness_textures.destroy(vc, allocator);
+    errdefer normal_textures.destroy(vc, allocator);
 
     const color_views = color_textures.data.items(.view);
     const roughness_views = roughness_textures.data.items(.view);

@@ -144,6 +144,7 @@ pub fn main() !void {
 
         var instances = Scene.Instances {};
         try instances.ensureTotalCapacity(allocator, 1);
+        errdefer instances.deinit(allocator);
 
         instances.appendAssumeCapacity(.{
             .mesh_info = .{
