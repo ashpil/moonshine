@@ -1,11 +1,8 @@
-// struct to provide sequential sync access to various device operations
-// likely not the most optimal but certainly the most straightforward
+// abstraction for GPU commands
 
 const std = @import("std");
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
-const Pipeline = @import("./Pipeline.zig");
-const Display = @import("./display.zig").Display;
 const vk = @import("vulkan");
 const utils = @import("./utils.zig");
 
@@ -17,7 +14,9 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext) !Self {
     const pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
-        .flags = .{},
+        .flags = .{
+            .transient_bit = true,
+        },
     }, null);
     errdefer vc.device.destroyCommandPool(pool, null);
 
@@ -35,18 +34,21 @@ pub fn create(vc: *const VulkanContext) !Self {
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    vc.device.freeCommandBuffers(self.pool, 1, utils.toPointerType(&self.buffer));
     vc.device.destroyCommandPool(self.pool, null);
 }
 
-fn beginOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
+// start recording work
+fn startRecording(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.beginCommandBuffer(self.buffer, &.{
-        .flags = .{},
+        .flags = .{
+            .one_time_submit_bit = true,
+        },
         .p_inheritance_info = null,
     });
 }
 
-fn endOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
+// submit recorded work
+fn submit(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.endCommandBuffer(self.buffer);
 
     const submit_info = vk.SubmitInfo2 {
@@ -63,31 +65,39 @@ fn endOneTimeCommands(self: *Self, vc: *const VulkanContext) !void {
     };
 
     try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
+}
+
+fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
+    try self.submit(vc);
+    try self.idleUntilDone(vc);
+}
+
+// must be called at some point if you want a guarantee your work is actually done
+fn idleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.queueWaitIdle(vc.queue);
     try vc.device.resetCommandPool(self.pool, .{});
 }
 
 pub fn copyAccelStructs(self: *Self, vc: *const VulkanContext, infos: []const vk.CopyAccelerationStructureInfoKHR) !void {
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
     for (infos) |info| {
         vc.device.cmdCopyAccelerationStructureKHR(self.buffer, &info);
     }
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
 
 pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
     const size = @intCast(u32, geometry_infos.len);
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
     vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
 
 pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR, handles: []const vk.AccelerationStructureKHR, compactedSizes: []vk.DeviceSize) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
     std.debug.assert(build_infos.len == handles.len);
     const size = @intCast(u32, geometry_infos.len);
-
 
     const query_pool = try vc.device.createQueryPool(&.{
         .flags = .{},
@@ -99,7 +109,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
 
     vc.device.resetQueryPool(query_pool, 0, size);
 
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
 
     vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
 
@@ -123,13 +133,13 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
 
     vc.device.cmdWriteAccelerationStructuresPropertiesKHR(self.buffer, size, handles.ptr, .acceleration_structure_compacted_size_khr, query_pool, 0);
 
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 
     _ = try vc.device.getQueryPoolResults(query_pool, 0, size, size * @sizeOf(vk.DeviceSize), compactedSizes.ptr, @sizeOf(vk.DeviceSize), .{.@"64_bit" = true, .wait_bit = true });
 }
 
 pub fn copyBufferToImage(self: *Self, vc: *const VulkanContext, src: vk.Buffer, dst: vk.Image, width: u32, height: u32, layer_count: u32) !void {
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
     
     const copy = vk.BufferImageCopy {
         .buffer_offset = 0,
@@ -153,11 +163,11 @@ pub fn copyBufferToImage(self: *Self, vc: *const VulkanContext, src: vk.Buffer, 
         },  
     };
     vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
 
 pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, images: []vk.Image, src_layout: vk.ImageLayout, dst_layout: vk.ImageLayout) !void {
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
 
     const barriers = try allocator.alloc(vk.ImageMemoryBarrier2, images.len);
     defer allocator.free(barriers);
@@ -193,7 +203,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
         .p_image_memory_barriers = barriers.ptr,
     });
 
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
 
 // TODO: possible to ensure all params have same len at comptime?
@@ -203,7 +213,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
     std.debug.assert(sizes.len == extents.len);
     std.debug.assert(extents.len == is_cubemaps.len);
 
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
 
     const len = @intCast(u32, dst_images.len);
 
@@ -308,7 +318,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         .p_image_memory_barriers = second_barriers.ptr,
     });
 
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
 
 const DataSource = union(enum) {
@@ -333,7 +343,7 @@ pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
     };
     defer staging_buffer.destroy(vc);
 
-    try self.beginOneTimeCommands(vc);
+    try self.startRecording(vc);
 
     const region = vk.BufferCopy {
         .src_offset = 0,
@@ -342,5 +352,5 @@ pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
     };
 
     vc.device.cmdCopyBuffer(self.buffer, staging_buffer.handle, dst_buffer, 1, utils.toPointerType(&region));
-    try self.endOneTimeCommands(vc);
+    try self.submitAndIdleUntilDone(vc);
 }
