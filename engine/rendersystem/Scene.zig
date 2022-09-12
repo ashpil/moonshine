@@ -103,7 +103,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
     errdefer materials_buffer.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, materials_buffer.handle, std.mem.asBytes(&gpu_materials));
+    try commands.uploadData(vc, vk_allocator, materials_buffer.handle, .{ .bytes = std.mem.asBytes(&gpu_materials) });
 
     var objects: [mesh_filepaths.len]MeshData = undefined;
 

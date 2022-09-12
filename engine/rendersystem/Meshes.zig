@@ -36,12 +36,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const vertices_bytes = std.mem.sliceAsBytes(object.vertices);
         const vertex_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
         errdefer vertex_buffer.destroy(vc);
-        try commands.uploadData(vc, vk_allocator, vertex_buffer.handle, vertices_bytes);
+        try commands.uploadData(vc, vk_allocator, vertex_buffer.handle, .{ .bytes = vertices_bytes });
 
         const indices_bytes = std.mem.sliceAsBytes(object.indices);
         const index_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
         errdefer index_buffer.destroy(vc);
-        try commands.uploadData(vc, vk_allocator, index_buffer.handle, indices_bytes);
+        try commands.uploadData(vc, vk_allocator, index_buffer.handle, .{ .bytes = indices_bytes });
 
         const vertex_address = vertex_buffer.getAddress(vc);
         const index_address = index_buffer.getAddress(vc);
@@ -88,7 +88,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const mesh_info_bytes = std.mem.sliceAsBytes(mesh_infos);
     const mesh_info = try vk_allocator.createDeviceBuffer(vc, allocator, mesh_info_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
     errdefer mesh_info.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, mesh_info.handle, mesh_info_bytes);
+    try commands.uploadData(vc, vk_allocator, mesh_info.handle, .{ .bytes = mesh_info_bytes });
 
     return Self {
         .buffers = mesh_buffers,

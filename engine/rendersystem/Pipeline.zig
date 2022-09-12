@@ -184,19 +184,19 @@ const ShaderBindingTable = struct {
         const raygen_size = handle_size_aligned * raygen_entry_count;
         const raygen = try vk_allocator.createDeviceBuffer(vc, allocator, raygen_size, buffer_usage_flags);
         errdefer raygen.destroy(vc);
-        try cmd.uploadData(vc, vk_allocator, raygen.handle, sbt[0..raygen_size]);
+        try cmd.uploadData(vc, vk_allocator, raygen.handle, .{ .bytes = sbt[0..raygen_size] });
         const raygen_address = raygen.getAddress(vc);
 
         const miss_size = handle_size_aligned * miss_entry_count;
         const miss = try vk_allocator.createDeviceBuffer(vc, allocator, miss_size, buffer_usage_flags);
         errdefer miss.destroy(vc);
-        try cmd.uploadData(vc, vk_allocator, miss.handle, sbt[raygen_size..raygen_size + miss_size]);
+        try cmd.uploadData(vc, vk_allocator, miss.handle, .{ .bytes =  sbt[raygen_size..raygen_size + miss_size] });
         const miss_address = miss.getAddress(vc);
 
         const hit_size = handle_size_aligned * hit_entry_count;
         const hit = try vk_allocator.createDeviceBuffer(vc, allocator, hit_size, buffer_usage_flags);
         errdefer hit.destroy(vc);
-        try cmd.uploadData(vc, vk_allocator, hit.handle, sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
+        try cmd.uploadData(vc, vk_allocator, hit.handle, .{ .bytes = sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size] });
         const hit_address = hit.getAddress(vc);
 
         return ShaderBindingTable {

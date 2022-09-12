@@ -311,19 +311,34 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
     try self.endOneTimeCommands(vc);
 }
 
-pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, data: []const u8) !void {
+const DataSource = union(enum) {
+    bytes: []const u8,
+    file: []const u8,
+};
 
-    const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, data.len), .{ .transfer_src_bit = true });
+pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, data: DataSource) !void {
+
+    const staging_buffer = switch (data) {
+        .bytes => |bytes| blk: {
+            const buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, buffer.data, bytes);
+            break :blk buffer;
+        },
+        .file => |file_path| blk: {
+            // TODO
+            _ = file_path;
+            const buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, unreachable), .{ .transfer_src_bit = true });
+            break :blk buffer;
+        }
+    };
     defer staging_buffer.destroy(vc);
-    
-    std.mem.copy(u8, staging_buffer.data, data);
 
     try self.beginOneTimeCommands(vc);
 
     const region = vk.BufferCopy {
         .src_offset = 0,
         .dst_offset = 0,
-        .size = data.len,
+        .size = staging_buffer.data.len,
     };
 
     vc.device.cmdCopyBuffer(self.buffer, staging_buffer.handle, dst_buffer, 1, utils.toPointerType(&region));

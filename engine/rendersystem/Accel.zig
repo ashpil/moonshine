@@ -209,7 +209,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instance_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * instance_count, .{ .shader_device_address_bit = true, .storage_buffer_bit = true, .transfer_dst_bit = true });
     errdefer instance_buffer.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, instance_buffer.handle, std.mem.sliceAsBytes(instances.items(.material_index)));
+    try commands.uploadData(vc, vk_allocator, instance_buffer.handle, .{ .bytes = std.mem.sliceAsBytes(instances.items(.material_index)) });
 
     var accel = Self {
         .blases = blases,
