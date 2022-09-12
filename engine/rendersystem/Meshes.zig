@@ -29,24 +29,44 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     try mesh_buffers.ensureTotalCapacity(allocator, objects.len);
     errdefer mesh_buffers.deinit(allocator);
     
-    var mesh_infos = try allocator.alloc(MeshInfo, objects.len);
-    defer allocator.free(mesh_infos);
+    var mesh_infos = try vk_allocator.createHostBuffer(vc, MeshInfo, @intCast(u32, objects.len), .{ .transfer_src_bit = true });
+    defer mesh_infos.destroy(vc);
+
+    var staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), objects.len * 2);
+    defer allocator.free(staging_buffers);
+    defer for (staging_buffers) |buffer| buffer.destroy(vc);
+
+    try commands.startRecording(vc);
 
     for (objects) |object, i| {
-        const vertices_bytes = std.mem.sliceAsBytes(object.vertices);
-        const vertex_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-        errdefer vertex_buffer.destroy(vc);
-        try commands.uploadData(vc, vk_allocator, vertex_buffer.handle, .{ .bytes = vertices_bytes });
+        const vertex_buffer = blk: {
+            const bytes = std.mem.sliceAsBytes(object.vertices);
 
-        const indices_bytes = std.mem.sliceAsBytes(object.indices);
-        const index_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, vertices_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+            staging_buffers[i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, staging_buffers[i].data, bytes);
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffers[i]);
+
+            break :blk gpu_buffer;
+        };
+        errdefer vertex_buffer.destroy(vc);
+
+        const index_buffer = blk: {
+            const bytes = std.mem.sliceAsBytes(object.indices);
+
+            staging_buffers[objects.len + i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, staging_buffers[objects.len + i].data, bytes);
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffers[objects.len + i]);
+
+            break :blk gpu_buffer;
+        };
         errdefer index_buffer.destroy(vc);
-        try commands.uploadData(vc, vk_allocator, index_buffer.handle, .{ .bytes = indices_bytes });
 
         const vertex_address = vertex_buffer.getAddress(vc);
         const index_address = index_buffer.getAddress(vc);
 
-        mesh_infos[i] = MeshInfo {
+        mesh_infos.data[i] = MeshInfo {
             .vertex_address = vertex_address,
             .index_address = index_address,
         };
@@ -85,11 +105,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         });
     }
 
-    const mesh_info_bytes = std.mem.sliceAsBytes(mesh_infos);
-    const mesh_info = try vk_allocator.createDeviceBuffer(vc, allocator, mesh_info_bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
+    const mesh_info = try vk_allocator.createDeviceBuffer(vc, allocator, mesh_infos.data.len * @sizeOf(MeshInfo), .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
     errdefer mesh_info.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, mesh_info.handle, .{ .bytes = mesh_info_bytes });
+    commands.recordUploadBuffer(MeshInfo, vc, mesh_info, mesh_infos);
 
+    try commands.submitAndIdleUntilDone(vc);
+    
     return Self {
         .buffers = mesh_buffers,
 

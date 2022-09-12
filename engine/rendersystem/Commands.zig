@@ -38,7 +38,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
 }
 
 // start recording work
-fn startRecording(self: *Self, vc: *const VulkanContext) !void {
+pub fn startRecording(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.beginCommandBuffer(self.buffer, &.{
         .flags = .{
             .one_time_submit_bit = true,
@@ -48,7 +48,7 @@ fn startRecording(self: *Self, vc: *const VulkanContext) !void {
 }
 
 // submit recorded work
-fn submit(self: *Self, vc: *const VulkanContext) !void {
+pub fn submit(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.endCommandBuffer(self.buffer);
 
     const submit_info = vk.SubmitInfo2 {
@@ -67,13 +67,13 @@ fn submit(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
 }
 
-fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
+pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     try self.submit(vc);
     try self.idleUntilDone(vc);
 }
 
 // must be called at some point if you want a guarantee your work is actually done
-fn idleUntilDone(self: *Self, vc: *const VulkanContext) !void {
+pub fn idleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.queueWaitIdle(vc.queue);
     try vc.device.resetCommandPool(self.pool, .{});
 }
@@ -325,6 +325,24 @@ const DataSource = union(enum) {
     bytes: []const u8,
     file: []const u8,
 };
+
+// buffers must have appropriate flags
+pub fn recordCopyBuffer(self: *Self, vc: *const VulkanContext, dst: vk.Buffer, src: vk.Buffer, regions: []const vk.BufferCopy) void {
+    vc.device.cmdCopyBuffer(self.buffer, src, dst, @intCast(u32, regions.len), regions.ptr);
+}
+
+// buffers must have appropriate flags
+// uploads whole host buffer to gpu buffer
+pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContext, dst: VkAllocator.DeviceBuffer, src: VkAllocator.HostBuffer(T)) void {
+    const bytes = std.mem.sliceAsBytes(src.data);
+    const region = vk.BufferCopy {
+        .src_offset = 0,
+        .dst_offset = 0,
+        .size = bytes.len,
+    };
+
+    vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, utils.toPointerType(&region));
+}
 
 pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, data: DataSource) !void {
 
