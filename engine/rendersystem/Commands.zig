@@ -321,11 +321,6 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
     try self.submitAndIdleUntilDone(vc);
 }
 
-const DataSource = union(enum) {
-    bytes: []const u8,
-    file: []const u8,
-};
-
 // buffers must have appropriate flags
 pub fn recordCopyBuffer(self: *Self, vc: *const VulkanContext, dst: vk.Buffer, src: vk.Buffer, regions: []const vk.BufferCopy) void {
     vc.device.cmdCopyBuffer(self.buffer, src, dst, @intCast(u32, regions.len), regions.ptr);
@@ -344,31 +339,13 @@ pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContex
     vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, utils.toPointerType(&region));
 }
 
-pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, data: DataSource) !void {
-
-    const staging_buffer = switch (data) {
-        .bytes => |bytes| blk: {
-            const buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
-            std.mem.copy(u8, buffer.data, bytes);
-            break :blk buffer;
-        },
-        .file => |file_path| blk: {
-            // TODO
-            _ = file_path;
-            const buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, unreachable), .{ .transfer_src_bit = true });
-            break :blk buffer;
-        }
-    };
+pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, bytes: []const u8) !void {
+    const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
     defer staging_buffer.destroy(vc);
 
+    std.mem.copy(u8, staging_buffer.data, bytes);
+
     try self.startRecording(vc);
-
-    const region = vk.BufferCopy {
-        .src_offset = 0,
-        .dst_offset = 0,
-        .size = staging_buffer.data.len,
-    };
-
-    vc.device.cmdCopyBuffer(self.buffer, staging_buffer.handle, dst_buffer, 1, utils.toPointerType(&region));
+    self.recordUploadBuffer(u8, vc, .{ .handle = dst_buffer }, staging_buffer);
     try self.submitAndIdleUntilDone(vc);
 }

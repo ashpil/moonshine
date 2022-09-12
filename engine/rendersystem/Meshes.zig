@@ -113,7 +113,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     
     return Self {
         .buffers = mesh_buffers,
-
         .mesh_info = mesh_info,
     };
 }

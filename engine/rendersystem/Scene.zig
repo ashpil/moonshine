@@ -60,7 +60,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     comptime var roughness_sources: [materials.len]Images.TextureSource = undefined;
     comptime var normal_sources: [materials.len]Images.TextureSource = undefined;
 
-    comptime var gpu_materials: [materials.len]GpuMaterial = undefined;
+    const gpu_materials = try vk_allocator.createHostBuffer(vc, GpuMaterial, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
+    defer gpu_materials.destroy(vc);
 
     var color_image_info: [materials.len]vk.DescriptorImageInfo = undefined;
     var roughness_image_info: [materials.len]vk.DescriptorImageInfo = undefined;
@@ -71,9 +72,16 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         roughness_sources[i] = set.roughness;
         normal_sources[i] = set.normal;
 
-        gpu_materials[i].ior = set.ior;
-        gpu_materials[i].metalness = set.metalness;
+        gpu_materials.data[i].ior = set.ior;
+        gpu_materials.data[i].metalness = set.metalness;
     };
+
+    const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+    errdefer materials_buffer.destroy(vc);
+
+    try commands.startRecording(vc);
+    commands.recordUploadBuffer(GpuMaterial, vc, materials_buffer, gpu_materials);
+    try commands.submitAndIdleUntilDone(vc);
 
     const color_textures = try Images.createTexture(vc, vk_allocator, allocator, &color_sources, commands);
     const roughness_textures = try Images.createTexture(vc, vk_allocator, allocator, &roughness_sources, commands);
@@ -100,10 +108,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .image_layout = .shader_read_only_optimal,
         };
     }
-
-    const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-    errdefer materials_buffer.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, materials_buffer.handle, .{ .bytes = std.mem.asBytes(&gpu_materials) });
 
     var objects: [mesh_filepaths.len]MeshData = undefined;
 
