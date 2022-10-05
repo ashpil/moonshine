@@ -126,8 +126,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 var timestamps: [2]u64 = undefined;
                 const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
                 const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * vc.physical_device.properties.limits.timestamp_period) / 1_000_000.0;
-                _ = result;
-                _ = time;
                 std.debug.print("{}: {d}\n", .{result, time});
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
             }

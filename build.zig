@@ -130,7 +130,7 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOp
     const engine_deps = try b.allocator.create([deps_local.len]std.build.Pkg);
     engine_deps.* = deps_local;
 
-    const engine = std.build.Pkg{
+    const engine = std.build.Pkg {
         .name = "engine",
         .source = .{ .path = "engine/engine.zig" },
         .dependencies = engine_deps,
@@ -515,7 +515,7 @@ pub const HlslCompileStep = struct {
         }) catch unreachable;
         self.shaders.append(.{ .source_path = src_full_path, .full_out_path = full_out_path }) catch unreachable;
 
-        self.file_text.writer().print("pub const {s} = @embedFile(\"{s}\");\n", .{ import_name, full_out_path }) catch unreachable;
+        self.file_text.writer().print("pub const {s} align(@alignOf(u32)) = @embedFile(\"{s}\").*;\n", .{ import_name, full_out_path }) catch unreachable;
     }
 
     fn make(step: *std.build.Step) !void {

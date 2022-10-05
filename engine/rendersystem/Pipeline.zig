@@ -20,28 +20,28 @@ pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocat
     const rgen_module = try vc.device.createShaderModule(&.{
         .flags = .{},
         .code_size = shaders.raygen.len,
-        .p_code = @ptrCast([*]const u32, shaders.raygen),
+        .p_code = @ptrCast([*]const u32, &shaders.raygen),
     }, null);
     defer vc.device.destroyShaderModule(rgen_module, null);
 
     const rmiss_module = try vc.device.createShaderModule(&.{
         .flags = .{},
         .code_size = shaders.raymiss.len,
-        .p_code = @ptrCast([*]const u32, shaders.raymiss),
+        .p_code = @ptrCast([*]const u32, &shaders.raymiss),
     }, null);
     defer vc.device.destroyShaderModule(rmiss_module, null);
 
     const rchit_module = try vc.device.createShaderModule(&.{
         .flags = .{},
         .code_size = shaders.rayhit.len,
-        .p_code = @ptrCast([*]const u32, shaders.rayhit),
+        .p_code = @ptrCast([*]const u32, &shaders.rayhit),
     }, null);
     defer vc.device.destroyShaderModule(rchit_module, null);
 
     const shadow_module = try vc.device.createShaderModule(&.{
         .flags = .{},
         .code_size = shaders.shadowmiss.len,
-        .p_code = @ptrCast([*]const u32, shaders.shadowmiss),
+        .p_code = @ptrCast([*]const u32, &shaders.shadowmiss),
     }, null);
     defer vc.device.destroyShaderModule(shadow_module, null);
 
