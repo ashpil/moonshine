@@ -154,7 +154,7 @@ pub fn main() !void {
             .material_index = 0,
         });
 
-        break :blk try Scene.create(&context, &vk_allocator, allocator, &commands, &materials, "../../assets/textures/skybox/", &mesh_filepaths, instances, &scene_descriptor_layout, &background_descriptor_layout);
+        break :blk try Scene.create(&context, &vk_allocator, allocator, &commands, &materials, "./assets/textures/skybox/", &mesh_filepaths, instances, &scene_descriptor_layout, &background_descriptor_layout);
     };
     defer scene.destroy(&context, allocator);
     

@@ -8,7 +8,7 @@ fn checkValidVecT(comptime T: type) void {
     }
 }
 
-fn intToT(comptime T: type, int: comptime_int) T {
+fn intToT(comptime T: type, comptime int: comptime_int) T {
     if (@typeInfo(T) == .Float) return @intToFloat(T, int);
     return @intCast(T, int);
 }

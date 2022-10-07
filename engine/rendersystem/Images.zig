@@ -8,6 +8,7 @@ const VkAllocator = @import("./Allocator.zig");
 const F32x3 = @import("../vector.zig").Vec3(f32);
 const Commands = @import("./Commands.zig");
 const dds = @import("../fileformats/dds.zig");
+const asset = @import("../asset.zig");
 
 pub const ImageCreateRawInfo = struct {
     extent: vk.Extent2D,
@@ -27,7 +28,7 @@ pub const TextureSource = union(enum) {
     dds_filepath: []const u8,
     raw_file: RawSource,
     color: F32x3,
-    greyscale: comptime_float,
+    greyscale: f32,
 };
 
 const Data = std.MultiArrayList(Image);
@@ -52,8 +53,7 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
     };
 }
 
-// TODO: sources won't be able to be comptime at some point, handle this after we have proper asset loading
-pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, comptime sources: []const TextureSource, commands: *Commands) !Self {
+pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, sources: []const TextureSource, commands: *Commands) !Self {
     var data = Data {};
     try data.ensureTotalCapacity(allocator, sources.len);
     errdefer data.deinit(allocator);
@@ -70,16 +70,25 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     const dst_layouts = try allocator.alloc(vk.ImageLayout, sources.len);
     defer allocator.free(dst_layouts);
 
-    inline for (sources) |source, i| {
-        const image = switch (source) {
+    var free_bytes = std.ArrayList([]const u8).init(allocator);
+    defer free_bytes.deinit();
+    defer for (free_bytes.items) |free_byte| allocator.free(free_byte);
+
+    for (sources) |*source, i| {
+        const image = switch (source.*) {
             .dds_filepath => |filepath| blk: {
-                const dds_file = @embedFile(filepath);
-                const dds_info = @ptrCast(*const dds.FileInfo, dds_file[0..@sizeOf(dds.FileInfo)]);
-                dds_info.verify(); // this could be comptime but compiler glitches out for some reason
+                const dds_file = try asset.openAsset(allocator, filepath);
+                defer dds_file.close();
+
+                const file_bytes = try dds_file.readToEndAlloc(allocator, std.math.maxInt(u32));
+                try free_bytes.append(file_bytes);
+
+                const dds_info = std.mem.bytesToValue(dds.FileInfo, file_bytes[0..@sizeOf(dds.FileInfo)]);
+                dds_info.verify();
                 extents[i] = dds_info.getExtent();
                 is_cubemaps[i] = dds_info.isCubemap();
                 dst_layouts[i] = .shader_read_only_optimal;
-                bytes[i] = dds_file[@sizeOf(dds.FileInfo)..];
+                bytes[i] = file_bytes[@sizeOf(dds.FileInfo)..];
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
             },
@@ -89,13 +98,20 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                     .height = raw_info.height,
                 };
                 is_cubemaps[i] = false;
-                bytes[i] = @embedFile(raw_info.filepath);
                 dst_layouts[i] = .general;
+
+                const file = try asset.openAsset(allocator, raw_info.filepath);
+                defer file.close();
+
+                const file_bytes = try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+                try free_bytes.append(file_bytes);
+
+                bytes[i] = file_bytes;
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemaps[i]);
             },
-            .color => |color| blk: {
-                bytes[i] = comptime std.mem.asBytes(&color);
+            .color => blk: {
+                bytes[i] = std.mem.asBytes(&source.color);
                 extents[i] = vk.Extent2D {
                     .width = 1,
                     .height = 1,
@@ -105,8 +121,8 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
-            .greyscale => |greyscale| blk: {
-                bytes[i] = comptime std.mem.asBytes(&@floatCast(f32, greyscale));
+            .greyscale => blk: {
+                bytes[i] = std.mem.asBytes(&source.greyscale);
                 extents[i] = vk.Extent2D {
                     .width = 1,
                     .height = 1,
