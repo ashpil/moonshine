@@ -32,5 +32,5 @@ jobs:
         version: master
 
     - name: Build with latest zig
-      run: zig build -fstage1
+      run: zig build
 
