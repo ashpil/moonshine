@@ -252,10 +252,14 @@ pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) void {
             .transform = vk.TransformMatrixKHR {
                 .matrix = @bitCast([3][4]f32, mesh_info.transform),
             },
-            .instance_custom_index = mesh_index,
-            .mask = if (mesh_info.visible) 0xFF else 0x00,
-            .instance_shader_binding_table_record_offset = 0,
-            .flags = 0,
+            .instance_custom_index_and_mask = .{
+                .instance_custom_index = mesh_index,
+                .mask = if (mesh_info.visible) 0xFF else 0x00,
+            },
+            .instance_shader_binding_table_record_offset_and_flags = .{
+                .instance_shader_binding_table_record_offset = 0,
+                .flags = 0,
+            },
             .acceleration_structure_reference = blas_addresses[mesh_index],
         };
     } 

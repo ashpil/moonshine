@@ -14,7 +14,7 @@ pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const 
    if (comptime @import("build_options").vk_validation) {
        try vc.device.setDebugUtilsObjectNameEXT(&.{
            .object_type = comptime typeToObjectType(@TypeOf(object)),
-           .object_handle = @bitCast(u64, object),
+           .object_handle = @enumToInt(object),
            .p_object_name = name,
        });
    }

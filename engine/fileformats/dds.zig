@@ -14,7 +14,7 @@ pub const PixelFormat = extern struct {
 
     fn verify(self: *const PixelFormat) void {
         std.debug.assert(self.size == 32);
-        std.debug.assert(self.four_cc == @ptrCast(*const u32, "DX10").*);
+        std.debug.assert(self.four_cc == comptime std.mem.readIntNative(u32, "DX10"));
     }
 };
 

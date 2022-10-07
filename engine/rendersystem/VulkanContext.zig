@@ -252,8 +252,8 @@ const validation_device_commands = if (validate) vk.DeviceCommandFlags {
 const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(perf_device_commands).merge(windowing_device_commands).merge(validation_device_commands);});
 
 fn debugCallback(
-    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT.IntType,
-    message_type: vk.DebugUtilsMessageTypeFlagsEXT.IntType,
+    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk.DebugUtilsMessageTypeFlagsEXT,
     callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
     user_data: ?*anyopaque,
     ) callconv(.C) vk.Bool32 {
@@ -263,7 +263,7 @@ fn debugCallback(
     const info_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .info_bit_ext = true }).toInt();
     const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
     const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_bit_ext = true }).toInt();
-    const color: u32 = switch (message_severity) {
+    const color: u32 = switch (message_severity.toInt()) {
         verbose_severity => 37,
         info_severity => 32,
         warning_severity => 33,

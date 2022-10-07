@@ -59,7 +59,8 @@ pub fn getObjSizes(contents: []const u8) Sizes {
 // by not efficient, this means it doesn't do vertex deduplication, which is quite crucial for obj files
 // it loads stuff relatively efficiently, but the stuff it loads may not be efficient
 pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
-    const reader = std.io.bufferedReader(file.reader()).reader();
+    var buffered_reader = std.io.bufferedReader(file.reader());
+    const reader = buffered_reader.reader();
     const contents = try reader.readAllAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(contents);
 
