@@ -54,7 +54,9 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{});
+    var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
+        .samples_per_run = 128,
+    });
     defer pipeline.destroy(&context);
 
     const extent = vk.Extent2D { .width = 1024, .height = 1024 }; // TODO: cli
@@ -309,6 +311,8 @@ pub fn main() !void {
         .signal_semaphore_info_count = 0,
         .p_signal_semaphore_infos = undefined,
     }}, vk.Fence.null_handle);
+
+    try context.device.deviceWaitIdle();
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
     var f32_slice: []const f32 = undefined;
