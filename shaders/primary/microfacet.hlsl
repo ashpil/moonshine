@@ -24,7 +24,7 @@ struct Material {
         return mixed + (float3(1.0, 1.0, 1.0) - mixed) * pow((1 - dot(w_i, m)), 5);
     }
 
-    // GGX
+    // GGX NDF
     static float D(float3 m, float roughness) {
         float cos_theta_m = frameCosTheta(m);
         if (cos_theta_m > 0.0) {
@@ -124,7 +124,7 @@ struct Material {
             pdf = lerp(pdf2, pdf, this.metalness);
             return w_i;
         } else {
-            square.x = (1 / (1.0 - this.metalness)) * (square.x - this.metalness);
+            square.x = (square.x - this.metalness) / (1.0 - this.metalness);
             float3 w_i = sampleLambert(w_o, this, pdf, square);
 
             float pdf2 = cookTorrancePDF(w_i, w_o, this);
