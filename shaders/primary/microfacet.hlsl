@@ -12,7 +12,7 @@ Texture2D<float> roughnessTextures[] : register(t4, space0);
 
 struct Material {
     float3 color;        // color; each component is (0, 1)
-    float metalness;      // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
+    float metalness;     // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
     float roughness;     // roughness value; (0, 1) exclusive
     float ior;           // index of refraction; (0, ?) exclusive
 
@@ -144,9 +144,9 @@ struct Material {
     float3 f_r(float3 w_i, float3 w_o) {
         float3 microfacet = cookTorrance(w_i, w_o, this);
         float3 lambertian = lambert(w_i, w_o, this);
-        return ((1.0 - this.metalness) * lambertian) + (this.metalness * microfacet);
-    }
 
+        return lerp(lambertian, microfacet, this.metalness);
+    }
 };
 
 Material getMaterial(uint materialIndex, float2 texcoords) {

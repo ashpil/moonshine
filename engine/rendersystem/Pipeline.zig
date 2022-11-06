@@ -13,10 +13,15 @@ const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 
+// defaults for online
+const PipelineConstants = struct {
+    samples_per_run: u32 = 1,
+    max_bounces: u32 = 4,
+};
+
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
-pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, scene_descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout, output_descriptor_layout: *const OutputDescriptorLayout) !Self {
-
+pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, scene_descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout, output_descriptor_layout: *const OutputDescriptorLayout, constants: PipelineConstants) !Self {
     const rgen_module = try vc.device.createShaderModule(&.{
         .flags = .{},
         .code_size = shaders.raygen.len,
@@ -46,7 +51,20 @@ pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocat
     defer vc.device.destroyShaderModule(shadow_module, null);
 
     const pipeline = try Self.create(vc, vk_allocator, allocator, cmd, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, output_descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = &vk.SpecializationInfo {
+            .map_entry_count = 2,
+            .p_map_entries = &[2]vk.SpecializationMapEntry { .{
+                .constant_id = 0,
+                .offset = 0,
+                .size = @sizeOf(u32),
+            }, .{
+                .constant_id = 1,
+                .offset = @sizeOf(u32),
+                .size = @sizeOf(u32),
+            } },
+            .data_size = @sizeOf(PipelineConstants),
+            .p_data = &constants,
+        }, },
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = rmiss_module, .p_name = "main", .p_specialization_info = null, },
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shadow_module, .p_name = "main", .p_specialization_info = null, },
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = rchit_module, .p_name = "main", .p_specialization_info = null, },

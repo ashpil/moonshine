@@ -28,8 +28,8 @@ struct PushConsts {
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
-static const uint SAMPLES_PER_FRAME = 1;
-static const uint MAX_BOUNCES = 4;
+[[vk::constant_id(0)]] const uint SAMPLES_PER_RUN = 1;
+[[vk::constant_id(1)]] const uint MAX_BOUNCES = 4;
 
 RayDesc generateDir(Camera camera, float4 rand) {
     float2 sampled_rand = squareToUniformDiskConcentric(rand.xy);
@@ -106,7 +106,7 @@ void storeColor(float3 color) {
         previouslyAccumulated = accumulationImage[imageCoords].rgb;
     }
     accumulationImage[imageCoords] = float4(previouslyAccumulated + color, 1.0);
-    displayImage[imageCoords] = float4((previouslyAccumulated + color) / ((pushConsts.numAccumulatedFrames + 1) * SAMPLES_PER_FRAME), 1.0);
+    displayImage[imageCoords] = float4((previouslyAccumulated + color) / ((pushConsts.numAccumulatedFrames + 1) * SAMPLES_PER_RUN), 1.0);
 }
 
 [shader("raygeneration")]
@@ -116,7 +116,7 @@ void main() {
     // the result that we write to our buffer
     float3 color = float3(0.0, 0.0, 0.0);
 
-    for (uint sampleCount = 0; sampleCount < SAMPLES_PER_FRAME; sampleCount++) {
+    for (uint sampleCount = 0; sampleCount < SAMPLES_PER_RUN; sampleCount++) {
         // set up initial directions for first bounce
         float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
         RayDesc initialRay = generateDir(pushConsts.camera, rand);

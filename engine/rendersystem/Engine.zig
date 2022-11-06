@@ -61,7 +61,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
     const camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout);
+    const pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{});
 
     return Self {
         .context = context,
