@@ -5,32 +5,35 @@ const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const Object = @import("../Object.zig");
 
-const MeshInfo = struct {
+// actual data we have per each mesh, CPU-side info
+// probably doesn't make sense to cache addresses?
+const Meshes = std.MultiArrayList(struct {
+    vertex_buffer: VkAllocator.DeviceBuffer,
+    vertex_count: u32,
+
+    index_buffer: VkAllocator.DeviceBuffer,
+    index_count: u32,
+});
+
+// store seperately to be able to get pointers to geometry data in shader
+const MeshAddresses = packed struct {
     vertex_address: vk.DeviceAddress,
     index_address: vk.DeviceAddress,
 };
 
-const MeshBuffers = std.MultiArrayList(struct {
-    vertex_buffer: VkAllocator.DeviceBuffer,
-    index_buffer: VkAllocator.DeviceBuffer,
-});
+meshes: Meshes,
 
-buffers: MeshBuffers,
-
-mesh_info: VkAllocator.DeviceBuffer,
+addresses_buffer: VkAllocator.DeviceBuffer,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, objects: []const Object, geometries: []vk.AccelerationStructureGeometryKHR, build_infos: []vk.AccelerationStructureBuildRangeInfoKHR) !Self {
-    std.debug.assert(objects.len == geometries.len);
-    std.debug.assert(objects.len == build_infos.len);
-
-    var mesh_buffers = MeshBuffers {};
-    try mesh_buffers.ensureTotalCapacity(allocator, objects.len);
-    errdefer mesh_buffers.deinit(allocator);
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, objects: []const Object) !Self {
+    var meshes = Meshes {};
+    try meshes.ensureTotalCapacity(allocator, objects.len);
+    errdefer meshes.deinit(allocator);
     
-    var mesh_infos = try vk_allocator.createHostBuffer(vc, MeshInfo, @intCast(u32, objects.len), .{ .transfer_src_bit = true });
-    defer mesh_infos.destroy(vc);
+    var addresses_buffer_host = try vk_allocator.createHostBuffer(vc, MeshAddresses, @intCast(u32, objects.len), .{ .transfer_src_bit = true });
+    defer addresses_buffer_host.destroy(vc);
 
     var staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), objects.len * 2);
     defer allocator.free(staging_buffers);
@@ -66,59 +69,34 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const vertex_address = vertex_buffer.getAddress(vc);
         const index_address = index_buffer.getAddress(vc);
 
-        mesh_infos.data[i] = MeshInfo {
+        addresses_buffer_host.data[i] = MeshAddresses {
             .vertex_address = vertex_address,
             .index_address = index_address,
         };
-        geometries[i] = vk.AccelerationStructureGeometryKHR {
-            .geometry_type = .triangles_khr,
-            .flags = .{ .opaque_bit_khr = true },
-            .geometry = .{
-                .triangles = .{
-                    .vertex_format = .r32g32b32_sfloat, 
-                    .vertex_data = .{
-                        .device_address = vertex_address,
-                    },
-                    .vertex_stride = @sizeOf(@TypeOf(object.vertices[0])),
-                    .max_vertex = @intCast(u32, object.vertices.len - 1),
-                    .index_type = .uint32,
-                    .index_data = .{
-                        .device_address = index_address,
-                    },
-                    .transform_data = .{
-                        .device_address = 0,
-                    }
-                }
-            }
-        };
 
-        build_infos[i] = vk.AccelerationStructureBuildRangeInfoKHR {
-            .primitive_count = @intCast(u32, object.indices.len),
-            .primitive_offset = 0,
-            .transform_offset = 0,
-            .first_vertex = 0,
-        };
-
-        mesh_buffers.appendAssumeCapacity(.{
+        meshes.appendAssumeCapacity(.{
             .vertex_buffer = vertex_buffer,
+            .vertex_count = @intCast(u32, object.vertices.len),
+
             .index_buffer = index_buffer,
+            .index_count = @intCast(u32, object.indices.len),
         });
     }
 
-    const mesh_info = try vk_allocator.createDeviceBuffer(vc, allocator, mesh_infos.data.len * @sizeOf(MeshInfo), .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
-    errdefer mesh_info.destroy(vc);
-    commands.recordUploadBuffer(MeshInfo, vc, mesh_info, mesh_infos);
+    const addresses_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, addresses_buffer_host.data.len * @sizeOf(MeshAddresses), .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
+    errdefer addresses_buffer.destroy(vc);
+    commands.recordUploadBuffer(MeshAddresses, vc, addresses_buffer, addresses_buffer_host);
 
     try commands.submitAndIdleUntilDone(vc);
     
     return Self {
-        .buffers = mesh_buffers,
-        .mesh_info = mesh_info,
+        .meshes = meshes,
+        .addresses_buffer = addresses_buffer,
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    const slice = self.buffers.slice();
+    const slice = self.meshes.slice();
     const vertex_buffers = slice.items(.vertex_buffer);
     const index_buffers = slice.items(.index_buffer);
 
@@ -127,7 +105,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         vertex_buffers[i].destroy(vc);
         index_buffers[i].destroy(vc);
     }
-    self.buffers.deinit(allocator);
+    self.meshes.deinit(allocator);
 
-    self.mesh_info.destroy(vc);
+    self.addresses_buffer.destroy(vc);
 }

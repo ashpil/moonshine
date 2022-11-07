@@ -8,7 +8,7 @@ const U32x3 = vector.Vec3(u32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 
-const Vertex = struct {
+pub const Vertex = struct {
     position: F32x3,
     texture: F32x2,
 };

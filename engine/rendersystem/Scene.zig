@@ -12,7 +12,7 @@ const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 
 const Background = @import("./Background.zig");
-const Meshes = @import("./Meshes.zig");
+const MeshManager = @import("./MeshManager.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
 const asset = @import("../asset.zig");
@@ -44,7 +44,7 @@ color_textures: Images,
 roughness_textures: Images,
 normal_textures: Images,
 
-meshes: Meshes,
+meshes: MeshManager,
 accel: Accel,
 
 materials_buffer: VkAllocator.DeviceBuffer,
@@ -125,26 +125,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         objects[i] = try MeshData.fromObj(allocator, file);
     }
 
-    var geometry_infos = Accel.GeometryInfos {};
-    defer geometry_infos.deinit(allocator);
-    try geometry_infos.ensureTotalCapacity(allocator, mesh_filepaths.len);
-    geometry_infos.len = mesh_filepaths.len;
-
-    const geometry_infos_slice = geometry_infos.slice();
-    const geometries = geometry_infos_slice.items(.geometry);
-    const build_infos = try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, mesh_filepaths.len);
-    defer allocator.free(build_infos);
-
-    var meshes = try Meshes.create(vc, vk_allocator, allocator, commands, objects, geometries, build_infos);
+    var meshes = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);
     errdefer meshes.destroy(vc, allocator);
 
-    var build_infos_ref = geometry_infos_slice.items(.build_info);
-    var i: u32 = 0;
-    while (i < mesh_filepaths.len) : (i += 1) {
-        build_infos_ref[i] = &build_infos[i];
-    }
-
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, geometry_infos, instances);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances);
     errdefer accel.destroy(vc, allocator);
 
     const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
@@ -234,7 +218,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = meshes.mesh_info.handle,
+                .buffer = meshes.addresses_buffer.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
