@@ -7,7 +7,7 @@ const VulkanContext = engine.rendersystem.VulkanContext;
 const Commands = engine.rendersystem.Commands;
 const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.Pipeline;
-const Images = engine.rendersystem.Images;
+const ImageManager = engine.rendersystem.ImageManager;
 const Camera = engine.rendersystem.Camera;
 const Scene = engine.rendersystem.Scene;
 const Material = engine.rendersystem.Scene.Material;
@@ -72,22 +72,22 @@ pub fn main() !void {
     };
     const camera = Camera.new(camera_create_info);
 
-    const display_image_info = Images.ImageCreateRawInfo {
+    const display_image_info = ImageManager.ImageCreateRawInfo {
         .extent = extent,
         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
         .format = .r32g32b32a32_sfloat,
     };
-    var display_image = try Images.createRaw(&context, &vk_allocator, allocator, &.{ display_image_info });
+    var display_image = try ImageManager.createRaw(&context, &vk_allocator, allocator, &.{ display_image_info });
     defer display_image.destroy(&context, allocator);
 
-    const accumulation_image_info = [_]Images.ImageCreateRawInfo {
+    const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
         .{
             .extent = extent,
             .usage = .{ .storage_bit = true, },
             .format = .r32g32b32a32_sfloat,
         },
     };
-    var accumulation_image = try Images.createRaw(&context, &vk_allocator, allocator, &accumulation_image_info);
+    var accumulation_image = try ImageManager.createRaw(&context, &vk_allocator, allocator, &accumulation_image_info);
     defer accumulation_image.destroy(&context, allocator);
 
     const output_sets = try output_descriptor_layout.allocate_sets(&context, 1, [_]vk.WriteDescriptorSet {

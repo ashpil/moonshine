@@ -9,7 +9,7 @@ const vk = @import("vulkan");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const MeshData = @import("../Object.zig");
-const Images = @import("./Images.zig");
+const ImageManager = @import("./ImageManager.zig");
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
@@ -26,9 +26,9 @@ const asset = @import("../asset.zig");
 const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
 pub const Material = struct {
-    color: Images.TextureSource,
-    roughness: Images.TextureSource,
-    normal: Images.TextureSource,
+    color: ImageManager.TextureSource,
+    roughness: ImageManager.TextureSource,
+    normal: ImageManager.TextureSource,
 
     metalness: f32,
     ior: f32,
@@ -45,7 +45,7 @@ pub const InstanceMeshInfo = Accel.MeshInfo;
 background: Background,
 
 // actually probably should go into some MaterialManager, which has one ImageManager
-textures: Images, // (color, roughness, normal) * N
+textures: ImageManager, // (color, roughness, normal) * N
 materials_buffer: VkAllocator.DeviceBuffer, // holds GpuMaterial info about materials
 
 mesh_manager: MeshManager,
@@ -59,7 +59,7 @@ descriptor_set: vk.DescriptorSet,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
-    comptime var texture_sources: [materials.len * 3]Images.TextureSource = undefined;
+    comptime var texture_sources: [materials.len * 3]ImageManager.TextureSource = undefined;
 
     const gpu_materials = try vk_allocator.createHostBuffer(vc, GpuMaterial, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
     defer gpu_materials.destroy(vc);
@@ -80,7 +80,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     commands.recordUploadBuffer(GpuMaterial, vc, materials_buffer, gpu_materials);
     try commands.submitAndIdleUntilDone(vc);
 
-    var textures = try Images.createTexture(vc, vk_allocator, allocator, &texture_sources, commands);
+    var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, &texture_sources, commands);
     errdefer textures.destroy(vc, allocator);
 
     var image_infos: [materials.len * 3]vk.DescriptorImageInfo = undefined;
@@ -113,7 +113,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
 
-    const sampler = try Images.createSampler(vc);
+    const sampler = try ImageManager.createSampler(vc);
 
     const background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
 

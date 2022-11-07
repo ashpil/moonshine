@@ -5,7 +5,7 @@ const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const Window = @import("../Window.zig");
 const Swapchain = @import("./Swapchain.zig");
-const Images = @import("./Images.zig");
+const ImageManager = @import("./ImageManager.zig");
 const Commands = @import("./Commands.zig");
 const DescriptorLayout = @import("./descriptor.zig").OutputDescriptorLayout;
 const DestructionQueue = @import("./DestructionQueue.zig");
@@ -21,8 +21,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         frame_index: u8,
 
         swapchain: Swapchain,
-        display_image: Images,
-        attachment_images: Images,
+        display_image: ImageManager,
+        attachment_images: ImageManager,
 
         extent: vk.Extent2D,
 
@@ -34,22 +34,22 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
 
-            const display_image_info = Images.ImageCreateRawInfo {
+            const display_image_info = ImageManager.ImageCreateRawInfo {
                 .extent = extent,
                 .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
                 .format = .r32g32b32a32_sfloat,
             };
-            var display_image = try Images.createRaw(vc, vk_allocator, allocator, &.{ display_image_info });
+            var display_image = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{ display_image_info });
             errdefer display_image.destroy(vc, allocator);
 
-            const accumulation_image_info = [_]Images.ImageCreateRawInfo {
+            const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
                 .{
                     .extent = extent,
                     .usage = .{ .storage_bit = true, },
                     .format = .r32g32b32a32_sfloat,
                 },
             };
-            var attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
+            var attachment_images = try ImageManager.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
             errdefer attachment_images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.handle), .@"undefined", .general);
 
@@ -242,7 +242,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 self.extent = new_extent;
 
                 try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image = try Images.createRaw(vc, vk_allocator, allocator, &[_]Images.ImageCreateRawInfo {
+                self.display_image = try ImageManager.createRaw(vc, vk_allocator, allocator, &[_]ImageManager.ImageCreateRawInfo {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
@@ -251,14 +251,14 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 });
 
                 try self.destruction_queue.add(allocator, self.attachment_images);
-                const accumulation_image_info = [_]Images.ImageCreateRawInfo {
+                const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, },
                         .format = .r32g32b32a32_sfloat,
                     },
                 };
-                self.attachment_images = try Images.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
+                self.attachment_images = try ImageManager.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
                 try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.handle), .@"undefined", .general);
 
                 comptime var i = 0;
