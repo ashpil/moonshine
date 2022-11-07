@@ -1,3 +1,9 @@
+// a scene contains:
+// - a list of meshes
+// - an acceleration structure/mesh heirarchy
+// - materials
+// - a background
+
 const std = @import("std");
 const vk = @import("vulkan");
 
@@ -40,16 +46,17 @@ background: Background,
 
 // TODO: should be some sort of one texture array with indices or something?
 // handle to ImageManager or something instead
+// actually probably should go into some MaterialManager, which has one ImageManager
 color_textures: Images,
 roughness_textures: Images,
 normal_textures: Images,
 
-meshes: MeshManager,
+materials_buffer: VkAllocator.DeviceBuffer, // holds GpuMaterial info about materials
+
+mesh_manager: MeshManager,
 accel: Accel,
 
-materials_buffer: VkAllocator.DeviceBuffer,
-
-instance_info: []InstanceMeshInfo,
+instance_info: []InstanceMeshInfo, // used to update heirarchy transforms
 
 sampler: vk.Sampler,
 descriptor_set: vk.DescriptorSet,
@@ -125,10 +132,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         objects[i] = try MeshData.fromObj(allocator, file);
     }
 
-    var meshes = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);
-    errdefer meshes.destroy(vc, allocator);
+    var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);
+    errdefer mesh_manager.destroy(vc, allocator);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances);
     errdefer accel.destroy(vc, allocator);
 
     const instance_info = @ptrCast([*]InstanceMeshInfo, (try allocator.realloc(instances.bytes[0..instances.capacity * @sizeOf(Instances.Elem)], @sizeOf(InstanceMeshInfo) * instances.len)).ptr)[0..instances.len];
@@ -218,7 +225,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = meshes.addresses_buffer.handle,
+                .buffer = mesh_manager.addresses_buffer.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -251,7 +258,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         .materials_buffer = materials_buffer,
 
-        .meshes = meshes,
+        .mesh_manager = mesh_manager,
         .accel = accel,
 
         .instance_info = instance_info,
@@ -280,7 +287,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.color_textures.destroy(vc, allocator);
     self.roughness_textures.destroy(vc, allocator);
     self.normal_textures.destroy(vc, allocator);
-    self.meshes.destroy(vc, allocator);
+    self.mesh_manager.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
 
     self.materials_buffer.destroy(vc);

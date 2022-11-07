@@ -19,11 +19,6 @@ pub const MeshInfo = struct {
     visible: bool = true,
 };
 
-pub const GeometryInfos = std.MultiArrayList(struct {
-    geometry: vk.AccelerationStructureGeometryKHR,
-    build_info: *const vk.AccelerationStructureBuildRangeInfoKHR,
-});
-
 const BottomLevelAccels = std.MultiArrayList(struct {
     handle: vk.AccelerationStructureKHR,
     buffer: VkAllocator.DeviceBuffer,
@@ -34,7 +29,7 @@ blases: BottomLevelAccels,
 
 instance_infos: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
 
-instance_buffer: VkAllocator.DeviceBuffer,
+instance_buffer: VkAllocator.DeviceBuffer, // holds instance-specific information -- currently just material index
 instance_count: u32,
 
 tlas_handle: vk.AccelerationStructureKHR,
