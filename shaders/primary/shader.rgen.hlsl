@@ -30,6 +30,7 @@ struct PushConsts {
 
 [[vk::constant_id(0)]] const uint SAMPLES_PER_RUN = 1;
 [[vk::constant_id(1)]] const uint MAX_BOUNCES = 4;
+[[vk::constant_id(2)]] const uint DIRECT_SAMPLES_PER_BOUNCE = 2;
 
 RayDesc generateDir(Camera camera, float4 rand) {
     float2 sampled_rand = squareToUniformDiskConcentric(rand.xy);
@@ -66,12 +67,12 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             
             Frame frame = createFrame(payload.normal);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
-            
-            float4 rand1 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-            float3 lightSample1 = estimateBackgroundDirect(frame, outgoing, material, rand1, payload);
-            float4 rand2 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-            float3 lightSample2 = estimateBackgroundDirect(frame, outgoing, material, rand2, payload);
-            accumulatedColor += (throughput * (lightSample1 + lightSample2) / 2.0);
+
+            // accumulate direct light samples
+            for (uint directCount = 0; directCount < DIRECT_SAMPLES_PER_BOUNCE; directCount++) {
+                float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
+                accumulatedColor += throughput * estimateBackgroundDirect(frame, outgoing, material, rand, payload) / DIRECT_SAMPLES_PER_BOUNCE;
+            }
             
             // set up info for next bounce
             ray.Origin = payload.position;
