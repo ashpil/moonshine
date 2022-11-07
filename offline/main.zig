@@ -40,8 +40,6 @@ pub fn main() !void {
         .{},
         .{},
         .{ .partially_bound_bit = true },
-        .{ .partially_bound_bit = true },
-        .{ .partially_bound_bit = true },
         .{},
         .{},
     });

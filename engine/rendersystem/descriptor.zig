@@ -1,7 +1,9 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const utils = @import("./utils.zig");
 const VulkanContext = @import("./VulkanContext.zig");
 
+// must be kept in sync with shader
 pub const InputDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
@@ -10,8 +12,9 @@ pub const InputDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-});
+}, "Input");
 
+// must be kept in sync with shader
 pub const OutputDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
@@ -27,8 +30,9 @@ pub const OutputDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-});
+}, "Output");
 
+// must be kept in sync with shader
 pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
@@ -65,9 +69,10 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-});
+}, "Background");
 
-const max_textures = 4; // TODO: think about this more
+// must be kept in sync with shader
+const max_textures = 4 * 3; // TODO: think about this more
 pub const SceneDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
@@ -94,40 +99,26 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .binding = 3,
         .descriptor_type = .sampled_image,
         .descriptor_count = max_textures,
-        .stage_flags = .{ .raygen_bit_khr = true },
+        .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true }, // technically atm some are only accessed in closest hit, and some only in raygen
         .p_immutable_samplers = null,
     },
     .{
         .binding = 4,
-        .descriptor_type = .sampled_image,
-        .descriptor_count = max_textures,
-        .stage_flags = .{ .raygen_bit_khr = true },
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
     .{
         .binding = 5,
-        .descriptor_type = .sampled_image,
-        .descriptor_count = max_textures,
-        .stage_flags = .{ .closest_hit_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
-    .{
-        .binding = 6,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
-        .binding = 7,
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .closest_hit_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
-});
+}, "Scene");
 
-pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding) type {
+pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime debug_name: [*:0]const u8) type {
     return struct {
         handle: vk.DescriptorSetLayout,
         pool: vk.DescriptorPool,
@@ -148,6 +139,8 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             };
             const handle = try vc.device.createDescriptorSetLayout(&create_info, null);
             errdefer vc.device.destroyDescriptorSetLayout(handle, null);
+
+            try utils.setDebugName(vc, handle, debug_name);
 
             comptime var pool_sizes: [bindings.len]vk.DescriptorPoolSize = undefined;
             comptime for (pool_sizes) |*pool_size, i| {

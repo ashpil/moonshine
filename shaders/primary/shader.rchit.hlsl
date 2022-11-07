@@ -15,9 +15,9 @@ struct Vertex {
 };
 
 SamplerState textureSampler : register(s1, space0);
-Texture2D<float2> normalTextures[] : register(t5, space0);
-StructuredBuffer<Mesh> meshes : register(t6, space0);
-StructuredBuffer<Instance> instances : register(t7, space0);
+Texture2D textures[] : register(t3, space0);
+StructuredBuffer<Mesh> meshes : register(t4, space0);
+StructuredBuffer<Instance> instances : register(t5, space0);
 
 float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2) {
     float2 deltaUV1 = t1 - t0;
@@ -47,7 +47,7 @@ float3 calculateNormal(Vertex v0, Vertex v1, Vertex v2, float2 texcoords, uint t
     float3 positionNormalObjectSpace = normalize(cross(edge0, edge1));
 
     float3x3 tangentToObjectMat = createTBNMatrix(positionNormalObjectSpace, edge0, edge1, v0.texcoord, v1.texcoord, v2.texcoord);
-    float2 textureNormal = (normalTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(textureSampler, texcoords, 0) * 2.0) - 1.0;
+    float2 textureNormal = (textures[NonUniformResourceIndex(3 * textureIndex + 2)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
     float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
 }

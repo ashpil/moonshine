@@ -7,8 +7,7 @@ struct MaterialData {
 
 SamplerState textureSampler : register(s1, space0);
 StructuredBuffer<MaterialData> materialDatas : register(t2, space0);
-Texture2D<float3> colorTextures[] : register(t3, space0);
-Texture2D<float> roughnessTextures[] : register(t4, space0);
+Texture2D textures[] : register(t3, space0);
 
 struct Material {
     float3 color;        // color; each component is (0, 1)
@@ -155,8 +154,8 @@ Material getMaterial(uint materialIndex, float2 texcoords) {
     Material material;
     material.metalness = materialData.metalness;
     material.ior = materialData.ior;
-    material.color = colorTextures[NonUniformResourceIndex(materialIndex)].SampleLevel(textureSampler, texcoords, 0);
-    material.roughness = roughnessTextures[NonUniformResourceIndex(materialIndex)].SampleLevel(textureSampler, texcoords, 0);
+    material.color = textures[NonUniformResourceIndex(3 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
+    material.roughness = textures[NonUniformResourceIndex(3 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
 
     return material;
 }
