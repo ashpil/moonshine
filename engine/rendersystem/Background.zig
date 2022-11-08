@@ -14,15 +14,30 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime texture_dir: []const u8, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler) !Self {
+// currently uses this custom weird format -- probably best to migrate to something else at some point
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_dir: []const u8, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler) !Self {
+    const path1 = try std.fs.path.join(allocator, &.{ texture_dir, "color.dds" });
+    defer allocator.free(path1);
+
+    const path2 = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_pdfs_integrals.raw" });
+    defer allocator.free(path2);
+
+    const path3 = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_cdfs.raw" });
+    defer allocator.free(path3);
+
+    const path4 = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_pdf_integral.raw" });
+    defer allocator.free(path4);
+
+    const path5 = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_cdf.raw" });
+    defer allocator.free(path5);
 
     const images = try ImageManager.createTexture(vc, vk_allocator, allocator, &[_]ImageManager.TextureSource {
         ImageManager.TextureSource {
-            .dds_filepath = texture_dir ++ "color.dds",
+            .dds_filepath = path1,
         },
         ImageManager.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "conditional_pdfs_integrals.raw",
+                .filepath = path2,
                 .width = 257,
                 .height = 128,
                 .format = .r32_sfloat,
@@ -31,7 +46,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         ImageManager.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "conditional_cdfs.raw",
+                .filepath = path3,
                 .width = 257,
                 .height = 128,
                 .format = .r32_sfloat,
@@ -40,7 +55,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         ImageManager.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "marginal_pdf_integral.raw",
+                .filepath = path4,
                 .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,
@@ -49,7 +64,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
         ImageManager.TextureSource {
             .raw_file = .{
-                .filepath = texture_dir ++ "marginal_cdf.raw",
+                .filepath = path5,
                 .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,

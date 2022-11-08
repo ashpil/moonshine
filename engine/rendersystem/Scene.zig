@@ -58,20 +58,21 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, comptime materials: []const Material, comptime background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
-    comptime var texture_sources: [materials.len * 3]ImageManager.TextureSource = undefined;
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+    const texture_sources = try allocator.alloc(ImageManager.TextureSource, materials.len * 3);
+    defer allocator.free(texture_sources);
 
     const gpu_materials = try vk_allocator.createHostBuffer(vc, GpuMaterial, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
     defer gpu_materials.destroy(vc);
 
-    comptime for (materials) |set, i| {
+    for (materials) |set, i| {
         texture_sources[3 * i + 0] = set.color;
         texture_sources[3 * i + 1] = set.roughness;
         texture_sources[3 * i + 2] = set.normal;
 
         gpu_materials.data[i].ior = set.ior;
         gpu_materials.data[i].metalness = set.metalness;
-    };
+    }
 
     const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
     errdefer materials_buffer.destroy(vc);
@@ -80,13 +81,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     commands.recordUploadBuffer(GpuMaterial, vc, materials_buffer, gpu_materials);
     try commands.submitAndIdleUntilDone(vc);
 
-    var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, &texture_sources, commands);
+    var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, texture_sources, commands);
     errdefer textures.destroy(vc, allocator);
 
-    var image_infos: [materials.len * 3]vk.DescriptorImageInfo = undefined;
+    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, materials.len * 3);
+    defer allocator.free(image_infos);
 
     const texture_views = textures.data.items(.view);
-    inline for (image_infos) |*info, i| {
+    for (image_infos) |*info, i| {
         info.* = .{
             .sampler = .null_handle,
             .image_view = texture_views[i],
@@ -164,9 +166,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_set = undefined,
             .dst_binding = 3,
             .dst_array_element = 0,
-            .descriptor_count = image_infos.len,
+            .descriptor_count = @intCast(u32, image_infos.len),
             .descriptor_type = .sampled_image,
-            .p_image_info = &image_infos,
+            .p_image_info = image_infos.ptr,
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
         },
