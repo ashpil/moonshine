@@ -21,8 +21,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         frame_index: u8,
 
         swapchain: Swapchain,
-        display_image: ImageManager,
-        attachment_images: ImageManager,
+        images: ImageManager, // 2 images -- first is display image, second is accumulation image; TODO: display image may not be needed on some platforms where the swapchain can be used as a storage image
 
         extent: vk.Extent2D,
 
@@ -34,24 +33,20 @@ pub fn Display(comptime num_frames: comptime_int) type {
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
 
-            const display_image_info = ImageManager.ImageCreateRawInfo {
-                .extent = extent,
-                .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                .format = .r32g32b32a32_sfloat,
-            };
-            var display_image = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{ display_image_info });
-            errdefer display_image.destroy(vc, allocator);
-
-            const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
+            var images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
+                .{
+                    .extent = extent,
+                    .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
+                    .format = .r32g32b32a32_sfloat,
+                },
                 .{
                     .extent = extent,
                     .usage = .{ .storage_bit = true, },
                     .format = .r32g32b32a32_sfloat,
                 },
-            };
-            var attachment_images = try ImageManager.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
-            errdefer attachment_images.destroy(vc, allocator);
-            try commands.transitionImageLayout(vc, allocator, attachment_images.data.items(.handle), .@"undefined", .general);
+            });
+            errdefer images.destroy(vc, allocator);
+            try commands.transitionImageLayout(vc, allocator, images.data.items(.handle)[1..], .@"undefined", .general);
 
             const sets = try descriptor_layout.allocate_sets(vc, num_frames, [_]vk.WriteDescriptorSet {
                 vk.WriteDescriptorSet {
@@ -62,7 +57,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .descriptor_type = .storage_image,
                     .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                         .sampler = .null_handle,
-                        .image_view = display_image.data.items(.view)[0],
+                        .image_view = images.data.items(.view)[0],
                         .image_layout = .general,
                     }),
                     .p_buffer_info = undefined,
@@ -76,7 +71,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .descriptor_type = .storage_image,
                     .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                         .sampler = .null_handle,
-                        .image_view = attachment_images.data.items(.view)[0],
+                        .image_view = images.data.items(.view)[1],
                         .image_layout = .general,
                     }),
                     .p_buffer_info = undefined,
@@ -95,8 +90,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 .frames = frames,
                 .frame_index = 0,
 
-                .display_image = display_image,
-                .attachment_images = attachment_images,
+                .images = images,
 
                 .extent = extent,
 
@@ -106,8 +100,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-            self.display_image.destroy(vc, allocator);
-            self.attachment_images.destroy(vc, allocator);
+            self.images.destroy(vc, allocator);
             self.swapchain.destroy(vc, allocator);
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -140,7 +133,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .descriptor_type = .storage_image,
                         .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                             .sampler = .null_handle,
-                            .image_view = self.display_image.data.items(.view)[0],
+                            .image_view = self.images.data.items(.view)[0],
                             .image_layout = .general,
                         }),
                         .p_buffer_info = undefined,
@@ -154,7 +147,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .descriptor_type = .storage_image,
                         .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                             .sampler = .null_handle,
-                            .image_view = self.attachment_images.data.items(.view)[0],
+                            .image_view = self.images.data.items(.view)[1],
                             .image_layout = .general,
                         }),
                         .p_buffer_info = undefined,
@@ -210,7 +203,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.display_image.data.items(.handle)[0],
+                    .image = self.images.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -241,25 +234,21 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 resized.* = true;
                 self.extent = new_extent;
 
-                try self.destruction_queue.add(allocator, self.display_image);
-                self.display_image = try ImageManager.createRaw(vc, vk_allocator, allocator, &[_]ImageManager.ImageCreateRawInfo {
+                try self.destruction_queue.add(allocator, self.images);
+                self.images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
                         .format = .r32g32b32a32_sfloat,
-                    }
-                });
-
-                try self.destruction_queue.add(allocator, self.attachment_images);
-                const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
+                    },
                     .{
                         .extent = self.extent,
                         .usage = .{ .storage_bit = true, },
                         .format = .r32g32b32a32_sfloat,
                     },
-                };
-                self.attachment_images = try ImageManager.createRaw(vc, vk_allocator, allocator, &accumulation_image_info);
-                try commands.transitionImageLayout(vc, allocator, self.attachment_images.data.items(.handle), .@"undefined", .general);
+                });
+
+                try commands.transitionImageLayout(vc, allocator, self.images.data.items(.handle)[1..], .@"undefined", .general);
 
                 comptime var i = 0;
                 inline while (i < num_frames) : (i += 1) {
@@ -282,7 +271,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.display_image.data.items(.handle)[0],
+                    .image = self.images.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -337,7 +326,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(frame.command_buffer, self.display_image.data.items(.handle)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+            vc.device.cmdBlitImage(frame.command_buffer, self.images.data.items(.handle)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
