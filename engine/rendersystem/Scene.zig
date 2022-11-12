@@ -10,6 +10,7 @@ const vk = @import("vulkan");
 const VulkanContext = @import("./VulkanContext.zig");
 const MeshData = @import("../Object.zig");
 const ImageManager = @import("./ImageManager.zig");
+const MaterialManager = @import("./MaterialManager.zig");
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
@@ -25,28 +26,13 @@ const asset = @import("../asset.zig");
 
 const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
-pub const Material = struct {
-    color: ImageManager.TextureSource,
-    roughness: ImageManager.TextureSource,
-    normal: ImageManager.TextureSource,
-
-    metalness: f32,
-    ior: f32,
-};
-
-pub const GpuMaterial = packed struct {
-    metalness: f32,
-    ior: f32,
-};
-
+pub const Material = MaterialManager.Material;
 pub const Instances = Accel.Instances;
 pub const InstanceMeshInfo = Accel.MeshInfo;
 
 background: Background,
 
-// actually probably should go into some MaterialManager, which has one ImageManager
-textures: ImageManager, // (color, roughness, normal) * N
-materials_buffer: VkAllocator.DeviceBuffer, // holds GpuMaterial info about materials
+material_manager: MaterialManager,
 
 mesh_manager: MeshManager,
 accel: Accel,
@@ -59,35 +45,13 @@ descriptor_set: vk.DescriptorSet,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
-    const texture_sources = try allocator.alloc(ImageManager.TextureSource, materials.len * 3);
-    defer allocator.free(texture_sources);
-
-    const gpu_materials = try vk_allocator.createHostBuffer(vc, GpuMaterial, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
-    defer gpu_materials.destroy(vc);
-
-    for (materials) |set, i| {
-        texture_sources[3 * i + 0] = set.color;
-        texture_sources[3 * i + 1] = set.roughness;
-        texture_sources[3 * i + 2] = set.normal;
-
-        gpu_materials.data[i].ior = set.ior;
-        gpu_materials.data[i].metalness = set.metalness;
-    }
-
-    const materials_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(GpuMaterial) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-    errdefer materials_buffer.destroy(vc);
-
-    try commands.startRecording(vc);
-    commands.recordUploadBuffer(GpuMaterial, vc, materials_buffer, gpu_materials);
-    try commands.submitAndIdleUntilDone(vc);
-
-    var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, texture_sources, commands);
-    errdefer textures.destroy(vc, allocator);
+    var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
+    errdefer material_manager.destroy(vc, allocator);
 
     const image_infos = try allocator.alloc(vk.DescriptorImageInfo, materials.len * 3);
     defer allocator.free(image_infos);
 
-    const texture_views = textures.data.items(.view);
+    const texture_views = material_manager.textures.data.items(.view);
     for (image_infos) |*info, i| {
         info.* = .{
             .sampler = .null_handle,
@@ -156,7 +120,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = materials_buffer.handle,
+                .buffer = material_manager.values.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -207,9 +171,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     return Self {
         .background = background,
 
-        .textures = textures,
-        .materials_buffer = materials_buffer,
-
+        .material_manager = material_manager,
         .mesh_manager = mesh_manager,
 
         .accel = accel,
@@ -236,9 +198,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     vc.device.destroySampler(self.sampler, null);
 
     self.background.destroy(vc, allocator);
-    self.textures.destroy(vc, allocator);
+    self.material_manager.destroy(vc, allocator);
     self.mesh_manager.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
-
-    self.materials_buffer.destroy(vc);
 }

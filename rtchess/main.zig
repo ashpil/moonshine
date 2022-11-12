@@ -31,8 +31,9 @@ pub fn main() !void {
             .normal = .{
                 .dds_filepath = "./assets/textures/board/normal.dds"
             },
-            .metalness = 0.4,
-            .ior = 1.35,
+            .values = .{
+                .metalness = 0.4,
+            },
         },
         ChessSet.Material {
             .color = .{
@@ -44,8 +45,9 @@ pub fn main() !void {
             .normal = .{
                 .color = F32x3.new(0.5, 0.5, 1.0)
             },
-            .metalness = 0.2,
-            .ior = 1.5,
+            .values = .{
+                .metalness = 0.2,
+            },
         },
         ChessSet.Material {
             .color = .{
@@ -57,8 +59,9 @@ pub fn main() !void {
             .normal = .{
                 .color = F32x3.new(0.5, 0.5, 1.0)
             },
-            .metalness = 0.2,
-            .ior = 1.5,
+            .values = .{
+                .metalness = 0.2,
+            },
         },
         ChessSet.Material {
             .color = .{
@@ -70,8 +73,9 @@ pub fn main() !void {
             .normal = .{
                 .color = F32x3.new(0.5, 0.5, 1.0)
             },
-            .metalness = 0.6,
-            .ior = 1.5,
+            .values = .{
+                .metalness = 0.6,
+            },
         },
     };
 

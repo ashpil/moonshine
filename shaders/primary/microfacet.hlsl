@@ -1,13 +1,14 @@
 #include "math.hlsl"
 
-struct MaterialData {
+// `values` is what I call non-texture material properties
+struct Values {
     float metalness;
     float ior;
 };
 
 SamplerState textureSampler : register(s1, space0);
-StructuredBuffer<MaterialData> materialDatas : register(t2, space0);
-Texture2D textures[] : register(t3, space0);
+StructuredBuffer<Values> materialValues : register(t2, space0);
+Texture2D materialTextures[] : register(t3, space0);
 
 struct Material {
     float3 color;        // color; each component is (0, 1)
@@ -149,13 +150,13 @@ struct Material {
 };
 
 Material getMaterial(uint materialIndex, float2 texcoords) {
-    MaterialData materialData = materialDatas[NonUniformResourceIndex(materialIndex)];
+    Values values = materialValues[NonUniformResourceIndex(materialIndex)];
 
     Material material;
-    material.metalness = materialData.metalness;
-    material.ior = materialData.ior;
-    material.color = textures[NonUniformResourceIndex(3 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
-    material.roughness = textures[NonUniformResourceIndex(3 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.metalness = values.metalness;
+    material.ior = values.ior;
+    material.color = materialTextures[NonUniformResourceIndex(3 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
+    material.roughness = materialTextures[NonUniformResourceIndex(3 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
 
     return material;
 }
