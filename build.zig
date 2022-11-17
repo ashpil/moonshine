@@ -126,15 +126,14 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
     build_options.addOption(bool, "windowing", options.windowing);
     build_options.addOption(bool, "exr", options.exr);
 
-    const deps_len = 4;
-    const deps_local = [deps_len]std.build.Pkg {
+    const deps_local = [_]std.build.Pkg {
         vk,
         zgltf,
         build_options.getPackage("build_options"),
         hlsl_comp.package,
     };
 
-    const engine_deps = try b.allocator.create([deps_len]std.build.Pkg);
+    const engine_deps = try b.allocator.create([deps_local.len]std.build.Pkg);
     engine_deps.* = deps_local;
 
     const engine = std.build.Pkg {
