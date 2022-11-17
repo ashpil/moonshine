@@ -11,7 +11,7 @@ pub const Material = struct {
     roughness: ImageManager.TextureSource,
     normal: ImageManager.TextureSource,
     
-    values: Values,
+    values: Values = .{},
 };
 
 // `value` is the term I use for non-texture material input

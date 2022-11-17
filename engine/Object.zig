@@ -10,7 +10,7 @@ const F32x2 = vector.Vec2(f32);
 
 pub const Vertex = struct {
     position: F32x3,
-    texture: F32x2,
+    texcoord: F32x2,
 };
 
 vertices: []Vertex,
@@ -26,7 +26,7 @@ const Error = error {
 
 const Sizes = struct {
     num_positions: u32,
-    num_textures: u32,
+    num_texcoords: u32,
     num_indices: u32,
 };
 
@@ -34,14 +34,14 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     var lines = std.mem.tokenize(u8, contents, "\n");
 
     var num_positions: u32 = 0;
-    var num_textures: u32 = 0;
+    var num_texcoords: u32 = 0;
     var num_indices: u32 = 0;
     while (lines.next()) |line| {
         var iter = std.mem.tokenize(u8, line, " ");
         const line_type = categorizeLine(iter.next().?);
         switch (line_type) {
             .position => num_positions += 1,
-            .texture => num_textures += 1,
+            .texcoord => num_texcoords += 1,
             .index => num_indices += 1,
             else => {},
         }
@@ -49,7 +49,7 @@ pub fn getObjSizes(contents: []const u8) Sizes {
 
     return Sizes {
         .num_positions = num_positions,
-        .num_textures = num_textures,
+        .num_texcoords = num_texcoords,
         .num_indices = num_indices,
     };
 }
@@ -67,14 +67,14 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
     const sizes = getObjSizes(contents);
     const positions = try allocator.alloc(F32x3, sizes.num_positions);
     defer allocator.free(positions);
-    const textures = try allocator.alloc(F32x2, sizes.num_textures);
-    defer allocator.free(textures);
+    const texcoords = try allocator.alloc(F32x2, sizes.num_texcoords);
+    defer allocator.free(texcoords);
     const indices = try allocator.alloc(U32x3, sizes.num_indices);
     const vertices = try allocator.alloc(Vertex, sizes.num_indices * 3);
 
     var lines = std.mem.tokenize(u8, contents, "\n");
     var current_position: u32 = 0;
-    var current_texture: u32 = 0;
+    var current_texcoord: u32 = 0;
     var current_index: u32 = 0;
     var current_vertex: u32 = 0;
     while (lines.next()) |line| {
@@ -86,9 +86,9 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
                 positions[current_position] = try positionFromIter(&iter);
                 current_position += 1;
             },
-            .texture => { 
-                textures[current_texture] = try textureFromIter(&iter);
-                current_texture += 1;
+            .texcoord => { 
+                texcoords[current_texcoord] = try texcoordFromIter(&iter);
+                current_texcoord += 1;
             },
             .index => {
                 var i: u32 = 0;
@@ -97,10 +97,10 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
                     const index_str = iter.next() orelse return Error.MissingIndex;
                     var numbers = std.mem.tokenize(u8, index_str, "/");
                     const position_index = if (numbers.next()) |val| ((try std.fmt.parseInt(u32, val, 10)) - 1) else return Error.MissingIndex;
-                    const texture_index = if (numbers.next()) |val| ((try std.fmt.parseInt(u32, val, 10)) - 1) else return Error.MissingIndex;
+                    const texcoord_index = if (numbers.next()) |val| ((try std.fmt.parseInt(u32, val, 10)) - 1) else return Error.MissingIndex;
                     const vertex = Vertex {
                         .position = positions[position_index],
-                        .texture = textures[texture_index],
+                        .texcoord = texcoords[texcoord_index],
                     };
                     switch (i) {
                         0 => index.x = current_vertex,
@@ -131,7 +131,7 @@ pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
 const LineType = enum {
     comment,
     position,
-    texture,
+    texcoord,
     index,
 };
 
@@ -143,14 +143,14 @@ fn categorizeLine(first_token: []const u8) LineType {
     } else if (std.mem.eql(u8, first_token, "f")) {
         return .index;
     } else if (std.mem.eql(u8, first_token, "vt")) {
-        return .texture;
+        return .texcoord;
     } else {
         std.debug.print("Unknown line: {s}\n", .{first_token});
         unreachable;
     }
 }
 
-fn textureFromIter(iter: *std.mem.TokenIterator(u8)) !F32x2 {
+fn texcoordFromIter(iter: *std.mem.TokenIterator(u8)) !F32x2 {
     const x = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingTexture;
     const y = if (iter.next()) |val| try std.fmt.parseFloat(f32, val) else return Error.MissingTexture;
     return F32x2.new(x, y);

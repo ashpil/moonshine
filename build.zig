@@ -23,6 +23,11 @@ pub fn build(b: *std.build.Builder) void {
     };
     const glfw = makeGlfwLibrary(b, target, mode) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target, mode);
+    const zgltf = std.build.Pkg {
+        .name = "zgltf",
+        .source = .{ .path = "deps/zgltf/src/main.zig" },
+        .dependencies = null,
+    };
     const default_engine_options = EngineOptions.fromCli(b);
 
     // chess exe
@@ -30,7 +35,7 @@ pub fn build(b: *std.build.Builder) void {
         var engine_options = default_engine_options;
         engine_options.windowing = true;
         engine_options.exr = false;
-        const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
+        const engine = makeEnginePackage(b, vk, zgltf, engine_options) catch unreachable;
         const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
         rtchess_exe.setTarget(target);
         rtchess_exe.setBuildMode(mode);
@@ -55,7 +60,7 @@ pub fn build(b: *std.build.Builder) void {
         var engine_options = default_engine_options;
         engine_options.windowing = false;
         engine_options.exr = true;
-        const engine = makeEnginePackage(b, vk, engine_options) catch unreachable;
+        const engine = makeEnginePackage(b, vk, zgltf, engine_options) catch unreachable;
         const offline_exe = b.addExecutable("offline", "offline/main.zig");
         offline_exe.setTarget(target);
         offline_exe.setBuildMode(mode);
@@ -98,7 +103,7 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOptions) !std.build.Pkg {
+fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.Pkg, options: EngineOptions) !std.build.Pkg {
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
         "dxc",
@@ -121,9 +126,10 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, options: EngineOp
     build_options.addOption(bool, "windowing", options.windowing);
     build_options.addOption(bool, "exr", options.exr);
 
-    const deps_len = 3;
+    const deps_len = 4;
     const deps_local = [deps_len]std.build.Pkg {
         vk,
+        zgltf,
         build_options.getPackage("build_options"),
         hlsl_comp.package,
     };

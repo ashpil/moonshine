@@ -59,7 +59,7 @@ pub fn main() !void {
 
     const extent = vk.Extent2D { .width = 1024, .height = 1024 }; // TODO: cli
 
-    const camera_origin = F32x3.new(0.6, 0.5, -0.6);
+    const camera_origin = F32x3.new(5.0, 5.0, 5.0);
     const camera_target = F32x3.new(0.0, 0.0, 0.0);
     const camera_create_info = .{
         .origin = camera_origin,
@@ -121,42 +121,7 @@ pub fn main() !void {
         },
     });
 
-    var scene = blk: {
-        const materials = comptime [_]Material {
-            .{
-                .color = .{
-                    .color = F32x3.new(0.0004, 0.0025, 0.0096)
-                },
-                .roughness = .{
-                    .greyscale = 0.15,
-                },
-                .normal = .{
-                    .color = F32x3.new(0.5, 0.5, 1.0)
-                },
-                .values = .{
-                    .metalness = 0.2,
-                },
-            },
-        };
-
-        const mesh_filepaths = [_][]const u8 {
-            "./assets/models/pawn.obj",
-        };
-
-        var instances = Scene.Instances {};
-        try instances.ensureTotalCapacity(allocator, 1);
-        errdefer instances.deinit(allocator);
-
-        instances.appendAssumeCapacity(.{
-            .mesh_info = .{
-                .transform = Mat3x4.identity,
-                .mesh_index = 0,
-            },
-            .material_index = 0,
-        });
-
-        break :blk try Scene.create(&context, &vk_allocator, allocator, &commands, &materials, "./assets/textures/skybox/", &mesh_filepaths, instances, &scene_descriptor_layout, &background_descriptor_layout);
-    };
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, "./assets/test.glb", "./assets/textures/skybox/", &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
     
     const command_pool = try context.device.createCommandPool(&.{

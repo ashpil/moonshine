@@ -7,3 +7,6 @@
 [submodule "deps/tinyexr"]
 	path = deps/tinyexr
 	url = https://github.com/syoyo/tinyexr.git
+[submodule "deps/zgltf"]
+	path = deps/zgltf
+	url = https://github.com/kooparse/zgltf.git
