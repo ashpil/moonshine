@@ -191,17 +191,15 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         // not most efficient way but simplest and does the trick
         for (gltf.data.nodes.items) |node| {
             if (node.mesh) |mesh_idx| {
-                _ = mesh_idx;
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
-
                 try instances.append(allocator, .{
                     .mesh_info = .{
                         .transform = Mat3x4.new(
-                            F32x4.new(mat[0][0], mat[0][1], mat[0][2], mat[0][3]),
-                            F32x4.new(mat[1][0], mat[1][1], mat[1][2], mat[1][3]),
-                            F32x4.new(mat[2][0], mat[2][1], mat[2][2], mat[2][3]),
+                            F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+                            F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+                            F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                         ),
-                        .mesh_index = 0, // TODO
+                        .mesh_index = @intCast(u24, mesh_idx), // TODO
                     },
                     .material_index = 0, // TODO
                 });
