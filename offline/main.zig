@@ -56,7 +56,7 @@ pub fn main() !void {
     defer commands.destroy(&context);
 
     var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
-        .samples_per_run = 128,
+        .samples_per_run = 16,
     });
     defer pipeline.destroy(&context);
 

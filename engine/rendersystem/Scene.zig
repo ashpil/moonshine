@@ -49,24 +49,37 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-fn gltfMaterialToMaterial(gltf_material: Gltf.Material) Material {
-    const color = if (gltf_material.metallic_roughness.base_color_texture) |_| ImageManager.TextureSource {
-        .color = undefined, // TODO
-    } else ImageManager.TextureSource {
+fn gltfMaterialToMaterial(gltf: Gltf, gltf_material: Gltf.Material) Material {
+    var color = ImageManager.TextureSource {
         .color = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
     };
+    if (gltf_material.metallic_roughness.base_color_texture) |texture| {
+        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
+        const png_data = image.data.?;
+        _ = png_data;
+        color = ImageManager.TextureSource {
+            .raw = undefined, // TODO
+        };
+    }
 
-    const roughness = if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| ImageManager.TextureSource {
-        .color = undefined, // TODO
-    } else ImageManager.TextureSource {
+    var roughness = ImageManager.TextureSource {
         .greyscale = gltf_material.metallic_roughness.roughness_factor,
     };
+    if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| {
+        roughness = ImageManager.TextureSource {
+            .raw = undefined, // TODO
+        };
+    }
 
-    const normal = if (gltf_material.normal_texture) |_| ImageManager.TextureSource {
-        .color = undefined, // TODO
-    } else ImageManager.TextureSource {
+    var normal = ImageManager.TextureSource {
         .color = F32x3.new(0.5, 0.5, 1.0),
     };
+    if (gltf_material.normal_texture) |_| {
+        normal = ImageManager.TextureSource {
+            .raw = undefined, // TODO
+        };
+    }
 
     return Material {
         .color = color,
@@ -79,6 +92,7 @@ fn gltfMaterialToMaterial(gltf_material: Gltf.Material) Material {
 }
 
 // TODO: textures/camera
+// glTF doesn't correspond very well to the internal data structures here so this isn't as efficient as constructing a scene manually
 pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, filepath: []const u8, background_dir: []const u8, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     // background atm unrelated to gltf
     const sampler = try ImageManager.createSampler(vc);
@@ -92,7 +106,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     const buffer = try std.fs.cwd().readFileAlloc(
         allocator,
         filepath,
-        512_000,
+        std.math.maxInt(usize),
     );
     defer allocator.free(buffer);
     try gltf.parse(buffer);
@@ -103,7 +117,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         defer allocator.free(materials);
 
         for (gltf.data.materials.items) |material, i| {
-            materials[i] = gltfMaterialToMaterial(material);
+            materials[i] = gltfMaterialToMaterial(gltf, material);
         }
 
         break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
@@ -119,11 +133,9 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
     const models = try allocator.alloc(Model, gltf.data.meshes.items.len);
     defer allocator.free(models);
-    defer for (models) |model| allocator.free(model.mesh_idxs);
 
     const skins = try allocator.alloc(Skin, gltf.data.meshes.items.len);
     defer allocator.free(skins);
-    defer for (skins) |skin| allocator.free(skin.material_idxs);
 
     for (gltf.data.meshes.items) |mesh, model_idx| {
         const mesh_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
@@ -164,7 +176,11 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                             const accessor = gltf.data.accessors.items[accessor_index];
                             gltf.getDataFromBufferView(f32, &texcoords, accessor, gltf.glb_binary.?);
                         },
-                        else => return error.UnhandledAttribute,
+                        .normal => |_| {}, // ignore, for now
+                        else => {
+                            std.debug.print("{any}\n", .{ attribute });
+                            return error.UnhandledAttribute;
+                        },
                     }
                 }
 
@@ -189,6 +205,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         models[model_idx].mesh_idxs = mesh_idxs;
         skins[model_idx].material_idxs = material_idxs;
     }
+    defer for (models) |model| allocator.free(model.mesh_idxs);
+    defer for (skins) |skin| allocator.free(skin.material_idxs);
 
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
     errdefer mesh_manager.destroy(vc, allocator);

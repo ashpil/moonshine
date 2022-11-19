@@ -17,16 +17,17 @@ pub const ImageCreateRawInfo = struct {
 };
 
 pub const RawSource = struct {
-    filepath: []const u8,
+    bytes: []const u8,
     width: u32,
     height: u32,
     format: vk.Format,
+    layout: vk.ImageLayout,
     usage: vk.ImageUsageFlags,
 };
 
 pub const TextureSource = union(enum) {
     dds_filepath: []const u8,
-    raw_file: RawSource,
+    raw: RawSource,
     color: F32x3,
     greyscale: f32,
 };
@@ -92,21 +93,14 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
             },
-            .raw_file => |raw_info| blk: {
+            .raw => |raw_info| blk: {
                 extents[i] = vk.Extent2D {
                     .width = raw_info.width,
                     .height = raw_info.height,
                 };
                 is_cubemaps[i] = false;
-                dst_layouts[i] = .general;
-
-                const file = try asset.openAsset(allocator, raw_info.filepath);
-                defer file.close();
-
-                const file_bytes = try file.readToEndAlloc(allocator, std.math.maxInt(u32));
-                try free_bytes.append(file_bytes);
-
-                bytes[i] = file_bytes;
+                dst_layouts[i] = raw_info.layout;
+                bytes[i] = raw_info.bytes;
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemaps[i]);
             },

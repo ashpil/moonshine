@@ -8,6 +8,7 @@ const BackgroundDescriptorLayout = @import("./descriptor.zig").BackgroundDescrip
 const Commands = @import("./Commands.zig");
 
 const utils = @import("./utils.zig");
+const asset = @import("../asset.zig");
 
 images: ImageManager,
 descriptor_set: vk.DescriptorSet,
@@ -16,58 +17,94 @@ const Self = @This();
 
 // currently uses this custom weird format -- probably best to migrate to something else at some point
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_dir: []const u8, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler) !Self {
-    const path1 = try std.fs.path.join(allocator, &.{ texture_dir, "color.dds" });
-    defer allocator.free(path1);
+    const dds_path = try std.fs.path.join(allocator, &.{ texture_dir, "color.dds" });
+    defer allocator.free(dds_path);
 
-    const path2 = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_pdfs_integrals.raw" });
-    defer allocator.free(path2);
+    const bytes1 = blk: {
+        const path = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_pdfs_integrals.raw" });
+        defer allocator.free(path);
 
-    const path3 = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_cdfs.raw" });
-    defer allocator.free(path3);
+        const file = try asset.openAsset(allocator, path);
+        defer file.close();
 
-    const path4 = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_pdf_integral.raw" });
-    defer allocator.free(path4);
+        break :blk try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+    };
+    defer allocator.free(bytes1);
 
-    const path5 = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_cdf.raw" });
-    defer allocator.free(path5);
+    const bytes2 = blk: {
+        const path = try std.fs.path.join(allocator, &.{ texture_dir, "conditional_cdfs.raw" });
+        defer allocator.free(path);
+
+        const file = try asset.openAsset(allocator, path);
+        defer file.close();
+
+        break :blk try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+    };
+    defer allocator.free(bytes2);
+
+    const bytes3 = blk: {
+        const path = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_pdf_integral.raw" });
+        defer allocator.free(path);
+
+        const file = try asset.openAsset(allocator, path);
+        defer file.close();
+
+        break :blk try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+    };
+    defer allocator.free(bytes3);
+
+    const bytes4 = blk: {
+        const path = try std.fs.path.join(allocator, &.{ texture_dir, "marginal_cdf.raw" });
+        defer allocator.free(path);
+
+        const file = try asset.openAsset(allocator, path);
+        defer file.close();
+
+        break :blk try file.readToEndAlloc(allocator, std.math.maxInt(u32));
+    };
+    defer allocator.free(bytes4);
 
     const images = try ImageManager.createTexture(vc, vk_allocator, allocator, &[_]ImageManager.TextureSource {
         ImageManager.TextureSource {
-            .dds_filepath = path1,
+            .dds_filepath = dds_path,
         },
         ImageManager.TextureSource {
-            .raw_file = .{
-                .filepath = path2,
+            .raw = .{
+                .bytes = bytes1,
                 .width = 257,
                 .height = 128,
                 .format = .r32_sfloat,
+                .layout = .general,
                 .usage = .{ .storage_bit = true },
             },
         },
         ImageManager.TextureSource {
-            .raw_file = .{
-                .filepath = path3,
+            .raw = .{
+                .bytes = bytes2,
                 .width = 257,
                 .height = 128,
                 .format = .r32_sfloat,
+                .layout = .general,
                 .usage = .{ .storage_bit = true },
             },
         },
         ImageManager.TextureSource {
-            .raw_file = .{
-                .filepath = path4,
+            .raw = .{
+                .bytes = bytes3,
                 .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,
+                .layout = .general,
                 .usage = .{ .storage_bit = true },
             },
         },
         ImageManager.TextureSource {
-            .raw_file = .{
-                .filepath = path5,
+            .raw = .{
+                .bytes = bytes4,
                 .width = 129,
                 .height = 1,
                 .format = .r32_sfloat,
+                .layout = .general,
                 .usage = .{ .storage_bit = true },
             },
         },
