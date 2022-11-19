@@ -52,7 +52,7 @@ const Self = @This();
 
 fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material) !Material {
     var color = ImageManager.TextureSource {
-        .color = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
+        .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
     };
     if (gltf_material.metallic_roughness.base_color_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
@@ -79,7 +79,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     }
 
     var roughness = ImageManager.TextureSource {
-        .greyscale = gltf_material.metallic_roughness.roughness_factor,
+        .f32x1 = gltf_material.metallic_roughness.roughness_factor,
     };
     // if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| {
     //     roughness = ImageManager.TextureSource {
@@ -88,7 +88,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     // }
 
     var normal = ImageManager.TextureSource {
-        .color = F32x3.new(0.5, 0.5, 1.0),
+        .f32x2 = F32x2.new(0.5, 0.5),
     };
     // if (gltf_material.normal_texture) |_| {
     //     normal = ImageManager.TextureSource {

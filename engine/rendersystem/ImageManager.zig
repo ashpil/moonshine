@@ -5,7 +5,9 @@ const utils = @import("./utils.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
-const F32x3 = @import("../vector.zig").Vec3(f32);
+const vector = @import("../vector.zig");
+const F32x3 = vector.Vec3(f32);
+const F32x2 = vector.Vec2(f32);
 const Commands = @import("./Commands.zig");
 const dds = @import("../fileformats/dds.zig");
 const asset = @import("../asset.zig");
@@ -28,8 +30,9 @@ pub const RawSource = struct {
 pub const TextureSource = union(enum) {
     dds_filepath: []const u8,
     raw: RawSource,
-    color: F32x3,
-    greyscale: f32,
+    f32x3: F32x3,
+    f32x2: F32x2,
+    f32x1: f32,
 };
 
 const Data = std.MultiArrayList(Image);
@@ -104,8 +107,8 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
                 break :blk try Image.create(vc, vk_allocator, extents[i], raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemaps[i]);
             },
-            .color => blk: {
-                bytes[i] = std.mem.asBytes(&source.color);
+            .f32x3 => blk: {
+                bytes[i] = std.mem.asBytes(&source.f32x3);
                 extents[i] = vk.Extent2D {
                     .width = 1,
                     .height = 1,
@@ -115,8 +118,19 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
-            .greyscale => blk: {
-                bytes[i] = std.mem.asBytes(&source.greyscale);
+            .f32x2 => blk: {
+                bytes[i] = std.mem.asBytes(&source.f32x2);
+                extents[i] = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                is_cubemaps[i] = false;
+                dst_layouts[i] = .shader_read_only_optimal;
+                
+                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32_sfloat, false);
+            },
+            .f32x1 => blk: {
+                bytes[i] = std.mem.asBytes(&source.f32x1);
                 extents[i] = vk.Extent2D {
                     .width = 1,
                     .height = 1,
@@ -124,7 +138,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 is_cubemaps[i] = false;
                 dst_layouts[i] = .shader_read_only_optimal;
 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false); // TODO: should this be grayscale format?
+                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false);
             },
         };
         data.appendAssumeCapacity(image);

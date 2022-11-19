@@ -26,10 +26,10 @@ pub fn main() !void {
                 .dds_filepath = "./assets/textures/board/color.dds",
             },
             .roughness = .{
-                .greyscale = 0.3,
+                .f32x1 = 0.3,
             },
             .normal = .{
-                .dds_filepath = "./assets/textures/board/normal.dds"
+                .dds_filepath = "./assets/textures/board/normal.dds",
             },
             .values = .{
                 .metalness = 0.4,
@@ -37,13 +37,13 @@ pub fn main() !void {
         },
         ChessSet.Material {
             .color = .{
-                .color = F32x3.new(0.653, 0.653, 0.653)
+                .f32x3 = F32x3.new(0.653, 0.653, 0.653),
             },
             .roughness = .{
-                .greyscale = 0.15,
+                .f32x1 = 0.15,
             },
             .normal = .{
-                .color = F32x3.new(0.5, 0.5, 1.0)
+                .f32x2 = F32x2.new(0.5, 0.5),
             },
             .values = .{
                 .metalness = 0.2,
@@ -51,13 +51,13 @@ pub fn main() !void {
         },
         ChessSet.Material {
             .color = .{
-                .color = F32x3.new(0.0004, 0.0025, 0.0096)
+                .f32x3 = F32x3.new(0.0004, 0.0025, 0.0096),
             },
             .roughness = .{
-                .greyscale = 0.15,
+                .f32x1 = 0.15,
             },
             .normal = .{
-                .color = F32x3.new(0.5, 0.5, 1.0)
+                .f32x2 = F32x2.new(0.5, 0.5),
             },
             .values = .{
                 .metalness = 0.2,
@@ -65,13 +65,13 @@ pub fn main() !void {
         },
         ChessSet.Material {
             .color = .{
-                .color = F32x3.new(0.901, 0.722, 0.271)
+                .f32x3 = F32x3.new(0.901, 0.722, 0.271),
             },
             .roughness = .{
-                .greyscale = 0.05,
+                .f32x1 = 0.05,
             },
             .normal = .{
-                .color = F32x3.new(0.5, 0.5, 1.0)
+                .f32x2 = F32x2.new(0.5, 0.5),
             },
             .values = .{
                 .metalness = 0.6,
