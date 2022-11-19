@@ -2,7 +2,6 @@
 
 // `values` is what I call non-texture material properties
 struct Values {
-    float metalness;
     float ior;
 };
 
@@ -153,10 +152,10 @@ Material getMaterial(uint materialIndex, float2 texcoords) {
     Values values = materialValues[NonUniformResourceIndex(materialIndex)];
 
     Material material;
-    material.metalness = values.metalness;
     material.ior = values.ior;
-    material.color = materialTextures[NonUniformResourceIndex(3 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
-    material.roughness = materialTextures[NonUniformResourceIndex(3 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.color = materialTextures[NonUniformResourceIndex(4 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
+    material.metalness = materialTextures[NonUniformResourceIndex(4 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.roughness = materialTextures[NonUniformResourceIndex(4 * materialIndex + 2)].SampleLevel(textureSampler, texcoords, 0).r;
     material.roughness = max(material.roughness, 0.0001); // set minimum roughness otherwise current math breaks down
 
     return material;

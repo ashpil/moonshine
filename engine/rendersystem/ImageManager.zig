@@ -127,7 +127,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 is_cubemaps[i] = false;
                 dst_layouts[i] = .shader_read_only_optimal;
                 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32_sfloat, false);
+                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32_sfloat, false);
             },
             .f32x1 => blk: {
                 bytes[i] = std.mem.asBytes(&source.f32x1);

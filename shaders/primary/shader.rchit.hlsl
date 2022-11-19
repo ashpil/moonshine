@@ -52,7 +52,7 @@ float3 calculateNormal(Vertex v0, Vertex v1, Vertex v2, float2 texcoords, uint t
     float3 positionNormalObjectSpace = normalize(cross(edge0, edge1));
 
     float3x3 tangentToObjectMat = createTBNMatrix(positionNormalObjectSpace, edge0, edge1, v0.texcoord, v1.texcoord, v2.texcoord);
-    float2 textureNormal = (textures[NonUniformResourceIndex(3 * textureIndex + 2)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
+    float2 textureNormal = (textures[NonUniformResourceIndex(4 * textureIndex + 3)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
     float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
 }

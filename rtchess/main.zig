@@ -25,56 +25,56 @@ pub fn main() !void {
             .color = .{
                 .dds_filepath = "./assets/textures/board/color.dds",
             },
+            .metalness = .{
+                .f32x1 = 0.4,
+            },
             .roughness = .{
                 .f32x1 = 0.3,
             },
             .normal = .{
                 .dds_filepath = "./assets/textures/board/normal.dds",
             },
-            .values = .{
-                .metalness = 0.4,
-            },
         },
         ChessSet.Material {
             .color = .{
                 .f32x3 = F32x3.new(0.653, 0.653, 0.653),
+            },
+            .metalness = .{
+                .f32x1 = 0.2,
             },
             .roughness = .{
                 .f32x1 = 0.15,
             },
             .normal = .{
                 .f32x2 = F32x2.new(0.5, 0.5),
-            },
-            .values = .{
-                .metalness = 0.2,
             },
         },
         ChessSet.Material {
             .color = .{
                 .f32x3 = F32x3.new(0.0004, 0.0025, 0.0096),
             },
+            .metalness = .{
+                .f32x1 = 0.2,
+            },
             .roughness = .{
                 .f32x1 = 0.15,
             },
             .normal = .{
                 .f32x2 = F32x2.new(0.5, 0.5),
             },
-            .values = .{
-                .metalness = 0.2,
-            },
         },
         ChessSet.Material {
             .color = .{
                 .f32x3 = F32x3.new(0.901, 0.722, 0.271),
+            },
+            .metalness = .{
+                .f32x1 = 0.6,
             },
             .roughness = .{
                 .f32x1 = 0.05,
             },
             .normal = .{
                 .f32x2 = F32x2.new(0.5, 0.5),
-            },
-            .values = .{
-                .metalness = 0.6,
             },
         },
     };

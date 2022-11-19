@@ -78,6 +78,16 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         };
     }
 
+
+    var metalness = ImageManager.TextureSource {
+        .f32x1 = gltf_material.metallic_roughness.metallic_factor,
+    };
+    // if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| {
+    //     roughness = ImageManager.TextureSource {
+    //         .raw = undefined, // TODO
+    //     };
+    // }
+
     var roughness = ImageManager.TextureSource {
         .f32x1 = gltf_material.metallic_roughness.roughness_factor,
     };
@@ -118,11 +128,9 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
 
     return Material {
         .color = color,
+        .metalness = metalness,
         .roughness = roughness,
         .normal = normal,
-        .values = .{
-            .metalness = gltf_material.metallic_roughness.metallic_factor,
-        }
     };
 }
 
@@ -447,7 +455,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
     errdefer material_manager.destroy(vc, allocator);
 
-    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, materials.len * 3);
+    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, materials.len * Material.textures_per_material);
     defer allocator.free(image_infos);
 
     const texture_views = material_manager.textures.data.items(.view);

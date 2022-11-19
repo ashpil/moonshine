@@ -8,34 +8,37 @@ const ImageManager = @import("./ImageManager.zig");
 
 pub const Material = struct {
     color: ImageManager.TextureSource,
+    metalness: ImageManager.TextureSource,
     roughness: ImageManager.TextureSource,
     normal: ImageManager.TextureSource,
     
     values: Values = .{},
+
+    pub const textures_per_material = 4;
 };
 
 // `value` is the term I use for non-texture material input
 pub const Values = packed struct {
-    metalness: f32 = 0.0,
     ior: f32 = 1.5,
 };
 
-textures: ImageManager, // (color, roughness, normal) * N
+textures: ImageManager, // (color, metalness, roughness, normal) * N
 values: VkAllocator.DeviceBuffer, // holds Values for each material
 
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material) !Self {
-    const texture_sources = try allocator.alloc(ImageManager.TextureSource, materials.len * 3);
+    const texture_sources = try allocator.alloc(ImageManager.TextureSource, materials.len * Material.textures_per_material);
     defer allocator.free(texture_sources);
 
     const values_tmp = try vk_allocator.createHostBuffer(vc, Values, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
     defer values_tmp.destroy(vc);
 
     for (materials) |set, i| {
-        texture_sources[3 * i + 0] = set.color;
-        texture_sources[3 * i + 1] = set.roughness;
-        texture_sources[3 * i + 2] = set.normal;
+        texture_sources[Material.textures_per_material * i + 0] = set.color;
+        texture_sources[Material.textures_per_material * i + 1] = set.metalness;
+        texture_sources[Material.textures_per_material * i + 2] = set.roughness;
+        texture_sources[Material.textures_per_material * i + 3] = set.normal;
 
         values_tmp.data[i] = set.values;
     }
