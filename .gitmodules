@@ -10,3 +10,6 @@
 [submodule "deps/zgltf"]
 	path = deps/zgltf
 	url = https://github.com/kooparse/zgltf.git
+[submodule "deps/zigimg"]
+	path = deps/zigimg
+	url = https://github.com/zigimg/zigimg.git
