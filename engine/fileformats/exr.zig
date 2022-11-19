@@ -107,9 +107,9 @@ pub const helpers = struct {
         const image_channels_slice = image_channels.slice();
         image.num_channels = channel_count;
         image.images = &[3][*c]u8 {
-            image_channels_slice.ptrs[0],
-            image_channels_slice.ptrs[1],
             image_channels_slice.ptrs[2],
+            image_channels_slice.ptrs[1],
+            image_channels_slice.ptrs[0],
         };
         image.width = @intCast(c_int, size.width);
         image.height = @intCast(c_int, size.height);
