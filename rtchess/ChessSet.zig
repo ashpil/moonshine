@@ -15,13 +15,13 @@ const Coord = @import("./coord.zig").Coord;
 pub const Material = Scene.Material;
 
 pub const Piece = struct {
-    black_material_index: u32,
-    white_material_index: u32,
+    black_material_idx: u32,
+    white_material_idx: u32,
     model_path: []const u8,
 };
 
 pub const Board = struct {
-    material_index: u32,
+    material_idx: u32,
     model_path: []const u8,
 };
 
@@ -42,6 +42,44 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, chess_set: SetInfo, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
 
+    const models = [_]Scene.Model {
+        .{ // board
+            .mesh_idxs = &.{ 0 },
+        },
+        .{ // pawn
+            .mesh_idxs = &.{ 1 },
+        },
+        .{ // rook
+            .mesh_idxs = &.{ 2 },
+        },
+        .{ // knight
+            .mesh_idxs = &.{ 3 },
+        },
+        .{ // bishop
+            .mesh_idxs = &.{ 4 },
+        },
+        .{ // king
+            .mesh_idxs = &.{ 5 },
+        },
+        .{ // queen
+            .mesh_idxs = &.{ 6 },
+        },
+    };
+    const skins = [_]Scene.Skin {
+        .{ // board
+            .material_idxs = &.{ 0 },
+        },
+        .{ // white
+            .material_idxs = &.{ 1 },
+        },
+        .{ // back
+            .material_idxs = &.{ 2 },
+        },
+        .{ // selected
+            .material_idxs = &.{ 3 },
+        },
+    };
+
     const instance_count = 33;
 
     var instances = Scene.Instances {};
@@ -49,250 +87,224 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     // board
     instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Mat3x4.identity,
-            .mesh_index = 0,
-        },
-        .material_index = 0,
+        .transform = Mat3x4.identity,
+        .model_idx = 0,
+        .skin_idx = 0,
     });
 
     const black_rotation = Mat3x4.from_rotation(F32x3.new(0.0, 1.0, 0.0), std.math.pi);
 
     // pawns
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.h2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.g2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.f2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.e2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.d2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.c2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.b2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.a2.toTransform(),
-            .mesh_index = 1,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.h7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.g7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.f7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.e7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.d7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.c7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.b7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.a7.toTransform().mul(black_rotation),
-            .mesh_index = 1,
-        },
-        .material_index = 2,
-    });
+    {
+        // white
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.h2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.g2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.f2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.e2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.d2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.c2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.b2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.a2.toTransform(),
+                .model_idx = 1,
+                .skin_idx = 1,
+            });
+        }
+        // black
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.h7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.g7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.f7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.e7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.d7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.c7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.b7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.a7.toTransform().mul(black_rotation),
+                .model_idx = 1,
+                .skin_idx = 2,
+            });
+        }
+    }
 
     // rooks
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.a1.toTransform(),
-            .mesh_index = 2,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.h1.toTransform(),
-            .mesh_index = 2,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.a8.toTransform().mul(black_rotation),
-            .mesh_index = 2,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.h8.toTransform().mul(black_rotation),
-            .mesh_index = 2,
-        },
-        .material_index = 2,
-    });
+    {
+        // white
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.a1.toTransform(),
+                .model_idx = 2,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.h1.toTransform(),
+                .model_idx = 2,
+                .skin_idx = 1,
+            });
+        }
+        // black
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.a8.toTransform().mul(black_rotation),
+                .model_idx = 2,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.h8.toTransform().mul(black_rotation),
+                .model_idx = 2,
+                .skin_idx = 2,
+            });
+        }
+    }
 
     // knights
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.b1.toTransform(),
-            .mesh_index = 3,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.g1.toTransform(),
-            .mesh_index = 3,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.b8.toTransform().mul(black_rotation),
-            .mesh_index = 3,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.g8.toTransform().mul(black_rotation),
-            .mesh_index = 3,
-        },
-        .material_index = 2,
-    });
+    {
+        // white
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.b1.toTransform(),
+                .model_idx = 3,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.g1.toTransform(),
+                .model_idx = 3,
+                .skin_idx = 1,
+            });
+        }
+        // black
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.b8.toTransform().mul(black_rotation),
+                .model_idx = 3,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.g8.toTransform().mul(black_rotation),
+                .model_idx = 3,
+                .skin_idx = 2,
+            });
+        }
+    }
 
     // bishops
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.c1.toTransform(),
-            .mesh_index = 4,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.f1.toTransform(),
-            .mesh_index = 4,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.c8.toTransform().mul(black_rotation),
-            .mesh_index = 4,
-        },
-        .material_index = 2,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
-            .transform = Coord.f8.toTransform().mul(black_rotation),
-            .mesh_index = 4,
-        },
-        .material_index = 2,
-    });
+    {
+        // white
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.c1.toTransform(),
+                .model_idx = 4,
+                .skin_idx = 1,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.f1.toTransform(),
+                .model_idx = 4,
+                .skin_idx = 1,
+            });
+        }
+        // black
+        {
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.c8.toTransform().mul(black_rotation),
+                .model_idx = 4,
+                .skin_idx = 2,
+            });
+            instances.appendAssumeCapacity(.{
+                .transform = Coord.f8.toTransform().mul(black_rotation),
+                .model_idx = 4,
+                .skin_idx = 2,
+            });
+        }
+    }
 
     // kings
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
+    {
+        // white
+        instances.appendAssumeCapacity(.{
             .transform = Coord.e1.toTransform(),
-            .mesh_index = 5,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
+            .model_idx = 5,
+            .skin_idx = 1,
+        });
+        // black
+        instances.appendAssumeCapacity(.{
             .transform = Coord.e8.toTransform().mul(black_rotation),
-            .mesh_index = 5,
-        },
-        .material_index = 2,
-    });
+            .model_idx = 5,
+            .skin_idx = 2,
+        });
+    }
 
     // queens
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
+    {
+        // white
+        instances.appendAssumeCapacity(.{
             .transform = Coord.d1.toTransform(),
-            .mesh_index = 6,
-        },
-        .material_index = 1,
-    });
-    instances.appendAssumeCapacity(.{
-        .mesh_info = .{
+            .model_idx = 6,
+            .skin_idx = 1,
+        });
+        // black
+        instances.appendAssumeCapacity(.{
             .transform = Coord.d8.toTransform().mul(black_rotation),
-            .mesh_index = 6,
-        },
-        .material_index = 2,
-    });
+            .model_idx = 6,
+            .skin_idx = 2,
+        });
+    }
 
     const mesh_filepaths = [_][]const u8 {
         chess_set.board.model_path,
@@ -304,7 +316,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_dir, &mesh_filepaths, instances, descriptor_layout, background_descriptor_layout);
+    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_dir, &mesh_filepaths, instances, &models, &skins, descriptor_layout, background_descriptor_layout);
 
     return Self {
         .scene = scene,

@@ -8,33 +8,63 @@ const Vertex = @import("../Object.zig").Vertex;
 const utils = @import("./utils.zig");
 const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
 
-pub const Instances = std.MultiArrayList(struct {
-    mesh_info: MeshInfo,
-    material_index: u32,
-});
+// the acceleration structure is the primary scene heirarchy, and controls
+// how all the meshes and materials fit together
+// 
+// an acceleration structure has:
+// - a list of instances
+//
+// each instance has:
+// - a transform
+// - a visible flag
+// - a model
+// - a skin
+//
+// each model has:
+// - a list of meshes
+//
+// each skin has:
+// - a list of materials
+//
+// a BLAS is made from each model
+//
 
-pub const MeshInfo = struct {
-    transform: Mat3x4,
-    mesh_index: u24,
-    visible: bool = true,
+pub const Instance = struct {
+    transform: Mat3x4, // transform of this instance
+    visible: bool = true, // whether this instance is visible
+    model_idx: u12, // index of model used by this instance
+    skin_idx: u12, // index of skin used by this instance
+};
+pub const Instances = std.MultiArrayList(Instance);
+
+pub const Model = struct {
+    mesh_idxs: []const u32,
+};
+
+pub const Skin = struct {
+    material_idxs: []const u32,
 };
 
 const BottomLevelAccels = std.MultiArrayList(struct {
     handle: vk.AccelerationStructureKHR,
     buffer: VkAllocator.DeviceBuffer,
-    address: vk.DeviceAddress,
 });
 
 blases: BottomLevelAccels,
 
-instance_infos: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
+instances: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
+instances_address: vk.DeviceAddress,
 
-instance_buffer: VkAllocator.DeviceBuffer, // holds instance-specific information -- currently just material index
-instance_count: u32,
+// four actual buffers
+model_idx_to_offset: VkAllocator.DeviceBuffer,
+offset_geo_idx_to_mesh_idx: VkAllocator.DeviceBuffer,
 
+skin_idx_to_offset: VkAllocator.DeviceBuffer,
+offset_geo_idx_to_material_idx: VkAllocator.DeviceBuffer,
+
+// tlas stuff
 tlas_handle: vk.AccelerationStructureKHR,
 tlas_buffer: VkAllocator.DeviceBuffer,
-tlas_device_address: vk.DeviceAddress,
 
 tlas_update_scratch_buffer: VkAllocator.DeviceBuffer,
 tlas_update_scratch_address: vk.DeviceAddress,
@@ -43,47 +73,61 @@ changed: bool,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instances: Instances) !Self {
-    // for now, just create a BLAS for each mesh
+const CustomIndex = packed struct {
+    model_idx: u12,
+    skin_idx: u12,
+};
+
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instances: Instances, models: []const Model, skins: []const Skin) !Self {
+    // create a BLAS for each model
     // lots of temp memory allocations here
     const blases = blk: {
-        const geometry_count = mesh_manager.meshes.len;
+        const geometry_count = models.len;
 
-        const uncompacted_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, geometry_count);
+        const uncompacted_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, models.len);
         defer allocator.free(uncompacted_buffers);
-        defer for (uncompacted_buffers) |buffer| {
-            buffer.destroy(vc);
-        };
+        defer for (uncompacted_buffers) |buffer| buffer.destroy(vc);
 
-        const uncompacted_blases = try allocator.alloc(vk.AccelerationStructureKHR, geometry_count);
+        const uncompacted_blases = try allocator.alloc(vk.AccelerationStructureKHR, models.len);
         defer allocator.free(uncompacted_blases);
-        defer for (uncompacted_blases) |handle| {
-            vc.device.destroyAccelerationStructureKHR(handle, null);
-        };
+        defer for (uncompacted_blases) |handle| vc.device.destroyAccelerationStructureKHR(handle, null);
 
-        var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, geometry_count);
+        var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, models.len);
         defer allocator.free(build_geometry_infos);
+        defer for (build_geometry_infos) |build_geometry_info| allocator.free(build_geometry_info.p_geometries.?[0..build_geometry_info.geometry_count]);
 
-        const scratch_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, geometry_count);
+        const scratch_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, models.len);
         defer allocator.free(scratch_buffers);
-        defer for (scratch_buffers) |scratch_buffer| {
-            scratch_buffer.destroy(vc);
-        };
+        defer for (scratch_buffers) |scratch_buffer| scratch_buffer.destroy(vc);
 
-        const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, geometry_count);
-        const build_infos = try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, geometry_count);
-        const build_infos_ref = try allocator.alloc(*const vk.AccelerationStructureBuildRangeInfoKHR, geometry_count);
-
-        defer allocator.free(geometries);
+        const build_infos = try allocator.alloc([*]vk.AccelerationStructureBuildRangeInfoKHR, models.len);
         defer allocator.free(build_infos);
-        defer allocator.free(build_infos_ref);
+        defer for (build_infos) |build_info, i| allocator.free(build_info[0..build_geometry_infos[i].geometry_count]);
 
-        {
-            var i: usize = 0;
-            while (i < geometry_count) : (i += 1) {
-                const mesh = mesh_manager.meshes.get(i);
+        for (models) |model, i| {
+            const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, model.mesh_idxs.len);
 
-                geometries[i] = vk.AccelerationStructureGeometryKHR {
+            build_geometry_infos[i] = vk.AccelerationStructureBuildGeometryInfoKHR {
+                .@"type" = .bottom_level_khr,
+                .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
+                .mode = .build_khr,
+                .src_acceleration_structure = .null_handle,
+                .dst_acceleration_structure = .null_handle,
+                .geometry_count = @intCast(u32, geometries.len),
+                .p_geometries = geometries.ptr,
+                .pp_geometries = null,
+                .scratch_data = undefined,
+            };
+
+            const primitive_counts = try allocator.alloc(u32, model.mesh_idxs.len);
+            defer allocator.free(primitive_counts);
+
+            build_infos[i] = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, model.mesh_idxs.len)).ptr;
+
+            for (model.mesh_idxs) |mesh_idx, j| {
+                const mesh = mesh_manager.meshes.get(mesh_idx);
+
+                geometries[j] = vk.AccelerationStructureGeometryKHR {
                     .geometry_type = .triangles_khr,
                     .flags = .{ .opaque_bit_khr = true },
                     .geometry = .{
@@ -105,31 +149,16 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                     }
                 };
 
-                build_infos[i] =  vk.AccelerationStructureBuildRangeInfoKHR {
+                build_infos[i][j] =  vk.AccelerationStructureBuildRangeInfoKHR {
                     .primitive_count = @intCast(u32, mesh.index_count),
                     .primitive_offset = 0,
                     .transform_offset = 0,
                     .first_vertex = 0,
                 };
-
-                build_infos_ref[i] = &build_infos[i];
+                primitive_counts[j] = build_infos[i][j].primitive_count;
             }
-        }
-        
 
-        for (geometries) |*geometry, i| {
-            build_geometry_infos[i] = .{
-                .@"type" = .bottom_level_khr,
-                .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
-                .mode = .build_khr,
-                .src_acceleration_structure = .null_handle,
-                .dst_acceleration_structure = .null_handle,
-                .geometry_count = 1,
-                .p_geometries = utils.toPointerType(geometry),
-                .pp_geometries = null,
-                .scratch_data = undefined,
-            };
-            const size_info = getBuildSizesInfo(vc, &build_geometry_infos[i], build_infos[i].primitive_count);
+            const size_info = getBuildSizesInfo(vc, &build_geometry_infos[i], primitive_counts.ptr);
 
             scratch_buffers[i] = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
             errdefer scratch_buffers[i].destroy(vc);
@@ -153,7 +182,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const compactedSizes = try allocator.alloc(vk.DeviceSize, geometry_count);
         defer allocator.free(compactedSizes);
-        try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos_ref, uncompacted_blases, compactedSizes);
+        try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos, uncompacted_blases, compactedSizes);
 
         var blases = BottomLevelAccels {};
         try blases.ensureTotalCapacity(allocator, geometry_count);
@@ -184,9 +213,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             blases.appendAssumeCapacity(.{
                 .handle = handle,
                 .buffer = buffer,
-                .address = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
-                    .acceleration_structure = handle,
-                }),
             });
         }
 
@@ -197,8 +223,40 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     // create instance info, tlas, and tlas state
     const instance_count = @intCast(u32, instances.len);
-    const instance_infos = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-    errdefer instance_infos.destroy(vc);
+    const vk_instances = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+    errdefer vk_instances.destroy(vc);
+
+    const instance_transforms = instances.items(.transform);
+    const instance_visibles = instances.items(.visible);
+    const instance_models = instances.items(.model_idx);
+    const instance_skins = instances.items(.skin_idx);
+    
+    const blas_handles = blases.items(.handle);
+
+    for (vk_instances.data) |*instance, i| {
+        const custom_index = @bitCast(u24, CustomIndex {
+            .model_idx = instance_models[i],
+            .skin_idx = instance_skins[i],
+        });
+        instance.* = .{
+            .transform = vk.TransformMatrixKHR {
+                .matrix = @bitCast([3][4]f32, instance_transforms[i]),
+            },
+            .instance_custom_index_and_mask = .{
+                .instance_custom_index = custom_index,
+                .mask = if (instance_visibles[i]) 0xFF else 0x00,
+            },
+            .instance_shader_binding_table_record_offset_and_flags = .{
+                .instance_shader_binding_table_record_offset = 0,
+                .flags = 0,
+            },
+            .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{ 
+                .acceleration_structure = blas_handles[instance_models[i]],
+            }),
+        };
+    }
+
+    const vk_instances_address = vk_instances.getAddress(vc);
 
     const geometry = vk.AccelerationStructureGeometryKHR {
         .geometry_type = .instances_khr,
@@ -207,7 +265,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .instances = .{
                 .array_of_pointers = vk.FALSE,
                 .data = .{
-                    .device_address = instance_infos.getAddress(vc),
+                    .device_address = vk_instances_address,
                 }
             }
         },
@@ -225,7 +283,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .scratch_data = undefined,
     };
 
-    const size_info = getBuildSizesInfo(vc, &geometry_info, instance_count);
+    const size_info = getBuildSizesInfo(vc, &geometry_info, utils.toPointerType(&instance_count));
 
     const scratch_buffer = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     defer scratch_buffer.destroy(vc);
@@ -248,30 +306,82 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     errdefer update_scratch_buffer.destroy(vc);
 
-    const instance_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * instance_count, .{ .shader_device_address_bit = true, .storage_buffer_bit = true, .transfer_dst_bit = true });
-    errdefer instance_buffer.destroy(vc);
-    try commands.uploadData(vc, vk_allocator, instance_buffer.handle, std.mem.sliceAsBytes(instances.items(.material_index)));
+    var offset_so_far: u32 = undefined;
+    const model_idx_to_offset = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * models.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
 
-    var accel = Self {
-        .blases = blases,
+        const buffer_host = try allocator.alloc(u32, models.len);
+        defer allocator.free(buffer_host);
+        offset_so_far = 0;
+        for (models) |model, i| {
+            buffer_host[i] = offset_so_far;
+            offset_so_far += @intCast(u32, model.mesh_idxs.len);
+        }
 
-        .instance_infos = instance_infos,
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
 
-        .tlas_device_address = geometry.geometry.instances.data.device_address,
-        .tlas_handle = geometry_info.dst_acceleration_structure,
-        .tlas_buffer = tlas_buffer,
-
-        .tlas_update_scratch_buffer = update_scratch_buffer,
-        .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
-
-        .instance_buffer = instance_buffer,
-        .instance_count = instance_count,
-
-        .changed = false,
+        break :blk buffer;
     };
+    errdefer model_idx_to_offset.destroy(vc);
 
-    const instance_data = instances.items(.mesh_info);
-    accel.updateInstanceBuffer(instance_data);
+    const offset_geo_idx_to_mesh_idx = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * offset_so_far, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const buffer_host = try allocator.alloc(u32, offset_so_far);
+        defer allocator.free(buffer_host);
+        var flat_idx: u32 = 0;
+        for (models) |model| {
+            for (model.mesh_idxs) |mesh_idx| {
+                buffer_host[flat_idx] = mesh_idx;
+                flat_idx += 1;
+            }
+        }
+
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
+
+        break :blk buffer;
+    };
+    errdefer offset_geo_idx_to_mesh_idx.destroy(vc);
+
+    const skin_idx_to_offset = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * skins.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const buffer_host = try allocator.alloc(u32, skins.len);
+        defer allocator.free(buffer_host);
+        offset_so_far = 0;
+        for (skins) |skin, i| {
+            buffer_host[i] = offset_so_far;
+            offset_so_far += @intCast(u32, skin.material_idxs.len);
+        }
+
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
+
+        break :blk buffer;
+    };
+    errdefer skin_idx_to_offset.destroy(vc);
+
+    const offset_geo_idx_to_material_idx = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * offset_so_far, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const buffer_host = try allocator.alloc(u32, offset_so_far);
+        defer allocator.free(buffer_host);
+        var flat_idx: u32 = 0;
+        for (skins) |skin| {
+            for (skin.material_idxs) |material_idx| {
+                buffer_host[flat_idx] = material_idx;
+                flat_idx += 1;
+            }
+        }
+
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
+
+        break :blk buffer;
+    };
+    errdefer offset_geo_idx_to_material_idx.destroy(vc);
 
     const build_info = .{
         .primitive_count = instance_count,
@@ -280,61 +390,50 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .transform_offset = 0,
     };
     try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ &build_info });
-    
-    return accel;
-}
 
-pub fn updateInstanceBuffer(self: *Self, mesh_infos: []const MeshInfo) void {
-    const blas_addresses = self.blases.items(.address);
+    return Self {
+        .blases = blases,
 
-    for (mesh_infos) |mesh_info, i| {
-        const mesh_index = mesh_info.mesh_index;
-        self.instance_infos.data[i] = .{
-            .transform = vk.TransformMatrixKHR {
-                .matrix = @bitCast([3][4]f32, mesh_info.transform),
-            },
-            .instance_custom_index_and_mask = .{
-                .instance_custom_index = mesh_index,
-                .mask = if (mesh_info.visible) 0xFF else 0x00,
-            },
-            .instance_shader_binding_table_record_offset_and_flags = .{
-                .instance_shader_binding_table_record_offset = 0,
-                .flags = 0,
-            },
-            .acceleration_structure_reference = blas_addresses[mesh_index],
-        };
-    } 
-}
+        .instances = vk_instances,
+        .instances_address = vk_instances_address,
 
-pub fn updateTlas(self: *Self, mesh_infos: []const MeshInfo) void {
-    self.updateInstanceBuffer(mesh_infos);
+        .tlas_handle = geometry_info.dst_acceleration_structure,
+        .tlas_buffer = tlas_buffer,
 
-    self.changed = true;
-}
+        .tlas_update_scratch_buffer = update_scratch_buffer,
+        .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
 
-pub fn recordInstanceUpdate(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_index: u32, new_value: u32) void {
-    vc.device.cmdUpdateBuffer(command_buffer, self.instance_buffer.handle, @sizeOf(u32) * instance_index, @sizeOf(u32), &new_value);
+        .model_idx_to_offset = model_idx_to_offset,
+        .offset_geo_idx_to_mesh_idx = offset_geo_idx_to_mesh_idx,
 
-    const barrier = vk.BufferMemoryBarrier2 {
-        .src_stage_mask = .{ .copy_bit = true },
-        .src_access_mask = .{ .transfer_write_bit = true },
-        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-        .dst_access_mask = .{ .shader_storage_read_bit = true },
-        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-        .buffer = self.instance_buffer.handle,
-        .offset = @sizeOf(u32) * instance_index,
-        .size = @sizeOf(u32),
+        .skin_idx_to_offset = skin_idx_to_offset,
+        .offset_geo_idx_to_material_idx = offset_geo_idx_to_material_idx,
+
+        .changed = false,
     };
-    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = utils.toPointerType(&barrier),
-        .image_memory_barrier_count = 0,
-        .p_image_memory_barriers = undefined,
-    });
+}
+
+pub fn updateTransform(self: *Self, instance_idx: u32, transform: Mat3x4) void {
+    self.changed = true;
+
+    self.instances.data[instance_idx].transform = vk.TransformMatrixKHR {
+        .matrix = @bitCast([3][4]f32, transform),
+    };
+}
+
+pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
+    self.changed = true;
+    
+    self.instances.data[instance_idx].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
+}
+
+// hmm technically current system requires accel rebuild on simply skin change, which isn't actually required
+pub fn updateSkin(self: *Self, instance_idx: u32, skin_idx: u12) void {
+    self.changed = true;
+    
+    var custom_index = @bitCast(CustomIndex, self.instances.data[instance_idx].instance_custom_index_and_mask.instance_custom_index);
+    custom_index.skin_idx = skin_idx;
+    self.instances.data[instance_idx].instance_custom_index_and_mask.instance_custom_index = @bitCast(u24, custom_index);
 }
 
 pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
@@ -346,7 +445,7 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
                 .instances = .{
                     .array_of_pointers = vk.FALSE,
                     .data = .{
-                        .device_address = self.tlas_device_address,
+                        .device_address = self.instances_address,
                     }
                 }
             },
@@ -367,7 +466,7 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
         };
 
         const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
-            .primitive_count = self.instance_count,
+            .primitive_count = @intCast(u32, self.instances.data.len),
             .first_vertex = 0,
             .primitive_offset = 0,
             .transform_offset = 0,
@@ -398,9 +497,13 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.instance_infos.destroy(vc);
+    self.instances.destroy(vc);
 
-    self.instance_buffer.destroy(vc);
+    self.model_idx_to_offset.destroy(vc);
+    self.offset_geo_idx_to_mesh_idx.destroy(vc);
+    self.skin_idx_to_offset.destroy(vc);
+    self.offset_geo_idx_to_material_idx.destroy(vc);
+
     self.tlas_update_scratch_buffer.destroy(vc);
 
     const blases_slice = self.blases.slice();
@@ -418,10 +521,10 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.tlas_buffer.destroy(vc);
 }
 
-fn getBuildSizesInfo(vc: *const VulkanContext, geometry_info: *const vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_count: u32) vk.AccelerationStructureBuildSizesInfoKHR {
+fn getBuildSizesInfo(vc: *const VulkanContext, geometry_info: *const vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_count: [*]const u32) vk.AccelerationStructureBuildSizesInfoKHR {
     var size_info: vk.AccelerationStructureBuildSizesInfoKHR = undefined;
     size_info.s_type = .acceleration_structure_build_sizes_info_khr;
     size_info.p_next = null;
-    vc.device.getAccelerationStructureBuildSizesKHR(.device_khr, geometry_info, utils.toPointerType(&max_primitive_count), &size_info);
+    vc.device.getAccelerationStructureBuildSizesKHR(.device_khr, geometry_info, max_primitive_count, &size_info);
     return size_info;
 }

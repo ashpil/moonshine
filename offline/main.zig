@@ -42,6 +42,9 @@ pub fn main() !void {
         .{ .partially_bound_bit = true },
         .{},
         .{},
+        .{},
+        .{},
+        .{},
     });
     defer scene_descriptor_layout.destroy(&context);
     var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, null);
@@ -59,8 +62,8 @@ pub fn main() !void {
 
     const extent = vk.Extent2D { .width = 1024, .height = 1024 }; // TODO: cli
 
-    const camera_origin = F32x3.new(5.0, 5.0, 5.0);
-    const camera_target = F32x3.new(0.0, 0.0, 0.0);
+    const camera_origin = F32x3.new(3.0, 2.0, 3.0);
+    const camera_target = F32x3.new(0.0, 0.2, 0.0);
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,

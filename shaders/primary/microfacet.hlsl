@@ -157,6 +157,7 @@ Material getMaterial(uint materialIndex, float2 texcoords) {
     material.ior = values.ior;
     material.color = materialTextures[NonUniformResourceIndex(3 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
     material.roughness = materialTextures[NonUniformResourceIndex(3 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.roughness = max(material.roughness, 0.0001); // set minimum roughness otherwise current math breaks down
 
     return material;
 }

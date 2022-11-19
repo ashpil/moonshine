@@ -94,7 +94,7 @@ pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos:
     try self.submitAndIdleUntilDone(vc);
 }
 
-pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR, handles: []const vk.AccelerationStructureKHR, compactedSizes: []vk.DeviceSize) !void {
+pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const [*]const vk.AccelerationStructureBuildRangeInfoKHR, handles: []const vk.AccelerationStructureKHR, compactedSizes: []vk.DeviceSize) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
     std.debug.assert(build_infos.len == handles.len);
     const size = @intCast(u32, geometry_infos.len);
@@ -111,7 +111,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
 
     try self.startRecording(vc);
 
-    vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
+    vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, @ptrCast([*]const *const vk.AccelerationStructureBuildRangeInfoKHR, build_infos.ptr)); // TODO: remove @ptrCast once https://github.com/Snektron/vulkan-zig/issues/59 fixed
 
     const barriers = [_]vk.MemoryBarrier2 {
         .{

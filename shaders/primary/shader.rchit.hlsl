@@ -17,7 +17,12 @@ struct Vertex {
 SamplerState textureSampler : register(s1, space0);
 Texture2D textures[] : register(t3, space0);
 StructuredBuffer<Mesh> meshes : register(t4, space0);
-StructuredBuffer<Instance> instances : register(t5, space0);
+
+StructuredBuffer<uint> modelIdxToOffset : register(t5, space0);
+StructuredBuffer<uint> offsetGeoIdxToMeshIdx : register(t6, space0);
+
+StructuredBuffer<uint> skinIdxToOffset : register(t7, space0);
+StructuredBuffer<uint> offsetGeoIdxToMaterialIdx : register(t8, space0);
 
 float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2) {
     float2 deltaUV1 = t1 - t0;
@@ -69,10 +74,31 @@ Vertex loadVertex(uint64_t addr, uint index) {
     return v;
 }
 
+uint modelIdx() {
+    return InstanceID() & 0xFFF; // lower 12 bits
+}
+
+uint skinIdx() {
+    return InstanceID() >> 12; // upper 12 bits
+}
+
+uint meshIdx(uint modelIdx, uint geometryIdx) {
+    uint offset = modelIdxToOffset[modelIdx];
+    return offsetGeoIdxToMeshIdx[offset + geometryIdx];
+}
+
+uint materialIdx(uint skinIdx, uint geometryIdx) {
+    uint offset = skinIdxToOffset[skinIdx];
+    return offsetGeoIdxToMaterialIdx[offset + geometryIdx];
+}
+
 [shader("closesthit")]
 void main(inout Payload payload, in float2 attribs) {
-    Mesh mesh = meshes[InstanceID()];
-    uint materialIndex = instances[InstanceIndex()].materialIndex;
+    uint meshIndex = meshIdx(modelIdx(), GeometryIndex());
+    uint materialIndex = materialIdx(skinIdx(), GeometryIndex());
+
+    Mesh mesh = meshes[meshIndex];
+
     uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * PrimitiveIndex());
     
     Vertex v0 = loadVertex(mesh.vertexAddress, ind.x);
