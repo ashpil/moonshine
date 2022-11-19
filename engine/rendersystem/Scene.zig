@@ -90,11 +90,31 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     var normal = ImageManager.TextureSource {
         .f32x2 = F32x2.new(0.5, 0.5),
     };
-    // if (gltf_material.normal_texture) |_| {
-    //     normal = ImageManager.TextureSource {
-    //         .raw = undefined, // TODO
-    //     };
-    // }
+    if (gltf_material.normal_texture) |texture| {
+        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
+
+        // this gives us rgb --> need to convert to rg
+        // theoretically gltf spec claims these values should already be linear
+        var img = try zigimg.Image.fromMemory(allocator, image.data.?);
+        defer img.deinit();
+
+        var rg = try allocator.alloc(u8, img.pixels.len() * 2);
+        for (img.pixels.rgb24) |pixel, i| {
+            rg[i * 2 + 0] = pixel.r;
+            rg[i * 2 + 1] = pixel.g;
+        }
+        normal = ImageManager.TextureSource {
+            .raw = .{
+                .bytes = rg,
+                .width = @intCast(u32, img.width),
+                .height = @intCast(u32, img.height),
+                .format = .r8g8_unorm,
+                .layout = .shader_read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        };
+    }
 
     return Material {
         .color = color,
