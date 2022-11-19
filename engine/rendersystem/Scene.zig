@@ -82,20 +82,46 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     var metalness = ImageManager.TextureSource {
         .f32x1 = gltf_material.metallic_roughness.metallic_factor,
     };
-    // if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| {
-    //     roughness = ImageManager.TextureSource {
-    //         .raw = undefined, // TODO
-    //     };
-    // }
-
     var roughness = ImageManager.TextureSource {
         .f32x1 = gltf_material.metallic_roughness.roughness_factor,
     };
-    // if (gltf_material.metallic_roughness.metallic_roughness_texture) |_| {
-    //     roughness = ImageManager.TextureSource {
-    //         .raw = undefined, // TODO
-    //     };
-    // }
+
+    if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
+        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
+
+        // this gives us rgb --> only need r (metallic) and g (roughness) channels
+        // theoretically gltf spec claims these values should already be linear
+        var img = try zigimg.Image.fromMemory(allocator, image.data.?);
+        defer img.deinit();
+
+        var r = try allocator.alloc(u8, img.pixels.len());
+        var g = try allocator.alloc(u8, img.pixels.len());
+        for (img.pixels.rgb24) |pixel, i| {
+            r[i] = pixel.r;
+            g[i] = pixel.g;
+        }
+        metalness = ImageManager.TextureSource {
+            .raw = .{
+                .bytes = r,
+                .width = @intCast(u32, img.width),
+                .height = @intCast(u32, img.height),
+                .format = .r8_unorm,
+                .layout = .shader_read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        };
+        roughness = ImageManager.TextureSource {
+            .raw = .{
+                .bytes = g,
+                .width = @intCast(u32, img.width),
+                .height = @intCast(u32, img.height),
+                .format = .r8_unorm,
+                .layout = .shader_read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        };
+    }
 
     var normal = ImageManager.TextureSource {
         .f32x2 = F32x2.new(0.5, 0.5),
@@ -160,6 +186,10 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         defer allocator.free(materials);
         defer for (materials) |material| {
             switch (material.color) {
+                .raw => |raw| allocator.free(raw.bytes),
+                else => {},
+            }
+            switch (material.metalness) {
                 .raw => |raw| allocator.free(raw.bytes),
                 else => {},
             }
