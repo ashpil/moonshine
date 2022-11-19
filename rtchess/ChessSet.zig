@@ -84,6 +84,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     var instances = Scene.Instances {};
     try instances.ensureTotalCapacity(allocator, instance_count);
+    defer instances.deinit(allocator);
 
     // board
     instances.appendAssumeCapacity(.{
