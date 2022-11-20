@@ -10,6 +10,7 @@ const Object = @import("../Object.zig");
 const Meshes = std.MultiArrayList(struct {
     position_buffer: VkAllocator.DeviceBuffer,
     texcoord_buffer: VkAllocator.DeviceBuffer,
+    normal_buffer: ?VkAllocator.DeviceBuffer, // hmm is there any way to get this to take up same size as normal buffer?
 
     vertex_count: u32,
 
@@ -21,6 +22,8 @@ const Meshes = std.MultiArrayList(struct {
 const MeshAddresses = packed struct {
     position_address: vk.DeviceAddress,
     texcoord_address: vk.DeviceAddress,
+    normal_address: vk.DeviceAddress,
+
     index_address: vk.DeviceAddress,
 };
 
@@ -38,9 +41,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var addresses_buffer_host = try vk_allocator.createHostBuffer(vc, MeshAddresses, @intCast(u32, objects.len), .{ .transfer_src_bit = true });
     defer addresses_buffer_host.destroy(vc);
 
-    var staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), objects.len * 3);
-    defer allocator.free(staging_buffers);
-    defer for (staging_buffers) |buffer| buffer.destroy(vc);
+    var staging_buffers = std.ArrayList(VkAllocator.HostBuffer(u8)).init(allocator);
+    defer staging_buffers.deinit();
+    defer for (staging_buffers.items) |buffer| buffer.destroy(vc);
 
     try commands.startRecording(vc);
 
@@ -48,10 +51,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const position_buffer = blk: {
             const bytes = std.mem.sliceAsBytes(object.positions);
 
-            staging_buffers[objects.len * 0 + i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
-            std.mem.copy(u8, staging_buffers[objects.len * 0 + i].data, bytes);
+            const staging_buffer = try staging_buffers.addOne();
+            staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, staging_buffer.data, bytes);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffers[objects.len * 0 + i]);
+            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
 
             break :blk gpu_buffer;
         };
@@ -60,22 +64,40 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const texcoord_buffer = blk: {
             const bytes = std.mem.sliceAsBytes(object.texcoords);
 
-            staging_buffers[objects.len * 1 + i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
-            std.mem.copy(u8, staging_buffers[objects.len * 1 + i].data, bytes);
+            const staging_buffer = try staging_buffers.addOne();
+            staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, staging_buffer.data, bytes);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffers[objects.len * 1 + i]);
+            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
 
             break :blk gpu_buffer;
         };
         errdefer texcoord_buffer.destroy(vc);
 
+        const normal_buffer = blk: {
+            if (object.normals) |normals| {
+                const bytes = std.mem.sliceAsBytes(normals);
+
+                const staging_buffer = try staging_buffers.addOne();
+                staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+                std.mem.copy(u8, staging_buffer.data, bytes);
+                const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+                commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
+                break :blk gpu_buffer;
+            } else {
+                break :blk null;
+            }
+        };
+        errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
+
         const index_buffer = blk: {
             const bytes = std.mem.sliceAsBytes(object.indices);
 
-            staging_buffers[objects.len * 2 + i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
-            std.mem.copy(u8, staging_buffers[objects.len * 2 + i].data, bytes);
+            const staging_buffer = try staging_buffers.addOne();
+            staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+            std.mem.copy(u8, staging_buffer.data, bytes);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffers[objects.len * 2 + i]);
+            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
 
             break :blk gpu_buffer;
         };
@@ -84,6 +106,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         addresses_buffer_host.data[i] = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
             .texcoord_address = texcoord_buffer.getAddress(vc),
+            .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
 
             .index_address = index_buffer.getAddress(vc),
         };
@@ -91,6 +114,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         meshes.appendAssumeCapacity(.{
             .position_buffer = position_buffer,
             .texcoord_buffer = texcoord_buffer,
+            .normal_buffer = normal_buffer,
 
             .vertex_count = @intCast(u32, object.positions.len), // should be same as indices
 
@@ -115,12 +139,14 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     const slice = self.meshes.slice();
     const position_buffers = slice.items(.position_buffer);
     const texcoord_buffers = slice.items(.texcoord_buffer);
+    const normal_buffers = slice.items(.normal_buffer);
     const index_buffers = slice.items(.index_buffer);
 
     var i: u32 = 0;
     while (i < slice.len) : (i += 1) {
         position_buffers[i].destroy(vc);
         texcoord_buffers[i].destroy(vc);
+        if (normal_buffers[i]) |buffer| buffer.destroy(vc);
         index_buffers[i].destroy(vc);
     }
     self.meshes.deinit(allocator);

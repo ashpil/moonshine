@@ -3,6 +3,7 @@
 struct Mesh {
     uint64_t positionAddress;
     uint64_t texcoordAddress;
+    uint64_t normalAddress; // may be zero, for no vertex normals
 
     uint64_t indexAddress;
 };
@@ -26,6 +27,19 @@ StructuredBuffer<uint> offsetGeoIdxToMeshIdx : register(t6, space0);
 StructuredBuffer<uint> skinIdxToOffset : register(t7, space0);
 StructuredBuffer<uint> offsetGeoIdxToMaterialIdx : register(t8, space0);
 
+
+float3 loadPosition(uint64_t addr, uint index) {
+    return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
+}
+
+float2 loadTexcoord(uint64_t addr, uint index) {
+    return vk::RawBufferLoad<float2>(addr + sizeof(float2) * index);
+}
+
+float3 loadNormal(uint64_t addr, uint index) {
+    return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
+}
+
 float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2) {
     float2 deltaUV1 = t1 - t0;
     float2 deltaUV2 = t2 - t0;
@@ -48,12 +62,21 @@ float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, f
     return transpose(objectToTangent);
 }
 
-float3 calculateNormal(float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, float2 t2, float2 texcoords, uint textureIndex) {
+float3 calculateNormal(uint64_t addr, uint3 ind, float3 barycentrics, float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, float2 t2, float2 texcoords, uint textureIndex) {
     float3 edge0 = p1 - p0;
     float3 edge1 = p2 - p0;
-    float3 positionNormalObjectSpace = normalize(cross(edge0, edge1));
 
-    float3x3 tangentToObjectMat = createTBNMatrix(positionNormalObjectSpace, edge0, edge1, t0, t1, t2);
+    float3 normalObjectSpace;
+    if (addr != 0) {
+        float3 n0 = loadNormal(addr, ind.x);
+        float3 n1 = loadNormal(addr, ind.y);
+        float3 n2 = loadNormal(addr, ind.z);
+        normalObjectSpace = barycentrics.x * n0 + barycentrics.y * n1 + barycentrics.z * n2;
+    } else {
+        normalObjectSpace = normalize(cross(edge0, edge1));
+    }
+
+    float3x3 tangentToObjectMat = createTBNMatrix(normalObjectSpace, edge0, edge1, t0, t1, t2);
     float2 textureNormal = (textures[NonUniformResourceIndex(4 * textureIndex + 3)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
     float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
@@ -66,14 +89,6 @@ float3 calculateHitPosition(float3 barycentrics, float3 v0, float3 v1, float3 v2
 
 float2 calculateTexcoord(float3 barycentrics, float2 t0, float2 t1, float2 t2) {
     return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
-}
-
-float3 loadPosition(uint64_t addr, uint index) {
-    return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
-}
-
-float2 loadTexcoord(uint64_t addr, uint index) {
-    return vk::RawBufferLoad<float2>(addr + sizeof(float2) * index);
 }
 
 uint modelIdx() {
@@ -114,7 +129,7 @@ void main(inout Payload payload, in float2 attribs) {
     float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
     payload.texcoord = calculateTexcoord(barycentrics, t0, t1, t2);
-    payload.normal = calculateNormal(p0, p1, p2, t0, t1, t2, payload.texcoord, materialIndex);
+    payload.normal = calculateNormal(mesh.normalAddress, ind, barycentrics, p0, p1, p2, t0, t1, t2, payload.texcoord, materialIndex);
     payload.position = calculateHitPosition(barycentrics, p0, p1, p2);
 
     payload.done = false;

@@ -253,6 +253,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             const vertices = blk2: {
                 var positions = std.ArrayList(f32).init(allocator);
                 var texcoords = std.ArrayList(f32).init(allocator);
+                var normals = std.ArrayList(f32).init(allocator);
 
                 for (primitive.attributes.items) |attribute| {
                     switch (attribute) {
@@ -264,8 +265,10 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                             const accessor = gltf.data.accessors.items[accessor_index];
                             gltf.getDataFromBufferView(f32, &texcoords, accessor, gltf.glb_binary.?);
                         },
-                        .normal => |_| {}, // ignore, for now
-                        .tangent => |_| {}, // ignore, for now
+                        .normal => |accessor_index| {
+                            const accessor = gltf.data.accessors.items[accessor_index];
+                            gltf.getDataFromBufferView(f32, &normals, accessor, gltf.glb_binary.?);
+                        },
                         else => {
                             std.debug.print("{any}\n", .{ attribute });
                             return error.UnhandledAttribute;
@@ -275,9 +278,14 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
                 const positions_slice = positions.toOwnedSlice();
                 const texcoords_slice = texcoords.toOwnedSlice();
+                const normals_slice = normals.toOwnedSlice();
 
                 // TODO: remove ptrcast workaround below once ptrcast works on slices
-                break :blk2 .{ .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3], .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2] };
+                break :blk2 .{
+                    .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3],
+                    .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2],
+                    .normals = @ptrCast([*]F32x3, normals_slice.ptr)[0..normals_slice.len / 3],
+                };
             };
             errdefer allocator.free(vertices.positions);
             errdefer allocator.free(vertices.texcoords);
@@ -286,6 +294,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             try objects.append(MeshData {
                 .positions = vertices.positions,
                 .texcoords = vertices.texcoords,
+                .normals = if (vertices.normals.len != 0) vertices.normals else null,
                 .indices = indices,
             });
         }

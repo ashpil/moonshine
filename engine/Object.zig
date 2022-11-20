@@ -9,8 +9,9 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 
 // vertices
-positions: []F32x3,
-texcoords: []F32x2,
+positions: []F32x3, // required
+texcoords: []F32x2, // required
+normals: ?[]F32x3, // optional
 
 // indices
 indices: []U32x3,
@@ -59,6 +60,8 @@ pub fn getObjSizes(contents: []const u8) Sizes {
 // since obj is a stupid format anyway
 // by not efficient, this means it doesn't do vertex deduplication, which is quite crucial for obj files
 // it loads stuff relatively efficiently, but the stuff it loads may not be efficient
+//
+// TODO: load vertex normals when available
 pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
     var buffered_reader = std.io.bufferedReader(file.reader());
     const reader = buffered_reader.reader();
@@ -122,6 +125,7 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
     return Self {
         .positions = final_positions.toOwnedSlice(),
         .texcoords = final_texcoords.toOwnedSlice(),
+        .normals = null,
         .indices = indices,
     };
 }
@@ -129,6 +133,7 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     allocator.free(self.positions);
     allocator.free(self.texcoords);
+    if (self.normals) |normals| allocator.free(normals);
     allocator.free(self.indices);
 }
 
