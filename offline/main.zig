@@ -29,6 +29,31 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    // parse cli args
+    const params = blk: {
+        const args = try std.process.argsAlloc(allocator);
+        defer std.process.argsFree(allocator, args);
+        if (args.len < 3) return error.BadArgs;
+
+        const in_filename = args[1];
+        if (!std.mem.eql(u8, std.fs.path.extension(in_filename), ".glb")) return error.OnlySupportsGlbInput;
+
+        const out_filename = args[2];
+        if (!std.mem.eql(u8, std.fs.path.extension(out_filename), ".exr")) return error.OnlySupportsExrOutput;
+
+        const spp = if (args.len > 3) try std.fmt.parseInt(u32, args[3], 10) else 16;
+
+        break :blk .{
+            .in_filename = try allocator.dupe(u8, in_filename),
+            .out_filename = try allocator.dupeZ(u8, out_filename), // ugh
+            .spp = spp,
+        };
+    };
+    defer {
+        allocator.free(params.in_filename);
+        allocator.free(params.out_filename);
+    }
+
     var context = try VulkanContext.create(.{ .allocator = allocator, .app_name = "offline" });
     defer context.destroy();
 
@@ -56,7 +81,7 @@ pub fn main() !void {
     defer commands.destroy(&context);
 
     var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
-        .samples_per_run = 16,
+        .samples_per_run = params.spp,
     });
     defer pipeline.destroy(&context);
 
@@ -124,7 +149,7 @@ pub fn main() !void {
         },
     });
 
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, "./assets/test.glb", "./assets/textures/skybox/", &scene_descriptor_layout, &background_descriptor_layout);
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filename, "./assets/textures/skybox/", &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
     
     const command_pool = try context.device.createCommandPool(&.{
@@ -285,7 +310,7 @@ pub fn main() !void {
     var f32_slice: []const f32 = undefined;
     f32_slice.ptr = @ptrCast([*]f32, @alignCast(@alignOf(f32), display_image_bytes.data.ptr));
     f32_slice.len = display_image_bytes.data.len / 4;
-    try exr.helpers.save(allocator, f32_slice, 4, extent, "out.exr");
+    try exr.helpers.save(allocator, f32_slice, 4, extent, params.out_filename);
 
     try context.device.deviceWaitIdle();
     std.log.info("Program completed!", .{});
