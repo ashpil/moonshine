@@ -161,7 +161,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
 }
 
 // TODO: camera
-// glTF doesn't correspond very well to the internal data structures here so this isn't as efficient as constructing a scene manually
+// glTF doesn't correspond very well to the internal data structures here so this is very inefficient
+// also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, filepath: []const u8, background_dir: []const u8, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     // background atm unrelated to gltf
     const sampler = try ImageManager.createSampler(vc);
@@ -251,9 +252,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
             const vertices = blk2: {
                 var positions = std.ArrayList(f32).init(allocator);
-                defer positions.deinit();
                 var texcoords = std.ArrayList(f32).init(allocator);
-                defer texcoords.deinit();
 
                 for (primitive.attributes.items) |attribute| {
                     switch (attribute) {
@@ -274,21 +273,19 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     }
                 }
 
-                const vertices = try allocator.alloc(MeshData.Vertex, positions.items.len / 3);
-                for (vertices) |*vertex, i| {
-                    vertex.* = MeshData.Vertex {
-                        .position = F32x3.new(positions.items[i * 3 + 0], positions.items[i * 3 + 1], positions.items[i * 3 + 2]),
-                        .texcoord = F32x2.new(texcoords.items[i * 2 + 0], texcoords.items[i * 2 + 1]),
-                    };
-                }
+                const positions_slice = positions.toOwnedSlice();
+                const texcoords_slice = texcoords.toOwnedSlice();
 
-                break :blk2 vertices;
+                // TODO: remove ptrcast workaround below once ptrcast works on slices
+                break :blk2 .{ .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3], .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2] };
             };
-            errdefer allocator.free(vertices);
+            errdefer allocator.free(vertices.positions);
+            errdefer allocator.free(vertices.texcoords);
 
             // get vertices
             try objects.append(MeshData {
-                .vertices = vertices,
+                .positions = vertices.positions,
+                .texcoords = vertices.texcoords,
                 .indices = indices,
             });
         }

@@ -8,12 +8,11 @@ const U32x3 = vector.Vec3(u32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 
-pub const Vertex = struct {
-    position: F32x3,
-    texcoord: F32x2,
-};
+// vertices
+positions: []F32x3,
+texcoords: []F32x2,
 
-vertices: []Vertex,
+// indices
 indices: []U32x3,
 
 const Self = @This();
@@ -54,6 +53,8 @@ pub fn getObjSizes(contents: []const u8) Sizes {
     };
 }
 
+// THIS REALLY NEEDS TO BE REMOVED -- make own mesh serialization
+//
 // not super efficient as the idea is that this won't be used all that much
 // since obj is a stupid format anyway
 // by not efficient, this means it doesn't do vertex deduplication, which is quite crucial for obj files
@@ -70,7 +71,9 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
     const texcoords = try allocator.alloc(F32x2, sizes.num_texcoords);
     defer allocator.free(texcoords);
     const indices = try allocator.alloc(U32x3, sizes.num_indices);
-    const vertices = try allocator.alloc(Vertex, sizes.num_indices * 3);
+
+    var final_positions = std.ArrayList(F32x3).init(allocator);
+    var final_texcoords = std.ArrayList(F32x2).init(allocator);
 
     var lines = std.mem.tokenize(u8, contents, "\n");
     var current_position: u32 = 0;
@@ -98,17 +101,14 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
                     var numbers = std.mem.tokenize(u8, index_str, "/");
                     const position_index = if (numbers.next()) |val| ((try std.fmt.parseInt(u32, val, 10)) - 1) else return Error.MissingIndex;
                     const texcoord_index = if (numbers.next()) |val| ((try std.fmt.parseInt(u32, val, 10)) - 1) else return Error.MissingIndex;
-                    const vertex = Vertex {
-                        .position = positions[position_index],
-                        .texcoord = texcoords[texcoord_index],
-                    };
+                    try final_positions.append(positions[position_index]);
+                    try final_texcoords.append(texcoords[texcoord_index]);
                     switch (i) {
                         0 => index.x = current_vertex,
                         1 => index.y = current_vertex,
                         2 => index.z = current_vertex,
                         else => unreachable,
                     }
-                    vertices[current_vertex] = vertex;
                     current_vertex += 1;
                 }
                 indices[current_index] = index;
@@ -117,14 +117,18 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
         }
     }
 
+    std.debug.assert(final_positions.items.len == final_texcoords.items.len);
+    
     return Self {
-        .vertices = vertices,
+        .positions = final_positions.toOwnedSlice(),
+        .texcoords = final_texcoords.toOwnedSlice(),
         .indices = indices,
     };
 }
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
-    allocator.free(self.vertices);
+    allocator.free(self.positions);
+    allocator.free(self.texcoords);
     allocator.free(self.indices);
 }
 

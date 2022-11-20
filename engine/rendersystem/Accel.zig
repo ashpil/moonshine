@@ -6,7 +6,10 @@ const VkAllocator = @import("./Allocator.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Vertex = @import("../Object.zig").Vertex;
 const utils = @import("./utils.zig");
-const Mat3x4 = @import("../vector.zig").Mat3x4(f32);
+
+const vector = @import("../vector.zig");
+const Mat3x4 = vector.Mat3x4(f32);
+const F32x3 = vector.Vec3(f32);
 
 // the acceleration structure is the primary scene heirarchy, and controls
 // how all the meshes and materials fit together
@@ -134,9 +137,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                         .triangles = .{
                             .vertex_format = .r32g32b32_sfloat, 
                             .vertex_data = .{
-                                .device_address = mesh.vertex_buffer.getAddress(vc),
+                                .device_address = mesh.position_buffer.getAddress(vc),
                             },
-                            .vertex_stride = @sizeOf(Vertex),
+                            .vertex_stride = @sizeOf(F32x3),
                             .max_vertex = @intCast(u32, mesh.vertex_count - 1),
                             .index_type = .uint32,
                             .index_data = .{
