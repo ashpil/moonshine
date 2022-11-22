@@ -68,8 +68,6 @@ pub fn main() !void {
         .{},
         .{},
         .{},
-        .{},
-        .{},
     });
     defer scene_descriptor_layout.destroy(&context);
     var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, null);

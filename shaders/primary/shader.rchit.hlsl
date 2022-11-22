@@ -21,12 +21,8 @@ SamplerState textureSampler : register(s1, space0);
 Texture2D textures[] : register(t3, space0);
 StructuredBuffer<Mesh> meshes : register(t4, space0);
 
-StructuredBuffer<uint> modelIdxToOffset : register(t5, space0);
-StructuredBuffer<uint> offsetGeoIdxToMeshIdx : register(t6, space0);
-
-StructuredBuffer<uint> skinIdxToOffset : register(t7, space0);
-StructuredBuffer<uint> offsetGeoIdxToMaterialIdx : register(t8, space0);
-
+StructuredBuffer<uint> meshIdxs : register(t5, space0);
+StructuredBuffer<uint> materialIdxs : register(t6, space0);
 
 float3 loadPosition(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
@@ -91,28 +87,26 @@ float2 calculateTexcoord(float3 barycentrics, float2 t0, float2 t1, float2 t2) {
     return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
 }
 
-uint modelIdx() {
+uint modelOffset() {
     return InstanceID() & 0xFFF; // lower 12 bits
 }
 
-uint skinIdx() {
+uint skinOffset() {
     return InstanceID() >> 12; // upper 12 bits
 }
 
-uint meshIdx(uint modelIdx, uint geometryIdx) {
-    uint offset = modelIdxToOffset[modelIdx];
-    return offsetGeoIdxToMeshIdx[offset + geometryIdx];
+uint meshIdx() {
+    return meshIdxs[modelOffset() + GeometryIndex()];
 }
 
-uint materialIdx(uint skinIdx, uint geometryIdx) {
-    uint offset = skinIdxToOffset[skinIdx];
-    return offsetGeoIdxToMaterialIdx[offset + geometryIdx];
+uint materialIdx() {
+    return materialIdxs[skinOffset() + GeometryIndex()];
 }
 
 [shader("closesthit")]
 void main(inout Payload payload, in float2 attribs) {
-    uint meshIndex = meshIdx(modelIdx(), GeometryIndex());
-    uint materialIndex = materialIdx(skinIdx(), GeometryIndex());
+    uint meshIndex = meshIdx();
+    uint materialIndex = materialIdx();
 
     Mesh mesh = meshes[meshIndex];
 

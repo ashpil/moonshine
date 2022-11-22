@@ -55,15 +55,23 @@ const BottomLevelAccels = std.MultiArrayList(struct {
 
 blases: BottomLevelAccels,
 
+//
+// TODO: when I created this I really wanted to have this symmetry between materials/meshes in a given instance,
+// but the more I think about it, it becomes not quite right, as meshes are static for an instance, but materials 
+// are not
+//
+
 instances: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
 instances_address: vk.DeviceAddress,
 
-// four actual buffers
-model_idx_to_offset: VkAllocator.DeviceBuffer,
-offset_geo_idx_to_mesh_idx: VkAllocator.DeviceBuffer,
+// two buffers, same idea for geo and material
+// use instanceCustomIndex + GeometryID() idx into here to get actual material/geo
+mesh_idxs: VkAllocator.DeviceBuffer,
+material_idxs: VkAllocator.DeviceBuffer,
 
-skin_idx_to_offset: VkAllocator.DeviceBuffer,
-offset_geo_idx_to_material_idx: VkAllocator.DeviceBuffer,
+// need these to construct above
+model_idx_to_offset: []u12, // not sure if this actually ever needs to be used
+skin_idx_to_offset: []u12,
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR,
@@ -309,26 +317,22 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     errdefer update_scratch_buffer.destroy(vc);
 
-    var offset_so_far: u32 = undefined;
+    var offset_so_far: u12 = undefined;
     const model_idx_to_offset = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * models.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const buffer_host = try allocator.alloc(u32, models.len);
-        defer allocator.free(buffer_host);
+        const buffer = try allocator.alloc(u12, models.len);
+        errdefer allocator.free(buffer);
         offset_so_far = 0;
         for (models) |model, i| {
-            buffer_host[i] = offset_so_far;
-            offset_so_far += @intCast(u32, model.mesh_idxs.len);
+            buffer[i] = offset_so_far;
+            offset_so_far += @intCast(u12, model.mesh_idxs.len);
         }
-
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
 
         break :blk buffer;
     };
-    errdefer model_idx_to_offset.destroy(vc);
+    errdefer allocator.free(model_idx_to_offset);
 
-    const offset_geo_idx_to_mesh_idx = blk: {
+    // flatten out models jagged array
+    const mesh_idxs = blk: {
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * offset_so_far, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
@@ -346,27 +350,23 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         break :blk buffer;
     };
-    errdefer offset_geo_idx_to_mesh_idx.destroy(vc);
+    errdefer mesh_idxs.destroy(vc);
 
     const skin_idx_to_offset = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * skins.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const buffer_host = try allocator.alloc(u32, skins.len);
-        defer allocator.free(buffer_host);
+        const buffer = try allocator.alloc(u12, skins.len);
+        errdefer allocator.free(buffer);
         offset_so_far = 0;
         for (skins) |skin, i| {
-            buffer_host[i] = offset_so_far;
-            offset_so_far += @intCast(u32, skin.material_idxs.len);
+            buffer[i] = offset_so_far;
+            offset_so_far += @intCast(u12, skin.material_idxs.len);
         }
-
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
 
         break :blk buffer;
     };
-    errdefer skin_idx_to_offset.destroy(vc);
+    errdefer allocator.free(skin_idx_to_offset);
 
-    const offset_geo_idx_to_material_idx = blk: {
+    // flatten out skins jagged array
+    const material_idxs = blk: {
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(u32) * offset_so_far, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
@@ -384,7 +384,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         break :blk buffer;
     };
-    errdefer offset_geo_idx_to_material_idx.destroy(vc);
+    errdefer material_idxs.destroy(vc);
 
     const build_info = .{
         .primitive_count = instance_count,
@@ -406,11 +406,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .tlas_update_scratch_buffer = update_scratch_buffer,
         .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
 
-        .model_idx_to_offset = model_idx_to_offset,
-        .offset_geo_idx_to_mesh_idx = offset_geo_idx_to_mesh_idx,
+        .material_idxs = material_idxs,
+        .mesh_idxs = mesh_idxs,
 
+        .model_idx_to_offset = model_idx_to_offset,
         .skin_idx_to_offset = skin_idx_to_offset,
-        .offset_geo_idx_to_material_idx = offset_geo_idx_to_material_idx,
 
         .changed = false,
     };
@@ -435,7 +435,7 @@ pub fn updateSkin(self: *Self, instance_idx: u32, skin_idx: u12) void {
     self.changed = true;
     
     var custom_index = @bitCast(CustomIndex, self.instances.data[instance_idx].instance_custom_index_and_mask.instance_custom_index);
-    custom_index.skin_idx = skin_idx;
+    custom_index.skin_idx = self.skin_idx_to_offset[skin_idx];
     self.instances.data[instance_idx].instance_custom_index_and_mask.instance_custom_index = @bitCast(u24, custom_index);
 }
 
@@ -502,10 +502,11 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instances.destroy(vc);
 
-    self.model_idx_to_offset.destroy(vc);
-    self.offset_geo_idx_to_mesh_idx.destroy(vc);
-    self.skin_idx_to_offset.destroy(vc);
-    self.offset_geo_idx_to_material_idx.destroy(vc);
+    self.mesh_idxs.destroy(vc);
+    self.material_idxs.destroy(vc);
+
+    allocator.free(self.model_idx_to_offset);
+    allocator.free(self.skin_idx_to_offset);
 
     self.tlas_update_scratch_buffer.destroy(vc);
 

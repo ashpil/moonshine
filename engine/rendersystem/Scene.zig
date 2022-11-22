@@ -347,7 +347,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         };
     }
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [7]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -422,7 +422,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.model_idx_to_offset.handle,
+                .buffer = accel.mesh_idxs.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -436,35 +436,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.offset_geo_idx_to_mesh_idx.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 7,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.skin_idx_to_offset.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 8,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.offset_geo_idx_to_material_idx.handle,
+                .buffer = accel.material_idxs.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -524,7 +496,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [7]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -599,7 +571,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.model_idx_to_offset.handle,
+                .buffer = accel.mesh_idxs.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -613,35 +585,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.offset_geo_idx_to_mesh_idx.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 7,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.skin_idx_to_offset.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 8,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.offset_geo_idx_to_material_idx.handle,
+                .buffer = accel.material_idxs.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),

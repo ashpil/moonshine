@@ -123,20 +123,6 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
-        .binding = 7,
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .closest_hit_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
-    .{
-        .binding = 8,
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .closest_hit_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
 }, "Scene");
 
 pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime debug_name: [*:0]const u8) type {
