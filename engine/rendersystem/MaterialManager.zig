@@ -6,15 +6,24 @@ const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 
+// TODO: currently each material "owns" its textures, but really it should just be an index
+// into global array of textures, so that materials can share textures
+
+const vector = @import("../vector.zig");
+const F32x3 = vector.Vec3(f32);
+
 pub const Material = struct {
     color: ImageManager.TextureSource,
     metalness: ImageManager.TextureSource,
     roughness: ImageManager.TextureSource,
     normal: ImageManager.TextureSource,
+    emissive: ImageManager.TextureSource = .{
+        .f32x3 = F32x3.new(0.0, 0.0, 0.0),
+    },
     
     values: Values = .{},
 
-    pub const textures_per_material = 4;
+    pub const textures_per_material = 5;
 };
 
 // `value` is the term I use for non-texture material input
@@ -38,7 +47,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         texture_sources[Material.textures_per_material * i + 0] = set.color;
         texture_sources[Material.textures_per_material * i + 1] = set.metalness;
         texture_sources[Material.textures_per_material * i + 2] = set.roughness;
-        texture_sources[Material.textures_per_material * i + 3] = set.normal;
+        texture_sources[Material.textures_per_material * i + 3] = set.emissive;
+        texture_sources[Material.textures_per_material * i + 4] = set.normal;
 
         values_tmp.data[i] = set.values;
     }

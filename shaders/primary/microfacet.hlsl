@@ -10,10 +10,11 @@ StructuredBuffer<Values> materialValues : register(t2, space0);
 Texture2D materialTextures[] : register(t3, space0);
 
 struct Material {
-    float3 color;        // color; each component is (0, 1)
-    float metalness;     // k_s - part it is specular. diffuse is (1 - specular); (0, 1) inclusive
-    float roughness;     // roughness value; (0, 1) exclusive
-    float ior;           // index of refraction; (0, ?) exclusive
+    float3 color;        // linear color; each component is [0, 1]
+    float3 emissive;     // linear emitted radiance; each component is [0, inf)
+    float metalness;     // k_s - part it is specular. diffuse is (1 - specular); [0, 1]
+    float roughness;     // roughness value; [0, 1)
+    float ior;           // index of refraction; [0, inf)
 
 
     // schlick approximation
@@ -153,9 +154,10 @@ Material getMaterial(uint materialIndex, float2 texcoords) {
 
     Material material;
     material.ior = values.ior;
-    material.color = materialTextures[NonUniformResourceIndex(4 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
-    material.metalness = materialTextures[NonUniformResourceIndex(4 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
-    material.roughness = materialTextures[NonUniformResourceIndex(4 * materialIndex + 2)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.color = materialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
+    material.metalness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.roughness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(textureSampler, texcoords, 0).r;
+    material.emissive = materialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(textureSampler, texcoords, 0).rgb;
     material.roughness = max(material.roughness, 0.0001); // set minimum roughness otherwise current math breaks down
 
     return material;

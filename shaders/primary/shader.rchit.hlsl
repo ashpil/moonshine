@@ -73,7 +73,7 @@ float3 calculateNormal(uint64_t addr, uint3 ind, float3 barycentrics, float3 p0,
     }
 
     float3x3 tangentToObjectMat = createTBNMatrix(normalObjectSpace, edge0, edge1, t0, t1, t2);
-    float2 textureNormal = (textures[NonUniformResourceIndex(4 * textureIndex + 3)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
+    float2 textureNormal = (textures[NonUniformResourceIndex(5 * textureIndex + 4)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
     float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
 }

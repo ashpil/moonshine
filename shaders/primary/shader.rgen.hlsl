@@ -64,7 +64,8 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
         TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
         if (!payload.done) {
             Material material = getMaterial(payload.materialIndex, payload.texcoord);
-            
+            accumulatedColor += throughput * material.emissive;
+
             Frame frame = createFrame(payload.normal);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
 

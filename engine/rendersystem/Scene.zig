@@ -78,6 +78,32 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         };
     }
 
+    var emissive = ImageManager.TextureSource {
+        .f32x3 = F32x3.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2]),
+    };
+    if (gltf_material.emissive_texture) |texture| {
+        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
+
+        // this gives us rgb --> need to convert to rgba
+        var img = try zigimg.Image.fromMemory(allocator, image.data.?);
+        defer img.deinit();
+
+        var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
+        for (img.pixels.rgb24) |pixel, i| {
+            rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
+        }
+        emissive = ImageManager.TextureSource {
+            .raw = .{
+                .bytes = rgba.asBytes(),
+                .width = @intCast(u32, img.width),
+                .height = @intCast(u32, img.height),
+                .format = .r8g8b8a8_srgb,
+                .layout = .shader_read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        };
+    }
 
     var metalness = ImageManager.TextureSource {
         .f32x1 = gltf_material.metallic_roughness.metallic_factor,
@@ -157,6 +183,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         .metalness = metalness,
         .roughness = roughness,
         .normal = normal,
+        .emissive = emissive,
     };
 }
 
@@ -199,6 +226,10 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                 else => {},
             }
             switch (material.normal) {
+                .raw => |raw| allocator.free(raw.bytes),
+                else => {},
+            }
+            switch (material.emissive) {
                 .raw => |raw| allocator.free(raw.bytes),
                 else => {},
             }
