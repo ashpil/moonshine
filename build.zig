@@ -186,6 +186,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
     if (maybe_lws) |str_lws| {
         if (std.mem.eql(u8, str_lws, "Wayland")) {
             try genWaylandHeaders(b, &lib.step);
+            lib.addIncludePath("./zig-cache/wayland-gen-headers/");
             lws = .wayland;
         } else if (std.mem.eql(u8, str_lws, "X11")) {
             lws = .x11;
@@ -194,6 +195,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
         }
     } else if (target.isLinux()) {
         try genWaylandHeaders(b, &lib.step);
+        lib.addIncludePath("./zig-cache/wayland-gen-headers/");
     }
 
     // collect source files
@@ -251,15 +253,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
             "win32_module.c",
         };
 
-        const wayland_lib_sources = [_][]const u8 {
-            "./zig-cache/wayland-gen-headers/wayland-idle-inhibit-unstable-v1-client-protocol-code.h",
-            "./zig-cache/wayland-gen-headers/wayland-pointer-constraints-unstable-v1-client-protocol-code.h",
-            "./zig-cache/wayland-gen-headers/wayland-relative-pointer-unstable-v1-client-protocol-code.h",
-            "./zig-cache/wayland-gen-headers/wayland-viewporter-client-protocol-code.h",
-            "./zig-cache/wayland-gen-headers/wayland-xdg-decoration-client-protocol-code.h",
-            "./zig-cache/wayland-gen-headers/wayland-xdg-shell-client-protocol-code.h",
-        };
-
         inline for (general_sources) |source| {
             try sources.append(source_path ++ source);
         }
@@ -273,9 +266,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
                     inline for (x11_sources ++ wayland_sources) |source| {
                         try sources.append(source_path ++ source);
                     }
-                    inline for (wayland_lib_sources) |source| {
-                        try sources.append(source);
-                    }
                 },
                 .x11 => {
                     inline for (x11_sources) |source| {
@@ -285,9 +275,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std
                 .wayland => {
                     inline for (wayland_sources) |source| {
                         try sources.append(source_path ++ source);
-                    }
-                    inline for (wayland_lib_sources) |source| {
-                        try sources.append(source);
                     }
                 }
             }
