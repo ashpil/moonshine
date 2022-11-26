@@ -22,13 +22,6 @@ Rng InitRng(uint initialState) {
     return rng;
 }
 
-float3 squareToDirection(float2 square) {
-    const float theta = 2 * PI * square.x;
-    const float u = 2.0 * square.y - 1.0;
-    const float r = sqrt(1.0 - u * u);
-    return float3(r * cos(theta), r * sin(theta), u);
-}
-
 float2 squareToGaussian(float2 square) {
     const float u1 = max(1e-38, square.x);
     const float u2 = square.y;
@@ -63,12 +56,12 @@ float3 squareToCosineHemisphere(float2 square) {
     float2 d = squareToUniformDiskConcentric(square);
     float z = sqrt(max(0.0, 1.0 - d.x * d.x - d.y * d.y));
 
-    return float3(d.x, d.y, z);
+    return float3(d.x, z, d.y);
 }
 
 float3 squareToUniformHemisphere(float2 square) {
     float z = square.x;
     float r = sqrt(max(0.0, 1.0 - z * z));
     float phi = 2 * PI * square.y;
-    return float3(r * cos(phi), r * sin(phi), z);
+    return float3(r * cos(phi), z, r * sin(phi));
 }

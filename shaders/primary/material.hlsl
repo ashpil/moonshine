@@ -9,7 +9,13 @@ SamplerState textureSampler : register(s1, space0);
 StructuredBuffer<Values> materialValues : register(t2, space0);
 Texture2D materialTextures[] : register(t3, space0);
 
-struct Material {
+interface Material {
+    float pdf(float3 w_i, float3 w_o);
+    float3 sample(float3 w_o, inout float pdf, float2 square);
+    float3 eval(float3 w_o, float3 w_i);
+};
+
+struct StandardPBR : Material {
     float3 color;        // linear color; each component is [0, 1]
     float3 emissive;     // linear emitted radiance; each component is [0, inf)
     float metalness;     // k_s - part it is specular. diffuse is (1 - specular); [0, 1]
@@ -18,7 +24,7 @@ struct Material {
 
 
     // schlick approximation
-    static float3 F(float3 w_i, float3 m, Material material) {
+    static float3 F(float3 w_i, float3 m, StandardPBR material) {
         float R_0 = pow((1 - material.ior) / (1 + material.ior), 2);
         float3 mixed = lerp(float3(R_0, R_0, R_0), material.color, material.metalness);
         return mixed + (float3(1.0, 1.0, 1.0) - mixed) * pow((1 - dot(w_i, m)), 5);
@@ -57,7 +63,7 @@ struct Material {
         return G_1(w_i, m, roughness) * G_1(w_o, m, roughness);
     }
 
-    static float3 cookTorrance(float3 w_i, float3 w_o, Material material) {
+    static float3 cookTorrance(float3 w_i, float3 w_o, StandardPBR material) {
         float3 h = normalize(w_i + w_o);
         float3 fresnel = F(w_i, h, material);
         float geometry = G(w_i, w_o, h, material.roughness);
@@ -65,18 +71,18 @@ struct Material {
         return (fresnel * geometry * distribution) / max(4 * abs(frameCosTheta(w_i)) * abs(frameCosTheta(w_o)), EPSILON);
     }
 
-    static float3 lambert(float3 w_i, float3 w_o, Material material) {
+    static float3 lambert(float3 w_i, float3 w_o, StandardPBR material) {
         return material.color / PI;
     }
 
-    static float lambertPDF(float3 w_i, float3 w_o, Material material) {
+    static float lambertPDF(float3 w_i, float3 w_o, StandardPBR material) {
         return sameHemisphere(w_i, w_o) ? abs(frameCosTheta(w_i)) / PI : EPSILON;
     }
 
-    static float3 sampleLambert(float3 w_o, Material material, inout float pdf, float2 square) {
+    static float3 sampleLambert(float3 w_o, StandardPBR material, inout float pdf, float2 square) {
         float3 w_i = squareToCosineHemisphere(square);
-        if (w_o.z < 0.0) {
-            w_i.z *= -1;
+        if (w_o.y < 0.0) {
+            w_i.y *= -1;
         }
 
         pdf = lambertPDF(w_i, w_o, material);
@@ -84,7 +90,7 @@ struct Material {
         return w_i;
     }
 
-    static float3 sampleCookTorrance(float3 w_o, Material material, inout float pdf, float2 square) {
+    static float3 sampleCookTorrance(float3 w_o, StandardPBR material, inout float pdf, float2 square) {
         // figure out spherical coords of half vector
         float tanTheta = material.roughness * sqrt(square.x) / sqrt(1 - square.x);
         float cosThetaSquared = 1 / (1 + (tanTheta * tanTheta));
@@ -94,18 +100,14 @@ struct Material {
 
         // convert them to cartesian
         float3 h = sphericalToCartesian(sinTheta, cosTheta, phi);
-        if (!sameHemisphere(w_o, h)) {
-            h = -h;
-        }
-
-        float3 w_i = -reflect(w_o, h);
+        float3 w_i = -reflect(w_o, h); // reflect in HLSL is negative of what papers usually mean for some reason
 
         pdf = max(D(h, material.roughness) * abs(frameCosTheta(h)) / (4.0 * dot(w_o, h)), EPSILON);
 
         return w_i;
     }
 
-    static float cookTorrancePDF(float3 w_i, float3 w_o, Material material) {
+    static float cookTorrancePDF(float3 w_i, float3 w_o, StandardPBR material) {
         if (!sameHemisphere(w_o, w_i)) {
             return 0.0;
         }
@@ -141,7 +143,7 @@ struct Material {
         return lerp(pdf1, pdf2, this.metalness);
     }
 
-    float3 f_r(float3 w_i, float3 w_o) {
+    float3 eval(float3 w_i, float3 w_o) {
         float3 microfacet = cookTorrance(w_i, w_o, this);
         float3 lambertian = lambert(w_i, w_o, this);
 
@@ -149,10 +151,10 @@ struct Material {
     }
 };
 
-Material getMaterial(uint materialIndex, float2 texcoords) {
+StandardPBR getMaterial(uint materialIndex, float2 texcoords) {
     Values values = materialValues[NonUniformResourceIndex(materialIndex)];
 
-    Material material;
+    StandardPBR material;
     material.ior = values.ior;
     material.color = materialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
     material.metalness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;

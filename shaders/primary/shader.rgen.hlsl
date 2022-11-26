@@ -10,7 +10,7 @@ RWTexture2D<float4> accumulationImage : register(u1, space2);
 #include "payload.hlsl"
 #include "reflection_frame.hlsl"
 #include "random.hlsl"
-#include "microfacet.hlsl"
+#include "material.hlsl"
 #include "background.hlsl"
 
 struct Camera {
@@ -63,7 +63,7 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
         Payload payload;
         TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
         if (!payload.done) {
-            Material material = getMaterial(payload.materialIndex, payload.texcoord);
+            StandardPBR material = getMaterial(payload.materialIndex, payload.texcoord);
             accumulatedColor += throughput * material.emissive;
 
             Frame frame = createFrame(payload.normal);
@@ -85,12 +85,12 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
                 break;
             }
             ray.Direction = frame.frameToWorld(incoming);
-            throughput *= material.f_r(incoming, outgoing) * abs(frameCosTheta(incoming)) / pdf;
+            throughput *= material.eval(incoming, outgoing) * abs(frameCosTheta(incoming)) / pdf;
         } else {
             // no hit, we're done
-            if (bounceCount == 0) {
-                // if primary ray, add background
-                accumulatedColor += throughput * getBackgroundColor(ray.Direction);
+            if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {
+                // add background color if it isn't explicitly sampled or this is a primary ray
+                accumulatedColor += throughput * Background::eval(ray.Direction);
             }
             break;
         }

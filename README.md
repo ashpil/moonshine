@@ -42,6 +42,10 @@
   * Commands:
     * Refresh frame count
 
+### Some notes about conventions, as idk where else to put them:
+* `+y` is up
+* physics conventions for polar coordinates, like pbrt --> phi is azimuthal angle (0-2pi) and theta is polar angle (0-pi)
+
 ## Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
