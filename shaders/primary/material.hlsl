@@ -32,7 +32,7 @@ struct StandardPBR : Material {
 
     // GGX NDF
     static float D(float3 m, float roughness) {
-        float cos_theta_m = frameCosTheta(m);
+        float cos_theta_m = Frame::cosTheta(m);
         if (cos_theta_m > 0.0) {
             float roughness_squared = pow(roughness, 2);
             float cos_theta_m_squared = pow(cos_theta_m, 2);
@@ -46,7 +46,7 @@ struct StandardPBR : Material {
 
     // G_1 for GGX
     static float G_1(float3 v, float3 m, float roughness) {
-        float cos_theta_v = frameCosTheta(v);
+        float cos_theta_v = Frame::cosTheta(v);
         float val = dot(v, m) / cos_theta_v;
         if (val > 0.0) {
             float cos_theta_v_squared = pow(cos_theta_v, 2);
@@ -68,7 +68,7 @@ struct StandardPBR : Material {
         float3 fresnel = F(w_i, h, material);
         float geometry = G(w_i, w_o, h, material.roughness);
         float distribution = D(h, material.roughness);
-        return (fresnel * geometry * distribution) / max(4 * abs(frameCosTheta(w_i)) * abs(frameCosTheta(w_o)), EPSILON);
+        return (fresnel * geometry * distribution) / max(4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)), EPSILON);
     }
 
     static float3 lambert(float3 w_i, float3 w_o, StandardPBR material) {
@@ -76,7 +76,7 @@ struct StandardPBR : Material {
     }
 
     static float lambertPDF(float3 w_i, float3 w_o, StandardPBR material) {
-        return sameHemisphere(w_i, w_o) ? abs(frameCosTheta(w_i)) / PI : EPSILON;
+        return Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) / PI : EPSILON;
     }
 
     static float3 sampleLambert(float3 w_o, StandardPBR material, inout float pdf, float2 square) {
@@ -102,17 +102,17 @@ struct StandardPBR : Material {
         float3 h = sphericalToCartesian(sinTheta, cosTheta, phi);
         float3 w_i = -reflect(w_o, h); // reflect in HLSL is negative of what papers usually mean for some reason
 
-        pdf = max(D(h, material.roughness) * abs(frameCosTheta(h)) / (4.0 * dot(w_o, h)), EPSILON);
+        pdf = max(D(h, material.roughness) * abs(Frame::cosTheta(h)) / (4.0 * dot(w_o, h)), EPSILON);
 
         return w_i;
     }
 
     static float cookTorrancePDF(float3 w_i, float3 w_o, StandardPBR material) {
-        if (!sameHemisphere(w_o, w_i)) {
+        if (!Frame::sameHemisphere(w_o, w_i)) {
             return 0.0;
         }
         float3 h = normalize(w_i + w_o);
-        float distributionPDF = D(h, material.roughness) * abs(frameCosTheta(h));
+        float distributionPDF = D(h, material.roughness) * abs(Frame::cosTheta(h));
         return distributionPDF / (4.0 * dot(w_o, h));
     }
 

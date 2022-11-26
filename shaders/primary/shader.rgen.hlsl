@@ -66,7 +66,7 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             StandardPBR material = getMaterial(payload.materialIndex, payload.texcoord);
             accumulatedColor += throughput * material.emissive;
 
-            Frame frame = createFrame(payload.normal);
+            Frame frame = Frame::create(payload.normal);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples
@@ -81,11 +81,11 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             float u = rng.getFloat();
             float v = rng.getFloat();
             float3 incoming = material.sample(outgoing, pdf, float2(u, v));
-            if (!sameHemisphere(outgoing, incoming)) {
+            if (!Frame::sameHemisphere(outgoing, incoming)) {
                 break;
             }
             ray.Direction = frame.frameToWorld(incoming);
-            throughput *= material.eval(incoming, outgoing) * abs(frameCosTheta(incoming)) / pdf;
+            throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / pdf;
         } else {
             // no hit, we're done
             if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {

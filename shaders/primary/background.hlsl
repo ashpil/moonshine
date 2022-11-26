@@ -150,7 +150,7 @@ float3 estimateBackgroundDirect(Frame frame, float3 outgoing, StandardPBR materi
             float3 brdf = material.eval(frameSunDir, outgoing);
             float3 li = backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
             float weight = powerHeuristic(1, lightPdf, 1, scatteringPdf);
-            directLighting += li * brdf * abs(frameCosTheta(frameSunDir)) * weight / lightPdf;
+            directLighting += li * brdf * abs(Frame::cosTheta(frameSunDir)) * weight / lightPdf;
         }
     }
 
@@ -171,7 +171,7 @@ float3 estimateBackgroundDirect(Frame frame, float3 outgoing, StandardPBR materi
         float weight = powerHeuristic(1, scatteringPdf, 1, lightPdf);
         float3 li = min(Background::eval(dir_world), 1.0);
         float3 brdf = material.eval(dir, outgoing);
-        directLighting += li * brdf * weight * abs(frameCosTheta(dir)) / scatteringPdf;
+        directLighting += li * brdf * weight * abs(Frame::cosTheta(dir)) / scatteringPdf;
     }
 
     return directLighting;
