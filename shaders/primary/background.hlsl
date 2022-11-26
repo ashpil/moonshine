@@ -68,22 +68,13 @@ struct Background {
     static float3 sampleEnv(float2 square, out float pdf, inout float2 uv) {
         float mapPdf = sample2D(square, uv);
 
-        uv.y -= 1;
-        uv.y *= -1;
-
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
 
-        uv.y -= 1;
-        uv.y *= -1;
-
         float cosTheta = cos(theta);
-        float sinTheta = sin(theta);
-        float cosPhi = cos(phi);
-        float sinPhi = sin(phi);
         
-        pdf = mapPdf / (2.0 * PI * PI * sinTheta);
-        return float3(cosTheta * cosPhi, sinTheta, cosTheta * sinPhi);
+        pdf = mapPdf / (2.0 * PI * PI * cosTheta);
+        return sphericalToCartesian(sin(theta), cosTheta, phi);
     }
 
     static float pdf(float3 w_i) {
@@ -92,21 +83,18 @@ struct Background {
         int width = size.x - 1;
         int height = size.y;
 
-        float2 theta_phi = float2(atan2(w_i.z, w_i.x), asin(w_i.y));
-        float sin_phi = sin(theta_phi.y);
-        theta_phi /= float2(2.0 * PI, PI);
+        float2 phiTheta = cartesianToSpherical(w_i);
+        float2 uv = phiTheta / float2(2 * PI, PI);
 
-        float2 uv = theta_phi + float2(0.5, 0.0);
         uint2 coords = clamp(uint2(uv * float2(width, height)), uint2(0, 0), uint2(width - 1, height - 1));
 
         float pdf = conditionalPdfsIntegrals[coords] / marginalPdfIntegral[height];
-        return pdf / (2.0 * PI * PI * sin_phi);
+        return pdf / (2.0 * PI * PI * cos(phiTheta.y));
     }
 
     static float3 eval(float3 direction) {
-        float2 uv = float2(atan2(direction.z, direction.x), asin(-direction.y));
-        uv /= float2(2.0 * PI, PI);
-        uv += float2(0.5, 0.5);
+        float2 phiTheta = cartesianToSpherical(direction);
+        float2 uv = phiTheta / float2(2 * PI, PI);
         return backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
     }
 };
