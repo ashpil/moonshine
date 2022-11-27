@@ -72,20 +72,18 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
             // accumulate direct light samples
             for (uint directCount = 0; directCount < DIRECT_SAMPLES_PER_BOUNCE; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateBackgroundDirect(background, frame, outgoing, material, rand, payload) / DIRECT_SAMPLES_PER_BOUNCE;
+                accumulatedColor += throughput * estimateDirect(frame, background, material, outgoing, payload.position, rand) / DIRECT_SAMPLES_PER_BOUNCE;
             }
             
             // set up info for next bounce
             ray.Origin = payload.position;
-            float pdf;
-            float u = rng.getFloat();
-            float v = rng.getFloat();
-            float3 incoming = material.sample(outgoing, pdf, float2(u, v));
+            MaterialSample sample = material.sample(outgoing, float2(rng.getFloat(), rng.getFloat()));
+            float3 incoming = sample.dirFs;
             if (!Frame::sameHemisphere(outgoing, incoming)) {
                 break;
             }
             ray.Direction = frame.frameToWorld(incoming);
-            throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / pdf;
+            throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / sample.pdf;
         } else {
             // no hit, we're done
             if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {

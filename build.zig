@@ -111,6 +111,7 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
     const hlsl_shader_cmd = [_][]const u8 {
         "dxc",
         "-T", "lib_6_7",
+        "-HV", "2021",
         "-spirv",
         "-fspv-target-env=vulkan1.2",
         "-fvk-use-scalar-layout",

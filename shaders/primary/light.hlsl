@@ -154,27 +154,28 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
     return (f2 / (f2 + g * g));
 }
 
-// estimates lighting from environment map using light + brdf MIS
+// estimates direct lighting from light + brdf via MIS
 // TODO: is it better to trace two rays as currently or is a one-ray approach preferable?
-float3 estimateBackgroundDirect(EnvMap background, Frame frame, float3 outgoing, StandardPBR material, float4 rand, Payload payload) {
+template <class Light, class Material>
+float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float4 rand) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
     {
-        LightSample lightSample = background.sample(rand.xy);
+        LightSample lightSample = light.sample(rand.xy);
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
-        if (dot(payload.normal, lightSample.dirWs) > 0.0) { 
+        if (Frame::cosTheta(lightDirFs) > 0.0) {
             RayDesc ray;
-            ray.Origin = payload.position;
+            ray.Origin = positionWs;
             ray.Direction = lightSample.dirWs;
             ray.TMin = 0.001;
             ray.TMax = 10000.0;
 
             if (!shadowed(ray)) {
-                float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
-                float scatteringPdf = material.pdf(lightDirFs, outgoing);
+                float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 if (scatteringPdf > 0) {
-                    float3 brdf = material.eval(lightDirFs, outgoing);
+                    float3 brdf = material.eval(lightDirFs, outgoingDirFs);
                     float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
                     directLighting += lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
                 }
@@ -184,24 +185,23 @@ float3 estimateBackgroundDirect(EnvMap background, Frame frame, float3 outgoing,
 
     // sample material
     {
-        float scatteringPdf;
-        float3 brdfDirFs = material.sample(outgoing, scatteringPdf, rand.zw);
+        MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
 
-        if (Frame::cosTheta(brdfDirFs) > 0.0) {
-            float3 brdfDirWs = frame.frameToWorld(brdfDirFs);
+        if (Frame::cosTheta(materialSample.dirFs) > 0.0) {
+            float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
             RayDesc ray;
-            ray.Origin = payload.position;
+            ray.Origin = positionWs;
             ray.Direction = brdfDirWs;
             ray.TMin = 0.001;
             ray.TMax = 10000.0;
 
             if (!shadowed(ray)) {
-                float lightPdf = background.pdf(brdfDirWs);
-                float weight = powerHeuristic(1, scatteringPdf, 1, lightPdf);
-                float3 li = background.eval(brdfDirWs);
-                float3 brdf = material.eval(brdfDirFs, outgoing);
-                directLighting += li * brdf * weight * abs(Frame::cosTheta(brdfDirFs)) / scatteringPdf;
+                float lightPdf = light.pdf(brdfDirWs);
+                float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
+                float3 li = light.eval(brdfDirWs);
+                float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
+                directLighting += li * brdf * weight * abs(Frame::cosTheta(materialSample.dirFs)) / materialSample.pdf;
             }
         }
     }
