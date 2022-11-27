@@ -21,6 +21,7 @@
 * Offline image generator -- would be healthy two have two consumers of engine library code
 * Add tonemapping
 * Add bloom
+* Figure out proper way to do whole shader binding thing -- how to avoid globals?
 * Add dev interface:
   * UI vs CLI?
     * UI prettier, better for demos

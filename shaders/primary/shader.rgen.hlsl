@@ -11,7 +11,7 @@ RWTexture2D<float4> accumulationImage : register(u1, space2);
 #include "reflection_frame.hlsl"
 #include "random.hlsl"
 #include "material.hlsl"
-#include "background.hlsl"
+#include "light.hlsl"
 
 struct Camera {
     float3 origin;
@@ -51,7 +51,7 @@ RayDesc generateDir(Camera camera, float4 rand) {
     return rayDesc;
 }
 
-float3 pathTrace(inout Rng rng, RayDesc initialRay) {
+float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
     float3 accumulatedColor = float3(0.0, 0.0, 0.0);
 
     RayDesc ray = initialRay;
@@ -72,7 +72,7 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             // accumulate direct light samples
             for (uint directCount = 0; directCount < DIRECT_SAMPLES_PER_BOUNCE; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateBackgroundDirect(frame, outgoing, material, rand, payload) / DIRECT_SAMPLES_PER_BOUNCE;
+                accumulatedColor += throughput * estimateBackgroundDirect(background, frame, outgoing, material, rand, payload) / DIRECT_SAMPLES_PER_BOUNCE;
             }
             
             // set up info for next bounce
@@ -90,7 +90,7 @@ float3 pathTrace(inout Rng rng, RayDesc initialRay) {
             // no hit, we're done
             if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {
                 // add background color if it isn't explicitly sampled or this is a primary ray
-                accumulatedColor += throughput * Background::eval(ray.Direction);
+                accumulatedColor += throughput * background.eval(ray.Direction);
             }
             break;
         }
@@ -114,6 +114,7 @@ void storeColor(float3 color) {
 [shader("raygeneration")]
 void main() {
     Rng rng = InitRng((pushConsts.numAccumulatedFrames + 1) * DispatchRaysIndex().x * DispatchRaysIndex().x + DispatchRaysIndex().y);
+    EnvMap background = EnvMap::create();
 
     // the result that we write to our buffer
     float3 color = float3(0.0, 0.0, 0.0);
@@ -123,7 +124,7 @@ void main() {
         float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
         RayDesc initialRay = generateDir(pushConsts.camera, rand);
 
-        color += pathTrace(rng, initialRay);
+        color += pathTrace(background, initialRay, rng);
     }
 
     storeColor(color);
