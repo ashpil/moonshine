@@ -88,7 +88,7 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
             // no hit, we're done
             if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {
                 // add background color if it isn't explicitly sampled or this is a primary ray
-                accumulatedColor += throughput * background.eval(ray.Direction);
+                accumulatedColor += throughput * background.eval(float3(0, 0, 0), ray.Direction);
             }
             break;
         }

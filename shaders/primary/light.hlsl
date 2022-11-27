@@ -28,9 +28,9 @@ struct LightSample {
 };
 
 interface Light {
-    LightSample sample(float2 square);
-    float pdf(float3 dirWs);
-    float3 eval(float3 dirWs);
+    LightSample sample(float3 positionWs, float2 square);
+    float pdf(float3 positionWs, float3 dirWs);
+    float3 eval(float3 positionWs, float3 dirWs);
 };
 
 struct EnvMap : Light {
@@ -108,7 +108,7 @@ struct EnvMap : Light {
         return pdf_v * pdf_u;
     }
 
-    LightSample sample(float2 square) {
+    LightSample sample(float3 positionWs, float2 square) {
         float2 uv;
         float mapPdf = sample2D(square, uv);
 
@@ -124,7 +124,7 @@ struct EnvMap : Light {
         return lightSample;
     }
 
-    float pdf(float3 dirWs) {
+    float pdf(float3 positionWs, float3 dirWs) {
         uint2 size;
         conditionalCdfs.GetDimensions(size.x, size.y);
         int width = size.x - 1;
@@ -139,7 +139,7 @@ struct EnvMap : Light {
         return pdf / (2.0 * PI * PI * cos(phiTheta.y));
     }
 
-    float3 eval(float3 dirWs) {
+    float3 eval(float3 positionWs, float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
         return texture.SampleLevel(sampler, uv, 0);
@@ -162,7 +162,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
 
     // sample light
     {
-        LightSample lightSample = light.sample(rand.xy);
+        LightSample lightSample = light.sample(positionWs, rand.xy);
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
         if (Frame::cosTheta(lightDirFs) > 0.0) {
@@ -197,9 +197,9 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
             ray.TMax = 10000.0;
 
             if (!shadowed(ray)) {
-                float lightPdf = light.pdf(brdfDirWs);
+                float lightPdf = light.pdf(positionWs, brdfDirWs);
                 float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
-                float3 li = light.eval(brdfDirWs);
+                float3 li = light.eval(positionWs, brdfDirWs);
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
                 directLighting += li * brdf * weight * abs(Frame::cosTheta(materialSample.dirFs)) / materialSample.pdf;
             }

@@ -97,8 +97,8 @@ struct MaterialSample {
 };
 
 interface Material {
-    float pdf(float3 w_i, float3 w_o);
-    float3 eval(float3 w_i, float3 w_o);
+    float pdf(float3 w_o, float3 w_i);
+    float3 eval(float3 w_o, float3 w_i);
     MaterialSample sample(float3 w_o, float2 square);
 };
 
