@@ -24,6 +24,12 @@ const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
+fn printTime(writer: anytype, time: u64) !void {
+    const ms = time / std.time.ns_per_ms;
+    const s = ms / std.time.ms_per_s;
+    try writer.print("{}.{}", .{ s, ms });
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
@@ -80,18 +86,20 @@ pub fn main() !void {
 
     var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
         .samples_per_run = params.spp,
+        .max_bounces = 4,
+        .direct_samples_per_bounce = 2,
     });
     defer pipeline.destroy(&context);
 
     const extent = vk.Extent2D { .width = 1024, .height = 1024 }; // TODO: cli
 
-    const camera_origin = F32x3.new(3.0, 2.0, 3.0);
+    const camera_origin = F32x3.new(1.0, 1.5, 3.0);
     const camera_target = F32x3.new(0.0, 0.2, 0.0);
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 35.0,
+        .vfov = 65.0,
         .extent = extent,
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),
@@ -147,8 +155,13 @@ pub fn main() !void {
         },
     });
 
+    const start_time = try std.time.Instant.now();
     var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filename, "./assets/textures/skybox/", &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
+    const scene_time = try std.time.Instant.now();
+    const stdout = std.io.getStdOut().writer();
+    try printTime(stdout, scene_time.since(start_time));
+    try stdout.print(" seconds to load scene\n", .{});
     
     const command_pool = try context.device.createCommandPool(&.{
         .queue_family_index = context.physical_device.queue_family_index,
@@ -304,12 +317,17 @@ pub fn main() !void {
 
     try context.device.deviceWaitIdle();
 
+    const render_time = try std.time.Instant.now();
+    try printTime(stdout, render_time.since(scene_time));
+    try stdout.print(" seconds to render\n", .{});
+
     // now done with GPU stuff/all rendering; can write from output buffer to exr
     var f32_slice: []const f32 = undefined;
     f32_slice.ptr = @ptrCast([*]f32, @alignCast(@alignOf(f32), display_image_bytes.data.ptr));
     f32_slice.len = display_image_bytes.data.len / 4;
     try exr.helpers.save(allocator, f32_slice, 4, extent, params.out_filename);
 
-    try context.device.deviceWaitIdle();
-    std.log.info("Program completed!", .{});
+    const exr_time = try std.time.Instant.now();
+    try printTime(stdout, exr_time.since(render_time));
+    try stdout.print(" seconds to write exr\n", .{});
 }
