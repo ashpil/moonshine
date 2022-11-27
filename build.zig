@@ -21,8 +21,8 @@ pub fn build(b: *std.build.Builder) void {
         }) catch unreachable;
         break :blk vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig").package;
     };
-    const glfw = makeGlfwLibrary(b, target, mode) catch unreachable;
-    const tinyexr = makeTinyExrLibrary(b, target, mode);
+    const glfw = makeGlfwLibrary(b, target, .ReleaseFast) catch unreachable;
+    const tinyexr = makeTinyExrLibrary(b, target, .ReleaseFast);
     const zgltf = std.build.Pkg {
         .name = "zgltf",
         .source = .{ .path = "deps/zgltf/src/main.zig" },
