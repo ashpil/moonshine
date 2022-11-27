@@ -2,7 +2,7 @@
 
 struct Mesh {
     uint64_t positionAddress;
-    uint64_t texcoordAddress;
+    uint64_t texcoordAddress; // may be zero, for no texcoords
     uint64_t normalAddress; // may be zero, for no vertex normals
 
     uint64_t indexAddress;
@@ -58,10 +58,7 @@ float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, f
     return transpose(objectToTangent);
 }
 
-float3 calculateNormal(uint64_t addr, uint3 ind, float3 barycentrics, float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, float2 t2, float2 texcoords, uint textureIndex) {
-    float3 edge0 = p1 - p0;
-    float3 edge1 = p2 - p0;
-
+float3 getGeometricNormalObjectSpace(uint64_t addr, uint3 ind, float3 barycentrics, float3 edge0, float3 edge1) {
     float3 normalObjectSpace;
     if (addr != 0) {
         float3 n0 = loadNormal(addr, ind.x);
@@ -71,8 +68,15 @@ float3 calculateNormal(uint64_t addr, uint3 ind, float3 barycentrics, float3 p0,
     } else {
         normalObjectSpace = normalize(cross(edge0, edge1));
     }
+    return normalObjectSpace;
+}
 
-    float3x3 tangentToObjectMat = createTBNMatrix(normalObjectSpace, edge0, edge1, t0, t1, t2);
+float3 calculateNormal(float3 geometricNormalObjectSpace, uint64_t texcoordAddress, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2, float2 texcoords, uint textureIndex) {
+    float4x3 unused = WorldToObject4x3(); // somehow this fixes a weird bug???
+    // if no uvs, can't look up from normal map
+    if (texcoordAddress == 0) return normalize(mul(WorldToObject4x3(), geometricNormalObjectSpace).xyz);
+
+    float3x3 tangentToObjectMat = createTBNMatrix(geometricNormalObjectSpace, edge0, edge1, t0, t1, t2);
     float2 textureNormal = (textures[NonUniformResourceIndex(5 * textureIndex + 4)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
     float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
@@ -96,11 +100,11 @@ uint skinOffset() {
 }
 
 uint meshIdx() {
-    return meshIdxs[modelOffset() + GeometryIndex()];
+    return meshIdxs[NonUniformResourceIndex(modelOffset() + GeometryIndex())];
 }
 
 uint materialIdx() {
-    return materialIdxs[skinOffset() + GeometryIndex()];
+    return materialIdxs[NonUniformResourceIndex(skinOffset() + GeometryIndex())];
 }
 
 [shader("closesthit")]
@@ -108,7 +112,7 @@ void main(inout Payload payload, in float2 attribs) {
     uint meshIndex = meshIdx();
     uint materialIndex = materialIdx();
 
-    Mesh mesh = meshes[meshIndex];
+    Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
 
     uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * PrimitiveIndex());
 
@@ -116,14 +120,18 @@ void main(inout Payload payload, in float2 attribs) {
     float3 p1 = loadPosition(mesh.positionAddress, ind.y);
     float3 p2 = loadPosition(mesh.positionAddress, ind.z);
 
-    float2 t0 = loadTexcoord(mesh.texcoordAddress, ind.x);
-    float2 t1 = loadTexcoord(mesh.texcoordAddress, ind.y);
-    float2 t2 = loadTexcoord(mesh.texcoordAddress, ind.z);
+    // just use placeholder texcoords if no real ones, textures should be constant in this case anyway
+    float2 t0 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.x) : float2(0.0, 0.0);
+    float2 t2 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.y) : float2(0.5, 0.5);
+    float2 t1 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.z) : float2(1.0, 1.0);
 
     float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
     payload.texcoord = calculateTexcoord(barycentrics, t0, t1, t2);
-    payload.normal = calculateNormal(mesh.normalAddress, ind, barycentrics, p0, p1, p2, t0, t1, t2, payload.texcoord, materialIndex);
+    float3 edge0 = p1 - p0;
+    float3 edge1 = p2 - p0;
+    float3 normalObjectSpace = getGeometricNormalObjectSpace(mesh.normalAddress, ind, barycentrics, edge0, edge1);
+    payload.normal = calculateNormal(normalObjectSpace, mesh.texcoordAddress, edge0, edge1, t0, t1, t2, payload.texcoord, materialIndex);
     payload.position = calculateHitPosition(barycentrics, p0, p1, p2);
 
     payload.done = false;

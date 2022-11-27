@@ -10,7 +10,7 @@ const F32x2 = vector.Vec2(f32);
 
 // vertices
 positions: []F32x3, // required
-texcoords: []F32x2, // required
+texcoords: ?[]F32x2, // optional
 normals: ?[]F32x3, // optional
 
 // indices
@@ -132,7 +132,7 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     allocator.free(self.positions);
-    allocator.free(self.texcoords);
+    if (self.texcoords) |texcoords| allocator.free(texcoords);
     if (self.normals) |normals| allocator.free(normals);
     allocator.free(self.indices);
 }

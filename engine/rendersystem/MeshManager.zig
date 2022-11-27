@@ -9,8 +9,8 @@ const Object = @import("../Object.zig");
 // probably doesn't make sense to cache addresses?
 const Meshes = std.MultiArrayList(struct {
     position_buffer: VkAllocator.DeviceBuffer,
-    texcoord_buffer: VkAllocator.DeviceBuffer,
-    normal_buffer: ?VkAllocator.DeviceBuffer, // hmm is there any way to get this to take up same size as normal buffer?
+    texcoord_buffer: ?VkAllocator.DeviceBuffer, // hmm is there any way to get this to take up same size as a non-nullable buffer?
+    normal_buffer: ?VkAllocator.DeviceBuffer, // and this
 
     vertex_count: u32,
 
@@ -62,17 +62,20 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         errdefer position_buffer.destroy(vc);
 
         const texcoord_buffer = blk: {
-            const bytes = std.mem.sliceAsBytes(object.texcoords);
+            if (object.texcoords) |texcoords| {
+                const bytes = std.mem.sliceAsBytes(texcoords);
 
-            const staging_buffer = try staging_buffers.addOne();
-            staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
-            std.mem.copy(u8, staging_buffer.data, bytes);
-            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
-            commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
-
-            break :blk gpu_buffer;
+                const staging_buffer = try staging_buffers.addOne();
+                staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+                std.mem.copy(u8, staging_buffer.data, bytes);
+                const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+                commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
+                break :blk gpu_buffer;
+            } else {
+                break :blk null;
+            }
         };
-        errdefer texcoord_buffer.destroy(vc);
+        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
 
         const normal_buffer = blk: {
             if (object.normals) |normals| {
@@ -81,7 +84,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 const staging_buffer = try staging_buffers.addOne();
                 staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
                 std.mem.copy(u8, staging_buffer.data, bytes);
-                const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+                const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, bytes.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
                 commands.recordUploadBuffer(u8, vc, gpu_buffer, staging_buffer.*);
                 break :blk gpu_buffer;
             } else {
@@ -105,7 +108,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         addresses_buffer_host.data[i] = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
-            .texcoord_address = texcoord_buffer.getAddress(vc),
+            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
             .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
 
             .index_address = index_buffer.getAddress(vc),
@@ -145,7 +148,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     var i: u32 = 0;
     while (i < slice.len) : (i += 1) {
         position_buffers[i].destroy(vc);
-        texcoord_buffers[i].destroy(vc);
+        if (texcoord_buffers[i]) |buffer| buffer.destroy(vc);
         if (normal_buffers[i]) |buffer| buffer.destroy(vc);
         index_buffers[i].destroy(vc);
     }

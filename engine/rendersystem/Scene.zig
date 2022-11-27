@@ -324,7 +324,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             // get vertices
             try objects.append(MeshData {
                 .positions = vertices.positions,
-                .texcoords = vertices.texcoords,
+                .texcoords = if (vertices.texcoords.len != 0) vertices.texcoords else null,
                 .normals = if (vertices.normals.len != 0) vertices.normals else null,
                 .indices = indices,
             });
