@@ -84,6 +84,13 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
             }
             ray.Direction = frame.frameToWorld(incoming);
             throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / sample.pdf;
+
+            // russian roulette
+            if (bounceCount > 3) {
+                float pSurvive = min(0.95, luminance(throughput));
+                if (rng.getFloat() > pSurvive) break;
+                throughput /= pSurvive;
+            }
         } else {
             // no hit, we're done
             if (DIRECT_SAMPLES_PER_BOUNCE == 0 || bounceCount == 0) {
