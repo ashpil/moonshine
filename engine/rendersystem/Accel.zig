@@ -386,13 +386,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer material_idxs.destroy(vc);
 
-    const build_info = .{
+    const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = instance_count,
         .first_vertex = 0,
         .primitive_offset = 0,
         .transform_offset = 0,
     };
-    try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ &build_info });
+    try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ utils.toPointerType(&build_info) });
 
     return Self {
         .blases = blases,
@@ -475,7 +475,7 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
             .transform_offset = 0,
         };
 
-        const build_info_ref = &build_info;
+        const build_info_ref = utils.toPointerType(&build_info);
 
         vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
 

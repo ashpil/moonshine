@@ -86,7 +86,7 @@ pub fn copyAccelStructs(self: *Self, vc: *const VulkanContext, infos: []const vk
     try self.submitAndIdleUntilDone(vc);
 }
 
-pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const *const vk.AccelerationStructureBuildRangeInfoKHR) !void {
+pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const [*]const vk.AccelerationStructureBuildRangeInfoKHR) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
     const size = @intCast(u32, geometry_infos.len);
     try self.startRecording(vc);
@@ -111,7 +111,7 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
 
     try self.startRecording(vc);
 
-    vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, @ptrCast([*]const *const vk.AccelerationStructureBuildRangeInfoKHR, build_infos.ptr)); // TODO: remove @ptrCast once https://github.com/Snektron/vulkan-zig/issues/59 fixed
+    vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
 
     const barriers = [_]vk.MemoryBarrier2 {
         .{
