@@ -163,9 +163,13 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
     // sample light
     {
         LightSample lightSample = light.sample(positionWs, rand.xy);
-        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+        
+        // holy fuck spirv/nvidia why are you like this
+        // for some reason on nvidia only if i call this before the raycast below i get super weird artifacts
+        // took two hours to figure it out ugh
+        // float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
-        if (Frame::cosTheta(lightDirFs) > 0.0) {
+        if (dot(frame.toFrame[1], lightSample.dirWs) > 0.0) {
             RayDesc ray;
             ray.Origin = positionWs;
             ray.Direction = lightSample.dirWs;
@@ -173,6 +177,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
             ray.TMax = 10000.0;
 
             if (!shadowed(ray)) {
+                float3 lightDirFs = frame.worldToFrame(lightSample.dirWs); 
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 if (scatteringPdf > 0) {
                     float3 brdf = material.eval(lightDirFs, outgoingDirFs);
