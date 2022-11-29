@@ -499,6 +499,22 @@ pub const HlslCompileStep = struct {
         return self;
     }
 
+    fn renderPath(path: []const u8, writer: anytype) void {
+        const separators = &[_]u8{ std.fs.path.sep_windows, std.fs.path.sep_posix };
+        var i: usize = 0;
+        while (std.mem.indexOfAnyPos(u8, path, i, separators)) |j| {
+            writer.writeAll(path[i..j]) catch unreachable;
+            switch (std.fs.path.sep) {
+                std.fs.path.sep_windows => writer.writeAll("\\\\") catch unreachable,
+                std.fs.path.sep_posix => writer.writeByte(std.fs.path.sep_posix) catch unreachable,
+                else => unreachable,
+            }
+
+            i = j + 1;
+        }
+        writer.writeAll(path[i..]) catch unreachable;
+    }
+
     pub fn add(self: *HlslCompileStep, import_name: []const u8, src: []const u8) void {
         const output_filename = std.fmt.allocPrint(self.builder.allocator, "{s}.spv", .{ src }) catch unreachable;
         const full_out_path = std.fs.path.join(self.builder.allocator, &[_][]const u8{
@@ -513,7 +529,9 @@ pub const HlslCompileStep = struct {
         }) catch unreachable;
         self.shaders.append(.{ .source_path = src_full_path, .full_out_path = full_out_path }) catch unreachable;
 
-        self.file_text.writer().print("pub const {s} align(@alignOf(u32)) = @embedFile(\"{s}\").*;\n", .{ import_name, full_out_path }) catch unreachable;
+        self.file_text.writer().print("pub const {s} align(@alignOf(u32)) = @embedFile(\"", .{ import_name }) catch unreachable;
+        renderPath(full_out_path, self.file_text.writer());
+        self.file_text.writer().writeAll("\").*;\n") catch unreachable;
     }
 
     fn make(step: *std.build.Step) !void {
