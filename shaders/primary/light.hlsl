@@ -1,11 +1,11 @@
-Texture2D<float3> g_backgroundTexture : register(t0, space1);
-SamplerState g_backgroundSampler : register(s0, space1);
+Texture2D<float3> backgroundTexture : register(t0, space1);
+SamplerState backgroundSampler : register(s0, space1);
 
-RWTexture2D<float> g_conditionalPdfsIntegrals : register(u1, space1);
-RWTexture2D<float> g_conditionalCdfs : register(u2, space1);
+RWTexture2D<float> conditionalPdfsIntegrals : register(u1, space1);
+RWTexture2D<float> conditionalCdfs : register(u2, space1);
 
-RWTexture1D<float> g_marginalPdfIntegral : register(u3, space1);
-RWTexture1D<float> g_marginalCdf : register(u4, space1);
+RWTexture1D<float> marginalPdfIntegral : register(u3, space1);
+RWTexture1D<float> marginalCdf : register(u4, space1);
 
 struct [raypayload] ShadowPayload {
     bool inShadow : read(caller) : write(miss);
@@ -34,25 +34,8 @@ interface Light {
 };
 
 struct EnvMap : Light {
-    Texture2D<float3> texture;
-    SamplerState sampler;
-
-    RWTexture2D<float> conditionalPdfsIntegrals;
-    RWTexture2D<float> conditionalCdfs;
-
-    RWTexture1D<float> marginalPdfIntegral;
-    RWTexture1D<float> marginalCdf;
-
     static EnvMap create() {
         EnvMap map;
-
-        map.texture = g_backgroundTexture;
-        map.sampler = g_backgroundSampler;
-        map.conditionalPdfsIntegrals = g_conditionalPdfsIntegrals;
-        map.conditionalCdfs = g_conditionalCdfs;
-        map.marginalPdfIntegral = g_marginalPdfIntegral;
-        map.marginalCdf = g_marginalCdf;
-
         return map;
     }
 
@@ -119,7 +102,7 @@ struct EnvMap : Light {
         
         LightSample lightSample;
         lightSample.pdf = mapPdf / (2.0 * PI * PI * cosTheta);
-        lightSample.radiance = texture.SampleLevel(sampler, uv, 0);
+        lightSample.radiance = backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
         lightSample.dirWs = sphericalToCartesian(sin(theta), cosTheta, phi);
         return lightSample;
     }
@@ -142,7 +125,7 @@ struct EnvMap : Light {
     float3 eval(float3 positionWs, float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
-        return texture.SampleLevel(sampler, uv, 0);
+        return backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
     }
 };
 
@@ -163,13 +146,9 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
     // sample light
     {
         LightSample lightSample = light.sample(positionWs, rand.xy);
-        
-        // holy fuck spirv/nvidia why are you like this
-        // for some reason on nvidia only if i call this before the raycast below i get super weird artifacts
-        // took two hours to figure it out ugh
-        // float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
-        if (dot(frame.toFrame[1], lightSample.dirWs) > 0.0) {
+        if (Frame::cosTheta(lightDirFs) > 0.0) {
             RayDesc ray;
             ray.Origin = positionWs;
             ray.Direction = lightSample.dirWs;
@@ -177,7 +156,6 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
             ray.TMax = 10000.0;
 
             if (!shadowed(ray)) {
-                float3 lightDirFs = frame.worldToFrame(lightSample.dirWs); 
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 if (scatteringPdf > 0) {
                     float3 brdf = material.eval(lightDirFs, outgoingDirFs);
