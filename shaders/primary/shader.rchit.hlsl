@@ -122,8 +122,8 @@ void main(inout Payload payload, in float2 attribs) {
 
     // just use placeholder texcoords if no real ones, textures should be constant in this case anyway
     float2 t0 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.x) : float2(0.0, 0.0);
-    float2 t2 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.y) : float2(0.5, 0.5);
-    float2 t1 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.z) : float2(1.0, 1.0);
+    float2 t1 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.y) : float2(0.5, 0.5);
+    float2 t2 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.z) : float2(1.0, 1.0);
 
     float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
