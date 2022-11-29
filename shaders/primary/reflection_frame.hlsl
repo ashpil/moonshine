@@ -4,17 +4,8 @@ struct Frame {
 
     // takes in a normalized vector, returns a frame where x,y,z are bitangent, normal, and tangent respectively
     static Frame create(float3 n) {
-        float3 t;
-        if (abs(n.x) > abs(n.z)) {
-            float len = sqrt(n.x * n.x + n.y * n.y);
-            t = float3(n.y / len, -n.x / len, 0.0);
-        } else {
-            float len = sqrt(n.z * n.z + n.y * n.y);
-            t = float3(0.0, -n.z / len, n.y / len);
-        }
-
-        float3 s = normalize(cross(t, n));
-
+        float3 t, s;
+        coordinateSystem(n, t, s);
         float3x3 toFrame = { s, n, t };
         Frame frame;
         frame.toFrame = toFrame;

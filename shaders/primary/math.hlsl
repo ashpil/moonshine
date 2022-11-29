@@ -25,3 +25,22 @@ float luminance(float3 color) {
            0.7152 * color.g +
            0.0722 * color.b;
 }
+
+void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
+    if (abs(v1.x) > abs(v1.y)) {
+        v2 = float3(-v1.z, 0.0, v1.x) / sqrt(v1.x * v1.x + v1.z * v1.z);
+    } else {
+        v2 = float3(0.0, v1.z, -v1.y) / sqrt(v1.y * v1.y + v1.z * v1.z);
+    }
+
+    v3 = cross(v2, v1);
+}
+
+// TODO: switch to this when figure it why it doesn't work
+// void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
+//     float sign = v1.z >= 0.0f ? 1.0f : -1.0f;
+//     float a = -1 / (sign + v1.z);
+//     float b = v1.x * v1.y * a;
+//     v2 = float3(1 + sign * sqrt(v1.x) * a, sign * b, -sign * v1.x);
+//     v3 = float3(b, sign + sqrt(v1.y) * a, -v1.y);
+// }
