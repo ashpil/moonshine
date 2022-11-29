@@ -8,15 +8,6 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
-struct Instance {
-    uint materialIndex;
-};
-
-struct Vertex {
-    float3 position;
-    float2 texcoord;
-};
-
 SamplerState textureSampler : register(s1, space0);
 Texture2D textures[] : register(t3, space0);
 StructuredBuffer<Mesh> meshes : register(t4, space0);
@@ -36,59 +27,43 @@ float3 loadNormal(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
 }
 
-float3x3 createTBNMatrix(float3 normal, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2) {
+void getTangentBitangent(float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, float2 t2, out float3 tangent, out float3 bitangent) {
     float2 deltaUV1 = t1 - t0;
     float2 deltaUV2 = t2 - t0;
 
+    float3 edge0 = p1 - p0;
+    float3 edge1 = p2 - p0;
+
     float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
 
-    float3 tangent = float3(
+    tangent = normalize(float3(
         (deltaUV2.y * edge0.x - deltaUV1.y * edge1.x) / f,
         (deltaUV2.y * edge0.y - deltaUV1.y * edge1.y) / f,
         (deltaUV2.y * edge0.z - deltaUV1.y * edge1.z) / f
-    );
-    
-    float3 bitangent = float3(
+    ));
+
+    bitangent = normalize(float3(
         (-deltaUV2.x * edge0.x + deltaUV1.x * edge1.x) / f,
         (-deltaUV2.x * edge0.y + deltaUV1.x * edge1.y) / f,
         (-deltaUV2.x * edge0.z + deltaUV1.x * edge1.z) / f
-    );
-
-    float3x3 objectToTangent = { normalize(tangent), normalize(bitangent), normal };
-    return transpose(objectToTangent);
+    ));
 }
 
-float3 getGeometricNormalObjectSpace(uint64_t addr, uint3 ind, float3 barycentrics, float3 edge0, float3 edge1) {
-    float3 normalObjectSpace;
-    if (addr != 0) {
-        float3 n0 = loadNormal(addr, ind.x);
-        float3 n1 = loadNormal(addr, ind.y);
-        float3 n2 = loadNormal(addr, ind.z);
-        normalObjectSpace = barycentrics.x * n0 + barycentrics.y * n1 + barycentrics.z * n2;
-    } else {
-        normalObjectSpace = normalize(cross(edge0, edge1));
-    }
-    return normalObjectSpace;
+float3 decodeNormal(float2 rg) {
+    rg = rg * 2 - 1;
+    return float3(rg, sqrt(1.0 - dot(rg, rg)));
 }
 
-float3 calculateNormal(float3 geometricNormalObjectSpace, uint64_t texcoordAddress, float3 edge0, float3 edge1, float2 t0, float2 t1, float2 t2, float2 texcoords, uint textureIndex) {
-    float4x3 unused = WorldToObject4x3(); // somehow this fixes a weird bug???
-    // if no uvs, can't look up from normal map
-    if (texcoordAddress == 0) return normalize(mul(WorldToObject4x3(), geometricNormalObjectSpace).xyz);
-
-    float3x3 tangentToObjectMat = createTBNMatrix(geometricNormalObjectSpace, edge0, edge1, t0, t1, t2);
-    float2 textureNormal = (textures[NonUniformResourceIndex(5 * textureIndex + 4)].SampleLevel(textureSampler, texcoords, 0) * 2.0).rg - 1.0;
-    float3 normalTangentSpace = float3(textureNormal, sqrt(1.0 - pow(textureNormal.r, 2) - pow(textureNormal.g, 2)));
+float3 lookupTextureNormal(float3 geometricNormalObjectSpace, float3 tangent, float3 bitangent, float2 texcoords, uint textureIndex) {
+    float3x3 objectToTangent = { tangent, bitangent, geometricNormalObjectSpace };
+    float3x3 tangentToObjectMat = transpose(objectToTangent);
+    float3 normalTangentSpace = decodeNormal(textures[NonUniformResourceIndex(5 * textureIndex + 4)].SampleLevel(textureSampler, texcoords, 0).rg);
     return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
 }
 
-float3 calculateHitPosition(float3 barycentrics, float3 v0, float3 v1, float3 v2) {
-    float3 hitObjectSpace = barycentrics.x * v0 + barycentrics.y * v1 + barycentrics.z * v2;
-    return mul(ObjectToWorld3x4(), float4(hitObjectSpace, 1.0));
-}
-
-float2 calculateTexcoord(float3 barycentrics, float2 t0, float2 t1, float2 t2) {
-    return barycentrics.x * t0 + barycentrics.y * t1 + barycentrics.z * t2;
+template <typename T>
+T interpolate(float3 barycentrics, T v1, T v2, T v3) {
+    return barycentrics.x * v1 + barycentrics.y * v2 + barycentrics.z * v3;
 }
 
 uint modelOffset() {
@@ -107,32 +82,68 @@ uint materialIdx() {
     return materialIdxs[NonUniformResourceIndex(skinOffset() + GeometryIndex())];
 }
 
+struct Attributes {
+    float3 position;
+    float2 texcoord;
+    float3 normal;
+    float3 tangent;
+    float3 bitangent;
+
+    static Attributes lookupAndInterpolate(Mesh mesh, float3 barycentrics) {
+        Attributes attrs;
+
+        uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * PrimitiveIndex());
+
+        // positions always available
+        float3 p0 = loadPosition(mesh.positionAddress, ind.x);
+        float3 p1 = loadPosition(mesh.positionAddress, ind.y);
+        float3 p2 = loadPosition(mesh.positionAddress, ind.z);
+        attrs.position = interpolate(barycentrics, p0, p1, p2);
+
+        // texcoords optional
+        float2 t0, t1, t2;
+        if (mesh.texcoordAddress != 0) {
+            t0 = loadTexcoord(mesh.texcoordAddress, ind.x);
+            t1 = loadTexcoord(mesh.texcoordAddress, ind.y);
+            t2 = loadTexcoord(mesh.texcoordAddress, ind.z);
+        } else {
+            // textures should be constant in this case
+            t0 = float2(0, 0);
+            t1 = float2(1, 0);
+            t2 = float2(1, 1);
+        }
+        attrs.texcoord = interpolate(barycentrics, t0, t1, t2);
+
+        // normals optional
+        if (mesh.normalAddress != 0) {
+            float3 n0 = loadNormal(mesh.normalAddress, ind.x);
+            float3 n1 = loadNormal(mesh.normalAddress, ind.y);
+            float3 n2 = loadNormal(mesh.normalAddress, ind.z);
+            attrs.normal = interpolate(barycentrics, n0, n1, n2);
+        } else {
+            // just use one from positions
+            attrs.normal = normalize(cross(p1 - p0, p2 - p0));
+        }
+
+        // at some point might have this in geometry too, but not yet
+        getTangentBitangent(p0, p1, p2, t0, t1, t2, attrs.tangent, attrs.bitangent);
+
+        return attrs;
+    }
+};
+
 [shader("closesthit")]
 void main(inout Payload payload, in float2 attribs) {
-    uint meshIndex = meshIdx();
     uint materialIndex = materialIdx();
-
-    Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
-
-    uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * PrimitiveIndex());
-
-    float3 p0 = loadPosition(mesh.positionAddress, ind.x);
-    float3 p1 = loadPosition(mesh.positionAddress, ind.y);
-    float3 p2 = loadPosition(mesh.positionAddress, ind.z);
-
-    // just use placeholder texcoords if no real ones, textures should be constant in this case anyway
-    float2 t0 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.x) : float2(0.0, 0.0);
-    float2 t1 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.y) : float2(0.5, 0.5);
-    float2 t2 = mesh.texcoordAddress ? loadTexcoord(mesh.texcoordAddress, ind.z) : float2(1.0, 1.0);
+    uint meshIndex = meshIdx();
 
     float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
-
-    payload.texcoord = calculateTexcoord(barycentrics, t0, t1, t2);
-    float3 edge0 = p1 - p0;
-    float3 edge1 = p2 - p0;
-    float3 normalObjectSpace = getGeometricNormalObjectSpace(mesh.normalAddress, ind, barycentrics, edge0, edge1);
-    payload.normal = calculateNormal(normalObjectSpace, mesh.texcoordAddress, edge0, edge1, t0, t1, t2, payload.texcoord, materialIndex);
-    payload.position = calculateHitPosition(barycentrics, p0, p1, p2);
+    Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
+    Attributes attrs = Attributes::lookupAndInterpolate(mesh, barycentrics);
+   
+    payload.texcoord = attrs.texcoord;
+    payload.position = mul(ObjectToWorld3x4(), float4(attrs.position, 1.0));
+    payload.normal = lookupTextureNormal(attrs.normal, attrs.tangent, attrs.bitangent, attrs.texcoord, materialIndex);
 
     payload.done = false;
     payload.materialIndex = materialIndex;
