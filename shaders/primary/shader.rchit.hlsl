@@ -147,5 +147,4 @@ void main(inout Payload payload, in float2 attribs) {
 
     payload.done = false;
     payload.materialIndex = materialIndex;
-    payload.index = InstanceIndex();
 }
