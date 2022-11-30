@@ -1,11 +1,11 @@
-Texture2D<float3> backgroundTexture : register(t0, space1);
-SamplerState backgroundSampler : register(s0, space1);
+[[vk::binding(0, 1)]] Texture2D<float3> backgroundTexture;
+[[vk::binding(0, 1)]] SamplerState backgroundSampler;
 
-RWTexture2D<float> conditionalPdfsIntegrals : register(u1, space1);
-RWTexture2D<float> conditionalCdfs : register(u2, space1);
+[[vk::binding(1, 1)]] RWTexture2D<float> conditionalPdfsIntegrals;
+[[vk::binding(2, 1)]] RWTexture2D<float> conditionalCdfs;
 
-RWTexture1D<float> marginalPdfIntegral : register(u3, space1);
-RWTexture1D<float> marginalCdf : register(u4, space1);
+[[vk::binding(3, 1)]] RWTexture1D<float> marginalPdfIntegral;
+[[vk::binding(4, 1)]] RWTexture1D<float> marginalCdf;
 
 struct [raypayload] ShadowPayload {
     bool inShadow : read(caller) : write(miss);

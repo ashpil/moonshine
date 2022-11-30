@@ -1,10 +1,10 @@
-// space 0 - scene
-// space 1 - background
-// space 2 - display
+// set 0 - scene
+// set 1 - background
+// set 2 - display
 
-RaytracingAccelerationStructure TLAS : register(t0, space0);
-RWTexture2D<float4> displayImage : register(u0, space2);
-RWTexture2D<float4> accumulationImage : register(u1, space2);
+[[vk::binding(0, 0)]] RaytracingAccelerationStructure TLAS;
+[[vk::binding(0, 2)]] RWTexture2D<float4> displayImage;
+[[vk::binding(1, 2)]] RWTexture2D<float4> accumulationImage;
 
 #include "math.hlsl"
 #include "payload.hlsl"

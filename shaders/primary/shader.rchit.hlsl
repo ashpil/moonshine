@@ -8,12 +8,11 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
-SamplerState textureSampler : register(s1, space0);
-Texture2D textures[] : register(t3, space0);
-StructuredBuffer<Mesh> meshes : register(t4, space0);
-
-StructuredBuffer<uint> meshIdxs : register(t5, space0);
-StructuredBuffer<uint> materialIdxs : register(t6, space0);
+[[vk::binding(1, 0)]] SamplerState textureSampler;
+[[vk::binding(3, 0)]] Texture2D textures[];
+[[vk::binding(4, 0)]] StructuredBuffer<Mesh> meshes;
+[[vk::binding(5, 0)]] StructuredBuffer<uint> meshIdxs;
+[[vk::binding(6, 0)]] StructuredBuffer<uint> materialIdxs;
 
 float3 loadPosition(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);

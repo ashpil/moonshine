@@ -4,8 +4,8 @@ struct ClickData {
     float2 barycentrics;
 };
 
-RWStructuredBuffer<ClickData> click_data : register(u0, space0);
-RaytracingAccelerationStructure TLAS : register(t0, space1);
+[[vk::binding(0, 0)]] RWStructuredBuffer<ClickData> click_data;
+[[vk::binding(0, 1)]] RaytracingAccelerationStructure TLAS;
 
 struct [raypayload] Payload {
     ClickData click_data : read(caller) : write(closesthit, miss);
