@@ -93,17 +93,17 @@ struct EnvMap : Light {
 
     LightSample sample(float3 positionWs, float2 square) {
         float2 uv;
-        float mapPdf = sample2D(square, uv);
+        float pdf2d = sample2D(square, uv);
 
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
 
-        float cosTheta = cos(theta);
+        float sinTheta = sin(theta);
         
         LightSample lightSample;
-        lightSample.pdf = mapPdf / (2.0 * PI * PI * cosTheta);
+        lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
         lightSample.radiance = backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
-        lightSample.dirWs = sphericalToCartesian(sin(theta), cosTheta, phi);
+        lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
         return lightSample;
     }
 
@@ -118,8 +118,9 @@ struct EnvMap : Light {
 
         uint2 coords = clamp(uint2(uv * float2(width, height)), uint2(0, 0), uint2(width - 1, height - 1));
 
-        float pdf = conditionalPdfsIntegrals[coords] / marginalPdfIntegral[height];
-        return pdf / (2.0 * PI * PI * cos(phiTheta.y));
+        float pdf2d = conditionalPdfsIntegrals[coords] / marginalPdfIntegral[height];
+        float sinTheta = sin(phiTheta.y);
+        return sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
     }
 
     float3 eval(float3 positionWs, float3 dirWs) {
