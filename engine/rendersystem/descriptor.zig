@@ -99,7 +99,7 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .binding = 3,
         .descriptor_type = .sampled_image,
         .descriptor_count = max_textures,
-        .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true }, // technically atm some are only accessed in closest hit, and some only in raygen
+        .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
     .{
