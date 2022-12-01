@@ -63,26 +63,24 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
         Payload payload;
         TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
         if (!payload.done) {
-            StandardPBR material = getMaterial(payload.materialIndex, payload.texcoord);
+            StandardPBR material = getMaterial(payload.materialIndex, payload.texcoord, payload.normal, payload.tangent, normalize(cross(payload.normal, payload.tangent)));
             accumulatedColor += throughput * material.emissive;
 
-            Frame frame = Frame::create(payload.normal);
+            Frame frame = Frame::create(material.normal);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples
             for (uint directCount = 0; directCount < DIRECT_SAMPLES_PER_BOUNCE; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirect(frame, background, material, outgoing, payload.position, rand) / DIRECT_SAMPLES_PER_BOUNCE;
+                accumulatedColor += throughput * estimateDirect(frame, background, material, outgoing, payload.position, payload.normal, rand) / DIRECT_SAMPLES_PER_BOUNCE;
             }
             
             // set up info for next bounce
             ray.Origin = payload.position;
             MaterialSample sample = material.sample(outgoing, float2(rng.getFloat(), rng.getFloat()));
             float3 incoming = sample.dirFs;
-            if (!Frame::sameHemisphere(outgoing, incoming)) {
-                break;
-            }
             ray.Direction = frame.frameToWorld(incoming);
+            if (dot(payload.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) break;
             throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / sample.pdf;
 
             // russian roulette

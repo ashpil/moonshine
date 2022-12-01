@@ -48,18 +48,6 @@ void getTangentBitangent(float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, 
     ));
 }
 
-float3 decodeNormal(float2 rg) {
-    rg = rg * 2 - 1;
-    return float3(rg, sqrt(1.0 - dot(rg, rg)));
-}
-
-float3 lookupTextureNormal(float3 geometricNormalObjectSpace, float3 tangent, float3 bitangent, float2 texcoords, uint textureIndex) {
-    float3x3 objectToTangent = { tangent, bitangent, geometricNormalObjectSpace };
-    float3x3 tangentToObjectMat = transpose(objectToTangent);
-    float3 normalTangentSpace = decodeNormal(textures[NonUniformResourceIndex(5 * textureIndex + 4)].SampleLevel(textureSampler, texcoords, 0).rg);
-    return normalize((mul(mul(WorldToObject4x3(), tangentToObjectMat), normalTangentSpace)).xyz);
-}
-
 template <typename T>
 T interpolate(float3 barycentrics, T v1, T v2, T v3) {
     return barycentrics.x * v1 + barycentrics.y * v2 + barycentrics.z * v3;
@@ -142,8 +130,10 @@ void main(inout Payload payload, in float2 attribs) {
    
     payload.texcoord = attrs.texcoord;
     payload.position = mul(ObjectToWorld3x4(), float4(attrs.position, 1.0));
-    payload.normal = lookupTextureNormal(attrs.normal, attrs.tangent, attrs.bitangent, attrs.texcoord, materialIndex);
+    payload.tangent = normalize(mul(WorldToObject4x3(), attrs.tangent).xyz);
+    payload.normal = normalize(mul(WorldToObject4x3(), attrs.normal).xyz);
 
     payload.done = false;
     payload.materialIndex = materialIndex;
 }
+

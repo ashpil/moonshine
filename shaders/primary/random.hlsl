@@ -54,7 +54,7 @@ float2 squareToUniformDiskConcentric(float2 square) {
 
 float3 squareToCosineHemisphere(float2 square) {
     float2 d = squareToUniformDiskConcentric(square);
-    float z = sqrt(max(0.0, 1.0 - d.x * d.x - d.y * d.y));
+    float z = sqrt(max(0.0, 1.0 - dot(d, d)));
 
     return float3(d.x, z, d.y);
 }

@@ -14,7 +14,8 @@ struct Values {
 interface MicrofacetDistribution {
     float D(float3 m);
     float G(float3 w_i, float3 w_o, float3 m);
-    float3 sample(float2 square);
+    float3 sample(float3 w_o, float2 square);
+    float pdf(float3 w_o, float3 h);
 };
 
 struct GGX : MicrofacetDistribution {
@@ -34,7 +35,7 @@ struct GGX : MicrofacetDistribution {
             float roughness_squared = pow(roughness, 2);
             float cos_theta_m_squared = pow(cos_theta_m, 2);
             float tan_theta_m_squared = (1.0 - cos_theta_m_squared) / cos_theta_m_squared;
-            float denominator = PI * pow(cos_theta_m_squared, 2) * max(pow(roughness_squared + tan_theta_m_squared, 2), EPSILON);
+            float denominator = PI * pow(cos_theta_m_squared, 2) * pow(roughness_squared + tan_theta_m_squared, 2);
             return roughness_squared / denominator;
         } else {
             return 0.0;
@@ -63,7 +64,7 @@ struct GGX : MicrofacetDistribution {
     }
 
     // samples a half vector from the distribution
-    float3 sample(float2 square) {
+    float3 sample(float3 w_o, float2 square) {
         // figure out spherical coords of half vector
         float tanTheta = roughness * sqrt(square.x) / sqrt(1 - square.x);
         float cosThetaSquared = 1 / (1 + (tanTheta * tanTheta));
@@ -72,7 +73,13 @@ struct GGX : MicrofacetDistribution {
         float phi = 2 * PI * square.y;
 
         // convert them to cartesian
-        return sphericalToCartesian(sinTheta, cosTheta, phi);
+        float3 h = sphericalToCartesian(sinTheta, cosTheta, phi);
+        if (!Frame::sameHemisphere(w_o, h)) h = -h;
+        return h;
+    }
+
+    float pdf(float3 w_o, float3 h) {
+        return D(h) * abs(Frame::cosTheta(h));
     }
 };
 
@@ -113,7 +120,7 @@ struct Lambert : Material {
     }
 
     float pdf(float3 w_i, float3 w_o) {
-        return Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) / PI : EPSILON;
+        return Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) / PI : 0.0;
     }
 
     float3 eval(float3 w_i, float3 w_o) {
@@ -122,9 +129,7 @@ struct Lambert : Material {
 
     MaterialSample sample(float3 w_o, float2 square) {
         float3 w_i = squareToCosineHemisphere(square);
-        if (w_o.y < 0.0) {
-            w_i.y *= -1;
-        }
+        if (w_o.y < 0.0) w_i.y *= -1;
 
         MaterialSample sample;
         sample.pdf = pdf(w_i, w_o);
@@ -140,6 +145,7 @@ struct StandardPBR : Material {
 
     float3 color;
     float3 emissive;
+    float3 normal;
     float metalness;
     float roughness;
     float ior;
@@ -149,31 +155,29 @@ struct StandardPBR : Material {
     // metalness - k_s - part it is specular. diffuse is (1 - specular); [0, 1]
     // roughness - roughness value; [0, 1)
     // ior - internal index of refraction; [0, inf)
-    static StandardPBR create(float3 color, float3 emissive, float metalness, float roughness, float ior) {
+    static StandardPBR create(float3 color, float3 normal, float3 emissive, float metalness, float roughness, float ior) {
         StandardPBR material;
         material.color = color;
         material.emissive = emissive;
         material.metalness = metalness;
         material.ior = ior;
+        material.normal = normal;
         material.distr = GGX::create(roughness);
         return material;
     }
 
     float microfacetPdf(float3 w_i, float3 w_o) {
-        if (!Frame::sameHemisphere(w_o, w_i)) {
-            return 0.0;
-        }
+        if (!Frame::sameHemisphere(w_o, w_i)) return 0.0;
         float3 h = normalize(w_i + w_o);
-        float distributionPDF = distr.D(h) * abs(Frame::cosTheta(h));
-        return distributionPDF / (4.0 * dot(w_o, h));
+        return distr.pdf(w_o, h) / (4.0 * dot(w_o, h));
     }
 
     MaterialSample microfacetSample(float3 w_o, float2 square) {
-        float3 h = distr.sample(square);
+        float3 h = distr.sample(w_o, square);
         float3 w_i = -reflect(w_o, h); // reflect in HLSL is negative of what papers usually mean for some reason
 
         MaterialSample sample;
-        sample.pdf = max(distr.D(h) * abs(Frame::cosTheta(h)) / (4.0 * dot(w_o, h)), EPSILON);
+        sample.pdf = Frame::sameHemisphere(w_o, w_i) ? distr.pdf(w_o, h) / (4.0 * dot(w_o, h)) : 0.0;
         sample.dirFs = w_i;
         return sample;
     }
@@ -183,7 +187,7 @@ struct StandardPBR : Material {
         float3 F = coloredFresnel(w_i, h, ior, color, metalness);
         float G = distr.G(w_i, w_o, h);
         float D = distr.D(h);
-        return (F * G * D) / max(4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)), EPSILON);
+        return (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
     }
 
     MaterialSample sample(float3 w_o, float2 square) {
@@ -222,13 +226,28 @@ struct StandardPBR : Material {
     }
 };
 
-StandardPBR getMaterial(uint materialIndex, float2 texcoords) {
+float3 decodeNormal(float2 rg) {
+    rg = rg * 2 - 1;
+    return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
+}
+
+float3 lookupTextureNormal(uint textureIndex, float2 texcoords, float3 normal, float3 tangent, float3 bitangent) {
+    float3x3 toTangent = { tangent, bitangent, normal };
+    float3x3 fromTangent = transpose(toTangent);
+    float3 normalTangentSpace = decodeNormal(materialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(textureSampler, texcoords, 0).rg);
+    return normalize(mul(fromTangent, normalTangentSpace).xyz);
+}
+
+StandardPBR getMaterial(uint materialIndex, float2 texcoords, float3 geometricNormal, float3 tangent, float3 bitangent) {
     Values values = materialValues[NonUniformResourceIndex(materialIndex)];
     float3 color = materialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
     float metalness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
     float roughness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(textureSampler, texcoords, 0).r;
     float3 emissive = materialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(textureSampler, texcoords, 0).rgb;
-    roughness = max(roughness, 0.0001); // set minimum roughness otherwise current math breaks down a bit
+    float3 normal = lookupTextureNormal(5 * materialIndex + 4, texcoords, geometricNormal, tangent, bitangent);
 
-    return StandardPBR::create(color, emissive, metalness, roughness, values.ior);
+    roughness = max(roughness, 0.004); // set minimum roughness otherwise current math breaks down a bit
+
+    return StandardPBR::create(color, normal, emissive, metalness, roughness, values.ior);
 }
+
