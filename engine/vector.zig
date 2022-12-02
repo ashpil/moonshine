@@ -100,6 +100,16 @@ pub fn Vec3(comptime T: type) type {
         pub fn extend(self: Self, w: T) Vec4T {
             return Vec4T.new(self.x, self.y, self.z, w);
         }
+
+        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            try writer.writeAll("{ ");
+            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(" }");
+        }
     };
 }
 
@@ -144,6 +154,18 @@ pub fn Vec4(comptime T: type) type {
 
         pub fn add(self: Self, other: Self) Self {
             return Self.new(self.x + other.x, self.y + other.y, self.z + other.z, self.w + other.w);
+        }
+
+        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            try writer.writeAll("{ ");
+            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.w, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(" }");
         }
     };
 }
@@ -212,6 +234,16 @@ pub fn Mat3x4(comptime T: type) type {
                 Vec4T.new(self.y.dot(transposed.x.extend(0.0)), self.y.dot(transposed.y.extend(0.0)), self.y.dot(transposed.z.extend(0.0)), self.y.dot(transposed.w.extend(1.0))),
                 Vec4T.new(self.z.dot(transposed.x.extend(0.0)), self.z.dot(transposed.y.extend(0.0)), self.z.dot(transposed.z.extend(0.0)), self.z.dot(transposed.w.extend(1.0))),
             );
+        }
+
+        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            try writer.writeAll("{ ");
+            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(" }");
         }
 
         pub usingnamespace if (@typeInfo(T) != .Float) struct {} else struct {
