@@ -1,4 +1,5 @@
 // TODO: should this be replaced by/use @Vector?
+// TODO: make sure everything here is consistent in naming/structure
 
 const std = @import("std");
 const math = std.math;
@@ -133,6 +134,10 @@ pub fn Vec4(comptime T: type) type {
             return self.x + self.y + self.z + self.w;
         }
 
+        pub fn truncate(self: Self) Vec3(T) {
+            return Vec3(T).new(self.x, self.y, self.z);
+        }
+
         pub fn mul_scalar(self: Self, scalar: T) Self {
             return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
         }
@@ -168,6 +173,7 @@ pub fn Mat3x4(comptime T: type) type {
     const Vec4T = Vec4(T);
     const Vec3T = Vec3(T);
     const Mat4x3T = Mat4x3(T);
+    const Mat3T = Mat3(T);
 
     return extern struct {
         x: Vec4T,
@@ -226,6 +232,21 @@ pub fn Mat3x4(comptime T: type) type {
                     Vec4T.new(axis2.x * omc + cos, xyomc + axissin.z, xzomc - axissin.y, 0.0),
                     Vec4T.new(xyomc - axissin.z, axis2.y * omc + cos, yzomc + axissin.x, 0.0),
                     Vec4T.new(xzomc + axissin.y, yzomc - axissin.x, axis2.z * omc + cos, 0.0),
+                );
+            }
+
+            // https://math.stackexchange.com/a/152686
+            pub fn inverse_affine(self: Self) Self {
+                const p = Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate());
+                const v = Vec3T.new(self.x.w, self.y.w, self.z.w);
+
+                const inv_p = p.inverse();
+                const neg_inv_p_v = p.inverse().mul_scalar(-1).mul_vec(v);
+
+                return Self.new(
+                    Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
+                    Vec4T.new(inv_p.x.y, inv_p.y.y, inv_p.z.y, neg_inv_p_v.x),
+                    Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.x),
                 );
             }
         };
@@ -359,11 +380,11 @@ pub fn Mat3(comptime T: type) type {
             return res;
         }
 
-        pub fn neg(self: Self) Self {
-            self.x = self.x.mul_scalar(-1);
-            self.y = self.y.mul_scalar(-1);
-            self.z = self.z.mul_scalar(-1);
-            return self;
+        pub fn mul_scalar(self: Self, scalar: T) Self {
+            const x = self.x.mul_scalar(scalar);
+            const y = self.y.mul_scalar(scalar);
+            const z = self.z.mul_scalar(scalar);
+            return Self.new(x, y, z);
         }
 
         pub fn determinant(self: Self) T {
