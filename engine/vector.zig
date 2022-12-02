@@ -1,6 +1,7 @@
 // TODO: should this be replaced by/use @Vector?
 
-const math = @import("std").math;
+const std = @import("std");
+const math = std.math;
 
 fn checkValidVecT(comptime T: type) void {
     if (!(@typeInfo(T) == .Float or @typeInfo(T) == .Int)) {
@@ -332,3 +333,61 @@ pub fn Mat4(comptime T: type) type {
         };
     };
 }
+
+pub fn Mat3(comptime T: type) type {
+    checkValidVecT(T);
+
+    const Vec3T = Vec3(T);
+
+    return extern struct {
+        x: Vec3T,
+        y: Vec3T,
+        z: Vec3T,
+
+        const Self = @This();
+
+        pub const identity = Self.new(Vec3T.e_0, Vec3T.e_1, Vec3T.e_2);
+
+        pub fn new(x: Vec3T, y: Vec3T, z: Vec3T) Self {
+            return Self { .x = x, .y = y, .z = z };
+        }
+
+        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
+            var res = self.x.mul_scalar(v.x);
+            res = self.y.mul_scalar(v.y).add(res);
+            res = self.z.mul_scalar(v.z).add(res);
+            return res;
+        }
+
+        pub fn neg(self: Self) Self {
+            self.x = self.x.mul_scalar(-1);
+            self.y = self.y.mul_scalar(-1);
+            self.z = self.z.mul_scalar(-1);
+            return self;
+        }
+
+        pub fn determinant(self: Self) T {
+            return self.x.dot(self.y.cross(self.z));
+        }
+
+        pub fn transpose(self: Self) Self {
+            return Self.new(
+                Vec3T.new(self.x.x, self.y.x, self.z.x),
+                Vec3T.new(self.x.y, self.y.y, self.z.y),
+                Vec3T.new(self.x.z, self.y.z, self.z.z),
+            );
+        }
+
+        pub usingnamespace if (@typeInfo(T) != .Float) struct {} else struct {
+            pub fn inverse(self: Self) Self {
+                const det = self.determinant();
+                std.debug.assert(det != 0);
+                const v1 = self.y.cross(self.z).mul_scalar(1 / det);
+                const v2 = self.z.cross(self.x).mul_scalar(1 / det);
+                const v3 = self.x.cross(self.y).mul_scalar(1 / det);
+                return Self.new(v1, v2, v3).transpose();
+            }
+        };
+    };
+}
+
