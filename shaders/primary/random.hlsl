@@ -1,7 +1,15 @@
+#pragma once
+
 #include "math.hlsl"
 
 struct Rng {
     uint state;
+
+    static Rng fromSeed(uint seed) {
+        Rng rng;
+        rng.state = seed;
+        return rng;
+    }
 
     void stepState() {
         this.state = this.state * 747796405 + 1;
@@ -15,12 +23,6 @@ struct Rng {
         return float(word) / 4294967295.0;
     }
 };
-
-Rng InitRng(uint initialState) {
-    Rng rng;
-    rng.state = initialState;
-    return rng;
-}
 
 float2 squareToGaussian(float2 square) {
     const float u1 = max(1e-38, square.x);

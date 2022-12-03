@@ -6,3 +6,4 @@ struct [raypayload] ShadowPayload {
 void main(inout ShadowPayload payload) {
     payload.inShadow = false;
 }
+

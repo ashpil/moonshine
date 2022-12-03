@@ -1,17 +1,3 @@
-struct Mesh {
-    uint64_t positionAddress;
-    uint64_t texcoordAddress; // may be zero, for no texcoords
-    uint64_t normalAddress; // may be zero, for no vertex normals
-
-    uint64_t indexAddress;
-};
-
-[[vk::binding(1, 0)]] StructuredBuffer<row_major float3x4> instanceToWorld;
-[[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> worldToInstance;
-[[vk::binding(3, 0)]] StructuredBuffer<Mesh> meshes;
-[[vk::binding(4, 0)]] StructuredBuffer<uint> meshIdxs;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> materialIdxs;
-
 float3 loadPosition(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
 }
@@ -60,11 +46,11 @@ uint skinOffset(uint instanceID) {
 }
 
 uint meshIdx(uint instanceID, uint geometryIndex) {
-    return meshIdxs[NonUniformResourceIndex(modelOffset(instanceID) + geometryIndex)];
+    return dMeshIdxs[NonUniformResourceIndex(modelOffset(instanceID) + geometryIndex)];
 }
 
 uint materialIdx(uint instanceID, uint geometryIndex) {
-    return materialIdxs[NonUniformResourceIndex(skinOffset(instanceID) + geometryIndex)];
+    return dMaterialIdxs[NonUniformResourceIndex(skinOffset(instanceID) + geometryIndex)];
 }
 
 struct MeshAttributes {
@@ -75,7 +61,7 @@ struct MeshAttributes {
     float3 bitangent;
 
     static MeshAttributes lookupAndInterpolate(uint meshIndex, uint primitiveIndex, float2 attribs) {
-        Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
+        Mesh mesh = dMeshes[NonUniformResourceIndex(meshIndex)];
         float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
         MeshAttributes attrs;
@@ -120,8 +106,8 @@ struct MeshAttributes {
     }
 
      MeshAttributes inWorld(uint instanceIndex) {
-        float3x4 toWorld = instanceToWorld[NonUniformResourceIndex(instanceIndex)];
-        float3x4 toMesh = worldToInstance[NonUniformResourceIndex(instanceIndex)];
+        float3x4 toWorld = dInstanceToWorld[NonUniformResourceIndex(instanceIndex)];
+        float3x4 toMesh = dWorldToInstance[NonUniformResourceIndex(instanceIndex)];
 
         position = mul(toWorld, float4(position, 1.0));
         normal = normalize(mul(transpose(toMesh), normal).xyz);

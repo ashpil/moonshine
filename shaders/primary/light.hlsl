@@ -1,12 +1,3 @@
-[[vk::binding(0, 1)]] Texture2D<float3> backgroundTexture;
-[[vk::binding(0, 1)]] SamplerState backgroundSampler;
-
-[[vk::binding(1, 1)]] RWTexture2D<float> conditionalPdfsIntegrals;
-[[vk::binding(2, 1)]] RWTexture2D<float> conditionalCdfs;
-
-[[vk::binding(3, 1)]] RWTexture1D<float> marginalPdfIntegral;
-[[vk::binding(4, 1)]] RWTexture1D<float> marginalCdf;
-
 struct [raypayload] ShadowPayload {
     bool inShadow : read(caller) : write(miss);
 };
@@ -17,7 +8,7 @@ bool shadowed(RayDesc ray) {
 
     ShadowPayload payload;
     payload.inShadow = true;
-    TraceRay(TLAS, shadowTraceFlags, 0xFF, 0, 0, 1, ray, payload);
+    TraceRay(dTLAS, shadowTraceFlags, 0xFF, 0, 0, 1, ray, payload);
     return payload.inShadow;
 }
 
@@ -41,7 +32,7 @@ struct EnvMap : Light {
 
     float sample2D(float2 uv, out float2 result) {
         uint2 size;
-        conditionalCdfs.GetDimensions(size.x, size.y);
+        dConditionalCdfs.GetDimensions(size.x, size.y);
         int width = size.x - 1;
         int height = size.y;
 
@@ -53,7 +44,7 @@ struct EnvMap : Light {
             int halfs = len >> 1;
             int middle = first + halfs;
             
-            if (marginalCdf.Load(middle) <= uv.y) {
+            if (dMarginalCdf.Load(middle) <= uv.y) {
                 first = middle + 1;
                 len -= halfs + 1;
             } else {
@@ -62,9 +53,9 @@ struct EnvMap : Light {
         }
 
         int offset_v = clamp(first - 1, 0, height - 2);
-        float valv = marginalCdf[offset_v];
-        float dv = (uv.y - valv) / (marginalCdf[offset_v + 1] - valv);
-        float pdf_v = marginalPdfIntegral[offset_v] / marginalPdfIntegral[height];
+        float valv = dMarginalCdf[offset_v];
+        float dv = (uv.y - valv) / (dMarginalCdf[offset_v + 1] - valv);
+        float pdf_v = dMarginalPdfIntegral[offset_v] / dMarginalPdfIntegral[height];
         result.y = (offset_v + dv) / height;
 
         // get x
@@ -75,7 +66,7 @@ struct EnvMap : Light {
             int halfs = len >> 1;
             int middle = first + halfs;
             
-            if (conditionalCdfs[int2(middle, offset_v)] <= uv.x) {
+            if (dConditionalCdfs[int2(middle, offset_v)] <= uv.x) {
                 first = middle + 1;
                 len -= halfs + 1;
             } else {
@@ -83,9 +74,9 @@ struct EnvMap : Light {
             }
         }
         int offset_u = clamp(first - 1, 0, width - 2);
-        float valu = conditionalCdfs[int2(offset_u, offset_v)];
-        float du = (uv.x - valu) / (conditionalCdfs[int2(offset_u + 1, offset_v)] - valu);
-        float pdf_u = conditionalPdfsIntegrals[int2(offset_u, offset_v)] / conditionalPdfsIntegrals[int2(width, offset_v)];
+        float valu = dConditionalCdfs[int2(offset_u, offset_v)];
+        float du = (uv.x - valu) / (dConditionalCdfs[int2(offset_u + 1, offset_v)] - valu);
+        float pdf_u = dConditionalPdfsIntegrals[int2(offset_u, offset_v)] / dConditionalPdfsIntegrals[int2(width, offset_v)];
         result.x = (offset_u + du) / width;
 
         return pdf_v * pdf_u;
@@ -102,14 +93,14 @@ struct EnvMap : Light {
         
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        lightSample.radiance = backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
+        lightSample.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
         return lightSample;
     }
 
     float pdf(float3 positionWs, float3 dirWs) {
         uint2 size;
-        conditionalCdfs.GetDimensions(size.x, size.y);
+        dConditionalCdfs.GetDimensions(size.x, size.y);
         int width = size.x - 1;
         int height = size.y;
 
@@ -118,7 +109,7 @@ struct EnvMap : Light {
 
         uint2 coords = clamp(uint2(uv * float2(width, height)), uint2(0, 0), uint2(width - 1, height - 1));
 
-        float pdf2d = conditionalPdfsIntegrals[coords] / marginalPdfIntegral[height];
+        float pdf2d = dConditionalPdfsIntegrals[coords] / dMarginalPdfIntegral[height];
         float sinTheta = sin(phiTheta.y);
         return sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
     }
@@ -126,7 +117,7 @@ struct EnvMap : Light {
     float3 eval(float3 positionWs, float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
-        return backgroundTexture.SampleLevel(backgroundSampler, uv, 0);
+        return dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
     }
 };
 

@@ -1,11 +1,11 @@
-#include "payload.hlsl"
+#include "intersection.hlsl"
 
 [shader("closesthit")]
-void main(inout Payload payload, in float2 attribs) {
-    payload.instanceID = InstanceID();
-    payload.instanceIndex = InstanceIndex();
-    payload.geometryIndex = GeometryIndex();
-    payload.primitiveIndex = PrimitiveIndex();
-    payload.attribs = attribs;
+void main(inout Intersection its, in float2 attribs) {
+    its.instanceID = InstanceID();
+    its.instanceIndex = InstanceIndex();
+    its.geometryIndex = GeometryIndex();
+    its.primitiveIndex = PrimitiveIndex();
+    its.attribs = attribs;
 }
 

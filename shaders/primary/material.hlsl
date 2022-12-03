@@ -2,15 +2,6 @@
 
 // all code below expects stuff to be in the reflection frame
 
-// `values` is what I call non-texture material properties
-struct Values {
-    float ior;
-};
-
-[[vk::binding(6, 0)]] SamplerState textureSampler;
-[[vk::binding(7, 0)]] Texture2D materialTextures[];
-[[vk::binding(8, 0)]] StructuredBuffer<Values> materialValues;
-
 interface MicrofacetDistribution {
     float D(float3 m);
     float G(float3 w_i, float3 w_o, float3 m);
@@ -234,16 +225,16 @@ float3 decodeNormal(float2 rg) {
 float3 lookupTextureNormal(uint textureIndex, float2 texcoords, float3 normal, float3 tangent, float3 bitangent) {
     float3x3 toTangent = { tangent, bitangent, normal };
     float3x3 fromTangent = transpose(toTangent);
-    float3 normalTangentSpace = decodeNormal(materialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(textureSampler, texcoords, 0).rg);
+    float3 normalTangentSpace = decodeNormal(dMaterialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rg);
     return normalize(mul(fromTangent, normalTangentSpace).xyz);
 }
 
 StandardPBR getMaterial(uint materialIndex, float2 texcoords, float3 geometricNormal, float3 tangent, float3 bitangent) {
-    Values values = materialValues[NonUniformResourceIndex(materialIndex)];
-    float3 color = materialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(textureSampler, texcoords, 0).rgb;
-    float metalness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(textureSampler, texcoords, 0).r;
-    float roughness = materialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(textureSampler, texcoords, 0).r;
-    float3 emissive = materialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(textureSampler, texcoords, 0).rgb;
+    Values values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
+    float3 color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+    float metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
+    float roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
+    float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
     float3 normal = lookupTextureNormal(5 * materialIndex + 4, texcoords, geometricNormal, tangent, bitangent);
 
     roughness = max(roughness, 0.004); // set minimum roughness otherwise current math breaks down a bit

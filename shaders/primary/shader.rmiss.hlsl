@@ -1,8 +1,7 @@
-#include "payload.hlsl"
-#include "math.hlsl"
+#include "intersection.hlsl"
 
 [shader("miss")]
-void main(inout Payload payload) {
-    payload.instanceID = MAX_UINT;
+void main(inout Intersection its) {
+    its = Intersection::createMiss();
 }
 
