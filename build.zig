@@ -113,8 +113,10 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
         "-T", "lib_6_7",
         "-HV", "2021",
         "-spirv",
-        "-fspv-target-env=vulkan1.2",
+        "-fspv-target-env=vulkan1.3",
         "-fvk-use-scalar-layout",
+        "-Ges", // strict mode
+        "-WX", // treat warnings as errors
     };
     const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
     hlsl_comp.add("input", "shaders/misc/input.hlsl");
