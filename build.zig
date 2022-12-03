@@ -120,10 +120,7 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
     };
     const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
     hlsl_comp.add("input", "shaders/misc/input.hlsl");
-    hlsl_comp.add("raygen", "shaders/primary/shader.rgen.hlsl");
-    hlsl_comp.add("rayhit", "shaders/primary/shader.rchit.hlsl");
-    hlsl_comp.add("raymiss", "shaders/primary/shader.rmiss.hlsl");
-    hlsl_comp.add("shadowmiss", "shaders/primary/shadow.rmiss.hlsl");
+    hlsl_comp.add("main", "shaders/primary/main.hlsl");
 
     // actual engine
     const build_options = b.addOptions();

@@ -23,36 +23,15 @@ const PipelineConstants = packed struct {
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, scene_descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout, output_descriptor_layout: *const OutputDescriptorLayout, constants: PipelineConstants) !Self {
-    const rgen_module = try vc.device.createShaderModule(&.{
+    const module = try vc.device.createShaderModule(&.{
         .flags = .{},
-        .code_size = shaders.raygen.len,
-        .p_code = @ptrCast([*]const u32, &shaders.raygen),
+        .code_size = shaders.main.len,
+        .p_code = @ptrCast([*]const u32, &shaders.main),
     }, null);
-    defer vc.device.destroyShaderModule(rgen_module, null);
-
-    const rmiss_module = try vc.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.raymiss.len,
-        .p_code = @ptrCast([*]const u32, &shaders.raymiss),
-    }, null);
-    defer vc.device.destroyShaderModule(rmiss_module, null);
-
-    const rchit_module = try vc.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.rayhit.len,
-        .p_code = @ptrCast([*]const u32, &shaders.rayhit),
-    }, null);
-    defer vc.device.destroyShaderModule(rchit_module, null);
-
-    const shadow_module = try vc.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.shadowmiss.len,
-        .p_code = @ptrCast([*]const u32, &shaders.shadowmiss),
-    }, null);
-    defer vc.device.destroyShaderModule(shadow_module, null);
+    defer vc.device.destroyShaderModule(module, null);
 
     const pipeline = try Self.create(vc, vk_allocator, allocator, cmd, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, output_descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = rgen_module, .p_name = "main", .p_specialization_info = &vk.SpecializationInfo {
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = module, .p_name = "raygen", .p_specialization_info = &vk.SpecializationInfo {
             .map_entry_count = 3,
             .p_map_entries = &[3]vk.SpecializationMapEntry { .{
                 .constant_id = 0,
@@ -70,9 +49,9 @@ pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocat
             .data_size = @sizeOf(PipelineConstants),
             .p_data = &constants,
         }, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = rmiss_module, .p_name = "main", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shadow_module, .p_name = "main", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = rchit_module, .p_name = "main", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = module, .p_name = "miss", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = module, .p_name = "shadowmiss", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = module, .p_name = "closesthit", .p_specialization_info = null, },
     }, &[_]vk.RayTracingShaderGroupCreateInfoKHR {
         .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
         .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },

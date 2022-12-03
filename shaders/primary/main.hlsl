@@ -19,7 +19,7 @@ float2 dispatchUV(float2 rand) {
 }
 
 [shader("raygeneration")]
-void main() {
+void raygen() {
     PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, DIRECT_SAMPLES_PER_BOUNCE);
 
     // the result that we write to our buffer
@@ -38,5 +38,24 @@ void main() {
     }
 
     storeColor(color);
+}
+
+[shader("closesthit")]
+void closesthit(inout Intersection its, in float2 attribs) {
+    its.instanceID = InstanceID();
+    its.instanceIndex = InstanceIndex();
+    its.geometryIndex = GeometryIndex();
+    its.primitiveIndex = PrimitiveIndex();
+    its.attribs = attribs;
+}
+
+[shader("miss")]
+void miss(inout Intersection its) {
+    its = Intersection::createMiss();
+}
+
+[shader("miss")]
+void shadowmiss(inout ShadowIntersection its) {
+    its.inShadow = false;
 }
 

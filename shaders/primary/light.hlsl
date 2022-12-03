@@ -1,17 +1,3 @@
-struct [raypayload] ShadowPayload {
-    bool inShadow : read(caller) : write(miss);
-};
-
-// traces a shadow ray, returning whether it hit geometry
-bool shadowed(RayDesc ray) {
-    const uint shadowTraceFlags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
-
-    ShadowPayload payload;
-    payload.inShadow = true;
-    TraceRay(dTLAS, shadowTraceFlags, 0xFF, 0, 0, 1, ray, payload);
-    return payload.inShadow;
-}
-
 struct LightSample {
     float3 dirWs;
     float3 radiance;
@@ -147,7 +133,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
             ray.TMin = 0.001;
             ray.TMax = 10000.0;
 
-            if (!shadowed(ray)) {
+            if (!ShadowIntersection::hit(ray)) {
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 float3 brdf = material.eval(lightDirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
@@ -168,7 +154,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
             ray.TMin = 0.001;
             ray.TMax = 10000.0;
 
-            if (!shadowed(ray)) {
+            if (!ShadowIntersection::hit(ray)) {
                 float lightPdf = light.pdf(positionWs, brdfDirWs);
                 float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
                 float3 li = light.eval(positionWs, brdfDirWs);

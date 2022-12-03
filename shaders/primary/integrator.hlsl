@@ -5,17 +5,11 @@
 #include "light.hlsl"
 #include "geometry.hlsl"
 
-Intersection intersectScene(RayDesc ray) {
-    Intersection its;
-    TraceRay(dTLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, its);
-    return its;
-}
-
 interface Integrator {
     float3 incomingRadiance(RayDesc ray, inout Rng rng);
 };
 
-struct PathTracingIntegrator {
+struct PathTracingIntegrator : Integrator {
     uint max_bounces;
     uint direct_samples_per_bounce;
 
@@ -33,7 +27,7 @@ struct PathTracingIntegrator {
         RayDesc ray = initialRay;
         float3 throughput = float3(1.0, 1.0, 1.0);
         uint bounceCount = 0;
-        Intersection its = intersectScene(ray);
+        Intersection its = Intersection::find(ray);
 
         // main path tracing loop
         while (its.hit()) {
@@ -74,7 +68,7 @@ struct PathTracingIntegrator {
             ray.Origin = attrs.position;
             if (dot(attrs.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) break;
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
-            its = intersectScene(ray);
+            its = Intersection::find(ray);
         }
 
         // add background color if it isn't explicitly sampled or this is a primary ray
