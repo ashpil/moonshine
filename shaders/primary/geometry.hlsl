@@ -74,7 +74,10 @@ struct MeshAttributes {
     float3 tangent;
     float3 bitangent;
 
-    static MeshAttributes lookupAndInterpolate(Mesh mesh, float3 barycentrics, uint primitiveIndex) {
+    static MeshAttributes lookupAndInterpolate(uint meshIndex, uint primitiveIndex, float2 attribs) {
+        Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
+        float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
+
         MeshAttributes attrs;
 
         uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * primitiveIndex);
