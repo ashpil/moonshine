@@ -70,7 +70,7 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(payload.instanceID, payload.geometryIndex), payload.primitiveIndex, payload.attribs);
             attrs = attrs.inWorld(payload.instanceIndex);
    
-            StandardPBR material = getMaterial(materialIdx(payload.instanceID, payload.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, normalize(cross(attrs.normal, attrs.tangent)));
+            StandardPBR material = getMaterial(materialIdx(payload.instanceID, payload.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
             accumulatedColor += throughput * material.emissive;
 
             Frame frame = Frame::create(material.normal);

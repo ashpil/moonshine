@@ -12,7 +12,6 @@ struct Frame {
         return frame;
     }
 
-
     float3 worldToFrame(float3 v) {
         return mul(this.toFrame, v);
     }
