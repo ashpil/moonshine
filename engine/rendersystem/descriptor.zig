@@ -74,53 +74,67 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
 // must be kept in sync with shader
 const max_textures = 4 * 5; // TODO: think about this more
 pub const SceneDescriptorLayout = DescriptorLayout(&.{
-    .{
+    .{ // TLAS
         .binding = 0,
         .descriptor_type = .acceleration_structure_khr,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // instanceToWorld
         .binding = 1,
-        .descriptor_type = .sampler,
+        .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .closest_hit_bit_khr = true },
+        .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // worldToInstance
         .binding = 2,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
+        .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // meshes
         .binding = 3,
-        .descriptor_type = .sampled_image,
-        .descriptor_count = max_textures,
-        .stage_flags = .{ .raygen_bit_khr = true },
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // meshIdxs
         .binding = 4,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // materialIdxs 
         .binding = 5,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .closest_hit_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // textureSampler
         .binding = 6,
+        .descriptor_type = .sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // materialTextures
+        .binding = 7,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = max_textures,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // materialValues
+        .binding = 8,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
-        .stage_flags = .{ .closest_hit_bit_khr = true },
+        .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
 }, "Scene");

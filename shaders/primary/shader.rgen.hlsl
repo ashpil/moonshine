@@ -2,7 +2,10 @@
 // set 1 - background
 // set 2 - display
 
+// geometry
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure TLAS;
+
+// display
 [[vk::binding(0, 2)]] RWTexture2D<float4> displayImage;
 [[vk::binding(1, 2)]] RWTexture2D<float4> accumulationImage;
 

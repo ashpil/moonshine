@@ -11,6 +11,7 @@ const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);
 const F32x3 = vector.Vec3(f32);
 
+// "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary scene heirarchy, and controls
 // how all the meshes and materials fit together
 // 
@@ -79,6 +80,10 @@ tlas_buffer: VkAllocator.DeviceBuffer,
 
 tlas_update_scratch_buffer: VkAllocator.DeviceBuffer,
 tlas_update_scratch_address: vk.DeviceAddress,
+
+// keep track of transforms
+instance_to_world: VkAllocator.DeviceBuffer,
+world_to_instance: VkAllocator.DeviceBuffer, // inverse of above
 
 changed: bool,
 
@@ -386,6 +391,35 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer material_idxs.destroy(vc);
 
+
+    // create transform stuff
+    const instance_to_world = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Mat3x4) * instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(instance_transforms));
+
+        break :blk buffer;
+    };
+    errdefer instance_to_world.destroy(vc);
+
+    const world_to_instance = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Mat3x4) * instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const inverses = try allocator.alloc(Mat3x4, instance_count);
+        defer allocator.free(inverses);
+        for (instance_transforms) |transform, i| {
+            inverses[i] = transform.inverse_affine();
+        }
+
+        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(inverses));
+
+        break :blk buffer;
+    };
+    errdefer world_to_instance.destroy(vc);
+
+    // build TLAS
     const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = instance_count,
         .first_vertex = 0,
@@ -412,10 +446,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .model_idx_to_offset = model_idx_to_offset,
         .skin_idx_to_offset = skin_idx_to_offset,
 
+        .instance_to_world = instance_to_world,
+        .world_to_instance = world_to_instance,
+
         .changed = false,
     };
 }
 
+// TODO: these working with new transform buffers
 pub fn updateTransform(self: *Self, instance_idx: u32, transform: Mat3x4) void {
     self.changed = true;
 
@@ -504,6 +542,9 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
 
     self.mesh_idxs.destroy(vc);
     self.material_idxs.destroy(vc);
+
+    self.instance_to_world.destroy(vc);
+    self.world_to_instance.destroy(vc);
 
     allocator.free(self.model_idx_to_offset);
     allocator.free(self.skin_idx_to_offset);

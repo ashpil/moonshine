@@ -8,11 +8,11 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
-[[vk::binding(1, 0)]] SamplerState textureSampler;
-[[vk::binding(3, 0)]] Texture2D textures[];
-[[vk::binding(4, 0)]] StructuredBuffer<Mesh> meshes;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> meshIdxs;
-[[vk::binding(6, 0)]] StructuredBuffer<uint> materialIdxs;
+[[vk::binding(1, 0)]] StructuredBuffer<row_major float3x4> instanceToWorld;
+[[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> worldToInstance;
+[[vk::binding(3, 0)]] StructuredBuffer<Mesh> meshes;
+[[vk::binding(4, 0)]] StructuredBuffer<uint> meshIdxs;
+[[vk::binding(5, 0)]] StructuredBuffer<uint> materialIdxs;
 
 float3 loadPosition(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
@@ -128,10 +128,12 @@ void main(inout Payload payload, in float2 attribs) {
     Mesh mesh = meshes[NonUniformResourceIndex(meshIndex)];
     Attributes attrs = Attributes::lookupAndInterpolate(mesh, barycentrics);
    
+    float3x4 toWorld = instanceToWorld[NonUniformResourceIndex(InstanceIndex())];
+    float3x4 toInstance = worldToInstance[NonUniformResourceIndex(InstanceIndex())];
     payload.texcoord = attrs.texcoord;
-    payload.position = mul(ObjectToWorld3x4(), float4(attrs.position, 1.0));
-    payload.tangent = normalize(mul(WorldToObject4x3(), attrs.tangent).xyz);
-    payload.normal = normalize(mul(WorldToObject4x3(), attrs.normal).xyz);
+    payload.position = mul(toWorld, float4(attrs.position, 1.0));
+    payload.tangent = normalize(mul(transpose(toInstance), attrs.tangent).xyz);
+    payload.normal = normalize(mul(transpose(toInstance), attrs.normal).xyz);
 
     payload.done = false;
     payload.materialIndex = materialIndex;

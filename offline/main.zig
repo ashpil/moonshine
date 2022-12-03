@@ -67,13 +67,8 @@ pub fn main() !void {
     defer vk_allocator.destroy(&context, allocator);
 
     var scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{
-        .{},
-        .{},
-        .{},
-        .{ .partially_bound_bit = true },
-        .{},
-        .{},
-        .{},
+        .{}, .{}, .{}, .{}, .{}, .{}, .{},
+        .{ .partially_bound_bit = true }, .{},
     });
     defer scene_descriptor_layout.destroy(&context);
     var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, null);

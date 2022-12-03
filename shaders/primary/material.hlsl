@@ -7,9 +7,9 @@ struct Values {
     float ior;
 };
 
-[[vk::binding(1, 0)]] SamplerState textureSampler;
-[[vk::binding(2, 0)]] StructuredBuffer<Values> materialValues;
-[[vk::binding(3, 0)]] Texture2D materialTextures[];
+[[vk::binding(6, 0)]] SamplerState textureSampler;
+[[vk::binding(7, 0)]] Texture2D materialTextures[];
+[[vk::binding(8, 0)]] StructuredBuffer<Values> materialValues;
 
 interface MicrofacetDistribution {
     float D(float3 m);

@@ -187,6 +187,149 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     };
 }
 
+fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const SceneDescriptorLayout) !vk.DescriptorSet {
+    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
+    defer allocator.free(image_infos);
+
+    const texture_views = self.material_manager.textures.data.items(.view);
+    for (image_infos) |*info, i| {
+        info.* = .{
+            .sampler = .null_handle,
+            .image_view = texture_views[i],
+            .image_layout = .shader_read_only_optimal,
+        };
+    }
+
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 0,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .acceleration_structure_khr,
+            .p_image_info = undefined,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
+                .acceleration_structure_count = 1,
+                .p_acceleration_structures = utils.toPointerType(&self.accel.tlas_handle),
+            },
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.accel.instance_to_world.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 2,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.accel.world_to_instance.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 3,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.mesh_manager.addresses_buffer.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 4,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.accel.mesh_idxs.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 5,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.accel.material_idxs.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 6,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .sampler,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = self.sampler,
+                .image_view = .null_handle,
+                .image_layout = undefined,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 7,
+            .dst_array_element = 0,
+            .descriptor_count = @intCast(u32, image_infos.len),
+            .descriptor_type = .sampled_image,
+            .p_image_info = image_infos.ptr,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 8,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+                .buffer = self.material_manager.values.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+    }))[0];
+
+    try utils.setDebugName(vc, descriptor_set, "Scene");
+
+    return descriptor_set;
+}
+
 // TODO: camera
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
@@ -366,118 +509,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models, skins);
     errdefer accel.destroy(vc, allocator);
 
-    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, material_manager.textures.data.len);
-    defer allocator.free(image_infos);
-
-    const texture_views = material_manager.textures.data.items(.view);
-    for (image_infos) |*info, i| {
-        info.* = .{
-            .sampler = .null_handle,
-            .image_view = texture_views[i],
-            .image_layout = .shader_read_only_optimal,
-        };
-    }
-
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [7]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .acceleration_structure_khr,
-            .p_image_info = undefined,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
-                .acceleration_structure_count = 1,
-                .p_acceleration_structures = utils.toPointerType(&accel.tlas_handle),
-            },
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                .sampler = sampler,
-                .image_view = .null_handle,
-                .image_layout = undefined,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = material_manager.values.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 3,
-            .dst_array_element = 0,
-            .descriptor_count = @intCast(u32, image_infos.len),
-            .descriptor_type = .sampled_image,
-            .p_image_info = image_infos.ptr,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 4,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = mesh_manager.addresses_buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 5,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.mesh_idxs.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 6,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.material_idxs.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-    }))[0];
-
-    try utils.setDebugName(vc, descriptor_set, "Scene");
-
-    return Self {
+    var scene = Self {
         .background = background,
 
         .material_manager = material_manager,
@@ -486,8 +518,12 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         .accel = accel,
 
         .sampler = sampler,
-        .descriptor_set = descriptor_set,
+        .descriptor_set = undefined,
     };
+
+    scene.descriptor_set = try scene.createDescriptorSet(vc, allocator, descriptor_layout);
+
+    return scene;
 }
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, skins: []const Skin, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
@@ -527,106 +563,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [7]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .acceleration_structure_khr,
-            .p_image_info = undefined,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
-                .acceleration_structure_count = 1,
-                .p_acceleration_structures = utils.toPointerType(&accel.tlas_handle),
-            },
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                .sampler = sampler,
-                .image_view = .null_handle,
-                .image_layout = undefined,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = material_manager.values.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 3,
-            .dst_array_element = 0,
-            .descriptor_count = @intCast(u32, image_infos.len),
-            .descriptor_type = .sampled_image,
-            .p_image_info = image_infos.ptr,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 4,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = mesh_manager.addresses_buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 5,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.mesh_idxs.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 6,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = accel.material_idxs.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-    }))[0];
-
-    try utils.setDebugName(vc, descriptor_set, "Scene");
-
-    return Self {
+    var scene = Self {
         .background = background,
 
         .material_manager = material_manager,
@@ -635,8 +572,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .accel = accel,
 
         .sampler = sampler,
-        .descriptor_set = descriptor_set,
+        .descriptor_set = undefined,
     };
+
+    scene.descriptor_set = try scene.createDescriptorSet(vc, allocator, descriptor_layout);
+
+    return scene;
 }
 
 pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
