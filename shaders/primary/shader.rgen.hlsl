@@ -15,6 +15,7 @@
 #include "random.hlsl"
 #include "material.hlsl"
 #include "light.hlsl"
+#include "geometry.hlsl"
 
 struct Camera {
     float3 origin;
@@ -65,8 +66,11 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
         
         Payload payload;
         TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
-        if (!payload.done) {
-            StandardPBR material = getMaterial(payload.materialIndex, payload.texcoord, payload.normal, payload.tangent, normalize(cross(payload.normal, payload.tangent)));
+        if (!payload.done()) {
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(payload.instanceID, payload.geometryIndex), payload.primitiveIndex, payload.attribs);
+            attrs = attrs.inWorld(payload.instanceIndex);
+   
+            StandardPBR material = getMaterial(materialIdx(payload.instanceID, payload.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, normalize(cross(attrs.normal, attrs.tangent)));
             accumulatedColor += throughput * material.emissive;
 
             Frame frame = Frame::create(material.normal);
@@ -75,15 +79,15 @@ float3 pathTrace(EnvMap background, RayDesc initialRay, inout Rng rng) {
             // accumulate direct light samples
             for (uint directCount = 0; directCount < DIRECT_SAMPLES_PER_BOUNCE; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirect(frame, background, material, outgoing, payload.position, payload.normal, rand) / DIRECT_SAMPLES_PER_BOUNCE;
+                accumulatedColor += throughput * estimateDirect(frame, background, material, outgoing, attrs.position, attrs.normal, rand) / DIRECT_SAMPLES_PER_BOUNCE;
             }
             
             // set up info for next bounce
-            ray.Origin = payload.position;
+            ray.Origin = attrs.position;
             MaterialSample sample = material.sample(outgoing, float2(rng.getFloat(), rng.getFloat()));
             float3 incoming = sample.dirFs;
             ray.Direction = frame.frameToWorld(incoming);
-            if (dot(payload.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) break;
+            if (dot(attrs.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) break;
             throughput *= material.eval(incoming, outgoing) * abs(Frame::cosTheta(incoming)) / sample.pdf;
 
             // russian roulette
