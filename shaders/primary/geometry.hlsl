@@ -67,15 +67,15 @@ uint materialIdx(uint instanceID, uint geometryIndex) {
     return materialIdxs[NonUniformResourceIndex(skinOffset(instanceID) + geometryIndex)];
 }
 
-struct Attributes {
+struct MeshAttributes {
     float3 position;
     float2 texcoord;
     float3 normal;
     float3 tangent;
     float3 bitangent;
 
-    static Attributes lookupAndInterpolate(Mesh mesh, float3 barycentrics, uint primitiveIndex) {
-        Attributes attrs;
+    static MeshAttributes lookupAndInterpolate(Mesh mesh, float3 barycentrics, uint primitiveIndex) {
+        MeshAttributes attrs;
 
         uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * primitiveIndex);
 
@@ -115,5 +115,17 @@ struct Attributes {
 
         return attrs;
     }
+
+     MeshAttributes inWorld(uint instanceIndex) {
+        float3x4 toWorld = instanceToWorld[NonUniformResourceIndex(instanceIndex)];
+        float3x4 toMesh = worldToInstance[NonUniformResourceIndex(instanceIndex)];
+
+        position = mul(toWorld, float4(position, 1.0));
+        normal = normalize(mul(transpose(toMesh), normal).xyz);
+        tangent = normalize(mul(transpose(toMesh), tangent).xyz);
+        bitangent = normalize(mul(transpose(toMesh), bitangent).xyz);
+
+        return this;
+     }
 };
 
