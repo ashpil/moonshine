@@ -269,16 +269,16 @@ pub fn Mat3x4(comptime T: type) type {
 
             // https://math.stackexchange.com/a/152686
             pub fn inverse_affine(self: Self) Self {
-                const p = Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate());
+                const p = Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate()).transpose();
                 const v = Vec3T.new(self.x.w, self.y.w, self.z.w);
 
                 const inv_p = p.inverse();
-                const neg_inv_p_v = p.inverse().mul_scalar(-1).mul_vec(v);
+                const neg_inv_p_v = inv_p.mul_scalar(-1).mul_vec(v);
 
                 return Self.new(
                     Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
-                    Vec4T.new(inv_p.x.y, inv_p.y.y, inv_p.z.y, neg_inv_p_v.x),
-                    Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.x),
+                    Vec4T.new(inv_p.x.y, inv_p.y.y, inv_p.z.y, neg_inv_p_v.y),
+                    Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.z),
                 );
             }
         };
