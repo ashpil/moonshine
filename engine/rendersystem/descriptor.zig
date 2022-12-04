@@ -72,7 +72,7 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
 }, "Background");
 
 // must be kept in sync with shader
-const max_textures = 4 * 5; // TODO: think about this more
+const max_textures = 20 * 5; // TODO: think about this more
 pub const SceneDescriptorLayout = DescriptorLayout(&.{
     .{ // TLAS
         .binding = 0,
