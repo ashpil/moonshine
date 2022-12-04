@@ -81,7 +81,7 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{ // instanceToWorld
+    .{ // instances
         .binding = 1,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,

@@ -34,7 +34,7 @@ const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 
 pub const Material = MaterialManager.Material;
-pub const Instances = Accel.Instances;
+pub const Instances = Accel.InstanceInfos;
 pub const Model = Accel.Model;
 pub const Skin = Accel.Skin;
 
@@ -223,7 +223,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.instance_to_world.handle,
+                .buffer = self.accel.instances_host.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),

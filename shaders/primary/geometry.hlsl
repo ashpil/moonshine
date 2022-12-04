@@ -106,7 +106,7 @@ struct MeshAttributes {
     }
 
      MeshAttributes inWorld(uint instanceIndex) {
-        float3x4 toWorld = dInstanceToWorld[NonUniformResourceIndex(instanceIndex)];
+        float3x4 toWorld = dInstances[NonUniformResourceIndex(instanceIndex)].transform;
         float3x4 toMesh = dWorldToInstance[NonUniformResourceIndex(instanceIndex)];
 
         position = mul(toWorld, float4(position, 1.0));

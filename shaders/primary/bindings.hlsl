@@ -14,8 +14,15 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
+struct Instance { // same required by vulkan on host side
+    row_major float3x4 transform;
+    uint instanceCustomIndexAndMask;
+    uint instanceShaderBindingTableRecordOffsetAndFlags;
+    uint64_t accelerationStructureReference;
+};
+
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure dTLAS;
-[[vk::binding(1, 0)]] StructuredBuffer<row_major float3x4> dInstanceToWorld;
+[[vk::binding(1, 0)]] StructuredBuffer<Instance> dInstances;
 [[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 
 [[vk::binding(3, 0)]] StructuredBuffer<Mesh> dMeshes;
