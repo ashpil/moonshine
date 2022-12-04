@@ -27,12 +27,9 @@ struct PathTracingIntegrator : Integrator {
         RayDesc ray = initialRay;
         float3 throughput = float3(1.0, 1.0, 1.0);
         uint bounceCount = 0;
-        Intersection its = Intersection::find(ray);
 
         // main path tracing loop
-        while (its.hit()) {
-            bounceCount += 1;
-
+        for (Intersection its = Intersection::find(ray); its.hit(); its = Intersection::find(ray)) {
             // decode mesh attributes and material from intersection
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(its.instanceID, its.geometryIndex), its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
             StandardPBR material = getMaterial(materialIdx(its.instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
@@ -52,11 +49,11 @@ struct PathTracingIntegrator : Integrator {
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette
             if (bounceCount >= max_bounces) {
-                break;
+                return accumulatedColor;
             } else if (bounceCount > 3) {
                 // russian roulette
                 float pSurvive = min(0.95, luminance(throughput));
-                if (rng.getFloat() > pSurvive) break;
+                if (rng.getFloat() > pSurvive) return accumulatedColor;
                 throughput /= pSurvive;
             }
             
@@ -66,10 +63,12 @@ struct PathTracingIntegrator : Integrator {
             // set up info for next bounce
             ray.Direction = frame.frameToWorld(sample.dirFs);
             ray.Origin = attrs.position;
-            if (dot(attrs.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) break;
+            if (dot(attrs.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) return accumulatedColor;
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
-            its = Intersection::find(ray);
+            bounceCount += 1;
         }
+
+        // we only get here on misses -- terminations for other reasons return from loop
 
         // add background color if it isn't explicitly sampled or this is a primary ray
         if (direct_samples_per_bounce == 0 || bounceCount == 0) {
