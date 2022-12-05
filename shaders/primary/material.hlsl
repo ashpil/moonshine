@@ -184,15 +184,13 @@ struct StandardPBR : Material {
     MaterialSample sample(float3 w_o, float2 square) {
         MaterialSample sample;
         Lambert lambert = Lambert::create(color);
-        if (square.x < this.metalness) {
-            square.x /= this.metalness;
+        if (coinFlipRemap(this.metalness, square.x)) {
             MaterialSample microSample = microfacetSample(w_o, square);
             float pdf2 = lambert.pdf(microSample.dirFs, w_o);
 
             sample.pdf = lerp(pdf2, microSample.pdf, this.metalness);
             sample.dirFs = microSample.dirFs;
         } else {
-            square.x = (square.x - this.metalness) / (1.0 - this.metalness);
             MaterialSample lambertSample = lambert.sample(w_o, square);
             float pdf2 = microfacetPdf(lambertSample.dirFs, w_o);
 

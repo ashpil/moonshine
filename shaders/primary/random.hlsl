@@ -24,6 +24,18 @@ struct Rng {
     }
 };
 
+// selects true with probability p (false otherwise),
+// remapping rand back into (0..1)
+bool coinFlipRemap(float p, inout float rand) {
+    if (rand < p) {
+        rand /= p;
+        return true;
+    } else {
+        rand = (rand - p) / (1.0 - p);
+        return false;
+    }
+}
+
 float2 squareToGaussian(float2 square) {
     const float u1 = max(1e-38, square.x);
     const float u2 = square.y;
