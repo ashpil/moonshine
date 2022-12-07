@@ -40,9 +40,12 @@ pub fn AliasTable(comptime Data: type) type {
             const n = @intCast(u32, raw_weights.len);
 
             var weight_sum: f32 = 0.0; // maybe kahan sum is a good idea here?
-            for (raw_weights) |weight, i| {
+            for (raw_weights) |weight| {
                 weight_sum += weight;
-                running_weights[i] = weight * @intToFloat(f32, n);
+            }
+
+            for (raw_weights) |weight, i| {
+                running_weights[i] = (weight * @intToFloat(f32, n)) / weight_sum;
                 if (running_weights[i] < 1.0) {
                     try small.append(@intCast(u32, i));
                 } else {
