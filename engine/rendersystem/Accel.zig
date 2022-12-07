@@ -6,6 +6,7 @@ const VkAllocator = @import("./Allocator.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Vertex = @import("../Object.zig").Vertex;
 const utils = @import("./utils.zig");
+const AliasTable = @import("alias_table.zig").AliasTable;
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);
@@ -38,6 +39,7 @@ pub const InstanceInfo = struct {
     visible: bool = true, // whether this instance is visible
     model_idx: u12, // index of model used by this instance
     skin_idx: u12, // index of skin used by this instance
+    sampled_geometry_idxs: []const u32 = &.{}, // indexes of geometries in this instance that are explicitly sampled for emitted radiance
 };
 pub const InstanceInfos = std.MultiArrayList(InstanceInfo);
 
@@ -66,6 +68,9 @@ instances_host: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
 instances_device: VkAllocator.DeviceBuffer,
 instances_address: vk.DeviceAddress,
 
+// keep track of inverse transform -- non-inverse we can get from instances_device
+world_to_instance: VkAllocator.DeviceBuffer,
+
 // two buffers, same idea for geo and material
 // use instanceCustomIndex + GeometryID() idx into here to get actual material/geo
 mesh_idxs: VkAllocator.DeviceBuffer,
@@ -82,8 +87,7 @@ tlas_buffer: VkAllocator.DeviceBuffer,
 tlas_update_scratch_buffer: VkAllocator.DeviceBuffer,
 tlas_update_scratch_address: vk.DeviceAddress,
 
-// keep track of inverse transform -- non-inverse we can get from instances_device
-world_to_instance: VkAllocator.DeviceBuffer,
+alias_table: VkAllocator.DeviceBuffer, // to sample lights
 
 changed: bool,
 
@@ -414,6 +418,64 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer world_to_instance.destroy(vc);
 
+    const alias_table = blk: {
+
+        const TableData = extern struct {
+            instance: u32,
+            geometry: u32,
+            primitive: u32,
+        };
+
+        var weights = std.ArrayList(f32).init(allocator);
+        defer weights.deinit();
+
+        var table_data = std.ArrayList(TableData).init(allocator);
+        defer table_data.deinit();
+
+        for (instance_infos.items(.sampled_geometry_idxs)) |sampled_geometry_idxs, i| {
+            const transform = instance_transforms[i];
+            for (sampled_geometry_idxs) |sampled_geometry_idx| {
+                const positions = mesh_manager.meshes.items(.positions)[sampled_geometry_idx];
+                const indices = mesh_manager.meshes.items(.indices)[sampled_geometry_idx];
+                for (indices) |index, j| {
+                    const p0 = transform.mul_point(positions[index.x]);
+                    const p1 = transform.mul_point(positions[index.y]);
+                    const p2 = transform.mul_point(positions[index.z]);
+                    const area = p1.sub(p0).cross(p2.sub(p0)).length() / 2.0;
+                    try weights.append(area);
+                    try table_data.append(.{
+                        .instance = @intCast(u32, i),
+                        .geometry = sampled_geometry_idx,
+                        .primitive = @intCast(u32, j),
+                    });
+                }
+            }
+        }
+
+        const AliasTableT = AliasTable(TableData);
+
+        const table = try AliasTableT.create(allocator, weights.items, table_data.items);
+        defer allocator.free(table.entries);
+    
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(AliasTableT.TableEntry) * (table.entries.len + 1), .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const bytes = std.mem.sliceAsBytes(table.entries);
+
+        const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len) + @sizeOf(AliasTableT.TableEntry), .{ .transfer_src_bit = true });
+        defer staging_buffer.destroy(vc);
+
+        std.mem.copy(u8, staging_buffer.data, &std.mem.toBytes(@intCast(u32, table.entries.len)));
+        std.mem.copy(u8, staging_buffer.data[@sizeOf(AliasTableT.TableEntry)..], bytes);
+
+        try commands.startRecording(vc);
+        commands.recordUploadBuffer(u8, vc, buffer, staging_buffer);
+        try commands.submitAndIdleUntilDone(vc);
+
+        break :blk buffer;
+    };
+    errdefer alias_table.destroy(vc);
+
     // build TLAS
     const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = instance_count,
@@ -430,6 +492,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .instances_device = instances_device,
         .instances_address = instances_address,
 
+        .world_to_instance = world_to_instance,
+
         .tlas_handle = geometry_info.dst_acceleration_structure,
         .tlas_buffer = tlas_buffer,
 
@@ -442,7 +506,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .model_idx_to_offset = model_idx_to_offset,
         .skin_idx_to_offset = skin_idx_to_offset,
 
-        .world_to_instance = world_to_instance,
+        .alias_table = alias_table,
 
         .changed = false,
     };
@@ -535,11 +599,12 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instances_device.destroy(vc);
     self.instances_host.destroy(vc);
+    self.world_to_instance.destroy(vc);
 
     self.mesh_idxs.destroy(vc);
     self.material_idxs.destroy(vc);
 
-    self.world_to_instance.destroy(vc);
+    self.alias_table.destroy(vc);
 
     allocator.free(self.model_idx_to_offset);
     allocator.free(self.skin_idx_to_offset);

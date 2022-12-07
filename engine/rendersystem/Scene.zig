@@ -498,6 +498,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     ),
                     .model_idx = @intCast(u12, model_idx),
                     .skin_idx = @intCast(u12, model_idx),
+                    .sampled_geometry_idxs = if (std.mem.eql(u8, gltf.data.meshes.items[model_idx].name, "Icosphere")) &.{ 0 } else &.{},
                 });
             }
         }
