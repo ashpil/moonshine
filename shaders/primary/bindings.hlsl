@@ -19,6 +19,10 @@ struct Instance { // same required by vulkan on host side
     uint instanceCustomIndexAndMask;
     uint instanceShaderBindingTableRecordOffsetAndFlags;
     uint64_t accelerationStructureReference;
+
+    uint instanceID() {
+        return instanceCustomIndexAndMask & 0x00FFFFFF;
+    }
 };
 
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure dTLAS;

@@ -60,7 +60,9 @@ struct MeshAttributes {
     float3 tangent;
     float3 bitangent;
 
-    static MeshAttributes lookupAndInterpolate(uint meshIndex, uint primitiveIndex, float2 attribs) {
+    static MeshAttributes lookupAndInterpolate(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 attribs) {
+        uint instanceID = dInstances[instanceIndex].instanceID();
+        uint meshIndex = meshIdx(instanceID, geometryIndex);
         Mesh mesh = dMeshes[NonUniformResourceIndex(meshIndex)];
         float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 

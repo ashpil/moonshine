@@ -3,15 +3,14 @@
 #include "math.hlsl"
 
 struct [raypayload] Intersection {
-    uint instanceID : read(caller) : write(closesthit, miss); // MAX_UINT for no hit -- currently only 24 bits actually ever used
-    uint instanceIndex : read(caller) : write(closesthit);
+    uint instanceIndex : read(caller) : write(closesthit, miss);  // MAX_UINT for no hit
     uint geometryIndex : read(caller) : write(closesthit);
     uint primitiveIndex : read(caller) : write(closesthit);
     float2 attribs : read(caller) : write(closesthit);
 
     static Intersection createMiss() {
         Intersection its;
-        its.instanceID = MAX_UINT;
+        its.instanceIndex = MAX_UINT;
         return its;
     }
 
@@ -23,7 +22,7 @@ struct [raypayload] Intersection {
     }
 
     bool hit() {
-        return instanceID != MAX_UINT;
+        return instanceIndex != MAX_UINT;
     }
 };
 

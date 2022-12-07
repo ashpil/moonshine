@@ -33,8 +33,9 @@ struct PathTracingIntegrator : Integrator {
         // main path tracing loop
         for (Intersection its = Intersection::find(ray); its.hit(); its = Intersection::find(ray)) {
             // decode mesh attributes and material from intersection
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(its.instanceID, its.geometryIndex), its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
-            StandardPBR material = getMaterial(materialIdx(its.instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
+            uint instanceID = dInstances[its.instanceIndex].instanceID();
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+            StandardPBR material = getMaterial(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
 
             // add emissive light at point
             // TODO: need some way to tell whether geometry is actually sampled to not double count here

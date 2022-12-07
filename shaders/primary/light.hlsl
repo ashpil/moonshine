@@ -127,10 +127,10 @@ struct MeshLights : Light {
             }
 
             // compute information about it
-            uint instanceID = dInstances[entry.instanceIndex].instanceCustomIndexAndMask & 0x00FFFFFF;
+            uint instanceID = dInstances[entry.instanceIndex].instanceID();
 
             float2 barycentrics = squareToTriangle(rand.zw);
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(instanceID, entry.geometryIndex), entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(entry.instanceIndex, entry.geometryIndex, entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
 
             float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
 
