@@ -227,6 +227,20 @@ pub fn Mat3x4(comptime T: type) type {
             );
         }
 
+        pub fn mul_point(self: Self, v: Vec3T) Vec3T {
+            const x = self.x.dot(v.extend(1.0));
+            const y = self.y.dot(v.extend(1.0));
+            const z = self.z.dot(v.extend(1.0));
+            return Vec3T.new(x, y, z);
+        }
+
+        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
+            const x = self.x.dot(v.extend(0.0));
+            const y = self.y.dot(v.extend(0.0));
+            const z = self.z.dot(v.extend(0.0));
+            return Vec3T.new(x, y, z);
+        }
+
         pub fn mul(self: Self, other: Self) Self {
             const transposed = other.transpose();
             return Self.new(
