@@ -1,11 +1,11 @@
 struct LightSample {
-    float3 dirWs;
+    float4 dirWs; // w is distance
     float3 radiance;
     float pdf;
 };
 
 interface Light {
-    LightSample sample(float3 positionWs, float2 square);
+    LightSample sample(float3 positionWs, float4 square);
     float pdf(float3 positionWs, float3 dirWs);
     float3 eval(float3 positionWs, float3 dirWs);
 };
@@ -68,9 +68,9 @@ struct EnvMap : Light {
         return pdf_v * pdf_u;
     }
 
-    LightSample sample(float3 positionWs, float2 square) {
+    LightSample sample(float3 positionWs, float4 rand) {
         float2 uv;
-        float pdf2d = sample2D(square, uv);
+        float pdf2d = sample2D(rand.xy, uv);
 
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
@@ -80,7 +80,7 @@ struct EnvMap : Light {
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
         lightSample.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
-        lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
+        lightSample.dirWs = float4(sphericalToCartesian(sinTheta, cos(theta), phi), 1000000.0);
         return lightSample;
     }
 
@@ -107,6 +107,79 @@ struct EnvMap : Light {
     }
 };
 
+// all mesh lights in scene
+struct MeshLights : Light {
+    static MeshLights create() {
+        MeshLights map;
+        return map;
+    }
+
+    LightSample sample(float3 positionWs, float4 rand) {
+        LightSample lightSample;
+        uint emitterCount = dEmitterAliasTable[0].alias;
+        uint sum = dEmitterAliasTable[0].weight;
+        if (emitterCount != 0) {
+            // find relevant entry
+            uint x = rand.x * emitterCount;
+            AliasEntry entry = dEmitterAliasTable[x + 1];
+            if (!coinFlipRemap(entry.weight, rand.y)) {
+                entry = dEmitterAliasTable[entry.alias + 1];
+            }
+
+            // compute information about it
+            Instance instance = dInstances[entry.instanceIndex];
+            uint instanceID = instance.instanceCustomIndexAndMask & 0x00FFFFFF;
+            uint materialIndex = materialIdx(instanceID, entry.geometryIndex);
+            Mesh mesh = dMeshes[NonUniformResourceIndex(meshIdx(instanceID, entry.geometryIndex))];
+
+            uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * entry.primitiveIndex);
+
+            float3 p0 = loadPosition(mesh.positionAddress, ind.x);
+            float3 p1 = loadPosition(mesh.positionAddress, ind.y);
+            float3 p2 = loadPosition(mesh.positionAddress, ind.z);
+
+            float3 barycentrics = squareToTriangle(rand.zw);
+            float3 emitterPositionWs = mul(instance.transform, float4(interpolate(barycentrics, p0, p1, p2), 1.0));
+
+            float2 t0, t1, t2;
+            if (mesh.texcoordAddress != 0) {
+                t0 = loadTexcoord(mesh.texcoordAddress, ind.x);
+                t1 = loadTexcoord(mesh.texcoordAddress, ind.y);
+                t2 = loadTexcoord(mesh.texcoordAddress, ind.z);
+            } else {
+                // textures should be constant in this case
+                t0 = float2(0, 0);
+                t1 = float2(1, 0);
+                t2 = float2(1, 1);
+            }
+            float2 texcoord = interpolate(barycentrics, t0, t1, t2);
+            float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoord, 0).rgb;
+
+            float3 emitterNormalWs = normalize(cross(p1 - p0, p2 - p0)); // hmm or should this use vertex normal
+            
+            float3 samplePositionToEmitterPositionWs = emitterPositionWs - positionWs;
+            float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
+            float r = sqrt(r2);
+            lightSample.radiance = emissive;
+            lightSample.dirWs = float4(samplePositionToEmitterPositionWs / r, r);
+
+            // convert pdf to solid angle measure
+            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs.xyz, emitterNormalWs)) * sum);
+        } else {
+            lightSample.pdf = 0.0;
+        }
+        return lightSample;
+    }
+
+    float pdf(float3 positionWs, float3 dirWs) {
+        return 0.0; // TODO get area
+    }
+
+    float3 eval(float3 positionWs, float3 dirWs) {
+        return 0.0; // TODO
+    }
+};
+
 float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
     float f = numf * fPdf;
     float g = numg * gPdf;
@@ -118,20 +191,20 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 // estimates direct lighting from light + brdf via MIS
 // TODO: is it better to trace two rays as currently or is a one-ray approach preferable?
 template <class Light, class Material>
-float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
+float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand1, float2 rand2) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
     {
-        LightSample lightSample = light.sample(positionWs, rand.xy);
-        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+        LightSample lightSample = light.sample(positionWs, rand1);
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
-        if (dot(normalDirWs, lightSample.dirWs) > 0.0 && lightSample.pdf > 0.0) {
+        if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
             RayDesc ray;
             ray.Origin = positionWs;
-            ray.Direction = lightSample.dirWs;
+            ray.Direction = lightSample.dirWs.xyz;
             ray.TMin = 0.001;
-            ray.TMax = 10000.0;
+            ray.TMax = lightSample.dirWs.w;
 
             if (!ShadowIntersection::hit(ray)) {
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
@@ -144,7 +217,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
 
     // sample material
     {
-        MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
+        MaterialSample materialSample = material.sample(outgoingDirFs, rand2);
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (dot(normalDirWs, brdfDirWs) > 0.0 && materialSample.pdf > 0.0) {
@@ -165,4 +238,26 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
     }
 
     return directLighting;
+}
+
+// no MIS, just light
+template <class Light, class Material>
+float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
+    LightSample lightSample = light.sample(positionWs, rand);
+    float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
+
+    if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
+        RayDesc ray;
+        ray.Origin = positionWs;
+        ray.Direction = lightSample.dirWs.xyz;
+        ray.TMin = 0.001;
+        ray.TMax = lightSample.dirWs.w - 0.001;
+
+        if (!ShadowIntersection::hit(ray)) {
+            float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+            return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
+        }
+    }
+
+    return float3(0, 0, 0);
 }

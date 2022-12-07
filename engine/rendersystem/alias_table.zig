@@ -5,7 +5,6 @@ fn Entry(comptime Data: type) type {
     return extern struct {
         alias: u32, // index of alias
         weight: f32, // weight by which to do a biased coin flip, if heads, this is the entry, if tails, alias is the entry
-        p: f32, // original probability of selecting this entry
         data: Data,
     };
 }
@@ -17,10 +16,11 @@ pub fn AliasTable(comptime Data: type) type {
         pub const TableEntry = Entry(Data);
 
         entries: []TableEntry,
+        sum: f32, // total unnormalized weight
 
         // https://www.keithschwarz.com/darts-dice-coins/
         // Vose's Method
-        // weights must not be normalized
+        // weights may not be normalized
         // O(n) where n = raw_weights.len
         pub fn create(allocator: std.mem.Allocator, raw_weights: []const f32, data: []const Data) std.mem.Allocator.Error!Self {
             std.debug.assert(raw_weights.len == data.len);
@@ -42,7 +42,7 @@ pub fn AliasTable(comptime Data: type) type {
             var weight_sum: f32 = 0.0; // maybe kahan sum is a good idea here?
             for (raw_weights) |weight, i| {
                 weight_sum += weight;
-                running_weights[i] *= @intToFloat(f32, n);
+                running_weights[i] = weight * @intToFloat(f32, n);
                 if (running_weights[i] < 1.0) {
                     try small.append(@intCast(u32, i));
                 } else {
@@ -56,7 +56,6 @@ pub fn AliasTable(comptime Data: type) type {
                 entries[l] = .{
                     .alias = g,
                     .weight = running_weights[l],
-                    .p = raw_weights[l] / weight_sum,
                     .data = data[l],
                 };
                 running_weights[g] = (running_weights[g] + running_weights[l]) - 1.0;
@@ -69,19 +68,18 @@ pub fn AliasTable(comptime Data: type) type {
 
             while (large.popOrNull()) |g| {
                 entries[g].weight = 1.0; // no alias
-                entries[g].p = raw_weights[g] / weight_sum;
                 entries[g].data = data[g];
             }
 
             // should only happen due to floating point, this is actually a large entry
             while (small.popOrNull()) |l| {
                 entries[l].weight = 1.0; // no alias
-                entries[l].p = raw_weights[l] / weight_sum;
                 entries[l].data = data[l];
             }
 
             return Self {
                 .entries = entries,
+                .sum = weight_sum,
             };
         }
     };

@@ -95,43 +95,50 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{ // meshes
+    .{ // emitterAliasTable
         .binding = 3,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{ // meshIdxs
+    .{ // meshes
         .binding = 4,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{ // materialIdxs 
+    .{ // meshIdxs
         .binding = 5,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{ // textureSampler
+    .{ // materialIdxs 
         .binding = 6,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // textureSampler
+        .binding = 7,
         .descriptor_type = .sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
     .{ // materialTextures
-        .binding = 7,
+        .binding = 8,
         .descriptor_type = .sampled_image,
         .descriptor_count = max_textures,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
     .{ // materialValues
-        .binding = 8,
+        .binding = 9,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },

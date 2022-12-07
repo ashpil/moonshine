@@ -127,7 +127,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .texcoord_buffer = texcoord_buffer,
             .normal_buffer = normal_buffer,
 
-            .vertex_count = @intCast(u32, object.positions.len), // should be same as indices
+            .vertex_count = @intCast(u32, object.positions.len),
 
             .index_buffer = index_buffer,
             .index_count = @intCast(u32, object.indices.len),

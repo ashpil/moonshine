@@ -435,8 +435,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         for (instance_infos.items(.sampled_geometry_idxs)) |sampled_geometry_idxs, i| {
             const transform = instance_transforms[i];
             for (sampled_geometry_idxs) |sampled_geometry_idx| {
-                const positions = mesh_manager.meshes.items(.positions)[sampled_geometry_idx];
-                const indices = mesh_manager.meshes.items(.indices)[sampled_geometry_idx];
+                const mesh_idx = models[i].mesh_idxs[sampled_geometry_idx];
+                const positions = mesh_manager.meshes.items(.positions)[mesh_idx];
+                const indices = mesh_manager.meshes.items(.indices)[mesh_idx];
                 for (indices) |index, j| {
                     const p0 = transform.mul_point(positions[index.x]);
                     const p1 = transform.mul_point(positions[index.y]);
@@ -456,7 +457,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const table = try AliasTableT.create(allocator, weights.items, table_data.items);
         defer allocator.free(table.entries);
-    
+
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(AliasTableT.TableEntry) * (table.entries.len + 1), .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
@@ -466,6 +467,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer staging_buffer.destroy(vc);
 
         std.mem.copy(u8, staging_buffer.data, &std.mem.toBytes(@intCast(u32, table.entries.len)));
+        std.mem.copy(u8, staging_buffer.data[@sizeOf(u32)..], &std.mem.toBytes(table.sum));
         std.mem.copy(u8, staging_buffer.data[@sizeOf(AliasTableT.TableEntry)..], bytes);
 
         try commands.startRecording(vc);

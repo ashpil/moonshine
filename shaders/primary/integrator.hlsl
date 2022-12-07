@@ -2,8 +2,8 @@
 #include "reflection_frame.hlsl"
 #include "random.hlsl"
 #include "material.hlsl"
-#include "light.hlsl"
 #include "geometry.hlsl"
+#include "light.hlsl"
 
 interface Integrator {
     float3 incomingRadiance(RayDesc ray, inout Rng rng);
@@ -43,8 +43,9 @@ struct PathTracingIntegrator : Integrator {
 
             // accumulate direct light samples
             for (uint directCount = 0; directCount < direct_samples_per_bounce; directCount++) {
-                float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirect(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.normal, rand) / direct_samples_per_bounce;
+                float4 rand1 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
+                float2 rand2 = float2(rng.getFloat(), rng.getFloat());
+                accumulatedColor += throughput * estimateDirectMIS(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.normal, rand1, rand2) / direct_samples_per_bounce;
             }
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette

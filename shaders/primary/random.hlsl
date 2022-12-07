@@ -36,6 +36,12 @@ bool coinFlipRemap(float p, inout float rand) {
     }
 }
 
+float3 squareToTriangle(float2 square) {
+    float a = 1 - sqrt(1 - square.x);
+    float b = square.y * sqrt(1 - square.x);
+    return float3(a, b, 1 - a - b);
+}
+
 float2 squareToGaussian(float2 square) {
     const float u1 = max(1e-38, square.x);
     const float u2 = square.y;

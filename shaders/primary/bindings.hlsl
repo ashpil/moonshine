@@ -25,9 +25,19 @@ struct Instance { // same required by vulkan on host side
 [[vk::binding(1, 0)]] StructuredBuffer<Instance> dInstances;
 [[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 
-[[vk::binding(3, 0)]] StructuredBuffer<Mesh> dMeshes;
-[[vk::binding(4, 0)]] StructuredBuffer<uint> dMeshIdxs;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> dMaterialIdxs;
+struct AliasEntry {
+    uint alias;
+    float weight;
+    uint instanceIndex;
+    uint geometryIndex;
+    uint primitiveIndex;
+};
+
+[[vk::binding(3, 0)]] StructuredBuffer<AliasEntry> dEmitterAliasTable;
+
+[[vk::binding(4, 0)]] StructuredBuffer<Mesh> dMeshes;
+[[vk::binding(5, 0)]] StructuredBuffer<uint> dMeshIdxs;
+[[vk::binding(6, 0)]] StructuredBuffer<uint> dMaterialIdxs;
 
 // MATERIALS
 // `values` is what I call non-texture material properties
@@ -35,9 +45,9 @@ struct Values {
     float ior;
 };
 
-[[vk::binding(6, 0)]] SamplerState dTextureSampler;
-[[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
-[[vk::binding(8, 0)]] StructuredBuffer<Values> dMaterialValues;
+[[vk::binding(7, 0)]] SamplerState dTextureSampler;
+[[vk::binding(8, 0)]] Texture2D dMaterialTextures[];
+[[vk::binding(9, 0)]] StructuredBuffer<Values> dMaterialValues;
 
 // BACKGROUND
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;
