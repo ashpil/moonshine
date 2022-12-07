@@ -74,5 +74,6 @@ struct PushConsts {
 // SPECIALIZATION CONSTANTS
 [[vk::constant_id(0)]] const uint SAMPLES_PER_RUN = 1;
 [[vk::constant_id(1)]] const uint MAX_BOUNCES = 4;
-[[vk::constant_id(2)]] const uint DIRECT_SAMPLES_PER_BOUNCE = 2;
+[[vk::constant_id(2)]] const uint ENV_SAMPLES_PER_BOUNCE = 1;     // how many times the environment map should be sampled per bounce for light
+[[vk::constant_id(3)]] const uint MESH_SAMPLES_PER_BOUNCE = 1;    // how many times emissive meshes should be sampled per bounce for light
 

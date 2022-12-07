@@ -82,7 +82,8 @@ pub fn main() !void {
     var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
         .samples_per_run = params.spp,
         .max_bounces = 1024,
-        .direct_samples_per_bounce = 1,
+        .env_samples_per_bounce = 1,
+        .mesh_samples_per_bounce = 1,
     });
     defer pipeline.destroy(&context);
 

@@ -14,10 +14,11 @@ const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 
 // defaults for online
-const PipelineConstants = packed struct {
+const PipelineConstants = extern struct {
     samples_per_run: u32 = 1,
     max_bounces: u32 = 4,
-    direct_samples_per_bounce: u32 = 2,
+    env_samples_per_bounce: u32 = 1,
+    mesh_samples_per_bounce: u32 = 1,
 };
 
 // a "standard" pipeline -- that is, the one we use for most
@@ -32,8 +33,8 @@ pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocat
 
     const pipeline = try Self.create(vc, vk_allocator, allocator, cmd, &.{ scene_descriptor_layout.handle, background_descriptor_layout.handle, output_descriptor_layout.handle }, &[_]vk.PipelineShaderStageCreateInfo {
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = module, .p_name = "raygen", .p_specialization_info = &vk.SpecializationInfo {
-            .map_entry_count = 3,
-            .p_map_entries = &[3]vk.SpecializationMapEntry { .{
+            .map_entry_count = 4,
+            .p_map_entries = &[4]vk.SpecializationMapEntry { .{
                 .constant_id = 0,
                 .offset = 0,
                 .size = @sizeOf(u32),
@@ -44,6 +45,10 @@ pub fn createStandardPipeline(vc: *const VulkanContext, vk_allocator: *VkAllocat
             }, .{
                 .constant_id = 2,
                 .offset = @sizeOf(u32) * 2,
+                .size = @sizeOf(u32),
+            }, .{
+                .constant_id = 3,
+                .offset = @sizeOf(u32) * 3,
                 .size = @sizeOf(u32),
             } },
             .data_size = @sizeOf(PipelineConstants),

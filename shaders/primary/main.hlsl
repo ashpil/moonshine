@@ -20,7 +20,7 @@ float2 dispatchUV(float2 rand) {
 
 [shader("raygeneration")]
 void raygen() {
-    PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, DIRECT_SAMPLES_PER_BOUNCE);
+    PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, ENV_SAMPLES_PER_BOUNCE, MESH_SAMPLES_PER_BOUNCE);
 
     // the result that we write to our buffer
     float3 color = float3(0.0, 0.0, 0.0);
