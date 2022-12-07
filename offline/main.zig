@@ -27,7 +27,7 @@ const Mat3x4 = vector.Mat3x4(f32);
 fn printTime(writer: anytype, time: u64) !void {
     const ms = time / std.time.ns_per_ms;
     const s = ms / std.time.ms_per_s;
-    try writer.print("{}.{}", .{ s, ms });
+    try writer.print("{}.{:0>3}", .{ s, ms });
 }
 
 pub fn main() !void {
@@ -86,15 +86,15 @@ pub fn main() !void {
     });
     defer pipeline.destroy(&context);
 
-    const extent = vk.Extent2D { .width = 1024, .height = 1024 }; // TODO: cli
+    const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
 
-    const camera_origin = F32x3.new(1.0, 1.5, 3.0);
-    const camera_target = F32x3.new(0.0, 0.2, 0.0);
+    const camera_origin = F32x3.new(0.0, 3.0, 5.0);
+    const camera_target = F32x3.new(0.0, 1.2, 0.0);
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 65.0,
+        .vfov = 35.0,
         .extent = extent,
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),
