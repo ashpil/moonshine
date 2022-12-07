@@ -223,7 +223,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.instances_host.handle,
+                .buffer = self.accel.instances_device.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),

@@ -243,10 +243,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     // create instance info, tlas, and tlas state
     const instance_count = @intCast(u32, instance_infos.len);
-    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true });
     errdefer instances_device.destroy(vc);
 
-    const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .shader_device_address_bit = true, .transfer_src_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+    const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
     errdefer instances_host.destroy(vc);
 
     const instance_transforms = instance_infos.items(.transform);
