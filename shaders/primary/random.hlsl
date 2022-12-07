@@ -36,10 +36,10 @@ bool coinFlipRemap(float p, inout float rand) {
     }
 }
 
-float3 squareToTriangle(float2 square) {
+float2 squareToTriangle(float2 square) {
     float a = 1 - sqrt(1 - square.x);
     float b = square.y * sqrt(1 - square.x);
-    return float3(a, b, 1 - a - b);
+    return float2(a, b);
 }
 
 float2 squareToGaussian(float2 square) {

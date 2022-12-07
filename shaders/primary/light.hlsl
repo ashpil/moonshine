@@ -127,44 +127,21 @@ struct MeshLights : Light {
             }
 
             // compute information about it
-            Instance instance = dInstances[entry.instanceIndex];
-            uint instanceID = instance.instanceCustomIndexAndMask & 0x00FFFFFF;
-            uint materialIndex = materialIdx(instanceID, entry.geometryIndex);
-            Mesh mesh = dMeshes[NonUniformResourceIndex(meshIdx(instanceID, entry.geometryIndex))];
+            uint instanceID = dInstances[entry.instanceIndex].instanceCustomIndexAndMask & 0x00FFFFFF;
 
-            uint3 ind = vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * entry.primitiveIndex);
+            float2 barycentrics = squareToTriangle(rand.zw);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(meshIdx(instanceID, entry.geometryIndex), entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
 
-            float3 p0 = loadPosition(mesh.positionAddress, ind.x);
-            float3 p1 = loadPosition(mesh.positionAddress, ind.y);
-            float3 p2 = loadPosition(mesh.positionAddress, ind.z);
+            float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
 
-            float3 barycentrics = squareToTriangle(rand.zw);
-            float3 emitterPositionWs = mul(instance.transform, float4(interpolate(barycentrics, p0, p1, p2), 1.0));
-
-            float2 t0, t1, t2;
-            if (mesh.texcoordAddress != 0) {
-                t0 = loadTexcoord(mesh.texcoordAddress, ind.x);
-                t1 = loadTexcoord(mesh.texcoordAddress, ind.y);
-                t2 = loadTexcoord(mesh.texcoordAddress, ind.z);
-            } else {
-                // textures should be constant in this case
-                t0 = float2(0, 0);
-                t1 = float2(1, 0);
-                t2 = float2(1, 1);
-            }
-            float2 texcoord = interpolate(barycentrics, t0, t1, t2);
-            float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoord, 0).rgb;
-
-            float3 emitterNormalWs = normalize(cross(p1 - p0, p2 - p0)); // hmm or should this use vertex normal
-            
-            float3 samplePositionToEmitterPositionWs = emitterPositionWs - positionWs;
+            float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float r = sqrt(r2);
             lightSample.radiance = emissive;
             lightSample.dirWs = float4(samplePositionToEmitterPositionWs / r, r);
 
-            // convert pdf to solid angle measure
-            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs.xyz, emitterNormalWs)) * sum);
+            // pdf in solid angle measure
+            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs.xyz, attrs.normal)) * sum);
         } else {
             lightSample.pdf = 0.0;
         }
