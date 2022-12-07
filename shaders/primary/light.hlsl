@@ -117,7 +117,7 @@ struct MeshLights : Light {
     LightSample sample(float3 positionWs, float4 rand) {
         LightSample lightSample;
         uint emitterCount = dEmitterAliasTable[0].alias;
-        uint sum = dEmitterAliasTable[0].weight;
+        float sum = dEmitterAliasTable[0].weight;
         if (emitterCount != 0) {
             // find relevant entry
             uint x = rand.x * emitterCount;
