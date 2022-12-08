@@ -85,3 +85,27 @@ float3 squareToUniformHemisphere(float2 square) {
     float phi = 2 * PI * square.y;
     return float3(r * cos(phi), z, r * sin(phi));
 }
+
+template<typename Data>
+struct Reservoir {
+    Data selected;
+    float weightSum;
+    uint numSamplesSeen;
+    float rand;
+
+    static Reservoir init(float rand) {
+        Reservoir r;
+        r.weightSum = 0.0;
+        r.numSamplesSeen = 0;
+        r.rand = rand;
+        return r;
+    }
+
+    void update(Data candidate, float weight) {
+        weightSum += weight;
+        numSamplesSeen += 1;
+        if (coinFlipRemap(weight / weightSum, rand)) {
+            selected = candidate;
+        }
+    }
+};

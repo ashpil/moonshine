@@ -15,7 +15,7 @@ interface Light {
     //
     // pdf is with respect to unobstructed solid angle
     // should trace a ray to determine obstruction
-    LightSample sample(float3 positionWs, float3 normalWs, float4 square);
+    LightSample sample(float3 positionWs, float3 normalWs, inout Rng rng);
 
     // evaluates a given position, returning radiance arriving at that point from
     // light and the pdf of that radiance
@@ -83,9 +83,9 @@ struct EnvMap : Light {
         return pdf_v * pdf_u;
     }
 
-    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, inout Rng rng) {
         float2 uv;
-        float pdf2d = sample2D(rand.xy, uv);
+        float pdf2d = sample2D(float2(rng.getFloat(), rng.getFloat()), uv);
 
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
@@ -136,6 +136,14 @@ struct EnvMap : Light {
     }
 };
 
+struct CandidateData {
+    float3 position;
+    float3 normal;
+    float3 dir;
+    float3 radiance;
+    float pdf;
+};
+
 // all mesh lights in scene
 struct MeshLights : Light {
     static MeshLights create() {
@@ -143,40 +151,59 @@ struct MeshLights : Light {
         return map;
     }
 
-    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, inout Rng rng) {
         LightSample lightSample;
         uint emitterCount = dEmitterAliasTable[0].alias;
         float sum = dEmitterAliasTable[0].weight;
         if (emitterCount != 0) {
-            // find relevant entry
-            uint x = rand.x * emitterCount;
-            AliasEntry entry = dEmitterAliasTable[x + 1];
-            if (!coinFlipRemap(entry.weight, rand.y)) {
-                entry = dEmitterAliasTable[entry.alias + 1];
+            const uint M = 2;
+            Reservoir<CandidateData> res = Reservoir<CandidateData>::init(rng.getFloat());
+            float coinp = rng.getFloat();
+            for (uint i = 0; i < M; i++) {
+                // find relevant entry
+                uint x = rng.getFloat() * emitterCount;
+                AliasEntry entry = dEmitterAliasTable[x + 1];
+                if (!coinFlipRemap(entry.weight, coinp)) {
+                    entry = dEmitterAliasTable[entry.alias + 1];
+                }
+
+                // compute information about it
+                uint instanceID = dInstances[entry.instanceIndex].instanceID();
+
+                float2 barycentrics = squareToTriangle(float2(rng.getFloat(), rng.getFloat()));
+                MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(entry.instanceIndex, entry.geometryIndex, entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
+
+                float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
+
+                float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
+                float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
+                float r = sqrt(r2);
+
+                CandidateData c;
+                c.position = attrs.position;
+                c.normal = attrs.normal;
+                c.dir = samplePositionToEmitterPositionWs / r;
+                c.radiance = emissive;
+                c.pdf = saturate(dot(-c.dir, attrs.normal)) / r2;
+
+                res.update(c, c.pdf * sum);
             }
-
-            // compute information about it
-            uint instanceID = dInstances[entry.instanceIndex].instanceID();
-
-            float2 barycentrics = squareToTriangle(rand.zw);
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(entry.instanceIndex, entry.geometryIndex, entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
-
-            float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
-
-            float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
-            float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
-            float r = sqrt(r2);
-            lightSample.radiance = emissive;
-            lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
-
-            // compute precise ray endpoints
-            float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.normal);
-            float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
-            float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
-
-            if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
+            if (res.weightSum == 0.0) {
                 lightSample.pdf = 0.0;
+            } else {
+                lightSample.pdf = res.weightSum / (res.numSamplesSeen * res.selected.pdf);
+                lightSample.pdf = 1 / lightSample.pdf;
+                lightSample.radiance = res.selected.radiance * res.selected.pdf;
+                lightSample.dirWs = res.selected.dir;
+
+                // compute precise ray endpoints
+                float3 offsetLightPositionWs = offsetAlongNormal(res.selected.position, res.selected.normal);
+                float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
+                float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
+
+                if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
+                    lightSample.pdf = 0.0;
+                }
             }
         } else {
             lightSample.pdf = 0.0;
@@ -184,7 +211,6 @@ struct MeshLights : Light {
         return lightSample;
     }
 
-    // TODO
     LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
         LightEval l;
         // trace ray to determine if we hit an emissive mesh
@@ -227,12 +253,12 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 // estimates direct lighting from light + brdf via MIS
 // TODO: is it better to trace two rays as currently or is a one-ray approach preferable?
 template <class Light, class Material>
-float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand1, float2 rand2) {
+float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, inout Rng rng) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
     {
-        LightSample lightSample = light.sample(positionWs, normalDirWs, rand1);
+        LightSample lightSample = light.sample(positionWs, normalDirWs, rng);
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
         if (lightSample.pdf > 0.0) {
@@ -247,7 +273,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
     // sample material
     {
-        MaterialSample materialSample = material.sample(outgoingDirFs, rand2);
+        MaterialSample materialSample = material.sample(outgoingDirFs, float2(rng.getFloat(), rng.getFloat()));
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (materialSample.pdf > 0.0) {
@@ -265,8 +291,8 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
 // no MIS, just light
 template <class Light, class Material>
-float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
-    LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
+float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, inout Rng rng) {
+    LightSample lightSample = light.sample(positionWs, normalDirWs, rng);
     float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
     if (lightSample.pdf > 0.0) {
