@@ -177,13 +177,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
         if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
-            RayDesc ray;
-            ray.Origin = positionWs;
-            ray.Direction = lightSample.dirWs.xyz;
-            ray.TMin = 0.001;
-            ray.TMax = lightSample.dirWs.w;
-
-            if (!ShadowIntersection::hit(ray)) {
+            if (!ShadowIntersection::hit(positionWs, lightSample.dirWs.xyz, 0.001, lightSample.dirWs.w)) {
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 float3 brdf = material.eval(lightDirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
@@ -198,17 +192,11 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (dot(normalDirWs, brdfDirWs) > 0.0 && materialSample.pdf > 0.0) {
-            RayDesc ray;
-            ray.Origin = positionWs;
-            ray.Direction = brdfDirWs;
-            ray.TMin = 0.001;
-            ray.TMax = 10000.0;
-
-            if (!ShadowIntersection::hit(ray)) {
+            if (!ShadowIntersection::hit(positionWs, brdfDirWs, 0.001, 10000.0)) {
                 float lightPdf = light.pdf(positionWs, brdfDirWs);
-                float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
                 float3 li = light.eval(positionWs, brdfDirWs);
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
+                float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
                 directLighting += li * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
             }
         }
@@ -224,13 +212,7 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
     float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
     if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
-        RayDesc ray;
-        ray.Origin = positionWs;
-        ray.Direction = lightSample.dirWs.xyz;
-        ray.TMin = 0.001;
-        ray.TMax = lightSample.dirWs.w - 0.001;
-
-        if (!ShadowIntersection::hit(ray)) {
+        if (!ShadowIntersection::hit(positionWs, lightSample.dirWs.xyz, 0.001, lightSample.dirWs.w - 0.001)) {
             float3 brdf = material.eval(lightDirFs, outgoingDirFs);
             return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
         }
