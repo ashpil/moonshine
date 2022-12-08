@@ -169,11 +169,14 @@ struct MeshLights : Light {
             float r = sqrt(r2);
             lightSample.radiance = emissive;
             lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-
-            // pdf in solid angle measure
             lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
 
-            if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), lightSample.dirWs, r - 0.001)) {
+            // compute precise ray endpoints
+            float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.normal);
+            float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
+            float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
+
+            if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
                 lightSample.pdf = 0.0;
             }
         } else {
