@@ -85,7 +85,7 @@ struct PathTracingIntegrator : Integrator {
 
         // add background color if it isn't explicitly sampled or this is a primary ray
         if (env_samples_per_bounce == 0 || bounceCount == 0) {
-            accumulatedColor += throughput * EnvMap::create().eval(float3(0, 0, 0), ray.Direction);
+            accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction);
         }
 
         return accumulatedColor;

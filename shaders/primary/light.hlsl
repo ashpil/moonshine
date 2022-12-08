@@ -4,10 +4,25 @@ struct LightSample {
     float pdf;
 };
 
+struct LightEval {
+    float3 radiance;
+    float pdf;
+};
+
 interface Light {
-    LightSample sample(float3 positionWs, float4 square);
-    float pdf(float3 positionWs, float3 dirWs);
-    float3 eval(float3 positionWs, float3 dirWs);
+    // samples a light direction based on given position and geometric normal, returning
+    // radiance at that point from light and pdf of this direction + radiance
+    //
+    // pdf is with respect to non-obstructed solid angle
+    // may trace a ray
+    LightSample sample(float3 positionWs, float3 normalWs, float4 square);
+
+    // evaluates a given position, returning radiance arriving at that point from
+    // light and the pdf of that radiance
+    //
+    // pdf is with respect to non-obstructed solid angle
+    // may trace a ray
+    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs);
 };
 
 struct EnvMap : Light {
@@ -68,7 +83,7 @@ struct EnvMap : Light {
         return pdf_v * pdf_u;
     }
 
-    LightSample sample(float3 positionWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
         float2 uv;
         float pdf2d = sample2D(rand.xy, uv);
 
@@ -84,23 +99,29 @@ struct EnvMap : Light {
         return lightSample;
     }
 
-    float pdf(float3 positionWs, float3 dirWs) {
+    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
+        float2 phiTheta = cartesianToSpherical(dirWs);
+        float2 uv = phiTheta / float2(2 * PI, PI);
+
+        // compute radiance
+        LightEval l;
+        l.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
+
+        // compute pdf
         uint2 size;
         dConditionalCdfs.GetDimensions(size.x, size.y);
         int width = size.x - 1;
         int height = size.y;
 
-        float2 phiTheta = cartesianToSpherical(dirWs);
-        float2 uv = phiTheta / float2(2 * PI, PI);
-
         uint2 coords = clamp(uint2(uv * float2(width, height)), uint2(0, 0), uint2(width - 1, height - 1));
-
         float pdf2d = dConditionalPdfsIntegrals[coords] / dMarginalPdfIntegral[height];
         float sinTheta = sin(phiTheta.y);
-        return sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
+        l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
+
+        return l;
     }
 
-    float3 eval(float3 positionWs, float3 dirWs) {
+    float3 incomingRadiance(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
         return dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
@@ -114,7 +135,7 @@ struct MeshLights : Light {
         return map;
     }
 
-    LightSample sample(float3 positionWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
         LightSample lightSample;
         uint emitterCount = dEmitterAliasTable[0].alias;
         float sum = dEmitterAliasTable[0].weight;
@@ -148,12 +169,11 @@ struct MeshLights : Light {
         return lightSample;
     }
 
-    float pdf(float3 positionWs, float3 dirWs) {
-        return 0.0; // TODO get area
-    }
-
-    float3 eval(float3 positionWs, float3 dirWs) {
-        return 0.0; // TODO
+    // TODO
+    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
+        LightEval l;
+        l.pdf = 0.0;
+        return l;
     }
 };
 
@@ -173,7 +193,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
     // sample light
     {
-        LightSample lightSample = light.sample(positionWs, rand1);
+        LightSample lightSample = light.sample(positionWs, normalDirWs, rand1);
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
         if (lightSample.pdf > 0.0) {
@@ -193,11 +213,10 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
         if (materialSample.pdf > 0.0) {
             if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), brdfDirWs, 10000.0)) {
-                float lightPdf = light.pdf(positionWs, brdfDirWs);
-                float3 li = light.eval(positionWs, brdfDirWs);
+                LightEval lightContrib = light.eval(positionWs, normalDirWs, brdfDirWs);
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
-                float weight = powerHeuristic(1, materialSample.pdf, 1, lightPdf);
-                directLighting += li * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
+                float weight = powerHeuristic(1, materialSample.pdf, 1, lightContrib.pdf);
+                directLighting += lightContrib.radiance * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
             }
         }
     }
@@ -208,7 +227,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 // no MIS, just light
 template <class Light, class Material>
 float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
-    LightSample lightSample = light.sample(positionWs, rand);
+    LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
     float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
     if (lightSample.pdf > 0.0) {
