@@ -36,7 +36,6 @@ const U32x3 = vector.Vec3(u32);
 pub const Material = MaterialManager.Material;
 pub const Instances = Accel.InstanceInfos;
 pub const Model = Accel.Model;
-pub const Skin = Accel.Skin;
 
 background: Background,
 
@@ -200,7 +199,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         };
     }
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [10]vk.WriteDescriptorSet {
+    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -279,7 +278,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.mesh_idxs.handle,
+                .buffer = self.accel.geometries.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -288,20 +287,6 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 6,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.material_idxs.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 7,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .sampler,
@@ -315,7 +300,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 8,
+            .dst_binding = 7,
             .dst_array_element = 0,
             .descriptor_count = @intCast(u32, image_infos.len),
             .descriptor_type = .sampled_image,
@@ -325,7 +310,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 9,
+            .dst_binding = 8,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
@@ -410,7 +395,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     const models = try allocator.alloc(Model, gltf.data.meshes.items.len);
     defer allocator.free(models);
 
-    const skins = try allocator.alloc(Skin, gltf.data.meshes.items.len);
+    const skins = try allocator.alloc([]u32, gltf.data.meshes.items.len);
     defer allocator.free(skins);
 
     for (gltf.data.meshes.items) |mesh, model_idx| {
@@ -487,10 +472,10 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             });
         }
         models[model_idx].mesh_idxs = mesh_idxs;
-        skins[model_idx].material_idxs = material_idxs;
+        skins[model_idx] = material_idxs;
     }
     defer for (models) |model| allocator.free(model.mesh_idxs);
-    defer for (skins) |skin| allocator.free(skin.material_idxs);
+    defer for (skins) |skin| allocator.free(skin);
 
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
     errdefer mesh_manager.destroy(vc, allocator);
@@ -511,8 +496,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                         F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     ),
                     .model_idx = @intCast(u12, model_idx),
-                    .skin_idx = @intCast(u12, model_idx),
-                    .sampled_geometry_idxs = if (std.mem.eql(u8, gltf.data.meshes.items[model_idx].name, "Icosphere")) &.{ 0 } else &.{},
+                    .material_idxs = skins[model_idx],
                 });
             }
         }
@@ -521,7 +505,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     };
     defer instances.deinit(allocator);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models, skins);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models);
     errdefer accel.destroy(vc, allocator);
 
     var scene = Self {
@@ -541,7 +525,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return scene;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, skins: []const Skin, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
     errdefer material_manager.destroy(vc, allocator);
 
@@ -571,7 +555,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);
     errdefer mesh_manager.destroy(vc, allocator);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models, skins);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models);
     errdefer accel.destroy(vc, allocator);
 
     const sampler = try ImageManager.createSampler(vc);

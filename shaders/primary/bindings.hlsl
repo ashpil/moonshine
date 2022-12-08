@@ -14,6 +14,12 @@ struct Mesh {
     uint64_t indexAddress;
 };
 
+struct Geometry {
+    uint materialIdx;
+    uint meshIdx;
+    bool sampled;
+};
+
 struct Instance { // same required by vulkan on host side
     row_major float3x4 transform;
     uint instanceCustomIndexAndMask;
@@ -40,8 +46,7 @@ struct AliasEntry {
 [[vk::binding(3, 0)]] StructuredBuffer<AliasEntry> dEmitterAliasTable;
 
 [[vk::binding(4, 0)]] StructuredBuffer<Mesh> dMeshes;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> dMeshIdxs;
-[[vk::binding(6, 0)]] StructuredBuffer<uint> dMaterialIdxs;
+[[vk::binding(5, 0)]] StructuredBuffer<Geometry> dGeometries;
 
 // MATERIALS
 // `values` is what I call non-texture material properties
@@ -49,9 +54,9 @@ struct Values {
     float ior;
 };
 
-[[vk::binding(7, 0)]] SamplerState dTextureSampler;
-[[vk::binding(8, 0)]] Texture2D dMaterialTextures[];
-[[vk::binding(9, 0)]] StructuredBuffer<Values> dMaterialValues;
+[[vk::binding(6, 0)]] SamplerState dTextureSampler;
+[[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
+[[vk::binding(8, 0)]] StructuredBuffer<Values> dMaterialValues;
 
 // BACKGROUND
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;

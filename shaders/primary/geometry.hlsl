@@ -37,20 +37,12 @@ T interpolate(float3 barycentrics, T v1, T v2, T v3) {
     return barycentrics.x * v1 + barycentrics.y * v2 + barycentrics.z * v3;
 }
 
-uint modelOffset(uint instanceID) {
-    return instanceID & 0xFFF; // lower 12 bits
-}
-
-uint skinOffset(uint instanceID) {
-    return instanceID >> 12; // upper 12 bits
-}
-
 uint meshIdx(uint instanceID, uint geometryIndex) {
-    return dMeshIdxs[NonUniformResourceIndex(modelOffset(instanceID) + geometryIndex)];
+    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)].meshIdx;
 }
 
 uint materialIdx(uint instanceID, uint geometryIndex) {
-    return dMaterialIdxs[NonUniformResourceIndex(skinOffset(instanceID) + geometryIndex)];
+    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)].materialIdx;
 }
 
 struct MeshAttributes {

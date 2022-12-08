@@ -65,20 +65,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .mesh_idxs = &.{ 6 },
         },
     };
-    const skins = [_]Scene.Skin {
-        .{ // board
-            .material_idxs = &.{ 0 },
-        },
-        .{ // white
-            .material_idxs = &.{ 1 },
-        },
-        .{ // back
-            .material_idxs = &.{ 2 },
-        },
-        .{ // selected
-            .material_idxs = &.{ 3 },
-        },
-    };
 
     const instance_count = 33;
 
@@ -90,7 +76,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     instances.appendAssumeCapacity(.{
         .transform = Mat3x4.identity,
         .model_idx = 0,
-        .skin_idx = 0,
+        .material_idxs = &.{ 0 },
     });
 
     const black_rotation = Mat3x4.from_rotation(F32x3.new(0.0, 1.0, 0.0), std.math.pi);
@@ -102,42 +88,42 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.h2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.g2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.f2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.e2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.d2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.c2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.b2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.a2.toTransform(),
                 .model_idx = 1,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
         }
         // black
@@ -145,42 +131,42 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.h7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.g7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.f7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.e7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.d7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.c7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.b7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.a7.toTransform().mul(black_rotation),
                 .model_idx = 1,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
         }
     }
@@ -192,12 +178,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.a1.toTransform(),
                 .model_idx = 2,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.h1.toTransform(),
                 .model_idx = 2,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
         }
         // black
@@ -205,12 +191,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.a8.toTransform().mul(black_rotation),
                 .model_idx = 2,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.h8.toTransform().mul(black_rotation),
                 .model_idx = 2,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
         }
     }
@@ -222,12 +208,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.b1.toTransform(),
                 .model_idx = 3,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.g1.toTransform(),
                 .model_idx = 3,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
         }
         // black
@@ -235,12 +221,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.b8.toTransform().mul(black_rotation),
                 .model_idx = 3,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.g8.toTransform().mul(black_rotation),
                 .model_idx = 3,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
         }
     }
@@ -252,12 +238,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.c1.toTransform(),
                 .model_idx = 4,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.f1.toTransform(),
                 .model_idx = 4,
-                .skin_idx = 1,
+                .material_idxs = &.{ 1 },
             });
         }
         // black
@@ -265,12 +251,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             instances.appendAssumeCapacity(.{
                 .transform = Coord.c8.toTransform().mul(black_rotation),
                 .model_idx = 4,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
             instances.appendAssumeCapacity(.{
                 .transform = Coord.f8.toTransform().mul(black_rotation),
                 .model_idx = 4,
-                .skin_idx = 2,
+                .material_idxs = &.{ 2 },
             });
         }
     }
@@ -281,13 +267,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         instances.appendAssumeCapacity(.{
             .transform = Coord.e1.toTransform(),
             .model_idx = 5,
-            .skin_idx = 1,
+            .material_idxs = &.{ 1 },
         });
         // black
         instances.appendAssumeCapacity(.{
             .transform = Coord.e8.toTransform().mul(black_rotation),
             .model_idx = 5,
-            .skin_idx = 2,
+            .material_idxs = &.{ 2 },
         });
     }
 
@@ -297,13 +283,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         instances.appendAssumeCapacity(.{
             .transform = Coord.d1.toTransform(),
             .model_idx = 6,
-            .skin_idx = 1,
+            .material_idxs = &.{ 1 },
         });
         // black
         instances.appendAssumeCapacity(.{
             .transform = Coord.d8.toTransform().mul(black_rotation),
             .model_idx = 6,
-            .skin_idx = 2,
+            .material_idxs = &.{ 2 },
         });
     }
 
@@ -317,7 +303,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_dir, &mesh_filepaths, instances, &models, &skins, descriptor_layout, background_descriptor_layout);
+    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_dir, &mesh_filepaths, instances, &models, descriptor_layout, background_descriptor_layout);
 
     return Self {
         .scene = scene,
