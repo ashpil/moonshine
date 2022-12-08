@@ -125,7 +125,6 @@ struct EnvMap : Light {
 
         if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), dirWs, INFINITY)) {
             l.pdf = 0.0;
-            l.radiance = float3(0, 0, 0);
         }
         return l;
     }
@@ -188,7 +187,31 @@ struct MeshLights : Light {
     // TODO
     LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
         LightEval l;
-        l.pdf = 0.0;
+        // trace ray to determine if we hit an emissive mesh
+        RayDesc ray;
+        ray.Origin = offsetAlongNormal(positionWs, normalWs);
+        ray.Direction = dirWs;
+        ray.TMin = 0.0;
+        ray.TMax = INFINITY;
+        Intersection its = Intersection::find(ray);
+
+        // process intersection
+        uint instanceID = dInstances[its.instanceIndex].instanceID();
+        Geometry geometry = getGeometry(instanceID, its.geometryIndex);
+
+        if (geometry.sampled) {
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+
+            float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
+            float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
+            float sum = dEmitterAliasTable[0].weight;
+            l.pdf = r2 / (abs(dot(-dirWs, attrs.normal)) * sum);
+            l.radiance = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, its.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
+        } else {
+            // geometry not sampled, pdf is zero
+            l.pdf = 0.0;
+        }
+
         return l;
     }
 };
