@@ -176,8 +176,8 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
         LightSample lightSample = light.sample(positionWs, rand1);
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
-        if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
-            if (!ShadowIntersection::hit(positionWs, lightSample.dirWs.xyz, 0.001, lightSample.dirWs.w)) {
+        if (lightSample.pdf > 0.0) {
+            if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), lightSample.dirWs.xyz, lightSample.dirWs.w)) {
                 float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
                 float3 brdf = material.eval(lightDirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
@@ -191,8 +191,8 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
         MaterialSample materialSample = material.sample(outgoingDirFs, rand2);
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
-        if (dot(normalDirWs, brdfDirWs) > 0.0 && materialSample.pdf > 0.0) {
-            if (!ShadowIntersection::hit(positionWs, brdfDirWs, 0.001, 10000.0)) {
+        if (materialSample.pdf > 0.0) {
+            if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), brdfDirWs, 10000.0)) {
                 float lightPdf = light.pdf(positionWs, brdfDirWs);
                 float3 li = light.eval(positionWs, brdfDirWs);
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
@@ -211,8 +211,8 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
     LightSample lightSample = light.sample(positionWs, rand);
     float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
 
-    if (dot(normalDirWs, lightSample.dirWs.xyz) > 0.0 && lightSample.pdf > 0.0) {
-        if (!ShadowIntersection::hit(positionWs, lightSample.dirWs.xyz, 0.001, lightSample.dirWs.w - 0.001)) {
+    if (lightSample.pdf > 0.0) {
+        if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), lightSample.dirWs.xyz, lightSample.dirWs.w - 0.001)) {
             float3 brdf = material.eval(lightDirFs, outgoingDirFs);
             return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
         }

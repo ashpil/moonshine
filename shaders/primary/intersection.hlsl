@@ -30,13 +30,13 @@ struct [raypayload] ShadowIntersection {
     bool inShadow : read(caller) : write(miss);
 
     // traces a shadow ray, returning whether it hit geometry
-    static bool hit(float3 origin, float3 direction, float tmin, float tmax) {
+    static bool hit(float3 origin, float3 direction, float tmax) {
         const uint shadowTraceFlags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
         
         RayDesc ray;
         ray.Origin = origin;
         ray.Direction = direction;
-        ray.TMin = tmin;
+        ray.TMin = 0.0;
         ray.TMax = tmax;
 
         ShadowIntersection its;

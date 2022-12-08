@@ -31,6 +31,19 @@ float luminance(float3 color) {
            0.0722 * color.b;
 }
 
+// https://research.nvidia.com/publication/2019-03_fast-and-robust-method-avoiding-self-intersection
+float3 offsetAlongNormal(float3 p, float3 n) {
+    float origin = 1.0f / 32.0f;
+    float float_scale = 1.0f / 65536.0f;
+    float int_scale = 256.0f;
+
+    int3 of_i = n * int_scale;
+
+    float3 p_i = asfloat(asint(p) + select(p < 0.f, -of_i, of_i));
+
+    return select(abs(p) < origin, p + n * float_scale, p_i);
+}
+
 void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
     if (abs(v1.x) > abs(v1.y)) {
         v2 = float3(-v1.z, 0.0, v1.x) / sqrt(v1.x * v1.x + v1.z * v1.z);
