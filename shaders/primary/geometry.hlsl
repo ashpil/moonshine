@@ -37,12 +37,16 @@ T interpolate(float3 barycentrics, T v1, T v2, T v3) {
     return barycentrics.x * v1 + barycentrics.y * v2 + barycentrics.z * v3;
 }
 
+Geometry getGeometry(uint instanceID, uint geometryIndex) {
+    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)];
+}
+
 uint meshIdx(uint instanceID, uint geometryIndex) {
-    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)].meshIdx;
+    return getGeometry(instanceID, geometryIndex).meshIdx;
 }
 
 uint materialIdx(uint instanceID, uint geometryIndex) {
-    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)].materialIdx;
+    return getGeometry(instanceID, geometryIndex).materialIdx;
 }
 
 struct MeshAttributes {

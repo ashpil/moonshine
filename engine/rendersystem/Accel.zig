@@ -42,10 +42,10 @@ pub const InstanceInfo = struct {
     sampled_geometry: []const bool = &.{}, // whether each geometry in this instance is sampled, empty for no sampled
 };
 
-pub const Geometry = struct {
+pub const Geometry = extern struct {
     mesh_idx: u32, // idx of mesh that this geometry uses
     material_idx: u32, // idx of material that this geometry uses
-    sampled: bool = false, // whether this geometry is explicitly sampled for emitted light
+    sampled: u32 = 0, // whether this geometry is explicitly sampled for emitted light, bool
 };
 
 pub const InstanceInfos = std.MultiArrayList(InstanceInfo);
@@ -273,7 +273,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 buffer_host[flat_idx] = .{
                     .mesh_idx = models[i].mesh_idxs[j],
                     .material_idx = idx,
-                    .sampled = if (instance_sampled_geometry[i].len != 0) instance_sampled_geometry[i][j] else false,
+                    .sampled = if (instance_sampled_geometry[i].len != 0) @boolToInt(instance_sampled_geometry[i][j]) else 0,
                 };
                 flat_idx += 1;
             }

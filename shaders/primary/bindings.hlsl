@@ -15,8 +15,8 @@ struct Mesh {
 };
 
 struct Geometry {
-    uint materialIdx;
     uint meshIdx;
+    uint materialIdx;
     bool sampled;
 };
 

@@ -34,12 +34,12 @@ struct PathTracingIntegrator : Integrator {
         for (Intersection its = Intersection::find(ray); its.hit(); its = Intersection::find(ray)) {
             // decode mesh attributes and material from intersection
             uint instanceID = dInstances[its.instanceIndex].instanceID();
+            Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
             StandardPBR material = getMaterial(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
 
-            // add emissive light at point
-            // TODO: need some way to tell whether geometry is actually sampled to not double count here
-            if (mesh_samples_per_bounce == 0 || bounceCount == 0) {
+            // add emissive light at point if light not explicitly sampled or initial bounce
+            if (mesh_samples_per_bounce == 0 || bounceCount == 0 || !geometry.sampled) {
                 accumulatedColor += throughput * material.emissive;
             }
 
