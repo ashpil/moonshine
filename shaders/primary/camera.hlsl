@@ -18,8 +18,8 @@ struct Camera {
         RayDesc rayDesc;
         rayDesc.Origin = origin + defocusOffset;
         rayDesc.Direction = normalize(lower_left_corner + uv.x * horizontal + uv.y * vertical - defocusOffset - origin);
-        rayDesc.TMin = 0.0001;
-        rayDesc.TMax = 10000.0;
+        rayDesc.TMin = 0;
+        rayDesc.TMax = INFINITY;
 
         return rayDesc;
     }

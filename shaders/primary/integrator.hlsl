@@ -75,8 +75,8 @@ struct PathTracingIntegrator : Integrator {
 
             // set up info for next bounce
             ray.Direction = frame.frameToWorld(sample.dirFs);
-            ray.Origin = attrs.position;
-            if (dot(attrs.normal, ray.Direction) <= 0.0 || sample.pdf == 0.0) return accumulatedColor;
+            ray.Origin = offsetAlongNormal(attrs.position, attrs.normal);
+            if (sample.pdf == 0.0) return accumulatedColor;
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
             bounceCount += 1;
         }
