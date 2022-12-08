@@ -1,5 +1,5 @@
 struct LightSample {
-    float4 dirWs; // w is distance
+    float3 dirWs;
     float3 radiance;
     float pdf;
 };
@@ -13,15 +13,15 @@ interface Light {
     // samples a light direction based on given position and geometric normal, returning
     // radiance at that point from light and pdf of this direction + radiance
     //
-    // pdf is with respect to non-obstructed solid angle
-    // may trace a ray
+    // pdf is with respect to unobstructed solid angle
+    // should trace a ray to determine obstruction
     LightSample sample(float3 positionWs, float3 normalWs, float4 square);
 
     // evaluates a given position, returning radiance arriving at that point from
     // light and the pdf of that radiance
     //
-    // pdf is with respect to non-obstructed solid angle
-    // may trace a ray
+    // pdf is with respect to unobstructed solid angle
+    // should trace a ray to determine obstruction
     LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs);
 };
 
@@ -95,7 +95,12 @@ struct EnvMap : Light {
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
         lightSample.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
-        lightSample.dirWs = float4(sphericalToCartesian(sinTheta, cos(theta), phi), 1000000.0);
+        lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
+
+        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), lightSample.dirWs, INFINITY)) {
+            lightSample.pdf = 0.0;
+        }
+
         return lightSample;
     }
 
@@ -118,6 +123,10 @@ struct EnvMap : Light {
         float sinTheta = sin(phiTheta.y);
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
 
+        if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), dirWs, INFINITY)) {
+            l.pdf = 0.0;
+            l.radiance = float3(0, 0, 0);
+        }
         return l;
     }
 
@@ -159,10 +168,14 @@ struct MeshLights : Light {
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float r = sqrt(r2);
             lightSample.radiance = emissive;
-            lightSample.dirWs = float4(samplePositionToEmitterPositionWs / r, r);
+            lightSample.dirWs = samplePositionToEmitterPositionWs / r;
 
             // pdf in solid angle measure
-            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs.xyz, attrs.normal)) * sum);
+            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
+
+            if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), lightSample.dirWs, r - 0.001)) {
+                lightSample.pdf = 0.0;
+            }
         } else {
             lightSample.pdf = 0.0;
         }
@@ -194,11 +207,11 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
     // sample light
     {
         LightSample lightSample = light.sample(positionWs, normalDirWs, rand1);
-        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
         if (lightSample.pdf > 0.0) {
-            if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), lightSample.dirWs.xyz, lightSample.dirWs.w)) {
-                float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
+            float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
+            if (scatteringPdf > 0.0) {
                 float3 brdf = material.eval(lightDirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
                 directLighting += lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
@@ -212,8 +225,8 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (materialSample.pdf > 0.0) {
-            if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), brdfDirWs, 10000.0)) {
-                LightEval lightContrib = light.eval(positionWs, normalDirWs, brdfDirWs);
+            LightEval lightContrib = light.eval(positionWs, normalDirWs, brdfDirWs);
+            if (lightContrib.pdf > 0.0) {
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, materialSample.pdf, 1, lightContrib.pdf);
                 directLighting += lightContrib.radiance * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
@@ -228,14 +241,12 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 template <class Light, class Material>
 float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
     LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
-    float3 lightDirFs = frame.worldToFrame(lightSample.dirWs.xyz);
+    float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
     if (lightSample.pdf > 0.0) {
-        if (!ShadowIntersection::hit(offsetAlongNormal(positionWs, normalDirWs), lightSample.dirWs.xyz, lightSample.dirWs.w - 0.001)) {
-            float3 brdf = material.eval(lightDirFs, outgoingDirFs);
-            return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
-        }
+        float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+        return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
+    } else {
+        return float3(0, 0, 0);
     }
-
-    return float3(0, 0, 0);
 }

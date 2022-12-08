@@ -2,6 +2,7 @@
 
 static const float PI = 3.14159265;
 static const float EPSILON = 0.000000119;
+static const float INFINITY = 1000000000000; // pranked
 static const uint MAX_UINT = 0xFFFFFFFF;
 
 float3 sphericalToCartesian(float sinTheta, float cosTheta, float phi) {
