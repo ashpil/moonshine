@@ -83,10 +83,9 @@ float3 coloredFresnel(float3 w_i, float3 m, float ior, float3 color, float metal
 }
 
 // basic schlick fresnel
-float3 schlickFresnel(float3 w_i, float3 n, float intIor) {
-    float extIor = 1.0;
-    float R_0 = pow((extIor - intIor) / (extIor + intIor), 2);
-    return R_0 + (1 - R_0) * pow(1 - dot(w_i, n), 5);
+float3 schlickFresnel(float cosTheta, float intIOR, float extIOR) {
+    float F_0 = pow((extIOR - intIOR) / (extIOR + intIOR), 2);
+    return F_0 + (1 - F_0) * pow(1 - cosTheta, 5);
 }
 
 struct MaterialSample {
@@ -208,6 +207,44 @@ struct StandardPBR : Material {
     }
 };
 
+// TODO: transmission
+struct DisneyDiffuse : Material {
+    float3 color;
+    float roughness;
+
+    static DisneyDiffuse create(float3 color, float roughness) {
+        DisneyDiffuse material;
+        material.color = color;
+        material.roughness = roughness;
+        return material;
+    }
+
+    MaterialSample sample(float3 w_o, float2 square) {
+        return Lambert::create(color).sample(w_o, square);
+    }
+
+    float pdf(float3 w_i, float3 w_o) {
+        return Lambert::create(color).pdf(w_i, w_o);
+    }
+
+    float3 eval(float3 w_i, float3 w_o) {
+        float3 lambertian = Lambert::create(color).eval(w_i, w_o);
+
+        float3 h = normalize(w_i + w_o);
+        float cosThetaHI = dot(w_i, h);
+        
+        float cosThetaNI = abs(Frame::cosTheta(w_i));
+        float cosThetaNO = abs(Frame::cosTheta(w_o));
+        float F_I = pow(1 - cosThetaNI, 5);
+        float F_O = pow(1 - cosThetaNO, 5);
+
+        float R_R = 2 * roughness * cosThetaHI * cosThetaHI;
+        float3 retro = R_R * (F_I + F_O + F_I * F_O * (R_R - 1));
+
+        return lambertian * ((1 - F_I / 2) * (1 - F_O / 2) + retro);
+    }
+};
+
 float3 decodeNormal(float2 rg) {
     rg = rg * 2 - 1;
     return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
@@ -261,5 +298,9 @@ struct MaterialParameters {
 
     Lambert getLambert() {
         return Lambert::create(color);
+    }
+
+    DisneyDiffuse getDisneyDiffuse() {
+        return DisneyDiffuse::create(color, roughness);
     }
 };
