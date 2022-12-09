@@ -10,11 +10,11 @@ interface MicrofacetDistribution {
 };
 
 struct GGX : MicrofacetDistribution {
-    float roughness;
+    float α;
 
-    static GGX create(float roughness) {
+    static GGX create(float α) {
         GGX ggx;
-        ggx.roughness = roughness;
+        ggx.α = α;
         return ggx;
     }
 
@@ -23,11 +23,11 @@ struct GGX : MicrofacetDistribution {
     float D(float3 m) {
         float cos_theta_m = Frame::cosTheta(m);
         if (cos_theta_m > 0.0) {
-            float roughness_squared = pow(roughness, 2);
+            float α2 = pow(α, 2);
             float cos_theta_m_squared = pow(cos_theta_m, 2);
             float tan_theta_m_squared = (1.0 - cos_theta_m_squared) / cos_theta_m_squared;
-            float denominator = PI * pow(cos_theta_m_squared, 2) * pow(roughness_squared + tan_theta_m_squared, 2);
-            return roughness_squared / denominator;
+            float denominator = PI * pow(cos_theta_m_squared, 2) * pow(α2 + tan_theta_m_squared, 2);
+            return α2 / denominator;
         } else {
             return 0.0;
         }
@@ -41,7 +41,7 @@ struct GGX : MicrofacetDistribution {
         if (val > 0.0) {
             float cos_theta_v_squared = pow(cos_theta_v, 2);
             float tan_theta_v_squared = (1.0 - cos_theta_v_squared) / cos_theta_v_squared;
-            float root = sqrt(1.0 + pow(roughness, 2) * tan_theta_v_squared);
+            float root = sqrt(1.0 + pow(α, 2) * tan_theta_v_squared);
             return 2 / (1 + root);
         } else {
             return 0.0;
@@ -57,7 +57,7 @@ struct GGX : MicrofacetDistribution {
     // samples a half vector from the distribution
     float3 sample(float3 w_o, float2 square) {
         // figure out spherical coords of half vector
-        float tanTheta = roughness * sqrt(square.x) / sqrt(1 - square.x);
+        float tanTheta = α * sqrt(square.x) / sqrt(1 - square.x);
         float cosThetaSquared = 1 / (1 + (tanTheta * tanTheta));
         float sinTheta = sqrt(max(0, 1 - cosThetaSquared));
         float cosTheta = sqrt(cosThetaSquared);
@@ -134,25 +134,18 @@ struct Lambert : Material {
 struct StandardPBR : Material {
     GGX distr;      // microfacet distribution used by this material
 
-    float3 color;
-    float3 emissive;
-    float3 normal;
-    float metalness;
-    float roughness;
-    float ior;
+    float3 color; // color - linear color; each component is [0, 1]
+    float metalness; // metalness - k_s - part it is specular. diffuse is (1 - specular); [0, 1]
+    float roughness; // roughness - roughness value; [0, 1)
+    float ior; // ior - internal index of refraction; [0, inf)
 
-    // color - linear color; each component is [0, 1]
-    // emissive - linear emitted radiance; each component is [0, inf)
-    // metalness - k_s - part it is specular. diffuse is (1 - specular); [0, 1]
-    // roughness - roughness value; [0, 1)
-    // ior - internal index of refraction; [0, inf)
-    static StandardPBR create(float3 color, float3 normal, float3 emissive, float metalness, float roughness, float ior) {
+    static StandardPBR create(float3 color, float metalness, float roughness, float ior) {
+        roughness = max(roughness, 0.004); // set minimum roughness otherwise current math breaks down a bit
+        
         StandardPBR material;
         material.color = color;
-        material.emissive = emissive;
         material.metalness = metalness;
         material.ior = ior;
-        material.normal = normal;
         material.distr = GGX::create(roughness);
         return material;
     }
@@ -227,16 +220,46 @@ float3 lookupTextureNormal(uint textureIndex, float2 texcoords, float3 normal, f
     return normalize(mul(fromTangent, normalTangentSpace).xyz);
 }
 
-StandardPBR getMaterial(uint materialIndex, float2 texcoords, float3 geometricNormal, float3 tangent, float3 bitangent) {
-    Values values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
-    float3 color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-    float metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
-    float roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
-    float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-    float3 normal = lookupTextureNormal(5 * materialIndex + 4, texcoords, geometricNormal, tangent, bitangent);
+// sort of a weird system rn
+// represents all parameters a material might have
+// then, to get a specific interpretation of these parameters,
+// just call getX where X is the specific material model
+//
+// the purpose of this is to be able to easily swap material models when testing
+// as well as somewhere to store material parameters that aren't really reliant on a specific material model,
+// such as the normal or emissive map
+struct MaterialParameters {
+    Values values;
+    float3 color;
+    float metalness;
+    float roughness;
 
-    roughness = max(roughness, 0.004); // set minimum roughness otherwise current math breaks down a bit
+    float3 emissive;
+    float3 normal;
 
-    return StandardPBR::create(color, normal, emissive, metalness, roughness, values.ior);
-}
+    static MaterialParameters create(uint materialIndex, float2 texcoords, float3 geometricNormal, float3 tangent, float3 bitangent) {
+        Values values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
+        float3 color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        float3 normal = lookupTextureNormal(5 * materialIndex + 4, texcoords, geometricNormal, tangent, bitangent);
+        float metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        float roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
 
+        MaterialParameters params;
+        params.values = values;
+        params.color = color;
+        params.emissive = emissive;
+        params.normal = normal;
+        params.metalness = metalness;
+        params.roughness = roughness;
+        return params;
+    }
+
+    StandardPBR getStandardPBR() {
+        return StandardPBR::create(color, metalness, roughness, values.ior);
+    }
+
+    Lambert getLambert() {
+        return Lambert::create(color);
+    }
+};

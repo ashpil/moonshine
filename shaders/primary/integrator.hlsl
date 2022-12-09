@@ -36,15 +36,16 @@ struct PathTracingIntegrator : Integrator {
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
-            StandardPBR material = getMaterial(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
+            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
+            Lambert material = materialParams.getLambert();
 
             // add emissive light at point if light not explicitly sampled or initial bounce
             if (mesh_samples_per_bounce == 0 || bounceCount == 0 || !geometry.sampled) {
-                accumulatedColor += throughput * material.emissive;
+                accumulatedColor += throughput * materialParams.emissive;
             }
 
             // create local shading frame
-            Frame frame = Frame::create(material.normal);
+            Frame frame = Frame::create(materialParams.normal);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples from env map
