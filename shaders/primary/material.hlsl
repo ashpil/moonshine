@@ -74,19 +74,62 @@ struct GGX : MicrofacetDistribution {
     }
 };
 
-// schlick approximation + some metalness mixing
-// not quite sure where I got this
-float3 coloredFresnel(float3 w_i, float3 m, float ior, float3 color, float metalness) {
-    float R_0 = pow((1 - ior) / (1 + ior), 2);
-    float3 mixed = lerp(float3(R_0, R_0, R_0), color, metalness);
-    return mixed + (float3(1.0, 1.0, 1.0) - mixed) * pow((1 - dot(w_i, m)), 5);
-}
+// ηi is index of refraction for medium on current side of boundary
+// ηt is index of refraction for medium on other side of boundary
+namespace Fresnel {
+    float schlickR0(float ηi, float ηt) {
+        return pow((ηt - ηi) / (ηt + ηi), 2);
+    }
 
-// basic schlick fresnel
-float3 schlickFresnel(float cosTheta, float intIOR, float extIOR) {
-    float F_0 = pow((extIOR - intIOR) / (extIOR + intIOR), 2);
-    return F_0 + (1 - F_0) * pow(1 - cosTheta, 5);
-}
+    float schlickWeight(float cosTheta) {
+        return pow(1 - cosTheta, 5);
+    }
+
+    float schlick(float cosTheta, float R0) {
+        return lerp(schlickWeight(cosTheta), 1, R0);
+    }
+
+    float3 schlick(float cosTheta, float3 R0) {
+        return lerp(schlickWeight(cosTheta), 1, R0);
+    }
+
+    // schlick approximation + tinting
+    float3 tintedSchlick(float cosTheta, float ηi, float ηt, float3 tint, float factor) {
+        float R0 = schlickR0(ηi, ηt);
+        float3 mixed = lerp(R0, tint, factor);
+        return schlick(cosTheta, mixed);
+    }
+
+    // boundary of two dielectric surfaces
+    // PBRT version
+    float dielectric(float cosThetaI, float ηi, float ηt) {
+        cosThetaI = clamp(cosThetaI, -1, 1);
+
+        // potentially swap indices of refraction
+        // TODO: should this be here?
+        bool entering = cosThetaI > 0;
+        if (!entering) {
+            float tmp = ηi;
+            ηi = ηt;
+            ηt = tmp;
+            cosThetaI = abs(cosThetaI);
+        }
+
+        // compute cosThetaT using Snell's Law
+        float sinThetaI = sqrt(max(0, 1 - cosThetaI * cosThetaI));
+        float sinThetaT = ηi / ηt * sinThetaI;
+
+        // handle total internal reflection
+        if (sinThetaT >= 1) return 1;
+
+        float cosThetaT = sqrt(max(0, 1 - sinThetaT * sinThetaT));
+
+        float r_parl = ((ηt * cosThetaI) - (ηi * cosThetaT)) / ((ηt * cosThetaI) + (ηi * cosThetaT));
+        float r_perp = ((ηi * cosThetaI) - (ηt * cosThetaT)) / ((ηi * cosThetaI) + (ηt * cosThetaT));
+
+        return (r_parl * r_parl + r_perp * r_perp) / 2;
+    }
+};
 
 struct MaterialSample {
     float3 dirFs;
@@ -167,7 +210,7 @@ struct StandardPBR : Material {
 
     float3 microfacetEval(float3 w_i, float3 w_o) {
         float3 h = normalize(w_i + w_o);
-        float3 F = coloredFresnel(w_i, h, ior, color, metalness);
+        float3 F = Fresnel::tintedSchlick(dot(w_i, h), 1, ior, color, metalness);
         float G = distr.G(w_i, w_o, h);
         float D = distr.D(h);
         return (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
