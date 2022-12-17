@@ -1,4 +1,10 @@
-# Chess with ray tracing - please think of a better name
+# My general purpose ray traced renderer
+
+Built with Zig + Vulkan ray tracing.
+
+### Subprojects
+* offline -- a headless offline renderer
+* rtchess -- intended to be a ray traced chess game, sort of in disrepair at the moment
 
 ### Build dependencies:
 * `zig`
@@ -7,41 +13,42 @@
     * For Wayland: `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
     * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
 
-### Possible optimizations
-* Better memory/buffers
-* Create homebrew version of `std.MultiArrayList` that has len as a `u32`, as that's what a `DeviceSize` is
-
-### Random thoughts
-* Orthographic projection might look visually interesting in this context 
-
 ### // TODO
-* Make sure we have all necessary `errdefer`s
-* Proper asset system - load scene from file rather than hardcoded
-* Swap off of GLFW?
-* Offline image generator -- would be healthy two have two consumers of engine library code
-* Add tonemapping
-* Add bloom
-* Figure out proper way to do whole shader binding thing -- how to avoid globals?
-* Add dev interface:
-  * UI vs CLI?
-    * UI prettier, better for demos
-    * UI better learning curve 
-    * CLI easier to get set up
-    * Probably do CLI first then UI after if still want
-  * Set:
-    * certain debug modes
-    * whether certain path tracing techniques are used
-    * Scene
-    * Background
-    * Samples per pixel, light samples, etc
-    * Camera settings (ortho vs persp)
-    * Max samples
-  * Display:
-    * Perf stuff
-    * Current camera settings
-    * Current scene info
-  * Commands:
-    * Refresh frame count
+* Feature
+  * Interactive viewer
+  * Proper generic material system
+    * How to do this on GPU???
+  * Bloom
+  * Tonemapping
+  * HDR display
+  * Figure out proper way to do whole shader binding thing -- how to avoid globals?
+  * More camera models
+    * Orthographic
+  * Add dev interface:
+    * UI vs CLI?
+      * UI prettier, better for demos
+      * UI better learning curve 
+      * CLI easier to get set up
+      * Probably do CLI first then UI after if still want
+    * Set:
+      * certain debug modes
+      * whether certain path tracing techniques are used
+      * Scene
+      * Background
+      * Samples per pixel, light samples, etc
+      * Camera settings (ortho vs persp)
+      * Max samples
+    * Display:
+      * Perf stuff
+      * Current camera settings
+      * Current scene info
+    * Commands:
+      * Refresh frame count
+* Code
+  * Make sure we have all necessary `errdefer`s
+  * Proper memory allocation interface
+  * Reduce unnecessary copying
+  * Build alias table or alternative on GPU?
 
 ### Some notes about conventions, as idk where else to put them:
 * `+y` is up
