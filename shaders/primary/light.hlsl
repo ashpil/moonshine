@@ -145,19 +145,9 @@ struct MeshLights : Light {
 
     LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
         LightSample lightSample;
-        uint emitterCount = dEmitterAliasTable[0].alias;
-        float sum = dEmitterAliasTable[0].weight;
-        if (emitterCount != 0) {
-            // find relevant entry
-            float scaled = rand.x * emitterCount;
-            uint idx = scaled;
-            rand.x = scaled - idx;
-            AliasEntry entry = dEmitterAliasTable[idx + 1];
-            if (!coinFlipRemap(entry.weight, rand.x)) {
-                entry = dEmitterAliasTable[entry.alias + 1];
-            }
-
-            // compute information about it
+        AliasEntry entry;
+        float sum = sampleAlias(dEmitterAliasTable, rand.x, entry);
+        if (sum != 0.0) {
             uint instanceID = dInstances[entry.instanceIndex].instanceID();
 
             float2 barycentrics = squareToTriangle(rand);

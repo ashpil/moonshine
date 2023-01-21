@@ -36,6 +36,26 @@ bool coinFlipRemap(float p, inout float rand) {
     }
 }
 
+// samples frorm an alias table, remaps rand
+// returns total weight in alias table, zero if no entries and then e is invalid
+template <class Entry>
+float sampleAlias(StructuredBuffer<Entry> entries, inout float rand, out Entry e) {
+    uint entryCount = entries[0].alias;
+    float sum = dEmitterAliasTable[0].weight;
+    if (entryCount != 0) {
+        float scaled = rand * entryCount;
+        uint idx = scaled;
+        rand = scaled - idx;
+        e = dEmitterAliasTable[idx + 1];
+        if (!coinFlipRemap(e.weight, rand)) {
+            e = dEmitterAliasTable[e.alias + 1];
+        }
+        return sum;
+    } else {
+        return 0.0;
+    }
+}
+
 float2 squareToTriangle(float2 square) {
     float a = 1 - sqrt(1 - square.x);
     float b = square.y * sqrt(1 - square.x);
