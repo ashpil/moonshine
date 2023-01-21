@@ -123,8 +123,8 @@ pub fn fromObj(allocator: std.mem.Allocator, file: std.fs.File) !Self {
     std.debug.assert(final_positions.items.len == final_texcoords.items.len);
     
     return Self {
-        .positions = final_positions.toOwnedSlice(),
-        .texcoords = final_texcoords.toOwnedSlice(),
+        .positions = try final_positions.toOwnedSlice(),
+        .texcoords = try final_texcoords.toOwnedSlice(),
         .normals = null,
         .indices = indices,
     };

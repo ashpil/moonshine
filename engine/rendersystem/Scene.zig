@@ -449,9 +449,9 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     }
                 }
 
-                const positions_slice = positions.toOwnedSlice();
-                const texcoords_slice = texcoords.toOwnedSlice();
-                const normals_slice = normals.toOwnedSlice();
+                const positions_slice = try positions.toOwnedSlice();
+                const texcoords_slice = try texcoords.toOwnedSlice();
+                const normals_slice = try normals.toOwnedSlice();
 
                 // TODO: remove ptrcast workaround below once ptrcast works on slices
                 break :blk2 .{

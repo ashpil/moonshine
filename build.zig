@@ -19,7 +19,7 @@ pub fn build(b: *std.build.Builder) void {
             b.build_root,
             "deps/vk.xml",
         }) catch unreachable;
-        break :blk vkgen.VkGenerateStep.init(b, vk_xml_path, "vk.zig").package;
+        break :blk vkgen.VkGenerateStep.create(b, vk_xml_path, "vk.zig").getPackage("vulkan");
     };
     const glfw = makeGlfwLibrary(b, target, .ReleaseFast) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target, .ReleaseFast);
@@ -118,9 +118,9 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
         "-Ges", // strict mode
         "-WX", // treat warnings as errors
     };
-    const hlsl_comp = HlslCompileStep.init(b, &hlsl_shader_cmd, "");
-    hlsl_comp.add("input", "shaders/misc/input.hlsl");
-    hlsl_comp.add("main", "shaders/primary/main.hlsl");
+    const hlsl_comp = vkgen.ShaderCompileStep.create(b, &hlsl_shader_cmd, "-Fo");
+    hlsl_comp.add("input", "shaders/misc/input.hlsl", .{});
+    hlsl_comp.add("main", "shaders/primary/main.hlsl", .{});
 
     // actual engine
     const build_options = b.addOptions();
@@ -134,7 +134,7 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
         zgltf,
         zigimg,
         build_options.getPackage("build_options"),
-        hlsl_comp.package,
+        hlsl_comp.getPackage("shaders"),
     };
 
     const engine_deps = try b.allocator.create([deps_local.len]std.build.Pkg);
