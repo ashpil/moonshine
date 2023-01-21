@@ -37,7 +37,7 @@ struct PathTracingIntegrator : Integrator {
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
             MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
-            Lambert material = materialParams.getLambert();
+            StandardPBR material = materialParams.getStandardPBR();
 
             // add emissive light at point if light not explicitly sampled or initial bounce
             if (mesh_samples_per_bounce == 0 || bounceCount == 0 || !geometry.sampled) {
