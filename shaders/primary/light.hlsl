@@ -15,7 +15,7 @@ interface Light {
     //
     // pdf is with respect to unobstructed solid angle
     // should trace a ray to determine obstruction
-    LightSample sample(float3 positionWs, float3 normalWs, float4 square);
+    LightSample sample(float3 positionWs, float3 normalWs, float2 square);
 
     // evaluates a given position, returning radiance arriving at that point from
     // light and the pdf of that radiance
@@ -83,7 +83,7 @@ struct EnvMap : Light {
         return pdf_v * pdf_u;
     }
 
-    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
         float2 uv;
         float pdf2d = sample2D(rand.xy, uv);
 
@@ -143,22 +143,24 @@ struct MeshLights : Light {
         return map;
     }
 
-    LightSample sample(float3 positionWs, float3 normalWs, float4 rand) {
+    LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
         LightSample lightSample;
         uint emitterCount = dEmitterAliasTable[0].alias;
         float sum = dEmitterAliasTable[0].weight;
         if (emitterCount != 0) {
             // find relevant entry
-            uint x = rand.x * emitterCount;
-            AliasEntry entry = dEmitterAliasTable[x + 1];
-            if (!coinFlipRemap(entry.weight, rand.y)) {
+            float scaled = rand.x * emitterCount;
+            uint idx = scaled;
+            rand.x = scaled - idx;
+            AliasEntry entry = dEmitterAliasTable[idx + 1];
+            if (!coinFlipRemap(entry.weight, rand.x)) {
                 entry = dEmitterAliasTable[entry.alias + 1];
             }
 
             // compute information about it
             uint instanceID = dInstances[entry.instanceIndex].instanceID();
 
-            float2 barycentrics = squareToTriangle(rand.zw);
+            float2 barycentrics = squareToTriangle(rand);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(entry.instanceIndex, entry.geometryIndex, entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
 
             float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
@@ -226,12 +228,12 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 // estimates direct lighting from light + brdf via MIS
 // TODO: is it better to trace two rays as currently or is a one-ray approach preferable?
 template <class Light, class Material>
-float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand1, float2 rand2) {
+float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
     {
-        LightSample lightSample = light.sample(positionWs, normalDirWs, rand1);
+        LightSample lightSample = light.sample(positionWs, normalDirWs, rand.xy);
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
         if (lightSample.pdf > 0.0) {
@@ -246,7 +248,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
     // sample material
     {
-        MaterialSample materialSample = material.sample(outgoingDirFs, rand2);
+        MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
         float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (materialSample.pdf > 0.0) {
@@ -264,7 +266,7 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
 
 // no MIS, just light
 template <class Light, class Material>
-float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
+float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float2 rand) {
     LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
     float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 

@@ -50,16 +50,14 @@ struct PathTracingIntegrator : Integrator {
 
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
-                float4 rand1 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                float2 rand2 = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMIS(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.normal, rand1, rand2) / env_samples_per_bounce;
+                float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
+                accumulatedColor += throughput * estimateDirectMIS(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.normal, rand) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
             for (uint directCount = 0; directCount < mesh_samples_per_bounce; directCount++) {
-                float4 rand1 = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                float2 rand2 = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMIS(frame, MeshLights::create(), material, outgoing, attrs.position, attrs.normal, rand1, rand2) / mesh_samples_per_bounce;
+                float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
+                accumulatedColor += throughput * estimateDirectMIS(frame, MeshLights::create(), material, outgoing, attrs.position, attrs.normal, rand) / mesh_samples_per_bounce;
             }
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette
