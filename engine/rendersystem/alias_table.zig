@@ -28,56 +28,61 @@ pub fn AliasTable(comptime Data: type) type {
             const entries = try allocator.alloc(TableEntry, raw_weights.len);
             errdefer allocator.free(entries);
 
-            const running_weights = try allocator.alloc(f32, raw_weights.len);
-            defer allocator.free(running_weights);
-
-            var small = std.ArrayList(u32).init(allocator);
-            defer small.deinit();
-
-            var large = std.ArrayList(u32).init(allocator);
-            defer large.deinit();
-
-            const n = @intCast(u32, raw_weights.len);
-
-            var weight_sum: f32 = 0.0; // maybe kahan sum is a good idea here?
+            var weight_sum: f32 = 0.0;
             for (raw_weights) |weight| {
                 weight_sum += weight;
             }
 
+            var less_head: u32 = std.math.maxInt(u32);
+            var more_head: u32 = std.math.maxInt(u32);
+
+            const n = @intCast(u32, raw_weights.len);
             for (raw_weights) |weight, i| {
-                running_weights[i] = (weight * @intToFloat(f32, n)) / weight_sum;
-                if (running_weights[i] < 1.0) {
-                    try small.append(@intCast(u32, i));
+                entries[i].data = data[i];
+
+                const adjusted_weight = (weight * @intToFloat(f32, n)) / weight_sum;
+                entries[i].weight = adjusted_weight;
+                if (adjusted_weight < 1.0) {
+                    entries[i].alias = less_head;
+                    less_head = @intCast(u32, i);
                 } else {
-                    try large.append(@intCast(u32, i));
+                    entries[i].alias = more_head;
+                    more_head = @intCast(u32, i);
                 }
             }
 
-            while (small.items.len != 0 and large.items.len != 0) {
-                const l = small.pop();
-                const g = large.pop();
-                entries[l] = .{
-                    .alias = g,
-                    .weight = running_weights[l],
-                    .data = data[l],
-                };
-                running_weights[g] = (running_weights[g] + running_weights[l]) - 1.0;
-                if (running_weights[g] < 1.0) {
-                    try small.append(g);
+            while (less_head != std.math.maxInt(u32) and more_head != std.math.maxInt(u32)) {
+                const less = less_head;
+                less_head = entries[less].alias;
+
+                const more = more_head;
+                more_head = entries[more].alias;
+
+                entries[less].alias = more;
+                entries[more].weight = (entries[more].weight + entries[less].weight) - 1.0;
+
+                if (entries[more].weight < 1.0) {
+                    entries[more].alias = less_head;
+                    less_head = more;
                 } else {
-                    try large.append(g);
+                    entries[more].alias = more_head;
+                    more_head = more;
                 }
             }
 
-            while (large.popOrNull()) |g| {
-                entries[g].weight = 1.0; // no alias
-                entries[g].data = data[g];
-            }
+            // while (more_head != std.math.maxInt(u32)) {
+            //     const more = more_head;
+            //     more_head = entries[more].alias;
+
+            //     entries[more].weight = 1.0;
+            // }
 
             // should only happen due to floating point, this is actually a large entry
-            while (small.popOrNull()) |l| {
-                entries[l].weight = 1.0; // no alias
-                entries[l].data = data[l];
+            while (less_head != std.math.maxInt(u32)) {
+                const less = less_head;
+                less_head = entries[less].alias;
+
+                entries[less].weight = 1.0;
             }
 
             return Self {
