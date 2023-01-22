@@ -120,7 +120,20 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
     };
     const hlsl_comp = vkgen.ShaderCompileStep.create(b, &hlsl_shader_cmd, "-Fo");
     hlsl_comp.add("input", "shaders/misc/input.hlsl", .{});
-    hlsl_comp.add("main", "shaders/primary/main.hlsl", .{});
+    hlsl_comp.add("main", "shaders/primary/main.hlsl", .{
+        .watched_files = &.{
+            "shaders/primary/bindings.hlsl",
+            "shaders/primary/camera.hlsl",
+            "shaders/primary/geometry.hlsl",
+            "shaders/primary/integrator.hlsl",
+            "shaders/primary/intersection.hlsl",
+            "shaders/primary/light.hlsl",
+            "shaders/primary/material.hlsl",
+            "shaders/primary/math.hlsl",
+            "shaders/primary/random.hlsl",
+            "shaders/primary/reflection_frame.hlsl",
+        }
+    });
 
     // actual engine
     const build_options = b.addOptions();
