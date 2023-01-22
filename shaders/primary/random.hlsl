@@ -41,13 +41,13 @@ bool coinFlipRemap(float p, inout float rand) {
 template <class Entry>
 float sampleAlias(StructuredBuffer<Entry> entries, inout float rand, out Entry e) {
     uint entryCount = entries[0].alias;
-    float sum = dEmitterAliasTable[0].weight;
+    float sum = dEmitterAliasTable[0].select;
     if (entryCount != 0) {
         float scaled = rand * entryCount;
         uint idx = scaled;
         rand = scaled - idx;
         e = dEmitterAliasTable[idx + 1];
-        if (!coinFlipRemap(e.weight, rand)) {
+        if (!coinFlipRemap(e.select, rand)) {
             e = dEmitterAliasTable[e.alias + 1];
         }
         return sum;

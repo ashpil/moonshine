@@ -195,7 +195,7 @@ struct MeshLights : Light {
 
             float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
-            float sum = dEmitterAliasTable[0].weight;
+            float sum = dEmitterAliasTable[0].select;
             l.pdf = r2 / (abs(dot(-dirWs, attrs.normal)) * sum);
             l.radiance = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, its.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
         } else {

@@ -4,7 +4,7 @@ const std = @import("std");
 fn Entry(comptime Data: type) type {
     return extern struct {
         alias: u32, // index of alias
-        weight: f32, // weight by which to do a biased coin flip, if heads, this is the entry, if tails, alias is the entry
+        select: f32, // weight by which to do a biased coin flip, if heads, this is the entry, if tails, alias is the entry
         data: Data,
     };
 }
@@ -41,7 +41,7 @@ pub fn AliasTable(comptime Data: type) type {
                 entries[i].data = data[i];
 
                 const adjusted_weight = (weight * @intToFloat(f32, n)) / weight_sum;
-                entries[i].weight = adjusted_weight;
+                entries[i].select = adjusted_weight;
                 if (adjusted_weight < 1.0) {
                     entries[i].alias = less_head;
                     less_head = @intCast(u32, i);
@@ -59,9 +59,9 @@ pub fn AliasTable(comptime Data: type) type {
                 more_head = entries[more].alias;
 
                 entries[less].alias = more;
-                entries[more].weight = (entries[more].weight + entries[less].weight) - 1.0;
+                entries[more].select = (entries[more].select + entries[less].select) - 1.0;
 
-                if (entries[more].weight < 1.0) {
+                if (entries[more].select < 1.0) {
                     entries[more].alias = less_head;
                     less_head = more;
                 } else {
@@ -74,7 +74,7 @@ pub fn AliasTable(comptime Data: type) type {
             //     const more = more_head;
             //     more_head = entries[more].alias;
 
-            //     entries[more].weight = 1.0;
+            //     entries[more].select = 1.0;
             // }
 
             // should only happen due to floating point, this is actually a large entry
@@ -82,7 +82,7 @@ pub fn AliasTable(comptime Data: type) type {
                 const less = less_head;
                 less_head = entries[less].alias;
 
-                entries[less].weight = 1.0;
+                entries[less].select = 1.0;
             }
 
             return Self {

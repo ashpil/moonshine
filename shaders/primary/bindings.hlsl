@@ -37,7 +37,7 @@ struct Instance { // same required by vulkan on host side
 
 struct AliasEntry {
     uint alias;
-    float weight;
+    float select;
     uint instanceIndex;
     uint geometryIndex;
     uint primitiveIndex;
