@@ -22,6 +22,7 @@ pub const TinyExrError = error {
 
 pub const Image = c.EXRImage;
 pub const Header = c.EXRHeader;
+pub const Version = c.EXRVersion;
 pub const ChannelInfo = c.EXRChannelInfo;
 
 pub const PixelType = enum(c_int) {
@@ -30,7 +31,7 @@ pub const PixelType = enum(c_int) {
     float = 2,
 };
 
-fn getErr(err_code: c_int) TinyExrError!void {
+fn intToStatus(err_code: c_int) TinyExrError!void {
     return switch (err_code) {
         0 => {},
         -1 => TinyExrError.InvalidMagicNumber,
@@ -51,13 +52,35 @@ fn getErr(err_code: c_int) TinyExrError!void {
     };
 }
 
-pub fn saveExrImageToFile(image: *const Image, header: *const Header, filename: [*:0]const u8) TinyExrError!void {
-    var err_message: [*c]u8 = null;
-    getErr(c.SaveEXRImageToFile(image, header, filename, &err_message)) catch |err| {
+pub fn handleError(func: anytype, args: anytype) TinyExrError!void {
+    var err_message: [*c]u8 = undefined;
+    const ref = &err_message;
+    const new_args = args ++ .{ ref };
+    intToStatus(@call(.auto, func, new_args)) catch |err| {
         std.log.err("tinyexr: {}: {s}", .{ err, err_message });
         c.FreeEXRErrorMessage(err_message);
         return err;
     };
+}
+
+pub fn saveExrImageToFile(image: *const Image, header: *const Header, filename: [*:0]const u8) TinyExrError!void {
+    return handleError(c.SaveEXRImageToFile, .{ image, header, filename });
+}
+
+pub fn loadExrImageFromFile(image: *Image, header: *const Header, filename: [*:0]const u8) TinyExrError!void {
+    return handleError(c.LoadExrImageFromFile, .{ image, header, filename });
+}
+
+pub fn parseExrHeaderFromFile(header: *Header, version: *const Version, filename: [*:0]const u8) TinyExrError!void {
+    return handleError(c.ParseEXRHeaderFromFile, .{ header, version, filename });
+}
+
+pub fn parseExrVersionFromFile(version: *Version, filename: [*:0]const u8) TinyExrError!void {
+    return intToStatus(c.ParseEXRVersionFromFile(version, filename));
+}
+
+pub fn loadEXR(out_rgba: *[*c]f32, width: *c_int, height: *c_int, filename: [*:0]const u8) TinyExrError!void {
+    return handleError(c.LoadEXR, .{ out_rgba, width, height, filename });
 }
 
 pub fn initExrHeader(header: *Header) void {
@@ -71,7 +94,7 @@ pub fn initExrImage(image: *Image) void {
 pub const helpers = struct {
     const vk = @import("vulkan");
 
-    // make out_filename this not sentinel terminated
+    // TODO: make out_filename this not sentinel terminated
     pub fn save(allocator: std.mem.Allocator, packed_channels: []const f32, packed_channel_count: u32, size: vk.Extent2D, out_filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!void {
         const channel_count = 3;
 
@@ -144,5 +167,42 @@ pub const helpers = struct {
         }
 
         try saveExrImageToFile(&image, &header, out_filename);
+    }
+
+    const Slice2D = struct {
+        ptr: [*]f32,
+        extent: vk.Extent2D,
+
+        fn asSlice(self: Slice2D) []f32 {
+            var slice: []f32 = undefined;
+            slice.ptr = self.ptr;
+            slice.len = self.extent.width * self.extent.height;
+            return slice;
+        }
+    };
+
+    // load RGB image into RGBA buffer
+    pub fn load(allocator: std.mem.Allocator, filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!Slice2D {
+        var version: Version = undefined;
+        try parseExrVersionFromFile(&version, filename);
+
+        var header: Header = undefined;
+        try parseExrHeaderFromFile(&header, &version, filename);
+
+        var out_rgba: [*c]f32 = undefined;
+        var width: c_int = undefined;
+        var height: c_int = undefined;
+        try loadEXR(&out_rgba, &width, &height, filename);
+        const malloc_slice = Slice2D {
+            .ptr = out_rgba,
+            .extent = vk.Extent2D {
+                .width = @intCast(u32, width),
+                .height = @intCast(u32, height),
+            },
+        };
+        return Slice2D {
+            .ptr = (try allocator.dupe(f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
+            .extent = malloc_slice.extent,
+        };
     }
 };
