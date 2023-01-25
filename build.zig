@@ -37,7 +37,7 @@ pub fn build(b: *std.build.Builder) void {
     {
         var engine_options = default_engine_options;
         engine_options.windowing = true;
-        engine_options.exr = false;
+        engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
         const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
         rtchess_exe.setTarget(target);
@@ -48,6 +48,9 @@ pub fn build(b: *std.build.Builder) void {
         rtchess_exe.addPackage(engine);
         rtchess_exe.linkLibrary(glfw.library);
         rtchess_exe.addIncludePath(glfw.include_path);
+        rtchess_exe.linkLibC();
+        rtchess_exe.linkLibrary(tinyexr.library);
+        rtchess_exe.addIncludePath(tinyexr.include_path);
 
         const run_chess = rtchess_exe.run();
         run_chess.step.dependOn(b.getInstallStep());

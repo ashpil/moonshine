@@ -169,12 +169,12 @@ pub const helpers = struct {
         try saveExrImageToFile(&image, &header, out_filename);
     }
 
-    const Slice2D = struct {
-        ptr: [*]f32,
+    const Rgba2D = struct {
+        ptr: [*][4]f32,
         extent: vk.Extent2D,
 
-        fn asSlice(self: Slice2D) []f32 {
-            var slice: []f32 = undefined;
+        pub fn asSlice(self: Rgba2D) [][4]f32 {
+            var slice: [][4]f32 = undefined;
             slice.ptr = self.ptr;
             slice.len = self.extent.width * self.extent.height;
             return slice;
@@ -182,7 +182,8 @@ pub const helpers = struct {
     };
 
     // load RGB image into RGBA buffer
-    pub fn load(allocator: std.mem.Allocator, filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!Slice2D {
+    // TODO: free
+    pub fn load(allocator: std.mem.Allocator, filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!Rgba2D {
         var version: Version = undefined;
         try parseExrVersionFromFile(&version, filename);
 
@@ -193,16 +194,18 @@ pub const helpers = struct {
         var width: c_int = undefined;
         var height: c_int = undefined;
         try loadEXR(&out_rgba, &width, &height, filename);
-        const malloc_slice = Slice2D {
-            .ptr = out_rgba,
+        const malloc_slice = Rgba2D {
+            .ptr = @ptrCast([*][4]f32, out_rgba),
             .extent = vk.Extent2D {
                 .width = @intCast(u32, width),
                 .height = @intCast(u32, height),
             },
         };
-        return Slice2D {
-            .ptr = (try allocator.dupe(f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
+        const out = Rgba2D {
+            .ptr = (try allocator.dupe([4]f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
             .extent = malloc_slice.extent,
         };
+        std.heap.c_allocator.free(malloc_slice.asSlice());
+        return out;
     }
 };

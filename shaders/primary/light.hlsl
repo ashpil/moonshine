@@ -31,61 +31,28 @@ struct EnvMap : Light {
         return map;
     }
 
-    float sample2D(float2 uv, out float2 result) {
+    float sample2D(float2 uv, out uint2 result) {
         uint2 size;
-        dConditionalCdfs.GetDimensions(size.x, size.y);
-        int width = size.x - 1;
-        int height = size.y;
+        dBackgroundTexture.GetDimensions(size.x, size.y);
 
         // get y
-        int first = 0;
-        int len = height;
-
-        while (len > 0) {
-            int halfs = len >> 1;
-            int middle = first + halfs;
-            
-            if (dMarginalCdf.Load(middle) <= uv.y) {
-                first = middle + 1;
-                len -= halfs + 1;
-            } else {
-                len = halfs;
-            }
-        }
-
-        int offset_v = clamp(first - 1, 0, height - 2);
-        float valv = dMarginalCdf[offset_v];
-        float dv = (uv.y - valv) / (dMarginalCdf[offset_v + 1] - valv);
-        float pdf_v = dMarginalPdfIntegral[offset_v] / dMarginalPdfIntegral[height];
-        result.y = (offset_v + dv) / height;
+        float pdf_y;
+        sampleAlias<float, AliasEntry<float> >(dBackgroundMarginalAlias, size.y, 0, uv.y, result.y, pdf_y);
 
         // get x
-        first = 0;
-        len = width;
+        float pdf_x;
+        sampleAlias<float, AliasEntry<float> >(dBackgroundConditionalAlias, size.x, result.y * size.x, uv.x, result.x, pdf_x);
 
-        while (len > 0) {
-            int halfs = len >> 1;
-            int middle = first + halfs;
-            
-            if (dConditionalCdfs[int2(middle, offset_v)] <= uv.x) {
-                first = middle + 1;
-                len -= halfs + 1;
-            } else {
-                len = halfs;
-            }
-        }
-        int offset_u = clamp(first - 1, 0, width - 2);
-        float valu = dConditionalCdfs[int2(offset_u, offset_v)];
-        float du = (uv.x - valu) / (dConditionalCdfs[int2(offset_u + 1, offset_v)] - valu);
-        float pdf_u = dConditionalPdfsIntegrals[int2(offset_u, offset_v)] / dConditionalPdfsIntegrals[int2(width, offset_v)];
-        result.x = (offset_u + du) / width;
-
-        return pdf_v * pdf_u;
+        return pdf_x * pdf_y * float(size.y) * float(size.x);
     }
 
     LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
-        float2 uv;
-        float pdf2d = sample2D(rand.xy, uv);
+        uint2 size;
+        dBackgroundTexture.GetDimensions(size.x, size.y);
+
+        uint2 discreteuv;
+        float pdf2d = sample2D(rand, discreteuv);
+        float2 uv = (float2(discreteuv) + float2(0.5, 0.5)) / size;
 
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
@@ -94,7 +61,7 @@ struct EnvMap : Light {
         
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        lightSample.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
+        lightSample.radiance = dBackgroundTexture.Load(float3(discreteuv, 0));
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), lightSample.dirWs, INFINITY)) {
@@ -114,12 +81,9 @@ struct EnvMap : Light {
 
         // compute pdf
         uint2 size;
-        dConditionalCdfs.GetDimensions(size.x, size.y);
-        int width = size.x - 1;
-        int height = size.y;
-
-        uint2 coords = clamp(uint2(uv * float2(width, height)), uint2(0, 0), uint2(width - 1, height - 1));
-        float pdf2d = dConditionalPdfsIntegrals[coords] / dMarginalPdfIntegral[height];
+        dBackgroundTexture.GetDimensions(size.x, size.y);
+        uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
+        float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * size.x * size.y;
         float sinTheta = sin(phiTheta.y);
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
 
@@ -145,32 +109,35 @@ struct MeshLights : Light {
 
     LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
         LightSample lightSample;
-        AliasEntry entry;
-        float sum = sampleAlias(dEmitterAliasTable, rand.x, entry);
-        if (sum != 0.0) {
-            uint instanceID = dInstances[entry.instanceIndex].instanceID();
+        lightSample.pdf = 0.0;
 
-            float2 barycentrics = squareToTriangle(rand);
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(entry.instanceIndex, entry.geometryIndex, entry.primitiveIndex, barycentrics).inWorld(entry.instanceIndex);
+        uint entryCount = dEmitterAliasTable[0].alias;
+        float sum = dEmitterAliasTable[0].select;
+        if (entryCount == 0 || sum == 0) return lightSample;
 
-            float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, entry.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
+        LightAliasData data;
+        uint idx;
+        sampleAlias<LightAliasData, AliasEntry<LightAliasData> >(dEmitterAliasTable, entryCount, 1, rand.x, idx, data);
+        uint instanceID = dInstances[data.instanceIndex].instanceID();
 
-            float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
-            float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
-            float r = sqrt(r2);
-            lightSample.radiance = emissive;
-            lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-            lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
+        float2 barycentrics = squareToTriangle(rand);
+        MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(data.instanceIndex, data.geometryIndex, data.primitiveIndex, barycentrics).inWorld(data.instanceIndex);
 
-            // compute precise ray endpoints
-            float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.normal);
-            float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
-            float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
+        float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, data.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
 
-            if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
-                lightSample.pdf = 0.0;
-            }
-        } else {
+        float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
+        float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
+        float r = sqrt(r2);
+        lightSample.radiance = emissive;
+        lightSample.dirWs = samplePositionToEmitterPositionWs / r;
+        lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
+
+        // compute precise ray endpoints
+        float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.normal);
+        float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
+        float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
+
+        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
             lightSample.pdf = 0.0;
         }
         return lightSample;

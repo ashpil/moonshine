@@ -335,7 +335,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, filepath: []const u8, background_dir: []const u8, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
     // background atm unrelated to gltf
     const sampler = try ImageManager.createSampler(vc);
-    var background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
+    var background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, sampler, background_dir);
     errdefer background.destroy(vc, allocator);
 
     // get the gltf
@@ -560,7 +560,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const sampler = try ImageManager.createSampler(vc);
 
-    const background = try Background.create(vc, vk_allocator, allocator, commands, background_dir, background_descriptor_layout, sampler);
+    const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, sampler, background_dir);
 
     var scene = Self {
         .background = background,

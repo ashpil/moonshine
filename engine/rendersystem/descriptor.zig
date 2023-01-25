@@ -34,37 +34,23 @@ pub const OutputDescriptorLayout = DescriptorLayout(&.{
 
 // must be kept in sync with shader
 pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
-    .{
+    .{ // image
         .binding = 0,
         .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // marginal
         .binding = 1,
-        .descriptor_type = .storage_image,
+        .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-    .{
+    .{ // conditional
         .binding = 2,
-        .descriptor_type = .storage_image,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
-    .{
-        .binding = 3,
-        .descriptor_type = .storage_image,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
-    },
-    .{
-        .binding = 4,
-        .descriptor_type = .storage_image,
+        .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,

@@ -39,24 +39,29 @@ pub fn main() !void {
     const params = blk: {
         const args = try std.process.argsAlloc(allocator);
         defer std.process.argsFree(allocator, args);
-        if (args.len < 3) return error.BadArgs;
+        if (args.len < 4) return error.BadArgs;
 
         const in_filename = args[1];
         if (!std.mem.eql(u8, std.fs.path.extension(in_filename), ".glb")) return error.OnlySupportsGlbInput;
 
-        const out_filename = args[2];
+        const background_filename = args[2];
+        if (!std.mem.eql(u8, std.fs.path.extension(background_filename), ".exr")) return error.OnlySupportsExrBackground;
+
+        const out_filename = args[3];
         if (!std.mem.eql(u8, std.fs.path.extension(out_filename), ".exr")) return error.OnlySupportsExrOutput;
 
-        const spp = if (args.len > 3) try std.fmt.parseInt(u32, args[3], 10) else 16;
+        const spp = if (args.len > 4) try std.fmt.parseInt(u32, args[4], 10) else 16;
 
         break :blk .{
             .in_filename = try allocator.dupe(u8, in_filename),
+            .background_filename = try allocator.dupe(u8, background_filename),
             .out_filename = try allocator.dupeZ(u8, out_filename), // ugh
             .spp = spp,
         };
     };
     defer {
         allocator.free(params.in_filename);
+        allocator.free(params.background_filename);
         allocator.free(params.out_filename);
     }
 
@@ -90,7 +95,7 @@ pub fn main() !void {
     const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
 
     const camera_origin = F32x3.new(0.0, 3.0, 5.0);
-    const camera_target = F32x3.new(0.0, 1.2, 0.0);
+    const camera_target = F32x3.new(0.0, 0.0, 0.0);
     const camera_create_info = .{
         .origin = camera_origin,
         .target = camera_target,
@@ -152,7 +157,7 @@ pub fn main() !void {
     });
 
     const start_time = try std.time.Instant.now();
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filename, "./assets/textures/skybox/", &scene_descriptor_layout, &background_descriptor_layout);
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filename, params.background_filename, &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
     const scene_time = try std.time.Instant.now();
     const stdout = std.io.getStdOut().writer();

@@ -6,7 +6,7 @@ const VkAllocator = @import("./Allocator.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Vertex = @import("../Object.zig").Vertex;
 const utils = @import("./utils.zig");
-const AliasTable = @import("alias_table.zig").AliasTable;
+const AliasTable = @import("./alias_table.zig").AliasTable;
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);

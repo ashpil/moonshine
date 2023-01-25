@@ -35,15 +35,20 @@ struct Instance { // same required by vulkan on host side
 [[vk::binding(1, 0)]] StructuredBuffer<Instance> dInstances;
 [[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 
-struct AliasEntry {
-    uint alias;
-    float select;
+struct LightAliasData {
     uint instanceIndex;
     uint geometryIndex;
     uint primitiveIndex;
 };
 
-[[vk::binding(3, 0)]] StructuredBuffer<AliasEntry> dEmitterAliasTable;
+template <class Data>
+struct AliasEntry {
+    uint alias;
+    float select;
+    Data data;
+};
+
+[[vk::binding(3, 0)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
 
 [[vk::binding(4, 0)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(5, 0)]] StructuredBuffer<Geometry> dGeometries;
@@ -62,11 +67,8 @@ struct Values {
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;
 [[vk::binding(0, 1)]] SamplerState dBackgroundSampler;
 
-[[vk::binding(1, 1)]] RWTexture2D<float> dConditionalPdfsIntegrals;
-[[vk::binding(2, 1)]] RWTexture2D<float> dConditionalCdfs;
-
-[[vk::binding(3, 1)]] RWTexture1D<float> dMarginalPdfIntegral;
-[[vk::binding(4, 1)]] RWTexture1D<float> dMarginalCdf;
+[[vk::binding(1, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
+[[vk::binding(2, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
 
 // OUTPUT
 [[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;

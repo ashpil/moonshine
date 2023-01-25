@@ -6,6 +6,7 @@ fn typeToObjectType(comptime in: type) vk.ObjectType {
     return switch(in) {
         vk.DescriptorSetLayout => .descriptor_set_layout,
         vk.DescriptorSet => .descriptor_set,
+        vk.Buffer => .buffer,
         else => unreachable, // TODO: add more
     };
 }
