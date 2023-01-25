@@ -36,8 +36,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         ImageManager.TextureSource {
             .raw = .{
                 .bytes = std.mem.sliceAsBytes(color.asSlice()),
-                .width = color.extent.width,
-                .height = color.extent.height,
+                .extent = color.extent,
                 .format = .r32g32b32a32_sfloat,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },

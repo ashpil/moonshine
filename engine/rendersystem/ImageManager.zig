@@ -20,8 +20,7 @@ pub const ImageCreateRawInfo = struct {
 
 pub const RawSource = struct {
     bytes: []const u8,
-    width: u32,
-    height: u32,
+    extent: vk.Extent2D,
     format: vk.Format,
     layout: vk.ImageLayout,
     usage: vk.ImageUsageFlags,
@@ -97,10 +96,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                 break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
             },
             .raw => |raw_info| blk: {
-                extents[i] = vk.Extent2D {
-                    .width = raw_info.width,
-                    .height = raw_info.height,
-                };
+                extents[i] = raw_info.extent;
                 is_cubemaps[i] = false;
                 dst_layouts[i] = raw_info.layout;
                 bytes[i] = raw_info.bytes;

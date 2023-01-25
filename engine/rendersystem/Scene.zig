@@ -68,8 +68,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         color = ImageManager.TextureSource {
             .raw = .{
                 .bytes = rgba.asBytes(),
-                .width = @intCast(u32, img.width),
-                .height = @intCast(u32, img.height),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
                 .format = .r8g8b8a8_srgb,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
@@ -95,8 +97,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         emissive = ImageManager.TextureSource {
             .raw = .{
                 .bytes = rgba.asBytes(),
-                .width = @intCast(u32, img.width),
-                .height = @intCast(u32, img.height),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
                 .format = .r8g8b8a8_srgb,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
@@ -129,8 +133,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         metalness = ImageManager.TextureSource {
             .raw = .{
                 .bytes = r,
-                .width = @intCast(u32, img.width),
-                .height = @intCast(u32, img.height),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
                 .format = .r8_unorm,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
@@ -139,8 +145,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         roughness = ImageManager.TextureSource {
             .raw = .{
                 .bytes = g,
-                .width = @intCast(u32, img.width),
-                .height = @intCast(u32, img.height),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
                 .format = .r8_unorm,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
@@ -168,8 +176,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         normal = ImageManager.TextureSource {
             .raw = .{
                 .bytes = rg,
-                .width = @intCast(u32, img.width),
-                .height = @intCast(u32, img.height),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
                 .format = .r8g8_unorm,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
