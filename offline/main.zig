@@ -93,19 +93,7 @@ pub fn main() !void {
     defer pipeline.destroy(&context);
 
     const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
-
-    const camera_origin = F32x3.new(0.0, 3.0, 5.0);
-    const camera_target = F32x3.new(0.0, 0.0, 0.0);
-    const camera_create_info = .{
-        .origin = camera_origin,
-        .target = camera_target,
-        .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 35.0,
-        .extent = extent,
-        .aperture = 0.007,
-        .focus_distance = camera_origin.sub(camera_target).length(),
-    };
-    const camera = Camera.new(camera_create_info);
+    const camera = try Camera.fromGlb(allocator, params.in_filename, extent);
 
     const display_image_info = ImageManager.ImageCreateRawInfo {
         .extent = extent,

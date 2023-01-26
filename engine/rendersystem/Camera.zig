@@ -1,8 +1,12 @@
 const std = @import("std");
 const vk = @import("vulkan");
+const Gltf = @import("zgltf");
 
 const VulkanContext = @import("./VulkanContext.zig");
-const F32x3 = @import("../vector.zig").Vec3(f32);
+const vector = @import("../vector.zig");
+const F32x3 = vector.Vec3(f32);
+const F32x4 = vector.Vec4(f32);
+const Mat3x4 = vector.Mat3x4(f32);
 
 pub const CreateInfo = struct {
     origin: F32x3,
@@ -62,4 +66,42 @@ pub fn new(create_info: CreateInfo) Self {
         .desc = desc,
         .blur_desc = blur_desc,
     };
+}
+
+pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8, extent: vk.Extent2D) !Self {
+    var gltf = Gltf.init(allocator);
+    defer gltf.deinit();
+
+    const buffer = try std.fs.cwd().readFileAlloc(
+        allocator,
+        path,
+        std.math.maxInt(usize),
+    );
+    defer allocator.free(buffer);
+    try gltf.parse(buffer);
+
+    // just use first camera found in nodes
+    const gltf_camera_node = for (gltf.data.nodes.items) |node| {
+        if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
+    } else return error.NoCameraInGlb;
+    
+    const gltf_camera = gltf_camera_node[0];
+    const transform = blk: {
+        const mat = Gltf.getGlobalTransform(&gltf.data, gltf_camera_node[1]);
+        break :blk Mat3x4.new(
+            F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+            F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+            F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+        );
+    };
+
+    return Self.new(.{
+        .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
+        .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
+        .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
+        .vfov = gltf_camera.type.perspective.yfov / std.math.pi * 180,
+        .extent = extent,
+        .aperture = 0.0,
+        .focus_distance = 1.0,
+    });
 }
