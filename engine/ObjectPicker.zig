@@ -32,7 +32,7 @@ ready_fence: vk.Fence,
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, accel_layout: vk.DescriptorSetLayout, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickData, 1, .{ .storage_buffer_bit = true });
 
-    const descriptor_layout = try InputDescriptorLayout.create(vc, 1);
+    const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
 
     const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [1]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {

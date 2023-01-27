@@ -28,7 +28,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
         destruction_queue: DestructionQueue,
 
         // descriptor layout must have enough room for num_frames sets
-        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, initial_extent: vk.Extent2D) !Self {
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
             var extent = initial_extent;
             var swapchain = try Swapchain.create(vc, allocator, &extent);
             errdefer swapchain.destroy(vc, allocator);
@@ -48,41 +48,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
             errdefer images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, images.data.items(.handle)[1..], .@"undefined", .general);
 
-            const sets = try descriptor_layout.allocate_sets(vc, num_frames, [_]vk.WriteDescriptorSet {
-                vk.WriteDescriptorSet {
-                    .dst_set = undefined,
-                    .dst_binding = 0,
-                    .dst_array_element = 0,
-                    .descriptor_count = 1,
-                    .descriptor_type = .storage_image,
-                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                        .sampler = .null_handle,
-                        .image_view = images.data.items(.view)[0],
-                        .image_layout = .general,
-                    }),
-                    .p_buffer_info = undefined,
-                    .p_texel_buffer_view = undefined,
-                },
-                vk.WriteDescriptorSet {
-                    .dst_set = undefined,
-                    .dst_binding = 1,
-                    .dst_array_element = 0,
-                    .descriptor_count = 1,
-                    .descriptor_type = .storage_image,
-                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                        .sampler = .null_handle,
-                        .image_view = images.data.items(.view)[1],
-                        .image_layout = .general,
-                    }),
-                    .p_buffer_info = undefined,
-                    .p_texel_buffer_view = undefined,
-                },
-            });
-
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
-                frames[i] = try Frame.create(vc, sets[i]);
+                frames[i] = try Frame.create(vc);
             }
 
             return Self {
@@ -121,42 +90,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * vc.physical_device.properties.limits.timestamp_period) / 1_000_000.0;
                 std.debug.print("{}: {d}\n", .{result, time});
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
-            }
-
-            if (frame.needs_rebind) {
-                const descriptor_writes = [2]vk.WriteDescriptorSet {
-                    vk.WriteDescriptorSet {
-                        .dst_set = self.frames[self.frame_index].set,
-                        .dst_binding = 0,
-                        .dst_array_element = 0,
-                        .descriptor_count = 1,
-                        .descriptor_type = .storage_image,
-                        .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                            .sampler = .null_handle,
-                            .image_view = self.images.data.items(.view)[0],
-                            .image_layout = .general,
-                        }),
-                        .p_buffer_info = undefined,
-                        .p_texel_buffer_view = undefined,
-                    },
-                    vk.WriteDescriptorSet {
-                        .dst_set = self.frames[self.frame_index].set,
-                        .dst_binding = 1,
-                        .dst_array_element = 0,
-                        .descriptor_count = 1,
-                        .descriptor_type = .storage_image,
-                        .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                            .sampler = .null_handle,
-                            .image_view = self.images.data.items(.view)[1],
-                            .image_layout = .general,
-                        }),
-                        .p_buffer_info = undefined,
-                        .p_texel_buffer_view = undefined,
-                    },
-                };
-
-                vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);
-                self.frames[self.frame_index].needs_rebind = false;
             }
 
             // we can optionally handle swapchain recreation on suboptimal here,
@@ -249,11 +182,6 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 });
 
                 try commands.transitionImageLayout(vc, allocator, self.images.data.items(.handle)[1..], .@"undefined", .general);
-
-                comptime var i = 0;
-                inline while (i < num_frames) : (i += 1) {
-                    self.frames[i].needs_rebind = true;
-                }
             }
         }
 
@@ -402,16 +330,13 @@ pub fn Display(comptime num_frames: comptime_int) type {
             image_acquired: vk.Semaphore,
             command_completed: vk.Semaphore,
             fence: vk.Fence,
-            set: vk.DescriptorSet,
 
             command_pool: vk.CommandPool,
             command_buffer: vk.CommandBuffer,
 
             query_pool: if (measure_perf) vk.QueryPool else void,
 
-            needs_rebind: bool,
-
-            fn create(vc: *const VulkanContext, set: vk.DescriptorSet) !Frame {
+            fn create(vc: *const VulkanContext) !Frame {
                 const image_acquired = try vc.device.createSemaphore(&.{
                     .flags = .{},
                 }, null);
@@ -452,14 +377,11 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .image_acquired = image_acquired,
                     .command_completed = command_completed,
                     .fence = fence,
-                    .set = set,
 
                     .command_pool = command_pool,
                     .command_buffer = command_buffer,
 
                     .query_pool = query_pool,
-
-                    .needs_rebind = false,
                 };
             }
 

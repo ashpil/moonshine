@@ -239,6 +239,7 @@ const windowing_device_commands = if (windowing) vk.DeviceCommandFlags {
     .acquireNextImage2KHR = true,
     .queuePresentKHR = true,
     .destroySwapchainKHR = true,
+    .cmdPushDescriptorSetKHR = true,
 } else .{};
 
 const perf_device_commands = if (measure_perf) vk.DeviceCommandFlags {
@@ -364,6 +365,7 @@ const PhysicalDevice = struct {
 
     const windowing_device_extensions = [_][*:0]const u8{
         vk.extension_info.khr_swapchain.name,
+        vk.extension_info.khr_push_descriptor.name,
     };
 
     const device_extensions = if (windowing) base_device_extensions ++ windowing_device_extensions else base_device_extensions;

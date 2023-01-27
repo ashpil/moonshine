@@ -18,6 +18,8 @@ const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const Scene = @import("./Scene.zig");
 
+const utils = @import("./utils.zig");
+
 const frames_in_flight = 2;
 
 const Self = @This();
@@ -41,12 +43,12 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     const context = try VulkanContext.create(.{ .allocator = allocator, .window = window, .app_name = app_name });
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
-    const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1);
-    const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1);
-    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight);
+    const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{});
+    const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
+    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight, .{ .push_descriptor_bit_khr = true });
 
     var commands = try Commands.create(&context);
-    const display = try Display.create(&context, &vk_allocator, allocator, &commands, &output_descriptor_layout, initial_window_size);
+    const display = try Display.create(&context, &vk_allocator, allocator, &commands, initial_window_size);
 
     const camera_origin = F32x3.new(0.6, 0.5, -0.6);
     const camera_target = F32x3.new(0.0, 0.0, 0.0);
@@ -80,7 +82,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 }
 
 pub fn setScene(self: *Self, scene: *const Scene, buffer: vk.CommandBuffer) void {
-    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, self.display.frames[self.display.frame_index].set }, 0, undefined);
+    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, 2, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set }, 0, undefined);
 }
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
@@ -107,14 +109,47 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
 }
 
 pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
-    // bind our stuff
+    // push some stuff
+    const descriptor_writes = [2]vk.WriteDescriptorSet {
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 0,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = .null_handle,
+                .image_view = self.display.images.data.items(.view)[0],
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                .sampler = .null_handle,
+                .image_view = self.display.images.data.items(.view)[1],
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+    };
+    self.context.device.cmdPushDescriptorSetKHR(command_buffer, vk.PipelineBindPoint.ray_tracing_khr, self.pipeline.layout, 2, descriptor_writes.len, &descriptor_writes);
+
+    // bind some stuff
     self.context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.pipeline.handle);
     
-    // push our stuff
+    // push some stuff
     const bytes = std.mem.asBytes(&.{self.camera.desc, self.camera.blur_desc, self.num_accumulted_frames});
     self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
-    // trace our stuff
+    // trace some stuff
     self.pipeline.traceRays(&self.context, command_buffer, self.display.extent);
 }
 

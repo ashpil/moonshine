@@ -132,13 +132,13 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int) !Self {
+        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int, layout_flags: vk.DescriptorSetLayoutCreateFlags) !Self {
             const binding_flags_create_info = if (binding_flags) |flags| (&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
                 .binding_count = bindings.len,
                 .p_binding_flags = &flags,
             }) else null;
             const create_info = vk.DescriptorSetLayoutCreateInfo {
-                .flags = .{},
+                .flags = layout_flags,
                 .binding_count = bindings.len,
                 .p_bindings = bindings.ptr,
                 .p_next = binding_flags_create_info,
