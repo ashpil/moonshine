@@ -209,7 +209,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         };
     }
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [9]vk.WriteDescriptorSet {
+    const descriptor_set = try descriptor_layout.allocate_set(vc, [9]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -332,7 +332,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             }),
             .p_texel_buffer_view = undefined,
         },
-    }))[0];
+    });
 
     try utils.setDebugName(vc, descriptor_set, "Scene");
 

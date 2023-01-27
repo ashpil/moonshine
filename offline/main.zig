@@ -121,7 +121,7 @@ pub fn main() !void {
     const output_image_handles = output_images_slice.items(.handle);
     const output_image_size_in_bytes = output_images_slice.items(.size_in_bytes)[0];
 
-    const output_sets = try output_descriptor_layout.allocate_sets(&context, 1, [_]vk.WriteDescriptorSet {
+    const output_set = try output_descriptor_layout.allocate_set(&context, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -234,7 +234,7 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output_sets[0] }, 0, undefined);
+        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output_set }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});

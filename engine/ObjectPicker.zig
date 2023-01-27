@@ -34,7 +34,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
 
-    const descriptor_set = (try descriptor_layout.allocate_sets(vc, 1, [1]vk.WriteDescriptorSet {
+    const descriptor_set = try descriptor_layout.allocate_set(vc, [1]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -49,7 +49,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }),
             .p_texel_buffer_view = undefined,
         },
-    }))[0];
+    });
 
     const shader_module = try vc.device.createShaderModule(&.{
         .flags = .{},

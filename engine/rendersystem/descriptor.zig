@@ -170,36 +170,24 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             };
         }
 
-        pub fn allocate_sets(self: *const Self, vc: *const VulkanContext, comptime duplicate_set_count: comptime_int, writes: [bindings.len]vk.WriteDescriptorSet) ![duplicate_set_count]vk.DescriptorSet {
-            var descriptor_set_layouts: [duplicate_set_count]vk.DescriptorSetLayout = undefined;
-
-            comptime var i = 0;
-            inline while (i < duplicate_set_count) : (i += 1) {
-                descriptor_set_layouts[i] = self.handle;
-            }
-
-            var descriptor_sets: [duplicate_set_count]vk.DescriptorSet = undefined;
+        pub fn allocate_set(self: *const Self, vc: *const VulkanContext, writes: [bindings.len]vk.WriteDescriptorSet) !vk.DescriptorSet {
+            var descriptor_set: vk.DescriptorSet = undefined;
 
             try vc.device.allocateDescriptorSets(&.{
                 .descriptor_pool = self.pool,
-                .descriptor_set_count = descriptor_sets.len,
-                .p_set_layouts = &descriptor_set_layouts,
-            }, &descriptor_sets);
+                .descriptor_set_count = 1,
+                .p_set_layouts = utils.toPointerType(&self.handle),
+            }, @ptrCast([*]vk.DescriptorSet, &descriptor_set));
 
-            var descriptor_writes: [duplicate_set_count * bindings.len]vk.WriteDescriptorSet = undefined;
-
-            comptime var j = 0;
-            inline while (j < duplicate_set_count) : (j += 1) {
-                comptime var k = 0;
-                inline while (k < bindings.len) : (k += 1) {
-                    descriptor_writes[j * duplicate_set_count + k] = writes[k];
-                    descriptor_writes[j * duplicate_set_count + k].dst_set = descriptor_sets[j];
-                }
+            var descriptor_writes = writes;
+            comptime var k = 0;
+            inline while (k < bindings.len) : (k += 1) {
+                descriptor_writes[k].dst_set = descriptor_set;
             }
 
             vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);
 
-            return descriptor_sets;
+            return descriptor_set;
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {
