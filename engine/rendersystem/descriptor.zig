@@ -12,7 +12,7 @@ pub const InputDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, "Input");
+}, null, "Input");
 
 // must be kept in sync with shader
 pub const OutputDescriptorLayout = DescriptorLayout(&.{
@@ -30,7 +30,7 @@ pub const OutputDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, "Output");
+}, null, "Output");
 
 // must be kept in sync with shader
 pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
@@ -55,10 +55,10 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, "Background");
+}, null, "Background");
 
 // must be kept in sync with shader
-const max_textures = 20 * 5; // TODO: think about this more
+const max_textures = 20 * 5; // TODO: think about this more, really should
 pub const SceneDescriptorLayout = DescriptorLayout(&.{
     .{ // TLAS
         .binding = 0,
@@ -123,17 +123,16 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, "Scene");
+}, .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{ .partially_bound_bit = true }, .{}, }, "Scene");
 
-pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime debug_name: [*:0]const u8) type {
+pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime binding_flags: ?[bindings.len]vk.DescriptorBindingFlags, comptime debug_name: [*:0]const u8) type {
     return struct {
         handle: vk.DescriptorSetLayout,
         pool: vk.DescriptorPool,
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int, binding_flags: ?[bindings.len]vk.DescriptorBindingFlags) !Self {
-            
+        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int) !Self {
             const binding_flags_create_info = if (binding_flags) |flags| (&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
                 .binding_count = bindings.len,
                 .p_binding_flags = &flags,

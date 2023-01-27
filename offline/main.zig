@@ -81,14 +81,11 @@ pub fn main() !void {
     var vk_allocator = try VkAllocator.create(&context, allocator);
     defer vk_allocator.destroy(&context, allocator);
 
-    var scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{
-        .{}, .{}, .{}, .{}, .{}, .{}, .{},
-        .{ .partially_bound_bit = true }, .{},
-    });
+    var scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1);
     defer scene_descriptor_layout.destroy(&context);
-    var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, null);
+    var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1);
     defer background_descriptor_layout.destroy(&context);
-    var output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1, null);
+    var output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1);
     defer output_descriptor_layout.destroy(&context);
 
     var commands = try Commands.create(&context);
