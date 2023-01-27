@@ -271,7 +271,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         for (instance_material_idxs) |material_idxs, i| {
             for (material_idxs) |idx, j| {
                 buffer_host[flat_idx] = .{
-                    .mesh_idx = models[i].mesh_idxs[j],
+                    .mesh_idx = models[instance_models[i]].mesh_idxs[j],
                     .material_idx = idx,
                     .sampled = if (instance_sampled_geometry[i].len != 0) @boolToInt(instance_sampled_geometry[i][j]) else 0,
                 };
