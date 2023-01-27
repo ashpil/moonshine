@@ -182,7 +182,6 @@ pub const helpers = struct {
     };
 
     // load RGB image into RGBA buffer
-    // TODO: free
     pub fn load(allocator: std.mem.Allocator, filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!Rgba2D {
         var version: Version = undefined;
         try parseExrVersionFromFile(&version, filename);
