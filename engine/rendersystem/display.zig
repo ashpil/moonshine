@@ -27,9 +27,11 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         destruction_queue: DestructionQueue,
 
+        set: vk.DescriptorSet,
+
         // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
         // then during rendering the render buffer is blitted into the swapchain images
-        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, initial_extent: vk.Extent2D) !Self {
             var swapchain = try Swapchain.create(vc, allocator, initial_extent);
             errdefer swapchain.destroy(vc, allocator);
 
@@ -48,6 +50,37 @@ pub fn Display(comptime num_frames: comptime_int) type {
             errdefer images.destroy(vc, allocator);
             try commands.transitionImageLayout(vc, allocator, images.data.items(.handle)[1..], .@"undefined", .general);
 
+            const set = try descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
+                vk.WriteDescriptorSet {
+                    .dst_set = undefined,
+                    .dst_binding = 0,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = .storage_image,
+                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                        .sampler = .null_handle,
+                        .image_view = images.data.items(.view)[0],
+                        .image_layout = .general,
+                    }),
+                    .p_buffer_info = undefined,
+                    .p_texel_buffer_view = undefined,
+                },
+                vk.WriteDescriptorSet {
+                    .dst_set = undefined,
+                    .dst_binding = 1,
+                    .dst_array_element = 0,
+                    .descriptor_count = 1,
+                    .descriptor_type = .storage_image,
+                    .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+                        .sampler = .null_handle,
+                        .image_view = images.data.items(.view)[1],
+                        .image_layout = .general,
+                    }),
+                    .p_buffer_info = undefined,
+                    .p_texel_buffer_view = undefined,
+                },
+            });
+
             var frames: [num_frames]Frame = undefined;
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
@@ -65,6 +98,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
                 // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
                 .destruction_queue = DestructionQueue.create(),
+
+                .set = set,
             };
         }
 
