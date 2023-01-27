@@ -105,23 +105,24 @@ pub fn main() !void {
     const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
     const camera = try Camera.fromGlb(allocator, params.in_filepath, extent);
 
-    const display_image_info = ImageManager.ImageCreateRawInfo {
-        .extent = extent,
-        .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-        .format = .r32g32b32a32_sfloat,
-    };
-    var display_image = try ImageManager.createRaw(&context, &vk_allocator, allocator, &.{ display_image_info });
-    defer display_image.destroy(&context, allocator);
-
-    const accumulation_image_info = [_]ImageManager.ImageCreateRawInfo {
-        .{
+    var output_images = try ImageManager.createRaw(&context, &vk_allocator, allocator, &.{
+        .{ // display
+            .extent = extent,
+            .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
+            .format = .r32g32b32a32_sfloat,
+        },
+        .{ // accumulation
             .extent = extent,
             .usage = .{ .storage_bit = true, },
             .format = .r32g32b32a32_sfloat,
         },
-    };
-    var accumulation_image = try ImageManager.createRaw(&context, &vk_allocator, allocator, &accumulation_image_info);
-    defer accumulation_image.destroy(&context, allocator);
+    });
+    defer output_images.destroy(&context, allocator);
+
+    const output_images_slice = output_images.data.slice();
+    const output_image_views = output_images_slice.items(.view);
+    const output_image_handles = output_images_slice.items(.handle);
+    const output_image_size_in_bytes = output_images_slice.items(.size_in_bytes)[0];
 
     const output_sets = try output_descriptor_layout.allocate_sets(&context, 1, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
@@ -132,7 +133,7 @@ pub fn main() !void {
             .descriptor_type = .storage_image,
             .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = display_image.data.items(.view)[0],
+                .image_view = output_image_views[0],
                 .image_layout = .general,
             }),
             .p_buffer_info = undefined,
@@ -146,7 +147,7 @@ pub fn main() !void {
             .descriptor_type = .storage_image,
             .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = accumulation_image.data.items(.view)[0],
+                .image_view = output_image_views[1],
                 .image_layout = .general,
             }),
             .p_buffer_info = undefined,
@@ -175,8 +176,8 @@ pub fn main() !void {
         .command_buffer_count = 1,
     }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-    const display_image_bytes = try vk_allocator.createHostBuffer(&context, u8, @intCast(u32, display_image.data.items(.size_in_bytes)[0]), .{ .transfer_dst_bit = true });
-    defer display_image_bytes.destroy(&context);
+    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, @intCast(u32, output_image_size_in_bytes) / 4, .{ .transfer_dst_bit = true });
+    defer output_buffer.destroy(&context);
     // record command buffer
     {
         try context.device.beginCommandBuffer(command_buffer, &.{
@@ -195,7 +196,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = accumulation_image.data.items(.handle)[0],
+                .image = output_image_handles[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -213,7 +214,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = display_image.data.items(.handle)[0],
+                .image = output_image_handles[1],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -255,7 +256,7 @@ pub fn main() !void {
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = display_image.data.items(.handle)[0],
+            .image = output_image_handles[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -296,7 +297,7 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(command_buffer, display_image.data.items(.handle)[0], .transfer_src_optimal, display_image_bytes.handle, 1, utils.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(command_buffer, output_image_handles[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
 
         try context.device.endCommandBuffer(command_buffer);
     }
@@ -321,8 +322,7 @@ pub fn main() !void {
     try stdout.print(" seconds to render\n", .{});
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    const f32_slice: []const f32 = @ptrCast([*]f32, @alignCast(@alignOf(f32), display_image_bytes.data.ptr))[0..display_image_bytes.data.len / 4];
-    try exr.helpers.save(allocator, f32_slice, 4, extent, params.out_filepath);
+    try exr.helpers.save(allocator, output_buffer.data, 4, extent, params.out_filepath);
 
     const exr_time = try std.time.Instant.now();
     try printTime(stdout, exr_time.since(render_time));
