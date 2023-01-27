@@ -30,40 +30,50 @@ fn printTime(writer: anytype, time: u64) !void {
     try writer.print("{}.{:0>3}", .{ s, ms });
 }
 
+const Config = struct {
+    in_filepath: []const u8, // must be glb
+    out_filepath: [:0]const u8, // must be exr
+    skybox_filepath: []const u8, // must be exr
+    spp: u32,
+
+    fn fromCli(allocator: std.mem.Allocator) !Config {
+        const args = try std.process.argsAlloc(allocator);
+        defer std.process.argsFree(allocator, args);
+        if (args.len < 4) return error.BadArgs;
+
+        const in_filepath = args[1];
+        if (!std.mem.eql(u8, std.fs.path.extension(in_filepath), ".glb")) return error.OnlySupportsGlbInput;
+
+        const skybox_filepath = args[2];
+        if (!std.mem.eql(u8, std.fs.path.extension(skybox_filepath), ".exr")) return error.OnlySupportsExrSkybox;
+
+        const out_filepath = args[3];
+        if (!std.mem.eql(u8, std.fs.path.extension(out_filepath), ".exr")) return error.OnlySupportsExrOutput;
+
+        const spp = if (args.len > 4) try std.fmt.parseInt(u32, args[4], 10) else 16;
+
+        return Config {
+            .in_filepath = try allocator.dupe(u8, in_filepath),
+            .out_filepath = try allocator.dupeZ(u8, out_filepath), // ugh
+            .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
+            .spp = spp,
+        };
+    }
+
+    fn destroy(self: *Config, allocator: std.mem.Allocator) void {
+        allocator.free(self.in_filepath);
+        allocator.free(self.out_filepath);
+        allocator.free(self.skybox_filepath);
+    }
+};
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // parse cli args
-    const params = blk: {
-        const args = try std.process.argsAlloc(allocator);
-        defer std.process.argsFree(allocator, args);
-        if (args.len < 4) return error.BadArgs;
-
-        const in_filename = args[1];
-        if (!std.mem.eql(u8, std.fs.path.extension(in_filename), ".glb")) return error.OnlySupportsGlbInput;
-
-        const background_filename = args[2];
-        if (!std.mem.eql(u8, std.fs.path.extension(background_filename), ".exr")) return error.OnlySupportsExrBackground;
-
-        const out_filename = args[3];
-        if (!std.mem.eql(u8, std.fs.path.extension(out_filename), ".exr")) return error.OnlySupportsExrOutput;
-
-        const spp = if (args.len > 4) try std.fmt.parseInt(u32, args[4], 10) else 16;
-
-        break :blk .{
-            .in_filename = try allocator.dupe(u8, in_filename),
-            .background_filename = try allocator.dupe(u8, background_filename),
-            .out_filename = try allocator.dupeZ(u8, out_filename), // ugh
-            .spp = spp,
-        };
-    };
-    defer {
-        allocator.free(params.in_filename);
-        allocator.free(params.background_filename);
-        allocator.free(params.out_filename);
-    }
+    var params = try Config.fromCli(allocator);
+    defer params.destroy(allocator);
 
     var context = try VulkanContext.create(.{ .allocator = allocator, .app_name = "offline" });
     defer context.destroy();
@@ -93,7 +103,7 @@ pub fn main() !void {
     defer pipeline.destroy(&context);
 
     const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
-    const camera = try Camera.fromGlb(allocator, params.in_filename, extent);
+    const camera = try Camera.fromGlb(allocator, params.in_filepath, extent);
 
     const display_image_info = ImageManager.ImageCreateRawInfo {
         .extent = extent,
@@ -145,7 +155,7 @@ pub fn main() !void {
     });
 
     const start_time = try std.time.Instant.now();
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filename, params.background_filename, &scene_descriptor_layout, &background_descriptor_layout);
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filepath, params.skybox_filepath, &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
     const scene_time = try std.time.Instant.now();
     const stdout = std.io.getStdOut().writer();
@@ -311,10 +321,8 @@ pub fn main() !void {
     try stdout.print(" seconds to render\n", .{});
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    var f32_slice: []const f32 = undefined;
-    f32_slice.ptr = @ptrCast([*]f32, @alignCast(@alignOf(f32), display_image_bytes.data.ptr));
-    f32_slice.len = display_image_bytes.data.len / 4;
-    try exr.helpers.save(allocator, f32_slice, 4, extent, params.out_filename);
+    const f32_slice: []const f32 = @ptrCast([*]f32, @alignCast(@alignOf(f32), display_image_bytes.data.ptr))[0..display_image_bytes.data.len / 4];
+    try exr.helpers.save(allocator, f32_slice, 4, extent, params.out_filepath);
 
     const exr_time = try std.time.Instant.now();
     try printTime(stdout, exr_time.since(render_time));
