@@ -5,3 +5,7 @@ zig-out/
 /build/
 /build-*/
 /docgen_tmp/
+
+# Any testing asset files
+**.exr
+**.glb
