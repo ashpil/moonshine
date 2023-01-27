@@ -57,6 +57,10 @@ pub fn getUserPointer(self: *const Self) ?*anyopaque {
     return c.glfwGetWindowUserPointer(self.handle).?;
 }
 
+pub fn setAspectRatio(self: *const Self, numer: u32, denom: u32) void {
+    c.glfwSetWindowAspectRatio(self.handle, @intCast(c_int, numer), @intCast(c_int, denom));
+}
+
 pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D) void) void {
     const Callback = struct {
         fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {

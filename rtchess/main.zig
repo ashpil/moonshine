@@ -15,6 +15,10 @@ const Vec3 = vector.Vec3(f32);
 const ChessSet = @import("./ChessSet.zig");
 const Coord = @import("./coord.zig").Coord;
 
+const initial_aspect = .{ 16, 10 };
+const initial_height = 600;
+const initial_width = initial_height * initial_aspect[0] / initial_aspect[1];
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
@@ -79,7 +83,7 @@ pub fn main() !void {
         },
     };
 
-    const window = try Window.create(800, 600, "rtchess");
+    const window = try Window.create(initial_width, initial_height, "rtchess");
     defer window.destroy();
 
     var engine = try Engine.create(allocator, &window, "rtchess");
@@ -136,6 +140,7 @@ pub fn main() !void {
         .clicked = null,
     };
 
+    window.setAspectRatio(initial_aspect[0], initial_aspect[1]);
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
     window.setMouseButtonCallback(mouseButtonCallback);
