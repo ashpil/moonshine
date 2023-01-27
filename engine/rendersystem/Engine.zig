@@ -97,15 +97,7 @@ pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
 }
 
 pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !vk.CommandBuffer {
-    var resized = false;
-
-    const buffer = try self.display.startFrame(&self.context, &self.allocator, allocator, &self.commands, window, &resized);
-    if (resized) {
-        resized = false;
-        try resize(self);
-    }
-
-    return buffer;
+    return self.display.startFrame(&self.context, allocator, window);
 }
 
 pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
@@ -150,24 +142,15 @@ pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace some stuff
-    self.pipeline.traceRays(&self.context, command_buffer, self.display.extent);
+    self.pipeline.traceRays(&self.context, command_buffer, self.display.render_extent);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !void {
-    var resized = false;
-    try self.display.endFrame(&self.context, &self.allocator, allocator, &self.commands, window, &resized);
-    if (resized) {
-        try resize(self);
-    }
-
-    if (!resized) {
+    // only update frame count if we presented successfully
+    // if we got outofdatekhr error, just ignore and continue, next frame should be better
+    if (self.display.endFrame(&self.context, allocator, window)) {
         self.num_accumulted_frames += 1;
+    } else |err| if (err != error.OutOfDateKHR) {
+        return err;
     }
-}
-
-fn resize(self: *Self) !void {
-    self.camera_create_info.extent = self.display.extent;
-    self.camera = Camera.new(self.camera_create_info);
-
-    self.num_accumulted_frames = 0;
 }

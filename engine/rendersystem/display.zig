@@ -23,24 +23,24 @@ pub fn Display(comptime num_frames: comptime_int) type {
         swapchain: Swapchain,
         images: ImageManager, // 2 images -- first is display image, second is accumulation image; TODO: display image may not be needed on some platforms where the swapchain can be used as a storage image
 
-        extent: vk.Extent2D,
+        render_extent: vk.Extent2D,
 
         destruction_queue: DestructionQueue,
 
-        // descriptor layout must have enough room for num_frames sets
+        // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
+        // then during rendering the render buffer is blitted into the swapchain images
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, initial_extent: vk.Extent2D) !Self {
-            var extent = initial_extent;
-            var swapchain = try Swapchain.create(vc, allocator, &extent);
+            var swapchain = try Swapchain.create(vc, allocator, initial_extent);
             errdefer swapchain.destroy(vc, allocator);
 
             var images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
                 .{
-                    .extent = extent,
+                    .extent = initial_extent,
                     .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
                     .format = .r32g32b32a32_sfloat,
                 },
                 .{
-                    .extent = extent,
+                    .extent = initial_extent,
                     .usage = .{ .storage_bit = true, },
                     .format = .r32g32b32a32_sfloat,
                 },
@@ -61,7 +61,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
                 .images = images,
 
-                .extent = extent,
+                .render_extent = initial_extent,
 
                 // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
                 .destruction_queue = DestructionQueue.create(),
@@ -78,7 +78,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
             _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
@@ -94,10 +94,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
             // we can optionally handle swapchain recreation on suboptimal here,
             // but I think for some reason it's better to just do it after presentation
-            _ = self.swapchain.acquireNextImage(vc, frame.image_acquired) catch |err| switch (err) {
-                error.OutOfDateKHR => try self.recreate(vc, vk_allocator, allocator, commands, window, resized),
-                else => return err,
-            };
+            while (true) {
+                if (self.swapchain.acquireNextImage(vc, frame.image_acquired)) |_| break else |err| switch (err) {
+                    error.OutOfDateKHR => try self.recreate(vc, allocator, window),
+                    else => return err,
+                }
+            }
 
             try vc.device.resetCommandPool(frame.command_pool, .{});
             try vc.device.beginCommandBuffer(frame.command_buffer, &.{
@@ -159,33 +161,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
-            var new_extent = window.getExtent();
+        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
             try self.destruction_queue.add(allocator, self.swapchain.handle);
-            try self.swapchain.recreate(vc, allocator, &new_extent);
-            if (!std.meta.eql(new_extent, self.extent)) {
-                resized.* = true;
-                self.extent = new_extent;
-
-                try self.destruction_queue.add(allocator, self.images);
-                self.images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
-                    .{
-                        .extent = self.extent,
-                        .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-                        .format = .r32g32b32a32_sfloat,
-                    },
-                    .{
-                        .extent = self.extent,
-                        .usage = .{ .storage_bit = true, },
-                        .format = .r32g32b32a32_sfloat,
-                    },
-                });
-
-                try commands.transitionImageLayout(vc, allocator, self.images.data.items(.handle)[1..], .@"undefined", .general);
-            }
+            try self.swapchain.recreate(vc, allocator, window.getExtent());
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, window: *const Window, resized: *bool) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
             const frame = self.frames[self.frame_index];
 
             // transition storage image to one we can blit from
@@ -235,8 +216,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .y = 0,
                         .z = 0,
                     }, .{
-                        .x = @intCast(i32, self.extent.width),
-                        .y = @intCast(i32, self.extent.height),
+                        .x = @intCast(i32, self.render_extent.width),
+                        .y = @intCast(i32, self.render_extent.height),
                         .z = 1,
                     }
                 },
@@ -247,8 +228,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
                         .y = 0,
                         .z = 0,
                     }, .{
-                        .x = @intCast(i32, self.extent.width),
-                        .y = @intCast(i32, self.extent.height),
+                        .x = @intCast(i32, self.swapchain.extent.width),
+                        .y = @intCast(i32, self.swapchain.extent.height),
                         .z = 1,
                     },
                 },
@@ -314,13 +295,15 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 }),
             }}, frame.fence);
 
-            const present_result = self.swapchain.present(vc, vc.queue, frame.command_completed) catch |err| switch (err) {
-                error.OutOfDateKHR => vk.Result.suboptimal_khr,
-                else => return err,
-            };
-
-            if (present_result == .suboptimal_khr) {
-                try self.recreate(vc, vk_allocator, allocator, commands, window, resized);
+            if (self.swapchain.present(vc, vc.queue, frame.command_completed)) |ok| {
+                if (ok == vk.Result.suboptimal_khr) {
+                    try self.recreate(vc, allocator, window);
+                }
+            } else |err| {
+                if (err == error.OutOfDateKHR) {
+                    try self.recreate(vc, allocator, window);
+                }
+                return err;
             }
 
             self.frame_index = (self.frame_index + 1) % num_frames;

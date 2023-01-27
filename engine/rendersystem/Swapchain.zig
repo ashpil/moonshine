@@ -9,15 +9,17 @@ const SwapchainError = error {
 handle: vk.SwapchainKHR,
 images: []SwapImage,
 image_index: u32,
+extent: vk.Extent2D,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D) !Self {
-    return try createFromOld(vc, allocator, extent, .null_handle, null);
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, ideal_extent: vk.Extent2D) !Self {
+    return try createFromOld(vc, allocator, ideal_extent, .null_handle, null);
 }
 
-fn createFromOld(vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
-    const settings = try SwapSettings.find(vc, allocator, extent);
+fn createFromOld(vc: *const VulkanContext, allocator: std.mem.Allocator, ideal_extent: vk.Extent2D, old_handle: vk.SwapchainKHR, old_images: ?[]SwapImage) !Self {
+    var real_extent = ideal_extent;
+    const settings = try SwapSettings.find(vc, allocator, &real_extent);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
@@ -27,7 +29,7 @@ fn createFromOld(vc: *const VulkanContext, allocator: std.mem.Allocator, extent:
         .min_image_count = settings.image_count,
         .image_format = settings.format.format,
         .image_color_space = settings.format.color_space,
-        .image_extent = extent.*,
+        .image_extent = real_extent,
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
@@ -57,11 +59,12 @@ fn createFromOld(vc: *const VulkanContext, allocator: std.mem.Allocator, extent:
         .handle = handle,
         .images = swap_images,
         .image_index = undefined, // this is odd, is it the best?
+        .extent = real_extent,
     };
 }
 
 // assumes old handle destruction is handled
-pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: *vk.Extent2D) !void {
+pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: vk.Extent2D) !void {
     for (self.images) |image| {
         image.destroy(vc);
     }

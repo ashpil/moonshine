@@ -239,8 +239,8 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
 
     if (button == .left and action == .press) {
         const pos = window.getCursorPos();
-        const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.extent.width);
-        const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.extent.height);
+        const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.swapchain.extent.width);
+        const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.swapchain.extent.height);
         window_data.clicked = window_data.object_picker.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
     }
 }
