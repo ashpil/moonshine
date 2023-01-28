@@ -11,6 +11,7 @@ const ImageManager = engine.rendersystem.ImageManager;
 const Camera = engine.rendersystem.Camera;
 const Scene = engine.rendersystem.Scene;
 const Material = engine.rendersystem.Scene.Material;
+const Output = engine.rendersystem.Output;
 
 const utils = engine.rendersystem.utils;
 const exr = engine.fileformats.exr;
@@ -102,55 +103,10 @@ pub fn main() !void {
     const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
     const camera = try Camera.fromGlb(allocator, params.in_filepath, extent);
 
-    var output_images = try ImageManager.createRaw(&context, &vk_allocator, allocator, &.{
-        .{ // display
-            .extent = extent,
-            .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-            .format = .r32g32b32a32_sfloat,
-        },
-        .{ // accumulation
-            .extent = extent,
-            .usage = .{ .storage_bit = true, },
-            .format = .r32g32b32a32_sfloat,
-        },
-    });
-    defer output_images.destroy(&context, allocator);
+    var output = try Output.create(&context, &vk_allocator, allocator, &output_descriptor_layout, extent);
+    defer output.destroy(&context, allocator);
 
-    const output_images_slice = output_images.data.slice();
-    const output_image_views = output_images_slice.items(.view);
-    const output_image_handles = output_images_slice.items(.handle);
-    const output_image_size_in_bytes = output_images_slice.items(.size_in_bytes)[0];
-
-    const output_set = try output_descriptor_layout.allocate_set(&context, [_]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = output_image_views[0],
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = output_image_views[1],
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-    });
+    const output_image_handles = output.images.data.items(.handle);
 
     const start_time = try std.time.Instant.now();
     var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filepath, params.skybox_filepath, &scene_descriptor_layout, &background_descriptor_layout);
@@ -173,7 +129,8 @@ pub fn main() !void {
         .command_buffer_count = 1,
     }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, @intCast(u32, output_image_size_in_bytes) / 4, .{ .transfer_dst_bit = true });
+    const output_f32_count = 4 * extent.width * extent.height;
+    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, output_f32_count, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
     // record command buffer
     {
@@ -234,7 +191,7 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output_set }, 0, undefined);
+        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output.descriptor_set }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});

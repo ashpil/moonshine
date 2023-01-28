@@ -82,7 +82,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 }
 
 pub fn setScene(self: *Self, scene: *const Scene, buffer: vk.CommandBuffer) void {
-    const sets = [_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, self.display.set };
+    const sets = [_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, self.display.output.descriptor_set };
     self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, sets.len, &sets, 0, undefined);
 }
 
@@ -110,7 +110,7 @@ pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace some stuff
-    self.pipeline.traceRays(&self.context, command_buffer, self.display.render_extent);
+    self.pipeline.traceRays(&self.context, command_buffer, self.display.output.extent);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator) !void {

@@ -8,6 +8,7 @@ pub const DestructionQueue = @import("DestructionQueue.zig");
 pub const Engine = @import("Engine.zig");
 pub const ImageManager = @import("ImageManager.zig");
 pub const MeshManager = @import("MeshManager.zig");
+pub const Output = @import("Output.zig");
 pub const Pipeline = @import("Pipeline.zig");
 pub const Scene = @import("Scene.zig");
 pub const Swapchain = @import("Swapchain.zig");
