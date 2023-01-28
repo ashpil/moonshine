@@ -4,6 +4,8 @@ const builtin = @import("builtin");
 const Swapchain = @import("./Swapchain.zig").Swapchain;
 const Window = @import("../Window.zig");
 
+const utils = @import("./utils.zig");
+
 const validate = @import("build_options").vk_validation;
 const measure_perf = @import("build_options").vk_measure_perf;
 const windowing = @import("build_options").windowing;
@@ -49,8 +51,9 @@ const Base = struct {
         };
     }
 
-    fn destroy(self: *Base) void {
-        if (!windowing) self.vulkan_lib.close();
+    fn destroy(self: Base) void {
+        var self_mut = self;
+        if (!windowing) self_mut.vulkan_lib.close();
     }
 
     fn getRequiredExtensions(allocator: std.mem.Allocator, window: if (windowing) *const Window else void) std.mem.Allocator.Error![]const [*:0]const u8 {
@@ -97,12 +100,9 @@ const Base = struct {
     }
 
     fn validationLayersAvailable(self: Base, allocator: std.mem.Allocator) !bool {
-        var layer_count: u32 = 0;
-        _ = try self.dispatch.enumerateInstanceLayerProperties(&layer_count, null);
-
-        const available_layers = try allocator.alloc(vk.LayerProperties, layer_count);
+        const available_layers = try utils.getVkSlice(allocator, BaseDispatch.enumerateInstanceLayerProperties, .{ self.dispatch });
         defer allocator.free(available_layers);
-        _ = try self.dispatch.enumerateInstanceLayerProperties(&layer_count, available_layers.ptr);
+
         for (validation_layers) |layer_name| {
             const layer_found = for (available_layers) |layer_properties| {
                 if (std.cstr.cmp(layer_name, @ptrCast([*:0]const u8, &layer_properties.layer_name)) == 0) {
@@ -116,12 +116,9 @@ const Base = struct {
     }
 
     fn instanceExtensionsAvailable(self: Base, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        var extension_count: u32 = 0;
-        _ = try self.dispatch.enumerateInstanceExtensionProperties(null, &extension_count, null);
-
-        const available_extensions = try allocator.alloc(vk.ExtensionProperties, extension_count);
+        const available_extensions = try utils.getVkSlice(allocator, BaseDispatch.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
         defer allocator.free(available_extensions);
-        _ = try self.dispatch.enumerateInstanceExtensionProperties(null, &extension_count, available_extensions.ptr);
+
         for (extensions) |extension_name| {
             const layer_found = for (available_extensions) |extension_properties| {
                 if (std.cstr.cmp(extension_name, @ptrCast([*:0]const u8, &extension_properties.extension_name)) == 0) {
@@ -323,7 +320,6 @@ pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
     const device = try physical_device.createLogicalDevice(instance);
     errdefer device.destroyDevice(null);
 
-    // not sure what best abstraction for queues is yet
     const queue = device.getDeviceQueue(physical_device.queue_family_index, 0);
 
     return Self {
@@ -338,7 +334,7 @@ pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
     };
 }
 
-pub fn destroy(self: *Self) void {
+pub fn destroy(self: Self) void {
     self.device.destroyDevice(null);
     if (windowing) self.instance.destroySurfaceKHR(self.surface, null);
 
@@ -347,13 +343,10 @@ pub fn destroy(self: *Self) void {
     self.base.destroy();
 }
 
-// TODO: do we actually need all these fields? seem to be carrying around a lot
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     queue_family_index: u32,
-    properties: vk.PhysicalDeviceProperties,
-    mem_properties: vk.PhysicalDeviceMemoryProperties,
-    raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR,
+    raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR, // TODO: should this live somewhere else?
 
     const base_device_extensions = [_][*:0]const u8{
         vk.extension_info.khr_deferred_host_operations.name,
@@ -368,13 +361,8 @@ const PhysicalDevice = struct {
 
     const device_extensions = if (windowing) base_device_extensions ++ windowing_device_extensions else base_device_extensions;
 
-    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: Surface) !u32 {
-        var family_count: u32 = 0;
-        instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, null);
-
-        const families = try allocator.alloc(vk.QueueFamilyProperties, family_count);
-        defer allocator.free(families);
-        instance.getPhysicalDeviceQueueFamilyProperties(device, &family_count, families.ptr);
+    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, surface: Surface) !u32 {
+        const families = utils.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
 
         var picked_family: ?u32 = null;
         for (families) |family, i| {
@@ -390,17 +378,11 @@ const PhysicalDevice = struct {
     }
 
     fn pick(instance: Instance, allocator: std.mem.Allocator, surface: Surface) !PhysicalDevice {
-        var device_count: u32 = 0;
-        _ = try instance.enumeratePhysicalDevices(&device_count, null);
+        const devices = (try utils.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
 
-        const devices = try allocator.alloc(vk.PhysicalDevice, device_count);
-        defer allocator.free(devices);
-
-        _ = try instance.enumeratePhysicalDevices(&device_count, devices.ptr);
         return for (devices) |device| {
             if (try PhysicalDevice.isDeviceSuitable(instance, device, allocator, surface)) {
-                if (pickQueueFamily(instance, device, allocator, surface)) |index| {
-                    const mem_properties = instance.getPhysicalDeviceMemoryProperties(device);
+                if (pickQueueFamily(instance, device, surface)) |index| {
 
                     var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
                     raytracing_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
@@ -416,8 +398,6 @@ const PhysicalDevice = struct {
                     break PhysicalDevice {
                         .handle = device,
                         .queue_family_index = index,
-                        .properties = properties2.properties,
-                        .mem_properties = mem_properties,
                         .raytracing_properties = raytracing_properties,
                     };
                 } else |err| return err;
@@ -432,13 +412,8 @@ const PhysicalDevice = struct {
     }
 
     fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator) !bool {
-        var extension_count: u32 = 0;
-        _ = try instance.enumerateDeviceExtensionProperties(device, null, &extension_count, null);
-
-        const available_extensions = try allocator.alloc(vk.ExtensionProperties, extension_count);
+        const available_extensions = try utils.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
         defer allocator.free(available_extensions);
-
-        _ = try instance.enumerateDeviceExtensionProperties(device, null, &extension_count, available_extensions.ptr);
 
         for (device_extensions) |extension_name| {
             const extension_found = for (available_extensions) |extension| {

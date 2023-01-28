@@ -47,7 +47,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, old_handle
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
-    const images = try utils.getInfoSlice(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
+    const images = try utils.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
 
     return Self {
         .handle = handle,
@@ -117,7 +117,7 @@ const SwapSettings = struct {
     pub fn findPresentMode(vc: *const VulkanContext) !vk.PresentModeKHR {
         const ideal = vk.PresentModeKHR.mailbox_khr;
 
-        const present_modes = (try utils.getInfoSlice(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
+        const present_modes = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
 
         for (present_modes) |present_mode| {
             if (std.meta.eql(present_mode, ideal)) {
@@ -135,7 +135,7 @@ const SwapSettings = struct {
             .color_space = .srgb_nonlinear_khr,
         };
 
-        const formats = (try utils.getInfoSlice(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
+        const formats = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
 
         for (formats) |format| {
             if (std.meta.eql(format, ideal)) {
