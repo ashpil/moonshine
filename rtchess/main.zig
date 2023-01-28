@@ -205,7 +205,7 @@ pub fn main() !void {
         }
         try set.scene.accel.recordChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
-        try engine.endFrame(&window, allocator);
+        try engine.endFrame(&window, allocator, buffer);
         window.pollEvents();
     }
     try engine.context.device.deviceWaitIdle();

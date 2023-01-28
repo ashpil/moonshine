@@ -57,6 +57,10 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, old_handle
     };
 }
 
+pub fn currentImage(self: *const Self) vk.Image {
+    return self.images.get(self.image_index);
+}
+
 // assumes old handle destruction is handled
 pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D) !void {
     self.* = try createFromOld(vc, extent, self.handle);
