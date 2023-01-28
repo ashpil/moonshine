@@ -25,17 +25,12 @@ const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
-fn printTime(writer: anytype, time: u64) !void {
-    const ms = time / std.time.ns_per_ms;
-    const s = ms / std.time.ms_per_s;
-    try writer.print("{}.{:0>3}", .{ s, ms });
-}
-
 const Config = struct {
     in_filepath: []const u8, // must be glb
     out_filepath: [:0]const u8, // must be exr
     skybox_filepath: []const u8, // must be exr
     spp: u32,
+    extent: vk.Extent2D,
 
     fn fromCli(allocator: std.mem.Allocator) !Config {
         const args = try std.process.argsAlloc(allocator);
@@ -58,23 +53,45 @@ const Config = struct {
             .out_filepath = try allocator.dupeZ(u8, out_filepath), // ugh
             .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
             .spp = spp,
+            .extent = vk.Extent2D { .width = 1280, .height = 720 }, // TODO: cli
         };
     }
 
-    fn destroy(self: *Config, allocator: std.mem.Allocator) void {
+    fn destroy(self: Config, allocator: std.mem.Allocator) void {
         allocator.free(self.in_filepath);
         allocator.free(self.out_filepath);
         allocator.free(self.skybox_filepath);
     }
 };
 
+const IntervalLogger = struct {
+    last_time: std.time.Instant,
+
+    fn start() !IntervalLogger {
+        return IntervalLogger {
+            .last_time = try std.time.Instant.now(),
+        };
+    }
+
+    fn log(self: *IntervalLogger, state: []const u8) !void {
+        const new_time = try std.time.Instant.now();
+        const elapsed = new_time.since(self.last_time);
+        const ms = elapsed / std.time.ns_per_ms;
+        const s = ms / std.time.ms_per_s;
+        try std.io.getStdOut().writer().print("{}.{:0>3} seconds to {s}\n", .{ s, ms, state });
+        self.last_time = new_time;
+    }
+};
+
 pub fn main() !void {
+    var logger = try IntervalLogger.start();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var params = try Config.fromCli(allocator);
-    defer params.destroy(allocator);
+    const config = try Config.fromCli(allocator);
+    defer config.destroy(allocator);
 
     var context = try VulkanContext.create(.{ .allocator = allocator, .app_name = "offline" });
     defer context.destroy();
@@ -93,31 +110,24 @@ pub fn main() !void {
     defer commands.destroy(&context);
 
     var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
-        .samples_per_run = params.spp,
+        .samples_per_run = config.spp,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 1,
     });
     defer pipeline.destroy(&context);
 
-    const extent = vk.Extent2D { .width = 1280, .height = 720 }; // TODO: cli
-    const camera = try Camera.fromGlb(allocator, params.in_filepath, extent);
-
-    var output = try Output.create(&context, &vk_allocator, allocator, &output_descriptor_layout, extent);
+    var output = try Output.create(&context, &vk_allocator, allocator, &output_descriptor_layout, config.extent);
     defer output.destroy(&context, allocator);
 
-    const output_image_handles = output.images.data.items(.handle);
+    try logger.log("set up initial state");
 
-    const start_time = try std.time.Instant.now();
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, params.in_filepath, params.skybox_filepath, &scene_descriptor_layout, &background_descriptor_layout);
+    const camera = try Camera.fromGlb(allocator, config.in_filepath, config.extent);
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, &scene_descriptor_layout, &background_descriptor_layout);
     defer scene.destroy(&context, allocator);
-    const scene_time = try std.time.Instant.now();
-    const stdout = std.io.getStdOut().writer();
-    try printTime(stdout, scene_time.since(start_time));
-    try stdout.print(" seconds to load scene\n", .{});
+    try logger.log("load scene");
     
-    const output_f32_count = 4 * extent.width * extent.height;
-    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, output_f32_count, .{ .transfer_dst_bit = true });
+    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, 4 * output.extent.width * output.extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
     // record command buffer
     {
@@ -134,7 +144,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = output_image_handles[0],
+                .image = output.images.data.items(.handle)[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -152,7 +162,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = output_image_handles[1],
+                .image = output.images.data.items(.handle)[1],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -182,7 +192,7 @@ pub fn main() !void {
         context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.traceRays(&context, commands.buffer, extent);
+        pipeline.traceRays(&context, commands.buffer, output.extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
@@ -194,7 +204,7 @@ pub fn main() !void {
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = output_image_handles[0],
+            .image = output.images.data.items(.handle)[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -230,24 +240,20 @@ pub fn main() !void {
                 .z = 0,
             },
             .image_extent = .{
-                .width = extent.width,
-                .height = extent.height,
+                .width = output.extent.width,
+                .height = output.extent.height,
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, output_image_handles[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, output.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }
 
-    const render_time = try std.time.Instant.now();
-    try printTime(stdout, render_time.since(scene_time));
-    try stdout.print(" seconds to render\n", .{});
+    try logger.log("render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.save(allocator, output_buffer.data, 4, extent, params.out_filepath);
+    try exr.helpers.save(allocator, output_buffer.data, 4, output.extent, config.out_filepath);
 
-    const exr_time = try std.time.Instant.now();
-    try printTime(stdout, exr_time.since(render_time));
-    try stdout.print(" seconds to write exr\n", .{});
+    try logger.log("write exr");
 }
