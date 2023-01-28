@@ -32,8 +32,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
         // then during rendering the render buffer is blitted into the swapchain images
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, initial_extent: vk.Extent2D) !Self {
-            var swapchain = try Swapchain.create(vc, allocator, initial_extent);
-            errdefer swapchain.destroy(vc, allocator);
+            var swapchain = try Swapchain.create(vc, initial_extent);
+            errdefer swapchain.destroy(vc);
 
             var images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
                 .{
@@ -105,7 +105,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
             self.images.destroy(vc, allocator);
-            self.swapchain.destroy(vc, allocator);
+            self.swapchain.destroy(vc);
             comptime var i = 0;
             inline while (i < num_frames) : (i += 1) {
                 self.frames[i].destroy(vc);
@@ -155,7 +155,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .transfer_dst_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.swapchain.images[self.swapchain.image_index].handle,
+                    .image = self.swapchain.images.get(self.swapchain.image_index),
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -197,8 +197,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
-            try self.destruction_queue.add(allocator, self.swapchain.handle);
-            try self.swapchain.recreate(vc, allocator, window.getExtent());
+            try self.destruction_queue.add(allocator, self.swapchain);
+            try self.swapchain.recreate(vc, window.getExtent());
         }
 
         pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
@@ -270,7 +270,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 },
             };
 
-            vc.device.cmdBlitImage(frame.command_buffer, self.images.data.items(.handle)[0], .transfer_src_optimal, self.swapchain.images[self.swapchain.image_index].handle, .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+            vc.device.cmdBlitImage(frame.command_buffer, self.images.data.items(.handle)[0], .transfer_src_optimal, self.swapchain.images.get(self.swapchain.image_index), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
             // transition swapchain back to present mode
             const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
@@ -283,7 +283,7 @@ pub fn Display(comptime num_frames: comptime_int) type {
                     .new_layout = .present_src_khr,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = self.swapchain.images[self.swapchain.image_index].handle,
+                    .image = self.swapchain.images.get(self.swapchain.image_index),
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
