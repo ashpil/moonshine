@@ -47,7 +47,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
     const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{});
     const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
-    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, frames_in_flight, .{});
+    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1, .{});
 
     var commands = try Commands.create(&context);
     const display = try Display.create(&context, initial_window_size);
