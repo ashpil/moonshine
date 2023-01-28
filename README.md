@@ -61,6 +61,11 @@ Built with Zig + Vulkan ray tracing.
   * Currently, just have ubershader
   * Would be better to have proper dynamic dispatch material system
     * Probably should do this with callable shaders
+* Light system
+  * Currently, only support skybox and mesh lights, which I think makes sense
+    * Both explicitly sampled using the alias method built on CPU
+  * But we'd like to have more dynamic meshes, which means we should mesh sampling build sampling stuff on GPU
+    * Not sure about proper route -- build inversion sampler on GPU in compute?
 * Memory management
   * A lot of unncessary copying in scene construction at the moment
     * Filesystem to RAM
