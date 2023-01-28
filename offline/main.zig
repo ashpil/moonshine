@@ -116,28 +116,12 @@ pub fn main() !void {
     try printTime(stdout, scene_time.since(start_time));
     try stdout.print(" seconds to load scene\n", .{});
     
-    const command_pool = try context.device.createCommandPool(&.{
-        .queue_family_index = context.physical_device.queue_family_index,
-        .flags = .{ .transient_bit = true },
-    }, null);
-    defer context.device.destroyCommandPool(command_pool, null);
-
-    var command_buffer: vk.CommandBuffer = undefined;
-    try context.device.allocateCommandBuffers(&.{
-        .level = vk.CommandBufferLevel.primary,
-        .command_pool = command_pool,
-        .command_buffer_count = 1,
-    }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
-
     const output_f32_count = 4 * extent.width * extent.height;
     const output_buffer = try vk_allocator.createHostBuffer(&context, f32, output_f32_count, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
     // record command buffer
     {
-        try context.device.beginCommandBuffer(command_buffer, &.{
-            .flags = .{ .one_time_submit_bit = true },
-            .p_inheritance_info = null,
-        });
+        try commands.startRecording(&context);
 
         // transition images to general layout
         const barriers = [_]vk.ImageMemoryBarrier2 {
@@ -179,7 +163,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
             .dependency_flags = .{},
             .memory_barrier_count = 0,
             .p_memory_barriers = undefined,
@@ -190,15 +174,15 @@ pub fn main() !void {
         });
 
         // bind our stuff
-        context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output.descriptor_set }, 0, undefined);
+        context.device.cmdBindPipeline(commands.buffer, .ray_tracing_khr, pipeline.handle);
+        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output.descriptor_set }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});
-        context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+        context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.traceRays(&context, command_buffer, extent);
+        pipeline.traceRays(&context, commands.buffer, extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
@@ -219,7 +203,7 @@ pub fn main() !void {
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
         };
-        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
             .dependency_flags = .{},
             .memory_barrier_count = 0,
             .p_memory_barriers = undefined,
@@ -251,25 +235,10 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(command_buffer, output_image_handles[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, output_image_handles[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
 
-        try context.device.endCommandBuffer(command_buffer);
+        try commands.submitAndIdleUntilDone(&context);
     }
-
-    try context.device.queueSubmit2(context.queue, 1, &[_]vk.SubmitInfo2 { .{
-        .flags = .{},
-        .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
-            .command_buffer = command_buffer,
-            .device_mask = 0,
-        }),
-        .wait_semaphore_info_count = 0,
-        .p_wait_semaphore_infos = undefined,
-        .signal_semaphore_info_count = 0,
-        .p_signal_semaphore_infos = undefined,
-    }}, vk.Fence.null_handle);
-
-    try context.device.deviceWaitIdle();
 
     const render_time = try std.time.Instant.now();
     try printTime(stdout, render_time.since(scene_time));
