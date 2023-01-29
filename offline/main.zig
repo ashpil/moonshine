@@ -12,6 +12,7 @@ const Camera = engine.rendersystem.Camera;
 const Scene = engine.rendersystem.Scene;
 const Material = engine.rendersystem.Scene.Material;
 const Output = engine.rendersystem.Output;
+const Background = engine.rendersystem.Background;
 
 const utils = engine.rendersystem.utils;
 const exr = engine.fileformats.exr;
@@ -123,9 +124,13 @@ pub fn main() !void {
     try logger.log("set up initial state");
 
     const camera = try Camera.fromGlb(allocator, config.in_filepath, config.extent);
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, &scene_descriptor_layout, &background_descriptor_layout);
+    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, config.in_filepath);
     defer scene.destroy(&context, allocator);
     try logger.log("load scene");
+
+    var background = try Background.create(&context, &vk_allocator, allocator, &commands, &background_descriptor_layout, scene.sampler, config.skybox_filepath);
+    defer background.destroy(&context, allocator);
+    try logger.log("load background");
     
     const output_buffer = try vk_allocator.createHostBuffer(&context, f32, 4 * output.extent.width * output.extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
@@ -185,7 +190,7 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(commands.buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, output.descriptor_set }, 0, undefined);
+        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, background.descriptor_set, output.descriptor_set }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});

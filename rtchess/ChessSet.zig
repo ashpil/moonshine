@@ -4,6 +4,7 @@ const VulkanContext = @import("engine").rendersystem.VulkanContext;
 const VkAllocator = @import("engine").rendersystem.Allocator;
 const Commands = @import("engine").rendersystem.Commands;
 const Scene = @import("engine").rendersystem.Scene;
+const Background = @import("engine").rendersystem.Background;
 const descriptor = @import("engine").rendersystem.descriptor;
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
@@ -37,10 +38,11 @@ pub const SetInfo = struct {
 };
 
 scene: Scene,
+background: Background,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, chess_set: SetInfo, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_path: []const u8, chess_set: SetInfo, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
 
     const models = [_]Scene.Model {
         .{ // board
@@ -303,10 +305,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, background_dir, &mesh_filepaths, instances, &models, descriptor_layout, background_descriptor_layout);
+    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, &mesh_filepaths, instances, &models, descriptor_layout);
+    const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, scene.sampler, background_path);
 
     return Self {
         .scene = scene,
+        .background = background,
     };
 }
 
@@ -321,4 +325,5 @@ pub fn changeVisibility(self: *Self, index: u32, visible: bool) void {
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.scene.destroy(vc, allocator);
+    self.background.destroy(vc, allocator);
 }

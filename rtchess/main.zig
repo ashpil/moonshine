@@ -149,7 +149,7 @@ pub fn main() !void {
 
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
-        engine.setScene(&set.scene, buffer);
+        engine.setScene(&set.scene, &set.background, buffer);
         if (window_data.clicked) |click_data| {
             if (click_data.instance_index > 0) {
                 const instance_index = @intCast(u16, click_data.instance_index);

@@ -18,6 +18,7 @@ const F32x3 = @import("../vector.zig").Vec3(f32);
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const Scene = @import("./Scene.zig");
+const Background = @import("./Background.zig");
 
 const utils = @import("./utils.zig");
 
@@ -86,8 +87,8 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
 }
 
-pub fn setScene(self: *Self, scene: *const Scene, buffer: vk.CommandBuffer) void {
-    const sets = [_]vk.DescriptorSet { scene.descriptor_set, scene.background.descriptor_set, self.output.descriptor_set };
+pub fn setScene(self: *Self, scene: *const Scene, background: *const Background, buffer: vk.CommandBuffer) void {
+    const sets = [_]vk.DescriptorSet { scene.descriptor_set, background.descriptor_set, self.output.descriptor_set };
     self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, sets.len, &sets, 0, undefined);
 }
 

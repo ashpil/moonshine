@@ -37,8 +37,6 @@ pub const Material = MaterialManager.Material;
 pub const Instances = Accel.InstanceInfos;
 pub const Model = Accel.Model;
 
-background: Background,
-
 material_manager: MaterialManager,
 
 mesh_manager: MeshManager,
@@ -342,11 +340,8 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 // TODO: camera
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, filepath: []const u8, background_dir: []const u8, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
-    // background atm unrelated to gltf
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const SceneDescriptorLayout, filepath: []const u8) !Self {
     const sampler = try ImageManager.createSampler(vc);
-    var background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, sampler, background_dir);
-    errdefer background.destroy(vc, allocator);
 
     // get the gltf
     var gltf = Gltf.init(allocator);
@@ -519,8 +514,6 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     errdefer accel.destroy(vc, allocator);
 
     var scene = Self {
-        .background = background,
-
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
 
@@ -535,7 +528,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return scene;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_dir: []const u8, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const SceneDescriptorLayout) !Self {
     var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
     errdefer material_manager.destroy(vc, allocator);
 
@@ -570,11 +563,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const sampler = try ImageManager.createSampler(vc);
 
-    const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, sampler, background_dir);
-
     var scene = Self {
-        .background = background,
-
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
 
@@ -600,7 +589,6 @@ pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     vc.device.destroySampler(self.sampler, null);
 
-    self.background.destroy(vc, allocator);
     self.material_manager.destroy(vc, allocator);
     self.mesh_manager.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
