@@ -130,7 +130,7 @@ pub fn main() !void {
     var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "assets/wide_street_1k.exr", set_info, &engine.scene_descriptor_layout, &engine.background_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
-    var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout.handle, &engine.commands);
+    var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout, &engine.commands);
     defer object_picker.destroy(&engine.context);
 
     var window_data = WindowData {

@@ -4,7 +4,7 @@ const shaders = @import("shaders");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../Window.zig");
-const Pipeline = @import("./Pipeline.zig");
+const Pipeline = @import("./pipeline.zig").StandardPipeline;
 const descriptor = @import("./descriptor.zig");
 const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
@@ -67,7 +67,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
     const camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{});
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{} });
 
     return Self {
         .context = context,
@@ -168,7 +168,7 @@ pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace some stuff
-    self.pipeline.traceRays(&self.context, command_buffer, self.output.extent);
+    self.pipeline.recordTraceRays(&self.context, command_buffer, self.output.extent);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator, command_buffer: vk.CommandBuffer) !void {

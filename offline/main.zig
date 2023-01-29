@@ -6,7 +6,7 @@ const engine = @import("engine");
 const VulkanContext = engine.rendersystem.VulkanContext;
 const Commands = engine.rendersystem.Commands;
 const VkAllocator = engine.rendersystem.Allocator;
-const Pipeline = engine.rendersystem.Pipeline;
+const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
 const ImageManager = engine.rendersystem.ImageManager;
 const Camera = engine.rendersystem.Camera;
 const Scene = engine.rendersystem.Scene;
@@ -109,12 +109,12 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var pipeline = try Pipeline.createStandardPipeline(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, &background_descriptor_layout, &output_descriptor_layout, .{
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{
         .samples_per_run = config.spp,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 1,
-    });
+    }});
     defer pipeline.destroy(&context);
 
     var output = try Output.create(&context, &vk_allocator, allocator, &output_descriptor_layout, config.extent);
@@ -192,7 +192,7 @@ pub fn main() !void {
         context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.traceRays(&context, commands.buffer, output.extent);
+        pipeline.recordTraceRays(&context, commands.buffer, output.extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {

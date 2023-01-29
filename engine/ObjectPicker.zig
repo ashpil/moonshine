@@ -4,8 +4,10 @@ const shaders = @import("shaders");
 
 const VulkanContext = @import("./rendersystem/VulkanContext.zig");
 const VkAllocator = @import("./rendersystem/Allocator.zig");
-const Pipeline = @import("./rendersystem/Pipeline.zig");
-const InputDescriptorLayout = @import("./rendersystem/descriptor.zig").InputDescriptorLayout;
+const Pipeline = @import("./rendersystem/pipeline.zig").ObjectPickPipeline;
+const descriptor = @import("./rendersystem/descriptor.zig");
+const InputDescriptorLayout = descriptor.InputDescriptorLayout;
+const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
 const Commands = @import("./rendersystem/Commands.zig");
 const Camera = @import("./rendersystem/Camera.zig");
 const F32x2 = @import("./vector.zig").Vec2(f32);
@@ -29,7 +31,7 @@ command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, accel_layout: vk.DescriptorSetLayout, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, scene_layout: SceneDescriptorLayout, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickData, 1, .{ .storage_buffer_bit = true });
 
     const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
@@ -58,21 +60,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     }, null);
     defer vc.device.destroyShaderModule(shader_module, null);
 
-    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, &.{ descriptor_layout.handle, accel_layout }, &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = shader_module, .p_name = "raygen", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = shader_module, .p_name = "miss", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = shader_module, .p_name = "chit", .p_specialization_info = null, },
-    }, &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 2, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-    }, &[_]vk.PushConstantRange {
-        .{
-            .offset = 0,
-            .size = @sizeOf(Camera.Desc) + @sizeOf(F32x2),
-            .stage_flags = .{ .raygen_bit_khr = true },
-        }
-    });
+    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, scene_layout }, .{});
 
     const command_pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
