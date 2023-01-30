@@ -12,8 +12,8 @@ pub const CreateInfo = struct {
     origin: F32x3,
     target: F32x3,
     up: F32x3,
-    vfov: f32,
-    extent: vk.Extent2D,
+    vfov: f32, // radians
+    aspect: f32, // width / height
     aperture: f32,
     focus_distance: f32,
 };
@@ -37,10 +37,9 @@ blur_desc: BlurDesc,
 const Self = @This();
 
 pub fn new(create_info: CreateInfo) Self {
-    const theta = create_info.vfov * std.math.pi / 180;
-    const h = std.math.tan(theta / 2);
+    const h = std.math.tan(create_info.vfov / 2);
     const viewport_height = 2.0 * h * create_info.focus_distance;
-    const viewport_width = @intToFloat(f32, create_info.extent.width) / @intToFloat(f32, create_info.extent.height) * viewport_height;
+    const viewport_width = create_info.aspect * viewport_height;
 
     const w = create_info.origin.sub(create_info.target).unit();
     const u = create_info.up.cross(w).unit();
@@ -68,7 +67,7 @@ pub fn new(create_info: CreateInfo) Self {
     };
 }
 
-pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8, extent: vk.Extent2D) !Self {
+pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8) !Self {
     var gltf = Gltf.init(allocator);
     defer gltf.deinit();
 
@@ -99,8 +98,8 @@ pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8, extent: vk.Extent
         .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
         .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
         .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
-        .vfov = gltf_camera.type.perspective.yfov / std.math.pi * 180,
-        .extent = extent,
+        .vfov = gltf_camera.type.perspective.yfov,
+        .aspect = gltf_camera.type.perspective.aspect_ratio,
         .aperture = 0.0,
         .focus_distance = 1.0,
     });

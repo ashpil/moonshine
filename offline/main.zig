@@ -123,7 +123,7 @@ pub fn main() !void {
 
     try logger.log("set up initial state");
 
-    const camera = try Camera.fromGlb(allocator, config.in_filepath, config.extent);
+    const camera = try Camera.fromGlb(allocator, config.in_filepath);
     var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
     defer world.destroy(&context, allocator);
     try logger.log("load world");

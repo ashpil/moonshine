@@ -61,8 +61,8 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
         .origin = camera_origin,
         .target = camera_target,
         .up = F32x3.new(0.0, 1.0, 0.0),
-        .vfov = 35.0,
-        .extent = initial_window_size,
+        .vfov = 0.6,
+        .aspect = @intToFloat(f32, initial_window_size.width) / @intToFloat(f32, initial_window_size.height),
         .aperture = 0.007,
         .focus_distance = camera_origin.sub(camera_target).length(),
     };
