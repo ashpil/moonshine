@@ -193,7 +193,7 @@ pub fn main() !void {
         context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, film.descriptor_set }, 0, undefined);
         
         // push our stuff
-        const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});
+        const bytes = std.mem.asBytes(&.{ camera.desc, camera.blur_desc, film.sample_count });
         context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff

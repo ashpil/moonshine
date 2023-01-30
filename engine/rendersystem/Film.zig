@@ -15,6 +15,7 @@ const utils = @import("./utils.zig");
 images: ImageManager,
 descriptor_set: vk.DescriptorSet,
 extent: vk.Extent2D,
+sample_count: u32,
 
 const Self = @This();
 
@@ -68,7 +69,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .images = images,
         .descriptor_set = descriptor_set,
         .extent = extent,
+        .sample_count = 0,
     };
+}
+
+pub fn clear(self: *Self) void {
+    self.sample_count = 0;
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
