@@ -13,7 +13,7 @@ const F32x2 = @import("../vector.zig").Vec2(f32);
 const descriptor = @import("./descriptor.zig");
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
+const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
 
 const PushConstant = struct {
@@ -164,7 +164,7 @@ pub const StandardPipeline = Pipeline(
     struct {
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
-        OutputDescriptorLayout,
+        FilmDescriptorLayout,
     },
     struct {
         @"0": extern struct {

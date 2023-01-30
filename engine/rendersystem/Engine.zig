@@ -8,10 +8,10 @@ const Pipeline = @import("./pipeline.zig").StandardPipeline;
 const descriptor = @import("./descriptor.zig");
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
+const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Display = @import("./display.zig").Display(frames_in_flight);
 const Camera = @import("./Camera.zig");
-const Output = @import("./Output.zig");
+const Film = @import("./Film.zig");
 
 const F32x3 = @import("../vector.zig").Vec3(f32);
 
@@ -28,11 +28,11 @@ const Self = @This();
 
 context: VulkanContext,
 display: Display,
-output: Output,
+film: Film,
 commands: Commands,
 world_descriptor_layout: WorldDescriptorLayout,
 background_descriptor_layout: BackgroundDescriptorLayout,
-output_descriptor_layout: OutputDescriptorLayout,
+film_descriptor_layout: FilmDescriptorLayout,
 camera_create_info: Camera.CreateInfo,
 camera: Camera,
 pipeline: Pipeline,
@@ -48,12 +48,12 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 
     const world_descriptor_layout = try WorldDescriptorLayout.create(&context, 1, .{});
     const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
-    const output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1, .{});
+    const film_descriptor_layout = try FilmDescriptorLayout.create(&context, 1, .{});
 
     var commands = try Commands.create(&context);
     const display = try Display.create(&context, initial_window_size);
-    const output = try Output.create(&context, &vk_allocator, allocator, &output_descriptor_layout, initial_window_size);
-    try commands.transitionImageLayout(&context, allocator, output.images.data.items(.handle)[1..], .@"undefined", .general);
+    const film = try Film.create(&context, &vk_allocator, allocator, &film_descriptor_layout, initial_window_size);
+    try commands.transitionImageLayout(&context, allocator, film.images.data.items(.handle)[1..], .@"undefined", .general);
 
     const camera_origin = F32x3.new(0.6, 0.5, -0.6);
     const camera_target = F32x3.new(0.0, 0.0, 0.0);
@@ -68,16 +68,16 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
     const camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{} });
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ .{} });
 
     return Self {
         .context = context,
-        .output = output,
+        .film = film,
         .display = display,
         .commands = commands,
         .world_descriptor_layout = world_descriptor_layout,
         .background_descriptor_layout = background_descriptor_layout,
-        .output_descriptor_layout = output_descriptor_layout,
+        .film_descriptor_layout = film_descriptor_layout,
         .camera_create_info = camera_create_info,
         .camera = camera,
         .pipeline = pipeline,
@@ -88,7 +88,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 }
 
 pub fn setScene(self: *Self, world: *const World, background: *const Background, buffer: vk.CommandBuffer) void {
-    const sets = [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, self.output.descriptor_set };
+    const sets = [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, self.film.descriptor_set };
     self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, sets.len, &sets, 0, undefined);
 }
 
@@ -96,10 +96,10 @@ pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.allocator.destroy(&self.context, allocator);
     self.world_descriptor_layout.destroy(&self.context);
     self.background_descriptor_layout.destroy(&self.context);
-    self.output_descriptor_layout.destroy(&self.context);
+    self.film_descriptor_layout.destroy(&self.context);
     self.pipeline.destroy(&self.context);
     self.commands.destroy(&self.context);
-    self.output.destroy(&self.context, allocator);
+    self.film.destroy(&self.context, allocator);
     self.display.destroy(&self.context, allocator);
     self.context.destroy();
 }
@@ -137,7 +137,7 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
             .new_layout = .general,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.output.images.data.items(.handle)[0],
+            .image = self.film.images.data.items(.handle)[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -169,7 +169,7 @@ pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     self.context.device.cmdPushConstants(command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace some stuff
-    self.pipeline.recordTraceRays(&self.context, command_buffer, self.output.extent);
+    self.pipeline.recordTraceRays(&self.context, command_buffer, self.film.extent);
 }
 
 pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator, command_buffer: vk.CommandBuffer) !void {
@@ -184,7 +184,7 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.output.images.data.items(.handle)[0],
+            .image = self.film.images.data.items(.handle)[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -220,8 +220,8 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
                 .y = 0,
                 .z = 0,
             }, .{
-                .x = @intCast(i32, self.output.extent.width),
-                .y = @intCast(i32, self.output.extent.height),
+                .x = @intCast(i32, self.film.extent.width),
+                .y = @intCast(i32, self.film.extent.height),
                 .z = 1,
             }
         },
@@ -239,7 +239,7 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
         },
     };
 
-    self.context.device.cmdBlitImage(command_buffer, self.output.images.data.items(.handle)[0], .transfer_src_optimal, self.display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+    self.context.device.cmdBlitImage(command_buffer, self.film.images.data.items(.handle)[0], .transfer_src_optimal, self.display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
 
     // transition swapchain back to present mode
     const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {

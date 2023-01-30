@@ -5,7 +5,7 @@ const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 const Commands = @import("./Commands.zig");
-const DescriptorLayout = @import("./descriptor.zig").OutputDescriptorLayout;
+const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
 
 const utils = @import("./utils.zig");
 

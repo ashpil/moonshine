@@ -15,7 +15,7 @@ pub const InputDescriptorLayout = DescriptorLayout(&.{
 }, null, "Input");
 
 // must be kept in sync with shader
-pub const OutputDescriptorLayout = DescriptorLayout(&.{
+pub const FilmDescriptorLayout = DescriptorLayout(&.{
     .{
         .binding = 0,
         .descriptor_type = .storage_image,
@@ -30,7 +30,7 @@ pub const OutputDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, null, "Output");
+}, null, "Film");
 
 // must be kept in sync with shader
 pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
