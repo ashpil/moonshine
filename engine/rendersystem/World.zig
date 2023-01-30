@@ -1,4 +1,4 @@
-// a scene contains:
+// a world contains:
 // - a list of meshes
 // - an acceleration structure/mesh heirarchy
 // - materials
@@ -17,7 +17,7 @@ const MaterialManager = @import("./MaterialManager.zig");
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const descriptor = @import("./descriptor.zig");
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 
 const Background = @import("./Background.zig");
@@ -194,7 +194,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     };
 }
 
-fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const SceneDescriptorLayout) !vk.DescriptorSet {
+fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const WorldDescriptorLayout) !vk.DescriptorSet {
     const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
     defer allocator.free(image_infos);
 
@@ -332,7 +332,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         },
     });
 
-    try utils.setDebugName(vc, descriptor_set, "Scene");
+    try utils.setDebugName(vc, descriptor_set, "World");
 
     return descriptor_set;
 }
@@ -340,7 +340,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 // TODO: camera
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const SceneDescriptorLayout, filepath: []const u8) !Self {
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, filepath: []const u8) !Self {
     const sampler = try ImageManager.createSampler(vc);
 
     // get the gltf
@@ -513,7 +513,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models);
     errdefer accel.destroy(vc, allocator);
 
-    var scene = Self {
+    var world = Self {
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
 
@@ -523,12 +523,12 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         .descriptor_set = undefined,
     };
 
-    scene.descriptor_set = try scene.createDescriptorSet(vc, allocator, descriptor_layout);
+    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
 
-    return scene;
+    return world;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const SceneDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const WorldDescriptorLayout) !Self {
     var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
     errdefer material_manager.destroy(vc, allocator);
 
@@ -563,7 +563,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const sampler = try ImageManager.createSampler(vc);
 
-    var scene = Self {
+    var world = Self {
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
 
@@ -573,9 +573,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .descriptor_set = undefined,
     };
 
-    scene.descriptor_set = try scene.createDescriptorSet(vc, allocator, descriptor_layout);
+    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
 
-    return scene;
+    return world;
 }
 
 pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {

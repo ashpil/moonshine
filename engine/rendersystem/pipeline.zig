@@ -11,7 +11,7 @@ const std = @import("std");
 const F32x2 = @import("../vector.zig").Vec2(f32);
 
 const descriptor = @import("./descriptor.zig");
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
@@ -135,7 +135,7 @@ pub const ObjectPickPipeline = Pipeline(
     shaders.input,
     struct {
         InputDescriptorLayout,
-        SceneDescriptorLayout,
+        WorldDescriptorLayout,
     },
     struct {},
     &[_]vk.PushConstantRange {
@@ -162,7 +162,7 @@ pub const ObjectPickPipeline = Pipeline(
 pub const StandardPipeline = Pipeline(
     shaders.main,
     struct {
-        SceneDescriptorLayout,
+        WorldDescriptorLayout,
         BackgroundDescriptorLayout,
         OutputDescriptorLayout,
     },

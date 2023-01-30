@@ -59,7 +59,7 @@ pub const BackgroundDescriptorLayout = DescriptorLayout(&.{
 
 // must be kept in sync with shader
 const max_textures = 20 * 5; // TODO: think about this more, really should
-pub const SceneDescriptorLayout = DescriptorLayout(&.{
+pub const WorldDescriptorLayout = DescriptorLayout(&.{
     .{ // TLAS
         .binding = 0,
         .descriptor_type = .acceleration_structure_khr,
@@ -123,7 +123,7 @@ pub const SceneDescriptorLayout = DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .p_immutable_samplers = null,
     },
-}, .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{ .partially_bound_bit = true }, .{}, }, "Scene");
+}, .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{ .partially_bound_bit = true }, .{}, }, "World");
 
 pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime binding_flags: ?[bindings.len]vk.DescriptorBindingFlags, comptime debug_name: [*:0]const u8) type {
     return struct {

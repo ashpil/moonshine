@@ -9,8 +9,8 @@ const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
 const ImageManager = engine.rendersystem.ImageManager;
 const Camera = engine.rendersystem.Camera;
-const Scene = engine.rendersystem.Scene;
-const Material = engine.rendersystem.Scene.Material;
+const World = engine.rendersystem.World;
+const Material = engine.rendersystem.World.Material;
 const Output = engine.rendersystem.Output;
 const Background = engine.rendersystem.Background;
 
@@ -18,7 +18,7 @@ const utils = engine.rendersystem.utils;
 const exr = engine.fileformats.exr;
 
 const descriptor = engine.rendersystem.descriptor;
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 
@@ -100,8 +100,8 @@ pub fn main() !void {
     var vk_allocator = try VkAllocator.create(&context, allocator);
     defer vk_allocator.destroy(&context, allocator);
 
-    var scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{});
-    defer scene_descriptor_layout.destroy(&context);
+    var world_descriptor_layout = try WorldDescriptorLayout.create(&context, 1, .{});
+    defer world_descriptor_layout.destroy(&context);
     var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
     defer background_descriptor_layout.destroy(&context);
     var output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1, .{});
@@ -110,7 +110,7 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{
         .samples_per_run = config.spp,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
@@ -124,11 +124,11 @@ pub fn main() !void {
     try logger.log("set up initial state");
 
     const camera = try Camera.fromGlb(allocator, config.in_filepath, config.extent);
-    var scene = try Scene.fromGlb(&context, &vk_allocator, allocator, &commands, &scene_descriptor_layout, config.in_filepath);
-    defer scene.destroy(&context, allocator);
-    try logger.log("load scene");
+    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
+    defer world.destroy(&context, allocator);
+    try logger.log("load world");
 
-    var background = try Background.create(&context, &vk_allocator, allocator, &commands, &background_descriptor_layout, scene.sampler, config.skybox_filepath);
+    var background = try Background.create(&context, &vk_allocator, allocator, &commands, &background_descriptor_layout, world.sampler, config.skybox_filepath);
     defer background.destroy(&context, allocator);
     try logger.log("load background");
     
@@ -190,7 +190,7 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(commands.buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { scene.descriptor_set, background.descriptor_set, output.descriptor_set }, 0, undefined);
+        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, output.descriptor_set }, 0, undefined);
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{camera.desc, camera.blur_desc, 0});

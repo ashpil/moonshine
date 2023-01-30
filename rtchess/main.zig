@@ -127,10 +127,10 @@ pub fn main() !void {
     };
 
     // TODO: unhardcode skybox
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "assets/wide_street_1k.exr", set_info, &engine.scene_descriptor_layout, &engine.background_descriptor_layout);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "assets/wide_street_1k.exr", set_info, &engine.world_descriptor_layout, &engine.background_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
-    var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.scene_descriptor_layout, &engine.commands);
+    var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.world_descriptor_layout, &engine.commands);
     defer object_picker.destroy(&engine.context);
 
     var window_data = WindowData {
@@ -149,7 +149,7 @@ pub fn main() !void {
 
     while (!window.shouldClose()) {
         const buffer = try engine.startFrame(&window, allocator);
-        engine.setScene(&set.scene, &set.background, buffer);
+        engine.setScene(&set.world, &set.background, buffer);
         if (window_data.clicked) |click_data| {
             if (click_data.instance_index > 0) {
                 const instance_index = @intCast(u16, click_data.instance_index);
@@ -157,16 +157,16 @@ pub fn main() !void {
                     if (instance_index == active_piece_index) {
                         active_piece = null;
                     } else {
-                        set.scene.accel.updateSkin(instance_index, 3);
+                        set.world.accel.updateSkin(instance_index, 3);
                         active_piece = instance_index;
                     }
                     if (Color.fromIndex(active_piece_index) == .white) {
-                        set.scene.accel.updateSkin(instance_index, 1);
+                        set.world.accel.updateSkin(instance_index, 1);
                     } else {
-                        set.scene.accel.updateSkin(instance_index, 2);
+                        set.world.accel.updateSkin(instance_index, 2);
                     }
                 } else {
-                    set.scene.accel.updateSkin(instance_index, 3);
+                    set.world.accel.updateSkin(instance_index, 3);
                     active_piece = instance_index;
                 }
                 engine.num_accumulted_frames = 0;
@@ -203,7 +203,7 @@ pub fn main() !void {
             }
             window_data.clicked = null;
         }
-        try set.scene.accel.recordChanges(&engine.context, buffer);
+        try set.world.accel.recordChanges(&engine.context, buffer);
         try engine.recordFrame(buffer);
         try engine.endFrame(&window, allocator, buffer);
         window.pollEvents();
@@ -241,7 +241,7 @@ fn mouseButtonCallback(window: *const Window, button: Window.MouseButton, action
         const pos = window.getCursorPos();
         const x = @floatCast(f32, pos.x) / @intToFloat(f32, window_data.engine.display.swapchain.extent.width);
         const y = @floatCast(f32, pos.y) / @intToFloat(f32, window_data.engine.display.swapchain.extent.height);
-        window_data.clicked = window_data.object_picker.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.scene.descriptor_set) catch unreachable;
+        window_data.clicked = window_data.object_picker.getClick(&window_data.engine.context, F32x2.new(x, y), window_data.engine.camera, window_data.set.world.descriptor_set) catch unreachable;
     }
 }
 

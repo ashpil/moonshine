@@ -13,7 +13,7 @@ const Mat3x4 = vector.Mat3x4(f32);
 const F32x3 = vector.Vec3(f32);
 
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
-// the acceleration structure is the primary scene heirarchy, and controls
+// the acceleration structure is the primary world heirarchy, and controls
 // how all the meshes and materials fit together
 // 
 // an acceleration structure has:

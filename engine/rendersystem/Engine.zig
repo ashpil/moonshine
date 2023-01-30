@@ -6,7 +6,7 @@ const VulkanContext = @import("./VulkanContext.zig");
 const Window = @import("../Window.zig");
 const Pipeline = @import("./pipeline.zig").StandardPipeline;
 const descriptor = @import("./descriptor.zig");
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const OutputDescriptorLayout = descriptor.OutputDescriptorLayout;
 const Display = @import("./display.zig").Display(frames_in_flight);
@@ -17,7 +17,7 @@ const F32x3 = @import("../vector.zig").Vec3(f32);
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
-const Scene = @import("./Scene.zig");
+const World = @import("./World.zig");
 const Background = @import("./Background.zig");
 
 const utils = @import("./utils.zig");
@@ -30,7 +30,7 @@ context: VulkanContext,
 display: Display,
 output: Output,
 commands: Commands,
-scene_descriptor_layout: SceneDescriptorLayout,
+world_descriptor_layout: WorldDescriptorLayout,
 background_descriptor_layout: BackgroundDescriptorLayout,
 output_descriptor_layout: OutputDescriptorLayout,
 camera_create_info: Camera.CreateInfo,
@@ -46,7 +46,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     const context = try VulkanContext.create(.{ .allocator = allocator, .window = window, .app_name = app_name });
     var vk_allocator = try VkAllocator.create(&context, allocator);
 
-    const scene_descriptor_layout = try SceneDescriptorLayout.create(&context, 1, .{});
+    const world_descriptor_layout = try WorldDescriptorLayout.create(&context, 1, .{});
     const background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
     const output_descriptor_layout = try OutputDescriptorLayout.create(&context, 1, .{});
 
@@ -68,14 +68,14 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
     const camera = Camera.new(camera_create_info);
 
-    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{} });
+    const pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, output_descriptor_layout }, .{ .{} });
 
     return Self {
         .context = context,
         .output = output,
         .display = display,
         .commands = commands,
-        .scene_descriptor_layout = scene_descriptor_layout,
+        .world_descriptor_layout = world_descriptor_layout,
         .background_descriptor_layout = background_descriptor_layout,
         .output_descriptor_layout = output_descriptor_layout,
         .camera_create_info = camera_create_info,
@@ -87,14 +87,14 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
     };
 }
 
-pub fn setScene(self: *Self, scene: *const Scene, background: *const Background, buffer: vk.CommandBuffer) void {
-    const sets = [_]vk.DescriptorSet { scene.descriptor_set, background.descriptor_set, self.output.descriptor_set };
+pub fn setScene(self: *Self, world: *const World, background: *const Background, buffer: vk.CommandBuffer) void {
+    const sets = [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, self.output.descriptor_set };
     self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, sets.len, &sets, 0, undefined);
 }
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.allocator.destroy(&self.context, allocator);
-    self.scene_descriptor_layout.destroy(&self.context);
+    self.world_descriptor_layout.destroy(&self.context);
     self.background_descriptor_layout.destroy(&self.context);
     self.output_descriptor_layout.destroy(&self.context);
     self.pipeline.destroy(&self.context);

@@ -10,7 +10,7 @@ pub const ImageManager = @import("ImageManager.zig");
 pub const MeshManager = @import("MeshManager.zig");
 pub const Output = @import("Output.zig");
 pub const pipeline = @import("pipeline.zig");
-pub const Scene = @import("Scene.zig");
+pub const World = @import("World.zig");
 pub const Swapchain = @import("Swapchain.zig");
 pub const VulkanContext = @import("VulkanContext.zig");
 

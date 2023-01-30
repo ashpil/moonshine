@@ -7,7 +7,7 @@ const VkAllocator = @import("./rendersystem/Allocator.zig");
 const Pipeline = @import("./rendersystem/pipeline.zig").ObjectPickPipeline;
 const descriptor = @import("./rendersystem/descriptor.zig");
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const Commands = @import("./rendersystem/Commands.zig");
 const Camera = @import("./rendersystem/Camera.zig");
 const F32x2 = @import("./vector.zig").Vec2(f32);
@@ -31,7 +31,7 @@ command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, scene_layout: SceneDescriptorLayout, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickData, 1, .{ .storage_buffer_bit = true });
 
     const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
@@ -60,7 +60,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     }, null);
     defer vc.device.destroyShaderModule(shader_module, null);
 
-    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, scene_layout }, .{});
+    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, world_layout }, .{});
 
     const command_pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,

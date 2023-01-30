@@ -3,17 +3,17 @@ const std = @import("std");
 const VulkanContext = @import("engine").rendersystem.VulkanContext;
 const VkAllocator = @import("engine").rendersystem.Allocator;
 const Commands = @import("engine").rendersystem.Commands;
-const Scene = @import("engine").rendersystem.Scene;
+const World = @import("engine").rendersystem.World;
 const Background = @import("engine").rendersystem.Background;
 const descriptor = @import("engine").rendersystem.descriptor;
-const SceneDescriptorLayout = descriptor.SceneDescriptorLayout;
+const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const vector = @import("engine").vector;
 const Mat3x4 = vector.Mat3x4(f32);
 const F32x3 = vector.Vec3(f32);
 const Coord = @import("./coord.zig").Coord;
 
-pub const Material = Scene.Material;
+pub const Material = World.Material;
 
 pub const Piece = struct {
     black_material_idx: u32,
@@ -37,14 +37,14 @@ pub const SetInfo = struct {
     queen: Piece,
 };
 
-scene: Scene,
+world: World,
 background: Background,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_path: []const u8, chess_set: SetInfo, descriptor_layout: *const SceneDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_path: []const u8, chess_set: SetInfo, descriptor_layout: *const WorldDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
 
-    const models = [_]Scene.Model {
+    const models = [_]World.Model {
         .{ // board
             .mesh_idxs = &.{ 0 },
         },
@@ -70,7 +70,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instance_count = 33;
 
-    var instances = Scene.Instances {};
+    var instances = World.Instances {};
     try instances.ensureTotalCapacity(allocator, instance_count);
     defer instances.deinit(allocator);
 
@@ -305,25 +305,25 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const scene = try Scene.create(vc, vk_allocator, allocator, commands, materials, &mesh_filepaths, instances, &models, descriptor_layout);
-    const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, scene.sampler, background_path);
+    const world = try World.create(vc, vk_allocator, allocator, commands, materials, &mesh_filepaths, instances, &models, descriptor_layout);
+    const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, world.sampler, background_path);
 
     return Self {
-        .scene = scene,
+        .world = world,
         .background = background,
     };
 }
 
 // todo: make this more high level
 pub fn move(self: *Self, index: u32, new_transform: Mat3x4) void {
-    self.scene.updateTransform(index, new_transform);
+    self.world.updateTransform(index, new_transform);
 }
 
 pub fn changeVisibility(self: *Self, index: u32, visible: bool) void {
-    self.scene.updateVisibility(index, visible);
+    self.world.updateVisibility(index, visible);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.scene.destroy(vc, allocator);
+    self.world.destroy(vc, allocator);
     self.background.destroy(vc, allocator);
 }
