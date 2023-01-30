@@ -3,6 +3,12 @@ const vk = @import("vulkan");
 const Gltf = @import("zgltf");
 
 const VulkanContext = @import("./VulkanContext.zig");
+const Film = @import("./Film.zig");
+const VkAllocator = @import("./Allocator.zig");
+const ImageManager = @import("./ImageManager.zig");
+const Commands = @import("./Commands.zig");
+const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
+
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
@@ -18,56 +24,56 @@ pub const CreateInfo = struct {
     focus_distance: f32,
 };
 
-pub const Desc = struct {
+pub const Properties = struct {
     origin: F32x3,
     lower_left_corner: F32x3,
     horizontal: F32x3,
     vertical: F32x3,
-};
-
-pub const BlurDesc = struct {
     u: F32x3,
     v: F32x3,
     lens_radius: f32,
+
+    pub fn new(create_info: CreateInfo) Properties {
+        const h = std.math.tan(create_info.vfov / 2);
+        const viewport_height = 2.0 * h * create_info.focus_distance;
+        const viewport_width = create_info.aspect * viewport_height;
+
+        const w = create_info.origin.sub(create_info.target).unit();
+        const u = create_info.up.cross(w).unit();
+        const v = w.cross(u);
+
+        const horizontal = u.mul_scalar(viewport_width);
+        const vertical = v.mul_scalar(viewport_height);
+
+        return Properties {
+            .origin = create_info.origin,
+            .horizontal = horizontal,
+            .vertical = vertical,
+            .lower_left_corner = create_info.origin.sub(horizontal.div_scalar(2.0)).sub(vertical.div_scalar(2.0)).sub(w.mul_scalar(create_info.focus_distance)),
+            .u = u,
+            .v = v,
+            .lens_radius = create_info.aperture / 2,
+        };
+    }
 };
 
-desc: Desc,
-blur_desc: BlurDesc,
+properties: Properties,
+film: Film,
 
 const Self = @This();
 
-pub fn new(create_info: CreateInfo) Self {
-    const h = std.math.tan(create_info.vfov / 2);
-    const viewport_height = 2.0 * h * create_info.focus_distance;
-    const viewport_width = create_info.aspect * viewport_height;
-
-    const w = create_info.origin.sub(create_info.target).unit();
-    const u = create_info.up.cross(w).unit();
-    const v = w.cross(u);
-
-    const horizontal = u.mul_scalar(viewport_width);
-    const vertical = v.mul_scalar(viewport_height);
-
-    const desc = Desc {
-        .origin = create_info.origin,
-        .horizontal = horizontal,
-        .vertical = vertical,
-        .lower_left_corner = create_info.origin.sub(horizontal.div_scalar(2.0)).sub(vertical.div_scalar(2.0)).sub(w.mul_scalar(create_info.focus_distance)),
-    };
-
-    const blur_desc = BlurDesc {
-        .u = u,
-        .v = v,
-        .lens_radius = create_info.aperture / 2,
-    };
-
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D, create_info: CreateInfo) !Self {
     return Self {
-        .desc = desc,
-        .blur_desc = blur_desc,
+        .properties = Properties.new(create_info),
+        .film = try Film.create(vc, vk_allocator, allocator, descriptor_layout, extent),
     };
 }
 
-pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8) !Self {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    self.film.destroy(vc, allocator);
+}
+
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D, path: []const u8) !Self {
     var gltf = Gltf.init(allocator);
     defer gltf.deinit();
 
@@ -94,7 +100,7 @@ pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8) !Self {
         );
     };
 
-    return Self.new(.{
+    return Self.create(vc, vk_allocator, allocator, descriptor_layout, extent, .{
         .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
         .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
         .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),

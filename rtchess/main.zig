@@ -169,7 +169,7 @@ pub fn main() !void {
                     set.world.accel.updateSkin(instance_index, 3);
                     active_piece = instance_index;
                 }
-                engine.film.clear();
+                engine.camera.film.clear();
             } else if (click_data.instance_index == 0 and (click_data.primitive_index == 11 or click_data.primitive_index == 5)) {
                 if (active_piece) |active_piece_index| {
                     const barycentrics = F32x3.new(1.0 - click_data.barycentrics.x - click_data.barycentrics.y, click_data.barycentrics.x, click_data.barycentrics.y);
@@ -192,13 +192,13 @@ pub fn main() !void {
                         transform = transform.mul(Mat3x4.from_rotation(Vec3.new(0.0, 1.0, 0.0), std.math.pi));
                     }
                     set.move(active_piece_index, transform);
-                    engine.film.clear();
+                    engine.camera.film.clear();
                 }
             } else if (click_data.instance_index == -1) {
                 if (active_piece) |active_piece_index| {
                     set.changeVisibility(active_piece_index, false);
                     active_piece = null;
-                    engine.film.clear();
+                    engine.camera.film.clear();
                 }
             }
             window_data.clicked = null;
@@ -284,7 +284,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
             engine.camera_create_info.focus_distance += 0.01;
         } else return;
 
-        engine.camera = Camera.new(engine.camera_create_info);
-        engine.film.clear();
+        engine.camera.properties = Camera.Properties.new(engine.camera_create_info);
+        engine.camera.film.clear();
     }
 }

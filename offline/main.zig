@@ -11,7 +11,6 @@ const ImageManager = engine.rendersystem.ImageManager;
 const Camera = engine.rendersystem.Camera;
 const World = engine.rendersystem.World;
 const Material = engine.rendersystem.World.Material;
-const Film = engine.rendersystem.Film;
 const Background = engine.rendersystem.Background;
 
 const utils = engine.rendersystem.utils;
@@ -118,21 +117,22 @@ pub fn main() !void {
     }});
     defer pipeline.destroy(&context);
 
-    var film = try Film.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent);
-    defer film.destroy(&context, allocator);
-
     try logger.log("set up initial state");
 
-    const camera = try Camera.fromGlb(allocator, config.in_filepath);
+    var camera = try Camera.fromGlb(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, config.in_filepath);
+    defer camera.destroy(&context, allocator);
+
     var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
     defer world.destroy(&context, allocator);
+
     try logger.log("load world");
 
     var background = try Background.create(&context, &vk_allocator, allocator, &commands, &background_descriptor_layout, world.sampler, config.skybox_filepath);
     defer background.destroy(&context, allocator);
+
     try logger.log("load background");
     
-    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, 4 * film.extent.width * film.extent.height, .{ .transfer_dst_bit = true });
+    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, 4 * camera.film.extent.width * camera.film.extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
     // record command buffer
     {
@@ -149,7 +149,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = film.images.data.items(.handle)[0],
+                .image = camera.film.images.data.items(.handle)[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -167,7 +167,7 @@ pub fn main() !void {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = film.images.data.items(.handle)[1],
+                .image = camera.film.images.data.items(.handle)[1],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -190,14 +190,14 @@ pub fn main() !void {
 
         // bind our stuff
         context.device.cmdBindPipeline(commands.buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, film.descriptor_set }, 0, undefined);
+        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set }, 0, undefined);
         
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ camera.desc, camera.blur_desc, film.sample_count });
+        const bytes = std.mem.asBytes(&.{ camera.properties, camera.film.sample_count });
         context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.recordTraceRays(&context, commands.buffer, film.extent);
+        pipeline.recordTraceRays(&context, commands.buffer, camera.film.extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
@@ -209,7 +209,7 @@ pub fn main() !void {
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = film.images.data.items(.handle)[0],
+            .image = camera.film.images.data.items(.handle)[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -245,12 +245,12 @@ pub fn main() !void {
                 .z = 0,
             },
             .image_extent = .{
-                .width = film.extent.width,
-                .height = film.extent.height,
+                .width = camera.film.extent.width,
+                .height = camera.film.extent.height,
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }
@@ -258,7 +258,7 @@ pub fn main() !void {
     try logger.log("render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.save(allocator, output_buffer.data, 4, film.extent, config.out_filepath);
+    try exr.helpers.save(allocator, output_buffer.data, 4, camera.film.extent, config.out_filepath);
 
     try logger.log("write exr");
 }

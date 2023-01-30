@@ -8,7 +8,9 @@ const shaders = @import("shaders");
 const vk = @import("vulkan");
 const std = @import("std");
 
-const F32x2 = @import("../vector.zig").Vec2(f32);
+const vector = @import("../vector.zig");
+const F32x2 = vector.Vec2(f32);
+const F32x3 = vector.Vec3(f32);
 
 const descriptor = @import("./descriptor.zig");
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
@@ -141,7 +143,7 @@ pub const ObjectPickPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Desc) + @sizeOf(F32x2),
+            .size = @sizeOf(F32x3) * 4 + @sizeOf(F32x2),
             .stage_flags = .{ .raygen_bit_khr = true },
         },
     },
@@ -177,7 +179,7 @@ pub const StandardPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Desc) + @sizeOf(Camera.BlurDesc) + @sizeOf(u32),
+            .size = @sizeOf(Camera.Properties) + @sizeOf(u32),
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     },
