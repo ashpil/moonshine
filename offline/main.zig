@@ -189,8 +189,8 @@ pub fn main() !void {
         });
 
         // bind our stuff
-        context.device.cmdBindPipeline(commands.buffer, .ray_tracing_khr, pipeline.handle);
-        context.device.cmdBindDescriptorSets(commands.buffer, .ray_tracing_khr, pipeline.layout, 0, 3, &[_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set }, 0, undefined);
+        pipeline.recordBindPipeline(&context, commands.buffer);
+        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{ camera.properties, camera.film.sample_count });

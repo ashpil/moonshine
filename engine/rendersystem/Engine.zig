@@ -82,8 +82,7 @@ pub fn create(allocator: std.mem.Allocator, window: *const Window, app_name: [*:
 }
 
 pub fn setScene(self: *Self, world: *const World, background: *const Background, buffer: vk.CommandBuffer) void {
-    const sets = [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, self.camera.film.descriptor_set };
-    self.context.device.cmdBindDescriptorSets(buffer, .ray_tracing_khr, self.pipeline.layout, 0, sets.len, &sets, 0, undefined);
+    self.pipeline.recordBindDescriptorSets(&self.context, buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, self.camera.film.descriptor_set });
 }
 
 pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
@@ -156,7 +155,7 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
 
 pub fn recordFrame(self: *Self, command_buffer: vk.CommandBuffer) !void {
     // bind some stuff
-    self.context.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.pipeline.handle);
+    self.pipeline.recordBindPipeline(&self.context, command_buffer);
     
     // push some stuff
     const bytes = std.mem.asBytes(&.{self.camera.properties, self.camera.film.sample_count });

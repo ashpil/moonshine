@@ -39,8 +39,10 @@ pub fn Pipeline(
 
         const Self = @This();
 
+        const set_layout_count = @typeInfo(SetLayouts).Struct.fields.len;
+
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: SetLayouts, constants: SpecConstants) !Self {
-            var set_layout_handles: [set_layouts.len]vk.DescriptorSetLayout = undefined;
+            var set_layout_handles: [set_layout_count]vk.DescriptorSetLayout = undefined;
             inline for (set_layout_handles) |*handle, i| {
                 handle.* = set_layouts[i].handle;
             }
@@ -120,6 +122,14 @@ pub fn Pipeline(
             self.sbt.destroy(vc);
             vc.device.destroyPipelineLayout(self.layout, null);
             vc.device.destroyPipeline(self.handle, null);
+        }
+
+        pub fn recordBindPipeline(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) void {
+            vc.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.handle);
+        }
+
+        pub fn recordBindDescriptorSets(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, sets: [set_layout_count]vk.DescriptorSet) void {
+            vc.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, self.layout, 0, sets.len, &sets, 0, undefined);
         }
 
         pub fn recordTraceRays(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, extent: vk.Extent2D) void {
