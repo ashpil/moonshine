@@ -66,8 +66,6 @@ float2 squareToGaussian(float2 square) {
 }
 
 float2 squareToUniformDiskConcentric(float2 square) {
-    float r1 = 2.0 * square.x - 1.0;
-    float r2 = 2.0 * square.y - 1.0;
     float2 uOffset = 2.0 * square - float2(1.0, 1.0);
 
     if (all(uOffset == float2(0.0, 0.0))) {
