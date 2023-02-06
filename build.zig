@@ -11,7 +11,7 @@ pub fn build(b: *std.build.Builder) void {
 
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    const mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
 
     // packages/libraries we'll need below
     const vk = blk: {
@@ -21,8 +21,8 @@ pub fn build(b: *std.build.Builder) void {
         }) catch unreachable;
         break :blk vkgen.VkGenerateStep.create(b, vk_xml_path, "vk.zig").getPackage("vulkan");
     };
-    const glfw = makeGlfwLibrary(b, target, .ReleaseFast) catch unreachable;
-    const tinyexr = makeTinyExrLibrary(b, target, .ReleaseFast);
+    const glfw = makeGlfwLibrary(b, target) catch unreachable;
+    const tinyexr = makeTinyExrLibrary(b, target);
     const zgltf = std.build.Pkg {
         .name = "zgltf",
         .source = .{ .path = "deps/zgltf/src/main.zig" },
@@ -39,9 +39,12 @@ pub fn build(b: *std.build.Builder) void {
         engine_options.windowing = true;
         engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
-        const rtchess_exe = b.addExecutable("rtchess", "rtchess/main.zig");
-        rtchess_exe.setTarget(target);
-        rtchess_exe.setBuildMode(mode);
+        const rtchess_exe = b.addExecutable(.{
+            .name = "rtchess",
+            .root_source_file = .{ .path = "rtchess/main.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
         rtchess_exe.install();
 
         rtchess_exe.addPackage(vk);
@@ -67,9 +70,12 @@ pub fn build(b: *std.build.Builder) void {
         engine_options.windowing = false;
         engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
-        const offline_exe = b.addExecutable("offline", "offline/main.zig");
-        offline_exe.setTarget(target);
-        offline_exe.setBuildMode(mode);
+        const offline_exe = b.addExecutable(.{
+            .name = "offline",
+            .root_source_file = .{ .path = "offline/main.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
         offline_exe.install();
 
         offline_exe.addPackage(vk);
@@ -170,13 +176,15 @@ const CLibrary = struct {
     library: *std.build.LibExeObjStep,
 };
 
-fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) CLibrary {
+fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrary {
     const tinyexr_path = "./deps/tinyexr/";
     const miniz_path = tinyexr_path ++ "deps/miniz/";
 
-    const lib = b.addStaticLibrary("tinyexr", null);
-    lib.setBuildMode(mode);
-    lib.setTarget(target);
+    const lib = b.addStaticLibrary(.{
+        .name = "tinyexr",
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
     lib.linkLibCpp();
     lib.addIncludePath(miniz_path);
     lib.addCSourceFiles(&.{
@@ -191,11 +199,13 @@ fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: 
 }
 
 // adapted from mach glfw
-fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, mode: std.builtin.Mode) !CLibrary {
+fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary {
     const path = "./deps/glfw/";
-    const lib = b.addStaticLibrary("glfw", null);
-    lib.setBuildMode(mode);
-    lib.setTarget(target);
+    const lib = b.addStaticLibrary(.{
+        .name = "glfw",
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
 
     const maybe_lws = b.option([]const u8, "target-lws", "Target linux window system to use, omit to build all.\n                               Ignored for Windows builds. (options: X11, Wayland)");
     var lws: Lws = .all;
