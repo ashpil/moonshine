@@ -502,6 +502,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     ),
                     .model_idx = @intCast(u12, model_idx),
                     .material_idxs = skins[model_idx],
+                    .sampled_geometry = if (std.mem.startsWith(u8, gltf.data.materials.items[gltf.data.meshes.items[model_idx].primitives.items[0].material.?].name, "Emitter")) &.{ true } else &.{}, // workaround for gltf not supporting this interface
                 });
             }
         }
