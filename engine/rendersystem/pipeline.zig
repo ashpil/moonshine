@@ -47,7 +47,6 @@ pub fn Pipeline(
                 handle.* = set_layouts[i].handle;
             }
             const layout = try vc.device.createPipelineLayout(&.{
-                .flags = .{},
                 .set_layout_count = set_layout_handles.len,
                 .p_set_layouts = &set_layout_handles,
                 .push_constant_range_count = push_constant_ranges.len,
@@ -56,7 +55,6 @@ pub fn Pipeline(
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
             const module = try vc.device.createShaderModule(&.{
-                .flags = .{},
                 .code_size = shader_code.len,
                 .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
             }, null);
@@ -90,15 +88,11 @@ pub fn Pipeline(
 
             var handle: vk.Pipeline = undefined;
             const createInfo = vk.RayTracingPipelineCreateInfoKHR {
-                .flags = .{},
                 .stage_count = var_stages.len,
                 .p_stages = &var_stages,
                 .group_count = groups.len,
                 .p_groups = groups.ptr,
                 .max_pipeline_ray_recursion_depth = 1,
-                .p_library_info = null,
-                .p_library_interface = null,
-                .p_dynamic_state = null,
                 .layout = layout,
                 .base_pipeline_handle = .null_handle,
                 .base_pipeline_index = -1,

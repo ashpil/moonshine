@@ -28,7 +28,6 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, old_handle
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
     const handle = try vc.device.createSwapchainKHR(&.{
-        .flags = .{},
         .surface = vc.surface,
         .min_image_count = settings.image_count,
         .image_format = settings.format.format,

@@ -148,14 +148,10 @@ pub fn Display(comptime num_frames: comptime_int) type {
             query_pool: if (measure_perf) vk.QueryPool else void,
 
             fn create(vc: *const VulkanContext) !Frame {
-                const image_acquired = try vc.device.createSemaphore(&.{
-                    .flags = .{},
-                }, null);
+                const image_acquired = try vc.device.createSemaphore(&.{}, null);
                 errdefer vc.device.destroySemaphore(image_acquired, null);
 
-                const command_completed = try vc.device.createSemaphore(&.{
-                    .flags = .{},
-                }, null);
+                const command_completed = try vc.device.createSemaphore(&.{}, null);
                 errdefer vc.device.destroySemaphore(command_completed, null);
 
                 const fence = try vc.device.createFence(&.{
@@ -176,10 +172,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
                 }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
                 const query_pool = if (measure_perf) try vc.device.createQueryPool(&.{
-                    .flags = .{},
                     .query_type = .timestamp,
                     .query_count = 2,
-                    .pipeline_statistics = .{},
                 }, null) else undefined;
                 errdefer if (measure_perf) vc.device.destroyQueryPool(query_pool, null);
                 if (measure_perf) vc.device.resetQueryPool(query_pool, 0, 2);

@@ -141,8 +141,6 @@ pub fn main() !void {
         // transition images to general layout
         const barriers = [_]vk.ImageMemoryBarrier2 {
             .{
-                .src_stage_mask = .{},
-                .src_access_mask = .{},
                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
                 .dst_access_mask = .{ .shader_write_bit = true },
                 .old_layout = .@"undefined",
@@ -159,8 +157,6 @@ pub fn main() !void {
                 },
             },
             .{
-                .src_stage_mask = .{},
-                .src_access_mask = .{},
                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
                 .dst_access_mask = .{ .shader_write_bit = true },
                 .old_layout = .@"undefined",
@@ -179,11 +175,6 @@ pub fn main() !void {
         };
 
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
-            .dependency_flags = .{},
-            .memory_barrier_count = 0,
-            .p_memory_barriers = undefined,
-            .buffer_memory_barrier_count = 0,
-            .p_buffer_memory_barriers = undefined,
             .image_memory_barrier_count = @intCast(u32, barriers.len),
             .p_image_memory_barriers = &barriers,
         });
@@ -219,11 +210,6 @@ pub fn main() !void {
             },
         };
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
-            .dependency_flags = .{},
-            .memory_barrier_count = 0,
-            .p_memory_barriers = undefined,
-            .buffer_memory_barrier_count = 0,
-            .p_buffer_memory_barriers = undefined,
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = utils.toPointerType(&barrier),
         });

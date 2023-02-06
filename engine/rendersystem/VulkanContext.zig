@@ -92,7 +92,6 @@ const Base = struct {
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
                 .enabled_extension_count = @intCast(u32, required_extensions.len),
                 .pp_enabled_extension_names = required_extensions.ptr,
-                .flags = .{},
                 .p_next = if (validate) &debug_messenger_create_info else null,
             },
             null
@@ -275,8 +274,6 @@ const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
     .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true},
     .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
     .pfn_user_callback = debugCallback,
-    .p_user_data = null,
-    .flags = .{},
 };
 
 base: Base,
@@ -447,7 +444,6 @@ const PhysicalDevice = struct {
                 .queue_family_index = self.queue_family_index,
                 .queue_count = 1,
                 .p_queue_priorities = &priority,
-                .flags = .{},
             }
         };
 
@@ -489,7 +485,6 @@ const PhysicalDevice = struct {
                 .p_enabled_features = &.{
                     .shader_int_64 = vk.TRUE,
                 },
-                .flags = .{},
                 .p_next = &device_features,
             },
             null,

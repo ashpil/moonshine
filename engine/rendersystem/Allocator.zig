@@ -42,9 +42,6 @@ fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, u
             .size = size,
             .usage = usage,
             .sharing_mode = vk.SharingMode.exclusive,
-            .queue_family_index_count = 0,
-            .p_queue_family_indices = undefined,
-            .flags = .{},
     }, null);
     errdefer vc.device.destroyBuffer(buffer.*, null);
 

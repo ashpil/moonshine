@@ -43,7 +43,6 @@ pub fn startRecording(self: *Self, vc: *const VulkanContext) !void {
         .flags = .{
             .one_time_submit_bit = true,
         },
-        .p_inheritance_info = null,
     });
 }
 
@@ -52,7 +51,6 @@ pub fn submit(self: *Self, vc: *const VulkanContext) !void {
     try vc.device.endCommandBuffer(self.buffer);
 
     const submit_info = vk.SubmitInfo2 {
-        .flags = .{},
         .command_buffer_info_count = 1,
         .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.buffer,
@@ -100,10 +98,8 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
     const size = @intCast(u32, geometry_infos.len);
 
     const query_pool = try vc.device.createQueryPool(&.{
-        .flags = .{},
         .query_type = .acceleration_structure_compacted_size_khr,
         .query_count = size,
-        .pipeline_statistics = .{},
     }, null);
     defer vc.device.destroyQueryPool(query_pool, null);
 
@@ -122,13 +118,8 @@ pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanCont
         }
     };
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
         .memory_barrier_count = barriers.len,
         .p_memory_barriers = &barriers,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
-        .image_memory_barrier_count = 0,
-        .p_image_memory_barriers = undefined,
     });
 
     vc.device.cmdWriteAccelerationStructuresPropertiesKHR(self.buffer, size, handles.ptr, .acceleration_structure_compacted_size_khr, query_pool, 0);
@@ -174,10 +165,6 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
     
     for (images) |image, i| {
         barriers[i] = .{
-            .src_stage_mask = .{},
-            .src_access_mask = .{},
-            .dst_stage_mask = .{},
-            .dst_access_mask = .{},
             .old_layout = src_layout,
             .new_layout = dst_layout,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -194,11 +181,6 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = @intCast(u32, barriers.len),
         .p_image_memory_barriers = barriers.ptr,
     });
@@ -232,8 +214,6 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
 
     for (dst_images) |image, i| {
         first_barriers[i] = .{
-            .src_stage_mask = .{},
-            .src_access_mask = .{},
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .@"undefined",
@@ -253,8 +233,6 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         second_barriers[i] = .{
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{},
-            .dst_access_mask = .{},
             .old_layout = .transfer_dst_optimal,
             .new_layout = dst_layouts[i],
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -274,11 +252,6 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = len,
         .p_image_memory_barriers = first_barriers.ptr,
     });
@@ -309,11 +282,6 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = len,
         .p_image_memory_barriers = second_barriers.ptr,
     });

@@ -104,8 +104,6 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
     // and accumulation image to one we can write to in shader
     const output_image_barriers = [_]vk.ImageMemoryBarrier2 {
         .{
-            .src_stage_mask = .{},
-            .src_access_mask = .{},
             .dst_stage_mask = .{ .blit_bit = true, },
             .dst_access_mask = .{ .transfer_write_bit = true, },
             .old_layout = .@"undefined",
@@ -122,8 +120,6 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
             },
         },
         .{
-            .src_stage_mask = .{},
-            .src_access_mask = .{},
             .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
             .dst_access_mask = .{ .shader_storage_write_bit = true, },
             .old_layout = .@"undefined",
@@ -141,11 +137,6 @@ pub fn startFrame(self: *Self, window: *const Window, allocator: std.mem.Allocat
         },
     };
     self.context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = output_image_barriers.len,
         .p_image_memory_barriers = &output_image_barriers,
     });
@@ -188,11 +179,6 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
         }
     };
     self.context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = image_memory_barriers.len,
         .p_image_memory_barriers = &image_memory_barriers,
     });
@@ -239,8 +225,6 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
         .{
             .src_stage_mask = .{ .blit_bit = true, },
             .src_access_mask = .{ .transfer_write_bit = true, },
-            .dst_stage_mask = .{},
-            .dst_access_mask = .{},
             .old_layout = .transfer_dst_optimal,
             .new_layout = .present_src_khr,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -256,11 +240,6 @@ pub fn endFrame(self: *Self, window: *const Window, allocator: std.mem.Allocator
         }
     };
     self.context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-        .dependency_flags = .{},
-        .memory_barrier_count = 0,
-        .p_memory_barriers = undefined,
-        .buffer_memory_barrier_count = 0,
-        .p_buffer_memory_barriers = undefined,
         .image_memory_barrier_count = return_swap_image_memory_barriers.len,
         .p_image_memory_barriers = &return_swap_image_memory_barriers,
     });
