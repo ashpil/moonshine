@@ -33,6 +33,33 @@ pub fn build(b: *std.build.Builder) void {
     };
     const default_engine_options = EngineOptions.fromCli(b);
 
+    {
+        var engine_options = default_engine_options;
+        engine_options.exr = true;
+        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
+
+        const engine_tests = b.addTest(.{
+            .name = "test",
+            .root_source_file = .{ .path = "engine/tests.zig" },
+            .kind = .test_exe,
+            .target = target,
+            .optimize = optimize,
+        });
+        engine_tests.install();
+        engine_tests.addPackage(vk);
+        engine_tests.addPackage(engine);
+
+        engine_tests.linkLibC();
+        engine_tests.linkLibrary(tinyexr.library);
+        engine_tests.addIncludePath(tinyexr.include_path);
+
+        const run_test_cmd = engine_tests.run();
+        run_test_cmd.step.dependOn(b.getInstallStep());
+
+        const test_step = b.step("test", "Run engine tests");
+        test_step.dependOn(&run_test_cmd.step);
+    }
+
     // chess exe
     {
         var engine_options = default_engine_options;
