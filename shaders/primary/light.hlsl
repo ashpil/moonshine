@@ -15,7 +15,7 @@ interface Light {
     //
     // pdf is with respect to unobstructed solid angle
     // should trace a ray to determine obstruction
-    LightSample sample(float3 positionWs, float3 normalWs, float2 square);
+    LightSample sample(float3 positionWs, float3 triangleNormalDirWs, float2 square);
 
     // evaluates a given position, returning radiance arriving at that point from
     // light and the pdf of that radiance
@@ -59,7 +59,7 @@ struct EnvMap : Light {
         lightSample.radiance = dBackgroundTexture.Load(float3(discreteuv, 0));
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
-        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, dot(lightSample.dirWs, normalWs) > 0 ? normalWs : -normalWs), lightSample.dirWs, INFINITY)) {
+        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, lightSample.dirWs)), lightSample.dirWs, INFINITY)) {
             lightSample.pdf = 0.0;
         }
 
@@ -82,7 +82,7 @@ struct EnvMap : Light {
         float sinTheta = sin(phiTheta.y);
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
 
-        if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), dirWs, INFINITY)) {
+        if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, dirWs)), dirWs, INFINITY)) {
             l.pdf = 0.0;
         }
         return l;
@@ -102,7 +102,7 @@ struct MeshLights : Light {
         return map;
     }
 
-    LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
+    LightSample sample(float3 positionWs, float3 triangleNormalDirWs, float2 rand) {
         LightSample lightSample;
         lightSample.pdf = 0.0;
 
@@ -127,8 +127,8 @@ struct MeshLights : Light {
         lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
 
         // compute precise ray endpoints
-        float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.normal);
-        float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, normalWs);
+        float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.triangleNormal);
+        float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, faceForward(triangleNormalDirWs, lightSample.dirWs));
         float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetShadingPositionWs, normalize(offsetLightPositionWs - offsetShadingPositionWs), tmax)) {
@@ -137,11 +137,11 @@ struct MeshLights : Light {
         return lightSample;
     }
 
-    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
+    LightEval eval(float3 positionWs, float3 triangleNormalDirWs, float3 dirWs) {
         LightEval l;
         // trace ray to determine if we hit an emissive mesh
         RayDesc ray;
-        ray.Origin = offsetAlongNormal(positionWs, dot(normalWs, dirWs) > 0 ? normalWs : -normalWs);
+        ray.Origin = offsetAlongNormal(positionWs, faceForward(triangleNormalDirWs, dirWs));
         ray.Direction = dirWs;
         ray.TMin = 0.0;
         ray.TMax = INFINITY;
@@ -179,12 +179,12 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 // estimates direct lighting from light + brdf via MIS
 // samples light and material
 template <class Light, class Material>
-float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
+float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float4 rand) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
     {
-        LightSample lightSample = light.sample(positionWs, normalDirWs, rand.xy);
+        LightSample lightSample = light.sample(positionWs, triangleNormalDirWs, rand.xy);
 
         if (lightSample.pdf > 0.0) {
             float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
@@ -203,7 +203,7 @@ float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material materia
 
         if (materialSample.pdf > 0.0) {
             float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
-            LightEval lightContrib = light.eval(positionWs, normalDirWs, brdfDirWs);
+            LightEval lightContrib = light.eval(positionWs, triangleNormalDirWs, brdfDirWs);
             if (lightContrib.pdf > 0.0) {
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
                 float weight = powerHeuristic(1, materialSample.pdf, 1, lightContrib.pdf);
@@ -218,8 +218,8 @@ float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material materia
 // estimates direct lighting from light + brdf via MIS
 // only samples light
 template <class Light, class Material>
-float3 estimateDirectMISLight(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float2 rand, uint samplesTaken) {
-    LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
+float3 estimateDirectMISLight(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float2 rand, uint samplesTaken) {
+    LightSample lightSample = light.sample(positionWs, triangleNormalDirWs, rand);
 
     if (lightSample.pdf > 0.0) {
         float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);

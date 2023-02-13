@@ -52,7 +52,8 @@ uint materialIdx(uint instanceID, uint geometryIndex) {
 struct MeshAttributes {
     float3 position;
     float2 texcoord;
-    float3 normal;
+    float3 triangleNormal; // normal of the hit triangle
+    float3 normal;         // normal specified as vertex attribute
     float3 tangent;
     float3 bitangent;
 
@@ -86,6 +87,8 @@ struct MeshAttributes {
         }
         attrs.texcoord = interpolate(barycentrics, t0, t1, t2);
 
+        attrs.triangleNormal = normalize(cross(p1 - p0, p2 - p0));
+
         // normals optional
         if (mesh.normalAddress != 0) {
             float3 n0 = loadNormal(mesh.normalAddress, ind.x);
@@ -94,7 +97,7 @@ struct MeshAttributes {
             attrs.normal = interpolate(barycentrics, n0, n1, n2);
         } else {
             // just use one from positions
-            attrs.normal = normalize(cross(p1 - p0, p2 - p0));
+            attrs.normal = attrs.triangleNormal;
         }
 
         // at some point might have this in geometry too, but not yet
@@ -109,6 +112,7 @@ struct MeshAttributes {
 
         position = mul(toWorld, float4(position, 1.0));
         normal = normalize(mul(transpose(toMesh), normal).xyz);
+        triangleNormal = normalize(mul(transpose(toMesh), triangleNormal).xyz);
         tangent = normalize(mul(transpose(toMesh), tangent).xyz);
         bitangent = normalize(mul(transpose(toMesh), bitangent).xyz);
 

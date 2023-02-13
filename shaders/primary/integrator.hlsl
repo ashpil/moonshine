@@ -65,13 +65,13 @@ struct PathTracingIntegrator : Integrator {
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLightMaterial(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.normal, rand) / env_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLightMaterial(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleNormal, rand) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
             for (uint directCount = 0; directCount < mesh_samples_per_bounce; directCount++) {
                 float2 rand = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLight(frame, MeshLights::create(), material, outgoing, attrs.position, attrs.normal, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLight(frame, MeshLights::create(), material, outgoing, attrs.position, attrs.triangleNormal, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
             }
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette
@@ -91,7 +91,7 @@ struct PathTracingIntegrator : Integrator {
 
             // set up info for next bounce
             ray.Direction = frame.frameToWorld(sample.dirFs);
-            ray.Origin = offsetAlongNormal(attrs.position, dot(attrs.normal, ray.Direction) > 0 ? attrs.normal : -attrs.normal);
+            ray.Origin = offsetAlongNormal(attrs.position, faceForward(attrs.triangleNormal, ray.Direction));
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
             bounceCount += 1;
         }

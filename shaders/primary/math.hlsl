@@ -32,6 +32,10 @@ float luminance(float3 color) {
            0.0722 * color.b;
 }
 
+float3 faceForward(float3 n, float3 d) {
+    return dot(n, d) > 0 ? n : -n;
+}
+
 // https://research.nvidia.com/publication/2019-03_fast-and-robust-method-avoiding-self-intersection
 float3 offsetAlongNormal(float3 p, float3 n) {
     float origin = 1.0f / 32.0f;
