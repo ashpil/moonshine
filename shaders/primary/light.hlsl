@@ -177,9 +177,9 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 }
 
 // estimates direct lighting from light + brdf via MIS
-// TODO: is it better to trace two rays as currently or is a one-ray approach preferable?
+// samples light and material
 template <class Light, class Material>
-float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
+float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float4 rand) {
     float3 directLighting = float3(0.0, 0.0, 0.0);
 
     // sample light
@@ -213,6 +213,25 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
     }
 
     return directLighting;
+}
+
+// estimates direct lighting from light + brdf via MIS
+// only samples light
+template <class Light, class Material>
+float3 estimateDirectMISLight(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float2 rand, uint samplesTaken) {
+    LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
+
+    if (lightSample.pdf > 0.0) {
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+        float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
+        if (scatteringPdf > 0.0) {
+            float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+            float weight = powerHeuristic(samplesTaken, lightSample.pdf, 1, scatteringPdf);
+            return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
+        }
+    }
+
+    return 0.0;
 }
 
 // no MIS, just light
