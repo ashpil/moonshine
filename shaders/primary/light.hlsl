@@ -35,13 +35,8 @@ struct EnvMap : Light {
         uint2 size;
         dBackgroundTexture.GetDimensions(size.x, size.y);
 
-        // get y
-        float pdf_y;
-        sampleAlias<float, AliasEntry<float> >(dBackgroundMarginalAlias, size.y, 0, uv.y, result.y, pdf_y);
-
-        // get x
-        float pdf_x;
-        sampleAlias<float, AliasEntry<float> >(dBackgroundConditionalAlias, size.x, result.y * size.x, uv.x, result.x, pdf_x);
+        float pdf_y = sampleAlias<float, AliasEntry<float> >(dBackgroundMarginalAlias, size.y, 0, uv.y, result.y);
+        float pdf_x = sampleAlias<float, AliasEntry<float> >(dBackgroundConditionalAlias, size.x, result.y * size.x, uv.x, result.x);
 
         return pdf_x * pdf_y * float(size.y) * float(size.x);
     }
@@ -64,7 +59,7 @@ struct EnvMap : Light {
         lightSample.radiance = dBackgroundTexture.Load(float3(discreteuv, 0));
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
-        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, normalWs), lightSample.dirWs, INFINITY)) {
+        if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, dot(lightSample.dirWs, normalWs) > 0 ? normalWs : -normalWs), lightSample.dirWs, INFINITY)) {
             lightSample.pdf = 0.0;
         }
 
@@ -115,9 +110,8 @@ struct MeshLights : Light {
         float sum = dEmitterAliasTable[0].select;
         if (entryCount == 0 || sum == 0) return lightSample;
 
-        LightAliasData data;
         uint idx;
-        sampleAlias<LightAliasData, AliasEntry<LightAliasData> >(dEmitterAliasTable, entryCount, 1, rand.x, idx, data);
+        LightAliasData data = sampleAlias<LightAliasData, AliasEntry<LightAliasData> >(dEmitterAliasTable, entryCount, 1, rand.x, idx);
         uint instanceID = dInstances[data.instanceIndex].instanceID();
 
         float2 barycentrics = squareToTriangle(rand);
@@ -147,7 +141,7 @@ struct MeshLights : Light {
         LightEval l;
         // trace ray to determine if we hit an emissive mesh
         RayDesc ray;
-        ray.Origin = offsetAlongNormal(positionWs, normalWs);
+        ray.Origin = offsetAlongNormal(positionWs, dot(normalWs, dirWs) > 0 ? normalWs : -normalWs);
         ray.Direction = dirWs;
         ray.TMin = 0.0;
         ray.TMax = INFINITY;
@@ -191,9 +185,9 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
     // sample light
     {
         LightSample lightSample = light.sample(positionWs, normalDirWs, rand.xy);
-        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
 
         if (lightSample.pdf > 0.0) {
+            float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
             float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
             if (scatteringPdf > 0.0) {
                 float3 brdf = material.eval(lightDirFs, outgoingDirFs);
@@ -206,9 +200,9 @@ float3 estimateDirectMIS(Frame frame, Light light, Material material, float3 out
     // sample material
     {
         MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
-        float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
 
         if (materialSample.pdf > 0.0) {
+            float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
             LightEval lightContrib = light.eval(positionWs, normalDirWs, brdfDirWs);
             if (lightContrib.pdf > 0.0) {
                 float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);

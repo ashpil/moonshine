@@ -37,18 +37,18 @@ bool coinFlipRemap(float p, inout float rand) {
 }
 
 // samples from an alias table, remaps rand
-// returns total weight in alias table, zero if no entries and then e is invalid
 template <class Data, class Entry>
-void sampleAlias(StructuredBuffer<Entry> entries, uint entryCount, uint offset, inout float rand, out uint idx, out Data d) {
+Data sampleAlias(StructuredBuffer<Entry> entries, uint entryCount, uint offset, inout float rand, out uint idx) {
     float scaled = rand * entryCount;
     idx = uint(scaled);
-    rand = scaled - idx;
+    rand = scaled - float(idx);
+    
     Entry e = entries[offset + idx];
     if (!coinFlipRemap(e.select, rand)) {
         idx = e.alias;
-        e = entries[offset + e.alias];
+        e = entries[offset + idx];
     }
-    d = e.data;
+    return e.data;
 }
 
 float2 squareToTriangle(float2 square) {
