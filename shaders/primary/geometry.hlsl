@@ -88,11 +88,9 @@ struct MeshAttributes {
             float3 n0 = loadNormal(mesh.normalAddress, ind.x);
             float3 n1 = loadNormal(mesh.normalAddress, ind.y);
             float3 n2 = loadNormal(mesh.normalAddress, ind.z);
+            attrs.frame = attrs.triangleFrame;
             attrs.frame.n = normalize(interpolate(barycentrics, n0, n1, n2));
-
-            attrs.frame.t = normalize(cross(attrs.frame.n, attrs.triangleFrame.s));
-            attrs.frame.s = cross(attrs.frame.t, attrs.frame.n);
-            attrs.frame.n = normalize(cross(attrs.frame.s, attrs.frame.t));
+            attrs.frame.reorthogonalize();
         } else {
             // just use one from triangle
             attrs.frame = attrs.triangleFrame;

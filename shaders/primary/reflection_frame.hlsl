@@ -27,6 +27,12 @@ struct Frame {
         return Frame::create(n2, s2, t2);
     }
 
+    void reorthogonalize() {
+        // Gram-Schmidt
+        s = normalize(s - n * dot(n, s));
+        t = normalize(cross(n, s));
+    }
+
     float3 worldToFrame(float3 v) {
         float3x3 toFrame = { s, n, t };
         return mul(toFrame, v);

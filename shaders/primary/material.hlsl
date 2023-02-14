@@ -300,10 +300,9 @@ Frame lookupTextureNormal(uint textureIndex, float2 texcoords, Frame tangentFram
 
     float3 normalTangentSpace = decodeNormal(dMaterialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rg);
 
-    Frame textureFrame;
+    Frame textureFrame = tangentFrame;
     textureFrame.n = normalize(tangentFrame.frameToWorld(normalTangentSpace).xyz);
-    textureFrame.s = normalize(tangentFrame.s - textureFrame.n * dot(textureFrame.n, tangentFrame.s));
-    textureFrame.t = normalize(cross(textureFrame.n, textureFrame.s));
+    textureFrame.reorthogonalize();
 
     return textureFrame;
 }
