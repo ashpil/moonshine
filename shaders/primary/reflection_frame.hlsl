@@ -6,6 +6,10 @@ struct Frame {
     static Frame create(float3 n) {
         float3 t, s;
         coordinateSystem(n, t, s);
+        return Frame::create(n, s, t);
+    }
+
+    static Frame create(float3 n, float3 s, float3 t) {
         float3x3 toFrame = { s, n, t };
         Frame frame;
         frame.toFrame = toFrame;

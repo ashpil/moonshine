@@ -21,8 +21,8 @@ void getTangentBitangent(float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, 
     if (det == 0.0) {
         coordinateSystem(normalize(cross(p2 - p0, p1 - p0)), tangent, bitangent);
     } else {
-        tangent = (deltaT12.y * deltaP02 - deltaT02.y * deltaP12) / det;
-        bitangent = (-deltaT12.x * deltaP02 + deltaT02.x * deltaP12) / det;
+        tangent = normalize((deltaT12.y * deltaP02 - deltaT02.y * deltaP12) / det);
+        bitangent = normalize((-deltaT12.x * deltaP02 + deltaT02.x * deltaP12) / det);
     }
 }
 
@@ -46,8 +46,14 @@ uint materialIdx(uint instanceID, uint geometryIndex) {
 struct MeshAttributes {
     float3 position;
     float2 texcoord;
-    float3 triangleNormal; // normal of the hit triangle
-    float3 normal;         // normal specified as vertex attribute
+
+    // from triangle positions
+    float3 triangleNormal;
+    float3 triangleTangent;
+    float3 triangleBitangent;
+
+    // from vertex attributes
+    float3 normal;
     float3 tangent;
     float3 bitangent;
 
@@ -81,21 +87,25 @@ struct MeshAttributes {
         }
         attrs.texcoord = interpolate(barycentrics, t0, t1, t2);
 
-        attrs.triangleNormal = normalize(cross(p1 - p0, p2 - p0));
+        getTangentBitangent(p0, p1, p2, t0, t1, t2, attrs.triangleTangent, attrs.triangleBitangent);
+        attrs.triangleNormal = normalize(cross(p0 - p2, p1 - p2));
 
         // normals optional
         if (mesh.normalAddress != 0) {
             float3 n0 = loadNormal(mesh.normalAddress, ind.x);
             float3 n1 = loadNormal(mesh.normalAddress, ind.y);
             float3 n2 = loadNormal(mesh.normalAddress, ind.z);
-            attrs.normal = interpolate(barycentrics, n0, n1, n2);
-        } else {
-            // just use one from positions
-            attrs.normal = attrs.triangleNormal;
-        }
+            attrs.normal = normalize(interpolate(barycentrics, n0, n1, n2));
 
-        // at some point might have this in geometry too, but not yet
-        getTangentBitangent(p0, p1, p2, t0, t1, t2, attrs.tangent, attrs.bitangent);
+            attrs.bitangent = normalize(cross(attrs.normal, attrs.triangleTangent));
+            attrs.tangent = cross(attrs.bitangent, attrs.normal);
+            attrs.normal = normalize(cross(attrs.tangent, attrs.bitangent));
+        } else {
+            // just use ones from triangle
+            attrs.normal = attrs.triangleNormal;
+            attrs.tangent = attrs.triangleTangent;
+            attrs.bitangent = attrs.triangleBitangent;
+        }
 
         return attrs;
     }
@@ -105,8 +115,12 @@ struct MeshAttributes {
         float3x4 toMesh = dWorldToInstance[NonUniformResourceIndex(instanceIndex)];
 
         position = mul(toWorld, float4(position, 1.0));
-        normal = normalize(mul(transpose(toMesh), normal).xyz);
+
         triangleNormal = normalize(mul(transpose(toMesh), triangleNormal).xyz);
+        triangleTangent = normalize(mul(transpose(toMesh), triangleTangent).xyz);
+        triangleBitangent = normalize(mul(transpose(toMesh), triangleBitangent).xyz);
+
+        normal = normalize(mul(transpose(toMesh), normal).xyz);
         tangent = normalize(mul(transpose(toMesh), tangent).xyz);
         bitangent = normalize(mul(transpose(toMesh), bitangent).xyz);
 
