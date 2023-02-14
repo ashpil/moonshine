@@ -37,7 +37,7 @@ struct PathTracingIntegrator : Integrator {
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
-            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.normal, attrs.tangent, attrs.bitangent);
+            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
             StandardPBR material = materialParams.getStandardPBR();
 
             // add emissive light at point if light not explicitly sampled or initial bounce
@@ -49,7 +49,7 @@ struct PathTracingIntegrator : Integrator {
                     float3 samplePositionToEmitterPositionWs = attrs.position - ray.Origin;
                     float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
                     float sum = dEmitterAliasTable[0].select;
-                    lightPdf = r2 / (abs(dot(-ray.Direction, attrs.normal)) * sum);
+                    lightPdf = r2 / (abs(dot(-ray.Direction, attrs.frame.n)) * sum);
                 }
 
                 if (lightPdf > 0.0) {
@@ -58,20 +58,18 @@ struct PathTracingIntegrator : Integrator {
                 }
             }
 
-            // create local shading frame
-            Frame frame = Frame::create(materialParams.normal, materialParams.tangent, materialParams.bitangent);
-            float3 outgoing = frame.worldToFrame(-ray.Direction);
+            float3 outgoing = materialParams.frame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
                 float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLightMaterial(frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleNormal, rand) / env_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLightMaterial(materialParams.frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
             for (uint directCount = 0; directCount < mesh_samples_per_bounce; directCount++) {
                 float2 rand = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLight(frame, MeshLights::create(), material, outgoing, attrs.position, attrs.triangleNormal, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLight(materialParams.frame, MeshLights::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
             }
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette
@@ -90,8 +88,8 @@ struct PathTracingIntegrator : Integrator {
             lastMaterialPdf = sample.pdf;
 
             // set up info for next bounce
-            ray.Direction = frame.frameToWorld(sample.dirFs);
-            ray.Origin = offsetAlongNormal(attrs.position, faceForward(attrs.triangleNormal, ray.Direction));
+            ray.Direction = materialParams.frame.frameToWorld(sample.dirFs);
+            ray.Origin = offsetAlongNormal(attrs.position, faceForward(attrs.triangleFrame.n, ray.Direction));
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
             bounceCount += 1;
         }

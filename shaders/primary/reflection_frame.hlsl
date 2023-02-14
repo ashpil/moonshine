@@ -1,6 +1,8 @@
 // different than PBRT as in our system y is up
 struct Frame {
-    float3x3 toFrame;
+    float3 n; // normal
+    float3 s; // tangent
+    float3 t; // bitangent
 
     // takes in a normalized vector, returns a frame where x,y,z are bitangent, normal, and tangent respectively
     static Frame create(float3 n) {
@@ -10,18 +12,29 @@ struct Frame {
     }
 
     static Frame create(float3 n, float3 s, float3 t) {
-        float3x3 toFrame = { s, n, t };
         Frame frame;
-        frame.toFrame = toFrame;
+        frame.n = n;
+        frame.s = s;
+        frame.t = t;
         return frame;
     }
 
+    Frame inSpace(float4x3 m) {
+        float3 n2 = normalize(mul(m, n).xyz);
+        float3 s2 = normalize(mul(m, s).xyz);
+        float3 t2 = normalize(mul(m, t).xyz);
+
+        return Frame::create(n2, s2, t2);
+    }
+
     float3 worldToFrame(float3 v) {
-        return mul(this.toFrame, v);
+        float3x3 toFrame = { s, n, t };
+        return mul(toFrame, v);
     }
 
     float3 frameToWorld(float3 v) {
-        return mul(transpose(this.toFrame), v);
+        float3x3 toFrame = { s, n, t };
+        return mul(transpose(toFrame), v);
     }
 
     static float cosTheta(float3 v) {

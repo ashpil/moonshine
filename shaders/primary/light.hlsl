@@ -124,10 +124,10 @@ struct MeshLights : Light {
         float r = sqrt(r2);
         lightSample.radiance = emissive;
         lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-        lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.normal)) * sum);
+        lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.frame.n)) * sum);
 
         // compute precise ray endpoints
-        float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.triangleNormal);
+        float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.triangleFrame.n);
         float3 offsetShadingPositionWs = offsetAlongNormal(positionWs, faceForward(triangleNormalDirWs, lightSample.dirWs));
         float tmax = distance(offsetLightPositionWs, offsetShadingPositionWs);
 
@@ -157,7 +157,7 @@ struct MeshLights : Light {
             float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float sum = dEmitterAliasTable[0].select;
-            l.pdf = r2 / (abs(dot(-dirWs, attrs.normal)) * sum);
+            l.pdf = r2 / (abs(dot(-dirWs, attrs.frame.n)) * sum);
             l.radiance = dMaterialTextures[NonUniformResourceIndex(5 * materialIdx(instanceID, its.geometryIndex) + 3)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
         } else {
             // geometry not sampled, pdf is zero
