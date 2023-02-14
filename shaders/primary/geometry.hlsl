@@ -11,25 +11,19 @@ float3 loadNormal(uint64_t addr, uint index) {
 }
 
 void getTangentBitangent(float3 p0, float3 p1, float3 p2, float2 t0, float2 t1, float2 t2, out float3 tangent, out float3 bitangent) {
-    float2 deltaUV1 = t1 - t0;
-    float2 deltaUV2 = t2 - t0;
+    float2 deltaT02 = t0 - t2;
+    float2 deltaT12 = t1 - t2;
 
-    float3 edge0 = p1 - p0;
-    float3 edge1 = p2 - p0;
+    float3 deltaP02 = p0 - p2;
+    float3 deltaP12 = p1 - p2;
 
-    float f = deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y;
-
-    tangent = normalize(float3(
-        (deltaUV2.y * edge0.x - deltaUV1.y * edge1.x) / f,
-        (deltaUV2.y * edge0.y - deltaUV1.y * edge1.y) / f,
-        (deltaUV2.y * edge0.z - deltaUV1.y * edge1.z) / f
-    ));
-
-    bitangent = normalize(float3(
-        (-deltaUV2.x * edge0.x + deltaUV1.x * edge1.x) / f,
-        (-deltaUV2.x * edge0.y + deltaUV1.x * edge1.y) / f,
-        (-deltaUV2.x * edge0.z + deltaUV1.x * edge1.z) / f
-    ));
+    float det = deltaT02.x * deltaT12.y - deltaT02.y * deltaT12.x;
+    if (det == 0.0) {
+        coordinateSystem(normalize(cross(p2 - p0, p1 - p0)), tangent, bitangent);
+    } else {
+        tangent = (deltaT12.y * deltaP02 - deltaT02.y * deltaP12) / det;
+        bitangent = (-deltaT12.x * deltaP02 + deltaT02.x * deltaP12) / det;
+    }
 }
 
 template <typename T>
