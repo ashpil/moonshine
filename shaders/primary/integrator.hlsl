@@ -58,18 +58,27 @@ struct PathTracingIntegrator : Integrator {
                 }
             }
 
-            float3 outgoing = materialParams.frame.worldToFrame(-ray.Direction);
+            Frame shadingFrame;
+            if (dot(-ray.Direction, materialParams.frame.n) > 0) {
+                shadingFrame = materialParams.frame;
+            } else if (dot(-ray.Direction, attrs.frame.n) > 0) {
+                shadingFrame = attrs.frame;
+            } else {
+                shadingFrame = attrs.triangleFrame;
+            }
+
+            float3 outgoing = shadingFrame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
                 float2 rand = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLight(materialParams.frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLight(shadingFrame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
             for (uint directCount = 0; directCount < mesh_samples_per_bounce; directCount++) {
                 float2 rand = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLight(materialParams.frame, MeshLights::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
+                accumulatedColor += throughput * estimateDirectMISLight(shadingFrame, MeshLights::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
             }
 
             // possibly terminate if reached max bounce cutoff or lose at russian roulette
@@ -88,7 +97,7 @@ struct PathTracingIntegrator : Integrator {
             lastMaterialPdf = sample.pdf;
 
             // set up info for next bounce
-            ray.Direction = materialParams.frame.frameToWorld(sample.dirFs);
+            ray.Direction = shadingFrame.frameToWorld(sample.dirFs);
             ray.Origin = offsetAlongNormal(attrs.position, faceForward(attrs.triangleFrame.n, ray.Direction));
             throughput *= material.eval(sample.dirFs, outgoing) * abs(Frame::cosTheta(sample.dirFs)) / sample.pdf;
             bounceCount += 1;
