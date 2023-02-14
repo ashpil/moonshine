@@ -59,7 +59,7 @@ struct PathTracingIntegrator : Integrator {
             }
 
             // create local shading frame
-            Frame frame = Frame::create(materialParams.normal);
+            Frame frame = Frame::create(materialParams.normal, materialParams.tangent, materialParams.bitangent);
             float3 outgoing = frame.worldToFrame(-ray.Direction);
 
             // accumulate direct light samples from env map

@@ -293,11 +293,13 @@ float3 decodeNormal(float2 rg) {
     return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
 }
 
-float3 lookupTextureNormal(uint textureIndex, float2 texcoords, float3 normal, float3 tangent, float3 bitangent) {
+void lookupTextureNormal(uint textureIndex, float2 texcoords, float3 normal, float3 tangent, float3 bitangent, out float3 textureNormal, out float3 textureTangent, out float3 textureBitangent) {
     float3x3 toTangent = { tangent, bitangent, normal };
     float3x3 fromTangent = transpose(toTangent);
     float3 normalTangentSpace = decodeNormal(dMaterialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rg);
-    return normalize(mul(fromTangent, normalTangentSpace).xyz);
+    textureNormal = normalize(mul(fromTangent, normalTangentSpace).xyz);
+    textureTangent = normalize(tangent - textureNormal * dot(textureNormal, tangent));
+    textureBitangent = normalize(cross(textureNormal, textureTangent));
 }
 
 // sort of a weird system rn
@@ -315,23 +317,19 @@ struct MaterialParameters {
     float roughness;
 
     float3 emissive;
+
     float3 normal;
+    float3 tangent;
+    float3 bitangent;
 
-    static MaterialParameters create(uint materialIndex, float2 texcoords, float3 geometricNormal, float3 tangent, float3 bitangent) {
-        Values values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
-        float3 color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        float3 emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        float3 normal = lookupTextureNormal(5 * materialIndex + 4, texcoords, geometricNormal, tangent, bitangent);
-        float metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        float roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
-
+    static MaterialParameters create(uint materialIndex, float2 texcoords, float3 normal, float3 tangent, float3 bitangent) {
         MaterialParameters params;
-        params.values = values;
-        params.color = color;
-        params.emissive = emissive;
-        params.normal = normal;
-        params.metalness = metalness;
-        params.roughness = roughness;
+        params.values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
+        params.color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        params.emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        params.metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        params.roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        lookupTextureNormal(5 * materialIndex + 4, texcoords, normal, tangent, bitangent, params.normal, params.tangent, params.bitangent);
         return params;
     }
 
