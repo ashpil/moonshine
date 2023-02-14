@@ -62,8 +62,8 @@ struct PathTracingIntegrator : Integrator {
 
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
-                float4 rand = float4(rng.getFloat(), rng.getFloat(), rng.getFloat(), rng.getFloat());
-                accumulatedColor += throughput * estimateDirectMISLightMaterial(materialParams.frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand) / env_samples_per_bounce;
+                float2 rand = float2(rng.getFloat(), rng.getFloat());
+                accumulatedColor += throughput * estimateDirectMISLight(materialParams.frame, EnvMap::create(), material, outgoing, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
@@ -99,6 +99,24 @@ struct PathTracingIntegrator : Integrator {
         // add background color if it isn't explicitly sampled or this is a primary ray
         if (env_samples_per_bounce == 0 || bounceCount == 0) {
             accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction);
+        } else {
+            float lightPdf;
+            {
+                float2 phiTheta = cartesianToSpherical(ray.Direction);
+                float2 uv = phiTheta / float2(2 * PI, PI);
+
+                uint2 size;
+                dBackgroundTexture.GetDimensions(size.x, size.y);
+                uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
+                float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * size.x * size.y;
+                float sinTheta = sin(phiTheta.y);
+                lightPdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
+            }
+
+            if (lightPdf > 0.0) {
+                float weight = powerHeuristic(1, lastMaterialPdf, env_samples_per_bounce, lightPdf);
+                accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction) * weight;
+            }
         }
 
         return accumulatedColor;
