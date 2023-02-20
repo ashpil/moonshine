@@ -5,6 +5,7 @@ const VkAllocator = @import("engine").rendersystem.Allocator;
 const Commands = @import("engine").rendersystem.Commands;
 const World = @import("engine").rendersystem.World;
 const Background = @import("engine").rendersystem.Background;
+const ImageManager = @import("engine").rendersystem.ImageManager;
 const descriptor = @import("engine").rendersystem.descriptor;
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
@@ -14,6 +15,7 @@ const F32x3 = vector.Vec3(f32);
 const Coord = @import("./coord.zig").Coord;
 
 pub const Material = World.Material;
+pub const Texture = ImageManager.TextureSource;
 
 pub const Piece = struct {
     black_material_idx: u32,
@@ -42,7 +44,7 @@ background: Background,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, background_path: []const u8, chess_set: SetInfo, descriptor_layout: *const WorldDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, textures: []const Texture, materials: []const Material, background_path: []const u8, chess_set: SetInfo, descriptor_layout: *const WorldDescriptorLayout, background_descriptor_layout: *const BackgroundDescriptorLayout) !Self {
 
     const mesh_groups = [_]World.MeshGroup {
         .{ // board
@@ -305,7 +307,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         chess_set.queen.model_path,
     };
 
-    const world = try World.create(vc, vk_allocator, allocator, commands, materials, &mesh_filepaths, instances, &mesh_groups, descriptor_layout);
+    const world = try World.create(vc, vk_allocator, allocator, commands, textures, materials, &mesh_filepaths, instances, &mesh_groups, descriptor_layout);
     const background = try Background.create(vc, vk_allocator, allocator, commands, background_descriptor_layout, world.sampler, background_path);
 
     return Self {

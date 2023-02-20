@@ -6,70 +6,44 @@ const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 
-// TODO: currently each material "owns" its textures, but really it should just be an index
-// into global array of textures, so that materials can share textures
-
 const vector = @import("../vector.zig");
-const F32x3 = vector.Vec3(f32);
 
-pub const Material = struct {
-    color: ImageManager.TextureSource,
-    metalness: ImageManager.TextureSource,
-    roughness: ImageManager.TextureSource,
-    normal: ImageManager.TextureSource,
-    emissive: ImageManager.TextureSource = .{
-        .f32x3 = F32x3.new(0.0, 0.0, 0.0),
-    },
-    
-    values: Values = .{},
-
-    pub const textures_per_material = 5;
-};
-
-// `value` is the term I use for non-texture material input
-pub const Values = packed struct {
+pub const StandardPBR = extern struct {
+    normal: u32,
+    emissive: u32,
+    color: u32,
+    metalness: u32,
+    roughness: u32,
     ior: f32 = 1.5,
 };
 
-textures: ImageManager, // (color, metalness, roughness, normal) * N
-values: VkAllocator.DeviceBuffer, // holds Values for each material
+textures: ImageManager,
+materials: VkAllocator.DeviceBuffer, // StandardPBR
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material) !Self {
-    const texture_sources = try allocator.alloc(ImageManager.TextureSource, materials.len * Material.textures_per_material);
-    defer allocator.free(texture_sources);
-
-    const values_tmp = try vk_allocator.createHostBuffer(vc, Values, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
-    defer values_tmp.destroy(vc);
-
-    for (materials) |set, i| {
-        texture_sources[Material.textures_per_material * i + 0] = set.color;
-        texture_sources[Material.textures_per_material * i + 1] = set.metalness;
-        texture_sources[Material.textures_per_material * i + 2] = set.roughness;
-        texture_sources[Material.textures_per_material * i + 3] = set.emissive;
-        texture_sources[Material.textures_per_material * i + 4] = set.normal;
-
-        values_tmp.data[i] = set.values;
-    }
-
-    const values = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Values) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-    errdefer values.destroy(vc);
-
-    try commands.startRecording(vc);
-    commands.recordUploadBuffer(Values, vc, values, values_tmp);
-    try commands.submitAndIdleUntilDone(vc);
-
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: []const StandardPBR) !Self {
     var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, texture_sources, commands);
     errdefer textures.destroy(vc, allocator);
 
+    const materials_tmp = try vk_allocator.createHostBuffer(vc, StandardPBR, @intCast(u32, materials.len), .{ .transfer_src_bit = true });
+    defer materials_tmp.destroy(vc);
+    std.mem.copy(StandardPBR, materials_tmp.data, materials);
+
+    const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(StandardPBR) * materials.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+    errdefer materials_gpu.destroy(vc);
+    
+    try commands.startRecording(vc);
+    commands.recordUploadBuffer(StandardPBR, vc, materials_gpu, materials_tmp);
+    try commands.submitAndIdleUntilDone(vc);
+
     return Self {
         .textures = textures,
-        .values = values,
+        .materials = materials_gpu,
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.textures.destroy(vc, allocator);
-    self.values.destroy(vc);
+    self.materials.destroy(vc);
 }

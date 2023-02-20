@@ -316,7 +316,7 @@ Frame lookupTextureNormal(uint textureIndex, float2 texcoords, Frame tangentFram
 // as well as somewhere to store material parameters that aren't really reliant on a specific material model,
 // such as the normal or emissive map
 struct MaterialParameters {
-    Values values;
+    float ior;
     float3 color;
     float metalness;
     float roughness;
@@ -326,18 +326,20 @@ struct MaterialParameters {
     Frame frame;
 
     static MaterialParameters create(uint materialIndex, float2 texcoords, Frame tangentFrame) {
+        MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
+
         MaterialParameters params;
-        params.values = dMaterialValues[NonUniformResourceIndex(materialIndex)];
-        params.color = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 0)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        params.emissive = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 3)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        params.metalness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 1)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        params.roughness = dMaterialTextures[NonUniformResourceIndex(5 * materialIndex + 2)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        params.frame = lookupTextureNormal(5 * materialIndex + 4, texcoords, tangentFrame);
+        params.ior = input.ior;
+        params.color = dMaterialTextures[NonUniformResourceIndex(input.color)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        params.emissive = dMaterialTextures[NonUniformResourceIndex(input.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        params.metalness = dMaterialTextures[NonUniformResourceIndex(input.metalness)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        params.roughness = dMaterialTextures[NonUniformResourceIndex(input.roughness)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        params.frame = lookupTextureNormal(input.normal, texcoords, tangentFrame);
         return params;
     }
 
     StandardPBR getStandardPBR() {
-        return StandardPBR::create(color, metalness, roughness, values.ior);
+        return StandardPBR::create(color, metalness, roughness, ior);
     }
 
     Lambert getLambert() {

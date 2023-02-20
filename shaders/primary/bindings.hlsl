@@ -54,14 +54,17 @@ struct AliasEntry {
 [[vk::binding(5, 0)]] StructuredBuffer<Geometry> dGeometries;
 
 // MATERIALS
-// `values` is what I call non-texture material properties
-struct Values {
+struct MaterialInput {
+    uint normal;
+    uint emissive;
+    uint color;
+    uint metalness;
+    uint roughness;
     float ior;
 };
-
 [[vk::binding(6, 0)]] SamplerState dTextureSampler;
 [[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
-[[vk::binding(8, 0)]] StructuredBuffer<Values> dMaterialValues;
+[[vk::binding(8, 0)]] StructuredBuffer<MaterialInput> dMaterials;
 
 // BACKGROUND
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;

@@ -24,62 +24,76 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const texture_sets = comptime [_]ChessSet.Material {
+    const textures = [_]ChessSet.Texture {
+        .{
+            .dds_filepath = "./assets/textures/board/color.dds",
+        },
+        .{
+            .f32x1 = 0.4,
+        },
+        .{
+            .f32x1 = 0.3,
+        },
+        .{
+            .dds_filepath = "./assets/textures/board/normal.dds",
+        },
+        .{
+            .f32x3 = F32x3.new(0.653, 0.653, 0.653),
+        },
+        .{
+            .f32x1 = 0.2,
+        },
+        .{
+            .f32x1 = 0.15,
+        },
+        .{
+            .f32x2 = F32x2.new(0.5, 0.5),
+        },
+        .{
+            .f32x3 = F32x3.new(0.0004, 0.0025, 0.0096),
+        },
+        .{
+            .f32x3 = F32x3.new(0.901, 0.722, 0.271),
+        },
+        .{
+            .f32x1 = 0.6,
+        },
+        .{
+            .f32x1 = 0.05,
+        },
+        .{
+            .f32x3 = F32x3.new(0.0, 0.0, 0.0),
+        },
+    };
+
+    const materials = comptime [_]ChessSet.Material {
         ChessSet.Material {
-            .color = .{
-                .dds_filepath = "./assets/textures/board/color.dds",
-            },
-            .metalness = .{
-                .f32x1 = 0.4,
-            },
-            .roughness = .{
-                .f32x1 = 0.3,
-            },
-            .normal = .{
-                .dds_filepath = "./assets/textures/board/normal.dds",
-            },
+            .color = 0,
+            .metalness = 1,
+            .roughness = 2,
+            .normal = 3,
+            .emissive = 12,
         },
         ChessSet.Material {
-            .color = .{
-                .f32x3 = F32x3.new(0.653, 0.653, 0.653),
-            },
-            .metalness = .{
-                .f32x1 = 0.2,
-            },
-            .roughness = .{
-                .f32x1 = 0.15,
-            },
-            .normal = .{
-                .f32x2 = F32x2.new(0.5, 0.5),
-            },
+            .color = 4,
+            .metalness = 5,
+            .roughness = 6,
+            .normal = 7,
+            .emissive = 12,
         },
         ChessSet.Material {
-            .color = .{
-                .f32x3 = F32x3.new(0.0004, 0.0025, 0.0096),
-            },
-            .metalness = .{
-                .f32x1 = 0.2,
-            },
-            .roughness = .{
-                .f32x1 = 0.15,
-            },
-            .normal = .{
-                .f32x2 = F32x2.new(0.5, 0.5),
-            },
+            .color = 8,
+            .metalness = 5,
+            .roughness = 6,
+            .normal = 7,
+            .emissive = 12,
         },
         ChessSet.Material {
-            .color = .{
-                .f32x3 = F32x3.new(0.901, 0.722, 0.271),
-            },
-            .metalness = .{
-                .f32x1 = 0.6,
-            },
-            .roughness = .{
-                .f32x1 = 0.05,
-            },
-            .normal = .{
-                .f32x2 = F32x2.new(0.5, 0.5),
-            },
+            .color = 9,
+            .metalness = 10,
+            .roughness = 11,
+            .normal = 7,
+            .emissive = 12,
         },
     };
 
@@ -127,7 +141,7 @@ pub fn main() !void {
     };
 
     // TODO: unhardcode skybox
-    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &texture_sets, "assets/wide_street_1k.exr", set_info, &engine.world_descriptor_layout, &engine.background_descriptor_layout);
+    var set = try ChessSet.create(&engine.context, &engine.allocator, allocator, &engine.commands, &textures, &materials, "assets/wide_street_1k.exr", set_info, &engine.world_descriptor_layout, &engine.background_descriptor_layout);
     defer set.destroy(&engine.context, allocator);
 
     var object_picker = try ObjectPicker.create(&engine.context, &engine.allocator, allocator, engine.world_descriptor_layout, &engine.commands);

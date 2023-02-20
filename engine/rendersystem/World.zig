@@ -33,7 +33,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 
-pub const Material = MaterialManager.Material;
+pub const Material = MaterialManager.StandardPBR;
 pub const Instances = Accel.InstanceInfos;
 pub const MeshGroup = Accel.MeshGroup;
 
@@ -47,10 +47,10 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material) !Material {
-    var color = ImageManager.TextureSource {
-        .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
-    };
+fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !Material {
+    var material: Material = undefined;
+    material.color = @intCast(u32, textures.items.len);
+
     if (gltf_material.metallic_roughness.base_color_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -63,7 +63,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         for (img.pixels.rgb24) |pixel, i| {
             rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
         }
-        color = ImageManager.TextureSource {
+        try textures.append(ImageManager.TextureSource {
             .raw = .{
                 .bytes = rgba.asBytes(),
                 .extent = vk.Extent2D {
@@ -74,12 +74,14 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
-        };
+        });
+    } else {
+        try textures.append(ImageManager.TextureSource {
+            .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
+        });
     }
 
-    var emissive = ImageManager.TextureSource {
-        .f32x3 = F32x3.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2]),
-    };
+    material.emissive = @intCast(u32, textures.items.len);
     if (gltf_material.emissive_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -92,7 +94,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         for (img.pixels.rgb24) |pixel, i| {
             rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
         }
-        emissive = ImageManager.TextureSource {
+        try textures.append(ImageManager.TextureSource {
             .raw = .{
                 .bytes = rgba.asBytes(),
                 .extent = vk.Extent2D {
@@ -103,16 +105,15 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
-        };
+        });
+    } else {
+        try textures.append(ImageManager.TextureSource {
+            .f32x3 = F32x3.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2]),
+        });
     }
 
-    var metalness = ImageManager.TextureSource {
-        .f32x1 = gltf_material.metallic_roughness.metallic_factor,
-    };
-    var roughness = ImageManager.TextureSource {
-        .f32x1 = gltf_material.metallic_roughness.roughness_factor,
-    };
-
+    material.metalness = @intCast(u32, textures.items.len);
+    material.roughness = @intCast(u32, textures.items.len + 1);
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -128,7 +129,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             r[i] = pixel.r;
             g[i] = pixel.g;
         }
-        metalness = ImageManager.TextureSource {
+        try textures.append(ImageManager.TextureSource {
             .raw = .{
                 .bytes = r,
                 .extent = vk.Extent2D {
@@ -139,8 +140,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
-        };
-        roughness = ImageManager.TextureSource {
+        });
+        try textures.append(ImageManager.TextureSource {
             .raw = .{
                 .bytes = g,
                 .extent = vk.Extent2D {
@@ -151,12 +152,17 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
-        };
+        });
+    } else {
+        try textures.append(ImageManager.TextureSource {
+            .f32x1 = gltf_material.metallic_roughness.metallic_factor,
+        });
+        try textures.append(ImageManager.TextureSource {
+            .f32x1 = gltf_material.metallic_roughness.roughness_factor,
+        });
     }
 
-    var normal = ImageManager.TextureSource {
-        .f32x2 = F32x2.new(0.5, 0.5),
-    };
+    material.normal = @intCast(u32, textures.items.len);
     if (gltf_material.normal_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -171,7 +177,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             rg[i * 2 + 0] = pixel.r;
             rg[i * 2 + 1] = pixel.g;
         }
-        normal = ImageManager.TextureSource {
+        try textures.append(ImageManager.TextureSource {
             .raw = .{
                 .bytes = rg,
                 .extent = vk.Extent2D {
@@ -182,16 +188,14 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
-        };
+        });
+    } else {
+        try textures.append(ImageManager.TextureSource {
+            .f32x2 = F32x2.new(0.5, 0.5),
+        });
     }
 
-    return Material {
-        .color = color,
-        .metalness = metalness,
-        .roughness = roughness,
-        .normal = normal,
-        .emissive = emissive,
-    };
+    return material;
 }
 
 fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const WorldDescriptorLayout) !vk.DescriptorSet {
@@ -324,7 +328,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
-                .buffer = self.material_manager.values.handle,
+                .buffer = self.material_manager.materials.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -337,7 +341,6 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
     return descriptor_set;
 }
 
-// TODO: camera
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, filepath: []const u8) !Self {
@@ -359,34 +362,20 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var material_manager = blk: {
         const materials = try allocator.alloc(Material, gltf.data.materials.items.len);
         defer allocator.free(materials);
-        defer for (materials) |material| {
-            switch (material.color) {
-                .raw => |raw| allocator.free(raw.bytes),
-                else => {},
-            }
-            switch (material.metalness) {
-                .raw => |raw| allocator.free(raw.bytes),
-                else => {},
-            }
-            switch (material.roughness) {
-                .raw => |raw| allocator.free(raw.bytes),
-                else => {},
-            }
-            switch (material.normal) {
-                .raw => |raw| allocator.free(raw.bytes),
-                else => {},
-            }
-            switch (material.emissive) {
-                .raw => |raw| allocator.free(raw.bytes),
-                else => {},
+
+        var textures = std.ArrayList(ImageManager.TextureSource).init(allocator);
+        defer textures.deinit();
+        defer for (textures.items) |texture| {
+            if (texture == .raw) {
+                allocator.free(texture.raw.bytes);
             }
         };
 
         for (gltf.data.materials.items) |material, i| {
-            materials[i] = try gltfMaterialToMaterial(allocator, gltf, material);
+            materials[i] = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
+        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, materials);
     };
     errdefer material_manager.destroy(vc, allocator);
 
@@ -529,21 +518,9 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return world;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const MeshGroup, descriptor_layout: *const WorldDescriptorLayout) !Self {
-    var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, textures: []const ImageManager.TextureSource, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const MeshGroup, descriptor_layout: *const WorldDescriptorLayout) !Self {
+    var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, textures, materials);
     errdefer material_manager.destroy(vc, allocator);
-
-    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, materials.len * Material.textures_per_material);
-    defer allocator.free(image_infos);
-
-    const texture_views = material_manager.textures.data.items(.view);
-    for (image_infos) |*info, i| {
-        info.* = .{
-            .sampler = .null_handle,
-            .image_view = texture_views[i],
-            .image_layout = .shader_read_only_optimal,
-        };
-    }
 
     const objects = try allocator.alloc(MeshData, mesh_filepaths.len);
     defer allocator.free(objects);
