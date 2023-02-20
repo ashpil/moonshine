@@ -35,7 +35,7 @@ const U32x3 = vector.Vec3(u32);
 
 pub const Material = MaterialManager.Material;
 pub const Instances = Accel.InstanceInfos;
-pub const Model = Accel.Model;
+pub const MeshGroup = Accel.MeshGroup;
 
 material_manager: MaterialManager,
 
@@ -391,19 +391,19 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     errdefer material_manager.destroy(vc, allocator);
 
     // meshes
-    // for each gltf mesh we create a model
+    // for each gltf mesh we create a mesh group
     // for each gltf primitive we create a mesh
     var objects = std.ArrayList(MeshData).init(allocator);
     defer objects.deinit();
     defer for (objects.items) |*object| object.destroy(allocator);
 
-    const models = try allocator.alloc(Model, gltf.data.meshes.items.len);
-    defer allocator.free(models);
+    const mesh_groups = try allocator.alloc(MeshGroup, gltf.data.meshes.items.len);
+    defer allocator.free(mesh_groups);
 
     const skins = try allocator.alloc([]u32, gltf.data.meshes.items.len);
     defer allocator.free(skins);
 
-    for (gltf.data.meshes.items) |mesh, model_idx| {
+    for (gltf.data.meshes.items) |mesh, group_idx| {
         const mesh_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
         errdefer allocator.free(mesh_idxs);
         const material_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
@@ -476,10 +476,10 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                 .indices = indices,
             });
         }
-        models[model_idx].mesh_idxs = mesh_idxs;
-        skins[model_idx] = material_idxs;
+        mesh_groups[group_idx].meshes = mesh_idxs;
+        skins[group_idx] = material_idxs;
     }
-    defer for (models) |model| allocator.free(model.mesh_idxs);
+    defer for (mesh_groups) |group| allocator.free(group.meshes);
     defer for (skins) |skin| allocator.free(skin);
 
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
@@ -500,8 +500,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                         F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                         F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     ),
-                    .model_idx = @intCast(u12, model_idx),
-                    .material_idxs = skins[model_idx],
+                    .mesh_group = @intCast(u24, model_idx),
+                    .materials = skins[model_idx],
                     .sampled_geometry = if (std.mem.startsWith(u8, gltf.data.materials.items[gltf.data.meshes.items[model_idx].primitives.items[0].material.?].name, "Emitter")) &.{ true } else &.{}, // workaround for gltf not supporting this interface
                 });
             }
@@ -511,7 +511,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     };
     defer instances.deinit(allocator);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, mesh_groups);
     errdefer accel.destroy(vc, allocator);
 
     var world = Self {
@@ -529,7 +529,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return world;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const Model, descriptor_layout: *const WorldDescriptorLayout) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const MeshGroup, descriptor_layout: *const WorldDescriptorLayout) !Self {
     var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, materials);
     errdefer material_manager.destroy(vc, allocator);
 
