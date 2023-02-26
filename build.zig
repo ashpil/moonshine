@@ -164,10 +164,17 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
             "shaders/primary/integrator.hlsl",
             "shaders/primary/intersection.hlsl",
             "shaders/primary/light.hlsl",
-            "shaders/primary/material.hlsl",
+            "shaders/primary/material_parameters.hlsl",
             "shaders/primary/math.hlsl",
             "shaders/primary/random.hlsl",
             "shaders/primary/reflection_frame.hlsl",
+            "shaders/materials/interface.hlsl",
+        }
+    });
+
+    hlsl_comp.add("material_standard_pbr", "shaders/materials/standard_pbr.hlsl", .{
+        .watched_files = &.{
+            "shaders/materials/material.hlsl"
         }
     });
 

@@ -24,7 +24,8 @@ const PushConstant = struct {
 };
 
 pub fn Pipeline(
-        comptime shader_code: anytype,
+        comptime shader_codes: anytype,
+        comptime module_to_stage: []const comptime_int,
         comptime SetLayouts: type,
         comptime SpecConstants: type,
         comptime push_constant_ranges: []const vk.PushConstantRange,
@@ -42,6 +43,8 @@ pub fn Pipeline(
         const set_layout_count = @typeInfo(SetLayouts).Struct.fields.len;
 
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: SetLayouts, constants: SpecConstants) !Self {
+            comptime std.debug.assert(stages.len == module_to_stage.len);
+
             var set_layout_handles: [set_layout_count]vk.DescriptorSetLayout = undefined;
             inline for (set_layout_handles) |*handle, i| {
                 handle.* = set_layouts[i].handle;
@@ -54,16 +57,21 @@ pub fn Pipeline(
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            const module = try vc.device.createShaderModule(&.{
-                .code_size = shader_code.len,
-                .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
-            }, null);
-            defer vc.device.destroyShaderModule(module, null);
+            var modules: [shader_codes.len]vk.ShaderModule = undefined;
+            inline for (shader_codes) |shader_code, i| {
+                modules[i] = try vc.device.createShaderModule(&.{
+                    .code_size = shader_code.len,
+                    .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
+                }, null);
+            }
+            defer for (modules) |module| {
+                vc.device.destroyShaderModule(module, null);
+            };
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
             inline for (var_stages) |*stage, i| {
                 stage.* = stages[i];
-                stage.module = module;
+                stage.module = modules[module_to_stage[i]];
             }
 
             inline for (@typeInfo(SpecConstants).Struct.fields) |field, i| {
@@ -101,7 +109,7 @@ pub fn Pipeline(
             errdefer vc.device.destroyPipeline(handle, null);
 
             const shader_info = ShaderInfo.find(stages);
-            const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, shader_info.raygen_count, shader_info.miss_count, shader_info.hit_count);
+            const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, shader_info.raygen_count, shader_info.miss_count, shader_info.hit_count, shader_info.callable_count);
             errdefer sbt.destroy(vc);
 
             return Self {
@@ -127,18 +135,14 @@ pub fn Pipeline(
         }
 
         pub fn recordTraceRays(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, extent: vk.Extent2D) void {
-            const callable_table = vk.StridedDeviceAddressRegionKHR {
-                .device_address = 0,
-                .stride = 0,
-                .size = 0,
-            };
-            vc.device.cmdTraceRaysKHR(command_buffer, &self.sbt.getRaygenSBT(), &self.sbt.getMissSBT(), &self.sbt.getHitSBT(), &callable_table, extent.width, extent.height, 1);
+            vc.device.cmdTraceRaysKHR(command_buffer, &self.sbt.getRaygenSBT(), &self.sbt.getMissSBT(), &self.sbt.getHitSBT(), &self.sbt.getCallableSBT(), extent.width, extent.height, 1);
         }
     };
 }
 
 pub const ObjectPickPipeline = Pipeline(
-    shaders.input,
+    .{ shaders.input },
+    &.{ 0, 0, 0 },
     struct {
         InputDescriptorLayout,
         WorldDescriptorLayout,
@@ -152,21 +156,22 @@ pub const ObjectPickPipeline = Pipeline(
         },
     },
     &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "chit", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "chit" },
     },
     &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 2, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 2, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
     },
 );
 
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub const StandardPipeline = Pipeline(
-    shaders.main,
+    .{ shaders.main, shaders.material_standard_pbr },
+    &.{ 0, 0, 0, 0, 1, 1 },
     struct {
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
@@ -188,16 +193,20 @@ pub const StandardPipeline = Pipeline(
         }
     },
     &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen", .p_specialization_info = null },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "shadowmiss", .p_specialization_info = null, },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "closesthit", .p_specialization_info = null, },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen"},
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "shadowmiss" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "closesthit" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .callable_bit_khr = true }, .module = undefined, .p_name = "sample" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .callable_bit_khr = true }, .module = undefined, .p_name = "eval" },
     },
     &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .general_khr, .general_shader = 2, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 3, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR, .p_shader_group_capture_replay_handle = null },
+        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .general_khr, .general_shader = 2, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 3, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .general_khr, .general_shader = 4, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
+        .{ .@"type" = .general_khr, .general_shader = 5, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
     },
 );
 
@@ -205,12 +214,14 @@ const ShaderInfo = struct {
     raygen_count: u32,
     miss_count: u32,
     hit_count: u32,
+    callable_count: u32,
 
     fn find(stages: []const vk.PipelineShaderStageCreateInfo) ShaderInfo {
 
         var raygen_count: u32 = 0;
         var miss_count: u32 = 0;
         var hit_count: u32 = 0;
+        var callable_count: u32 = 0;
 
         for (stages) |stage| {
             if (stage.stage.contains(.{ .raygen_bit_khr = true })) {
@@ -219,6 +230,8 @@ const ShaderInfo = struct {
                 miss_count += 1;
             } else if (stage.stage.contains(.{ .closest_hit_bit_khr = true })) {
                 hit_count += 1;
+            } else if (stage.stage.contains(.{ .callable_bit_khr = true })) {
+                callable_count += 1;
             }
         }
 
@@ -226,6 +239,7 @@ const ShaderInfo = struct {
             .raygen_count = raygen_count,
             .miss_count = miss_count,
             .hit_count = hit_count,
+            .callable_count = callable_count,
         };
     }
 };
@@ -236,15 +250,24 @@ const ShaderBindingTable = struct {
     raygen_address: vk.DeviceAddress,
     miss_address: vk.DeviceAddress,
     hit_address: vk.DeviceAddress,
+    callable_address: vk.DeviceAddress,
+
+    raygen_count: u32,
+    miss_count: u32,
+    hit_count: u32,
+    callable_count: u32,
 
     handle_size_aligned: u32,
 
-    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32) !ShaderBindingTable {
+    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, pipeline: vk.Pipeline, cmd: *Commands, raygen_entry_count: u32, miss_entry_count: u32, hit_entry_count: u32, callable_entry_count: u32) !ShaderBindingTable {
         const handle_size_aligned = std.mem.alignForwardGeneric(u32, vc.physical_device.raytracing_properties.shader_group_handle_size, vc.physical_device.raytracing_properties.shader_group_handle_alignment);
-        const group_count = raygen_entry_count + miss_entry_count + hit_entry_count;
-        const miss_index = std.mem.alignForwardGeneric(u32, raygen_entry_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
+        const group_count = raygen_entry_count + miss_entry_count + hit_entry_count + callable_entry_count;
+        
+        const raygen_index = 0;
+        const miss_index = std.mem.alignForwardGeneric(u32, raygen_index + raygen_entry_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
         const hit_index = std.mem.alignForwardGeneric(u32, miss_index + miss_entry_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
-        const sbt_size = hit_index + hit_entry_count * handle_size_aligned;
+        const callable_index = std.mem.alignForwardGeneric(u32, hit_index + hit_entry_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
+        const sbt_size = callable_index + callable_entry_count * handle_size_aligned;
 
         // query sbt from pipeline
         const sbt = try vk_allocator.createHostBuffer(vc, u8, sbt_size, .{ .transfer_src_bit = true });
@@ -254,8 +277,10 @@ const ShaderBindingTable = struct {
         const raygen_size = handle_size_aligned * raygen_entry_count;
         const miss_size = handle_size_aligned * miss_entry_count;
         const hit_size = handle_size_aligned * hit_entry_count;
+        const callable_size = handle_size_aligned * callable_entry_count;
         
         // must align up to shader_group_base_alignment
+        std.mem.copyBackwards(u8, sbt.data[callable_index..callable_index + callable_size], sbt.data[raygen_size + miss_size + hit_size..raygen_size + miss_size + hit_size + callable_size]);
         std.mem.copyBackwards(u8, sbt.data[hit_index..hit_index + hit_size], sbt.data[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
         std.mem.copyBackwards(u8, sbt.data[miss_index..miss_index + miss_size], sbt.data[raygen_size..raygen_size + miss_size]);
         
@@ -269,6 +294,7 @@ const ShaderBindingTable = struct {
         const raygen_address = handle.getAddress(vc);
         const miss_address = raygen_address + miss_index;
         const hit_address = raygen_address + hit_index;
+        const callable_address = raygen_address + callable_index;
 
         try cmd.idleUntilDone(vc);
 
@@ -278,6 +304,12 @@ const ShaderBindingTable = struct {
             .raygen_address = raygen_address,
             .miss_address = miss_address,
             .hit_address = hit_address,
+            .callable_address = callable_address,
+
+            .raygen_count = raygen_entry_count,
+            .miss_count = miss_entry_count,
+            .hit_count = hit_entry_count,
+            .callable_count = callable_entry_count,
 
             .handle_size_aligned = handle_size_aligned,
         };
@@ -287,7 +319,7 @@ const ShaderBindingTable = struct {
         return vk.StridedDeviceAddressRegionKHR {
             .device_address = self.raygen_address,
             .stride = self.handle_size_aligned,
-            .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
+            .size = self.handle_size_aligned * self.raygen_count,
         }; 
     }
 
@@ -295,7 +327,7 @@ const ShaderBindingTable = struct {
         return vk.StridedDeviceAddressRegionKHR {
             .device_address = self.miss_address,
             .stride = self.handle_size_aligned,
-            .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
+            .size = self.handle_size_aligned * self.miss_count,
         }; 
     }
 
@@ -303,7 +335,15 @@ const ShaderBindingTable = struct {
         return vk.StridedDeviceAddressRegionKHR {
             .device_address = self.hit_address,
             .stride = self.handle_size_aligned,
-            .size = self.handle_size_aligned, // this will need to change once we have more than one kind of each shader
+            .size = self.handle_size_aligned * self.hit_count,
+        }; 
+    }
+
+    pub fn getCallableSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
+        return vk.StridedDeviceAddressRegionKHR {
+            .device_address = self.callable_address,
+            .stride = self.handle_size_aligned,
+            .size = self.handle_size_aligned * self.callable_count,
         }; 
     }
 
