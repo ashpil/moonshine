@@ -5,6 +5,86 @@
 #include "geometry.hlsl"
 #include "light.hlsl"
 
+float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
+    float f = numf * fPdf;
+    float g = numg * gPdf;
+
+    float f2 = f * f;
+    return (f2 / (f2 + g * g));
+}
+
+// estimates direct lighting from light + brdf via MIS
+// samples light and material
+template <class Light, class Material>
+float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float4 rand) {
+    float3 directLighting = float3(0.0, 0.0, 0.0);
+
+    // sample light
+    {
+        LightSample lightSample = light.sample(positionWs, triangleNormalDirWs, rand.xy);
+
+        if (lightSample.pdf > 0.0) {
+            float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+            float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
+            if (scatteringPdf > 0.0) {
+                float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+                float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
+                directLighting += lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
+            }
+        }
+    }
+
+    // sample material
+    {
+        MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
+
+        if (materialSample.pdf > 0.0) {
+            float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
+            LightEval lightContrib = light.eval(positionWs, triangleNormalDirWs, brdfDirWs);
+            if (lightContrib.pdf > 0.0) {
+                float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
+                float weight = powerHeuristic(1, materialSample.pdf, 1, lightContrib.pdf);
+                directLighting += lightContrib.radiance * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
+            }
+        }
+    }
+
+    return directLighting;
+}
+
+// estimates direct lighting from light + brdf via MIS
+// only samples light
+template <class Light, class Material>
+float3 estimateDirectMISLight(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float2 rand, uint samplesTaken) {
+    LightSample lightSample = light.sample(positionWs, triangleNormalDirWs, rand);
+
+    if (lightSample.pdf > 0.0) {
+        float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+        float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
+        if (scatteringPdf > 0.0) {
+            float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+            float weight = powerHeuristic(samplesTaken, lightSample.pdf, 1, scatteringPdf);
+            return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
+        }
+    }
+
+    return 0.0;
+}
+
+// no MIS, just light
+template <class Light, class Material>
+float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 normalDirWs, float2 rand) {
+    LightSample lightSample = light.sample(positionWs, normalDirWs, rand);
+    float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
+
+    if (lightSample.pdf > 0.0) {
+        float3 brdf = material.eval(lightDirFs, outgoingDirFs);
+        return lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) / lightSample.pdf;
+    } else {
+        return float3(0, 0, 0);
+    }
+}
+
 interface Integrator {
     float3 incomingRadiance(RayDesc ray, inout Rng rng);
 };
@@ -143,3 +223,67 @@ struct PathTracingIntegrator : Integrator {
     }
 };
 
+// primary ray + light sample
+// same as above with max_bounces = 0, but simpler code
+struct DirectLightIntegrator : Integrator {
+    uint env_samples_per_bounce;
+    uint mesh_samples_per_bounce;
+
+    static DirectLightIntegrator create(uint env_samples_per_bounce, uint mesh_samples_per_bounce) {
+        DirectLightIntegrator integrator;
+        integrator.env_samples_per_bounce = env_samples_per_bounce;
+        integrator.mesh_samples_per_bounce = mesh_samples_per_bounce;
+        return integrator;
+    }
+
+    float3 incomingRadiance(RayDesc initialRay, inout Rng rng) {
+        float3 accumulatedColor = float3(0.0, 0.0, 0.0);
+
+        Intersection its = Intersection::find(initialRay);
+        if (its.hit()) {
+            // decode mesh attributes and material from intersection
+            uint instanceID = dInstances[its.instanceIndex].instanceID();
+            Geometry geometry = getGeometry(instanceID, its.geometryIndex);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
+            StandardPBR material = materialParams.getStandardPBR();
+
+            float3 outgoingDirWs = -initialRay.Direction;
+
+            // select proper shading normal
+            Frame shadingFrame;
+            if (dot(outgoingDirWs, materialParams.frame.n) > 0) {
+                // prefer texture normal if we can
+                shadingFrame = materialParams.frame;
+            } else if (dot(outgoingDirWs, attrs.frame.n) > 0) {
+                // if texture normal not valid, try shading normal
+                shadingFrame = attrs.frame;
+            } else {
+                // otherwise fall back to triangle normal
+                shadingFrame = attrs.triangleFrame;
+            }
+
+            float3 outgoingDirSs = shadingFrame.worldToFrame(outgoingDirWs);
+
+            // collect light from emissive meshes
+            accumulatedColor += materialParams.emissive;
+
+            // accumulate direct light samples from env map
+            for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
+                float2 rand = float2(rng.getFloat(), rng.getFloat());
+                accumulatedColor += estimateDirectMISLight(shadingFrame, EnvMap::create(), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
+            }
+
+            // accumulate direct light samples from emissive meshes
+            for (uint directCount = 0; directCount < mesh_samples_per_bounce; directCount++) {
+                float2 rand = float2(rng.getFloat(), rng.getFloat());
+                accumulatedColor += estimateDirectMISLight(shadingFrame, MeshLights::create(), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
+            }
+        } else {
+            // add background color
+            accumulatedColor += EnvMap::create().incomingRadiance(initialRay.Direction);
+        }
+
+        return accumulatedColor;
+    }
+};
