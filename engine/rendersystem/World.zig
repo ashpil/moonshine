@@ -33,7 +33,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 
-pub const Material = MaterialManager.StandardPBR;
+pub const Material = MaterialManager.Material;
 pub const Instances = Accel.InstanceInfos;
 pub const MeshGroup = Accel.MeshGroup;
 

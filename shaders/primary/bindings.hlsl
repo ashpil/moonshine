@@ -54,9 +54,16 @@ struct AliasEntry {
 [[vk::binding(5, 0)]] StructuredBuffer<Geometry> dGeometries;
 
 // MATERIALS
+
+// dxc will crash for non-uppercase enum variants
+enum class MaterialType {
+  STANDARD_PBR,
+};
 struct MaterialInput {
     uint normal;
     uint emissive;
+
+    MaterialType type;
     uint color;
     uint metalness;
     uint roughness;
