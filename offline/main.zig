@@ -110,7 +110,7 @@ pub fn main() !void {
     defer commands.destroy(&context);
 
     var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ .{
-        .samples_per_run = config.spp,
+        .samples_per_run = 1,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 1,
@@ -183,12 +183,62 @@ pub fn main() !void {
         pipeline.recordBindPipeline(&context, commands.buffer);
         pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
         
-        // push our stuff
-        const bytes = std.mem.asBytes(&.{ camera.properties, camera.film.sample_count });
-        context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+        var i: u32 = 0;
+        while (i < config.spp) : (i += 1) {
+            // push our stuff
+            const bytes = std.mem.asBytes(&.{ camera.properties, i });
+            context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
-        // trace our stuff
-        pipeline.recordTraceRays(&context, commands.buffer, camera.film.extent);
+            // trace our stuff
+            pipeline.recordTraceRays(&context, commands.buffer, camera.film.extent);
+
+            // if not last invocation, need barrier cuz we write to images
+            if (i != config.spp) {
+                const rt_barriers = [_]vk.ImageMemoryBarrier2 {
+                    .{
+                        .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .src_access_mask = .{ .shader_write_bit = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .shader_write_bit = true },
+                        .old_layout = .general,
+                        .new_layout = .general,
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .image = camera.film.images.data.items(.handle)[0],
+                        .subresource_range = .{
+                            .aspect_mask = .{ .color_bit = true },
+                            .base_mip_level = 0,
+                            .level_count = 1,
+                            .base_array_layer = 0,
+                            .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                        },
+                    },
+                    .{
+                        .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .src_access_mask = .{ .shader_write_bit = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .shader_write_bit = true },
+                        .old_layout = .general,
+                        .new_layout = .general,
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .image = camera.film.images.data.items(.handle)[1],
+                        .subresource_range = .{
+                            .aspect_mask = .{ .color_bit = true },
+                            .base_mip_level = 0,
+                            .level_count = 1,
+                            .base_array_layer = 0,
+                            .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                        },
+                    },
+                };
+
+                context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+                    .image_memory_barrier_count = @intCast(u32, rt_barriers.len),
+                    .p_image_memory_barriers = &rt_barriers,
+                });
+            }
+        }
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
