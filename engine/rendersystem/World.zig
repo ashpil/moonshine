@@ -51,6 +51,7 @@ const Self = @This();
 fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !std.meta.Tuple(&.{ Material, StandardPBR }) {
     var material: Material = undefined;
     material.normal = @intCast(u32, textures.items.len);
+    material.type = .standard_pbr;
     if (gltf_material.normal_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -114,7 +115,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         });
     }
 
-    var standard_pbr: MaterialManager.StandardPBR = undefined;
+    var standard_pbr: StandardPBR = undefined;
+    standard_pbr.ior = 1.5;
     standard_pbr.color = @intCast(u32, textures.items.len);
     if (gltf_material.metallic_roughness.base_color_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];

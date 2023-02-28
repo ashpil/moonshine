@@ -290,6 +290,44 @@ struct DisneyDiffuse : Material {
     }
 };
 
+struct AnyMaterial : Material {
+    MaterialType type;
+    uint64_t addr;
+    float2 texcoords;
+
+    static AnyMaterial load(MaterialType type, uint64_t addr, float2 texcoords) {
+        AnyMaterial material;
+        material.type = type;
+        material.addr = addr;
+        material.texcoords = texcoords;
+        return material;
+    }
+
+    float pdf(float3 w_i, float3 w_o) {
+        switch (type) {
+            case MaterialType::STANDARD_PBR:
+                StandardPBR m = StandardPBR::load(addr, texcoords);
+                return m.pdf(w_i, w_o);
+        }
+    }
+
+    float3 eval(float3 w_i, float3 w_o) {
+        switch (type) {
+            case MaterialType::STANDARD_PBR:
+                StandardPBR m = StandardPBR::load(addr, texcoords);
+                return m.eval(w_i, w_o);
+        }
+    }
+
+    MaterialSample sample(float3 w_o, float2 square) {
+        switch (type) {
+            case MaterialType::STANDARD_PBR:
+                StandardPBR m = StandardPBR::load(addr, texcoords);
+                return m.sample(w_o, square);
+        }
+    }
+};
+
 float3 decodeNormal(float2 rg) {
     rg = rg * 2 - 1;
     return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
@@ -312,14 +350,14 @@ Frame createTextureFrame(float3 normalWorldSpace, Frame tangentFrame) {
 }
 
 Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) {
-    MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
-    float2 rg = dMaterialTextures[NonUniformResourceIndex(input.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
+    AnyMaterialData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+    float2 rg = dMaterialTextures[NonUniformResourceIndex(data.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
     float3 normalTangentSpace = decodeNormal(rg);
     float3 normalWorldSpace = tangentNormalToWorld(normalTangentSpace, tangentFrame);
     return createTextureFrame(normalWorldSpace, tangentFrame);
 }
 
 float3 getEmissive(uint materialIndex, float2 texcoords) {
-    MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
-    return dMaterialTextures[NonUniformResourceIndex(input.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+    AnyMaterialData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+    return dMaterialTextures[NonUniformResourceIndex(data.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
 }
