@@ -117,7 +117,7 @@ struct MeshLights : Light {
         float2 barycentrics = squareToTriangle(rand);
         MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(data.instanceIndex, data.geometryIndex, data.primitiveIndex, barycentrics).inWorld(data.instanceIndex);
 
-        float3 emissive = dMaterialTextures[NonUniformResourceIndex(dMaterials[materialIdx(instanceID, data.geometryIndex)].emissive)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
+        float3 emissive = getEmissive(materialIdx(instanceID, data.geometryIndex), attrs.texcoord);
 
         float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
         float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
@@ -158,7 +158,7 @@ struct MeshLights : Light {
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float sum = dEmitterAliasTable[0].select;
             l.pdf = r2 / (abs(dot(-dirWs, attrs.frame.n)) * sum);
-            l.radiance = dMaterialTextures[NonUniformResourceIndex(dMaterials[materialIdx(instanceID, its.geometryIndex)].emissive)].SampleLevel(dTextureSampler, attrs.texcoord, 0).rgb;
+            l.radiance = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
         } else {
             // geometry not sampled, pdf is zero
             l.pdf = 0.0;
