@@ -118,16 +118,17 @@ struct PathTracingIntegrator : Integrator {
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
-            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
-            StandardPBR material = materialParams.getStandardPBR();
+            Frame textureFrame = getTextureFrame(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
+            float3 emissiveLight = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
+            StandardPBR material = StandardPBR::load(dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))].materialAddress, attrs.texcoord);
 
             float3 outgoingDirWs = -ray.Direction;
 
             // select proper shading normal
             Frame shadingFrame;
-            if (dot(outgoingDirWs, materialParams.frame.n) > 0) {
+            if (dot(outgoingDirWs, textureFrame.n) > 0) {
                 // prefer texture normal if we can
-                shadingFrame = materialParams.frame;
+                shadingFrame = textureFrame;
             } else if (dot(outgoingDirWs, attrs.frame.n) > 0) {
                 // if texture normal not valid, try shading normal
                 shadingFrame = attrs.frame;
@@ -141,7 +142,7 @@ struct PathTracingIntegrator : Integrator {
             // collect light from emissive meshes
             if (mesh_samples_per_bounce == 0 || bounceCount == 0 || !geometry.sampled) {
                 // add emissive light at point if light not explicitly sampled or initial bounce
-                accumulatedColor += throughput * materialParams.emissive;
+                accumulatedColor += throughput * emissiveLight;
             } else if (geometry.sampled) {
                 // MIS emissive light if it is sampled at later bounces
                 float lightPdf;
@@ -154,7 +155,7 @@ struct PathTracingIntegrator : Integrator {
 
                 if (lightPdf > 0.0) {
                     float weight = powerHeuristic(1, lastMaterialPdf, mesh_samples_per_bounce, lightPdf);
-                    accumulatedColor += throughput * materialParams.emissive * weight;
+                    accumulatedColor += throughput * emissiveLight * weight;
                 }
             }
 
@@ -245,16 +246,16 @@ struct DirectLightIntegrator : Integrator {
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
-            MaterialParameters materialParams = MaterialParameters::create(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
-            StandardPBR material = materialParams.getStandardPBR();
+            Frame textureFrame = getTextureFrame(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
+            StandardPBR material = StandardPBR::load(dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))].materialAddress, attrs.texcoord);
 
             float3 outgoingDirWs = -initialRay.Direction;
 
             // select proper shading normal
             Frame shadingFrame;
-            if (dot(outgoingDirWs, materialParams.frame.n) > 0) {
+            if (dot(outgoingDirWs, textureFrame.n) > 0) {
                 // prefer texture normal if we can
-                shadingFrame = materialParams.frame;
+                shadingFrame = textureFrame;
             } else if (dot(outgoingDirWs, attrs.frame.n) > 0) {
                 // if texture normal not valid, try shading normal
                 shadingFrame = attrs.frame;
@@ -266,7 +267,7 @@ struct DirectLightIntegrator : Integrator {
             float3 outgoingDirSs = shadingFrame.worldToFrame(outgoingDirWs);
 
             // collect light from emissive meshes
-            accumulatedColor += materialParams.emissive;
+            accumulatedColor += getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
 
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {

@@ -59,16 +59,18 @@ struct AliasEntry {
 enum class MaterialType {
   STANDARD_PBR,
 };
+
 struct MaterialInput {
+    // all materials have these two
     uint normal;
     uint emissive;
 
+    // then material specific stuff
+    // find appropriate thing to decode from address using `type`
     MaterialType type;
-    uint color;
-    uint metalness;
-    uint roughness;
-    float ior;
+    uint64_t materialAddress;
 };
+
 [[vk::binding(6, 0)]] SamplerState dTextureSampler;
 [[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
 [[vk::binding(8, 0)]] StructuredBuffer<MaterialInput> dMaterials;

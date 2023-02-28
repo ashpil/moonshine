@@ -178,17 +178,19 @@ struct StandardPBR : Material {
 
     float3 color; // color - linear color; each component is [0, 1]
     float metalness; // metalness - k_s - part it is specular. diffuse is (1 - specular); [0, 1]
-    float roughness; // roughness - roughness value; [0, 1)
     float ior; // ior - internal index of refraction; [0, inf)
 
-    static StandardPBR create(float3 color, float metalness, float roughness, float ior) {
-        roughness = max(roughness, 0.004); // set minimum roughness otherwise current math breaks down a bit
-        
+    static StandardPBR load(uint64_t addr, float2 texcoords) {
+        uint colorTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 0);
+        uint metalnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 1);
+        uint roughnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 2);
+        float ior = vk::RawBufferLoad<float>(addr + sizeof(uint) * 3);
+
         StandardPBR material;
-        material.color = color;
-        material.metalness = metalness;
+        material.color = dMaterialTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        material.metalness = dMaterialTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        material.distr = GGX::create(max(dMaterialTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r, 0.004));
         material.ior = ior;
-        material.distr = GGX::create(roughness);
         return material;
     }
 
@@ -293,60 +295,31 @@ float3 decodeNormal(float2 rg) {
     return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
 }
 
-Frame lookupTextureNormal(uint textureIndex, float2 texcoords, Frame tangentFrame) {
+float3 tangentNormalToWorld(float3 normalTangentSpace, Frame tangentFrame) {
     float3 tmp = tangentFrame.n;
     tangentFrame.n = tangentFrame.t;
     tangentFrame.t = tmp;
 
-    float3 normalTangentSpace = decodeNormal(dMaterialTextures[NonUniformResourceIndex(textureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rg);
+    return normalize(tangentFrame.frameToWorld(normalTangentSpace)).xyz;
+}
 
+Frame createTextureFrame(float3 normalWorldSpace, Frame tangentFrame) {
     Frame textureFrame = tangentFrame;
-    textureFrame.n = normalize(tangentFrame.frameToWorld(normalTangentSpace).xyz);
+    textureFrame.n = normalWorldSpace;
     textureFrame.reorthogonalize();
 
     return textureFrame;
 }
 
-// sort of a weird system rn
-// represents all parameters a material might have
-// then, to get a specific interpretation of these parameters,
-// just call getX where X is the specific material model
-//
-// the purpose of this is to be able to easily swap material models when testing
-// as well as somewhere to store material parameters that aren't really reliant on a specific material model,
-// such as the normal or emissive map
-struct MaterialParameters {
-    float ior;
-    float3 color;
-    float metalness;
-    float roughness;
+Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) {
+    MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
+    float2 rg = dMaterialTextures[NonUniformResourceIndex(input.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
+    float3 normalTangentSpace = decodeNormal(rg);
+    float3 normalWorldSpace = tangentNormalToWorld(normalTangentSpace, tangentFrame);
+    return createTextureFrame(normalWorldSpace, tangentFrame);
+}
 
-    float3 emissive;
-
-    Frame frame;
-
-    static MaterialParameters create(uint materialIndex, float2 texcoords, Frame tangentFrame) {
-        MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
-
-        MaterialParameters params;
-        params.ior = input.ior;
-        params.color = dMaterialTextures[NonUniformResourceIndex(input.color)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        params.emissive = dMaterialTextures[NonUniformResourceIndex(input.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        params.metalness = dMaterialTextures[NonUniformResourceIndex(input.metalness)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        params.roughness = dMaterialTextures[NonUniformResourceIndex(input.roughness)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        params.frame = lookupTextureNormal(input.normal, texcoords, tangentFrame);
-        return params;
-    }
-
-    StandardPBR getStandardPBR() {
-        return StandardPBR::create(color, metalness, roughness, ior);
-    }
-
-    Lambert getLambert() {
-        return Lambert::create(color);
-    }
-
-    DisneyDiffuse getDisneyDiffuse() {
-        return DisneyDiffuse::create(color, roughness);
-    }
-};
+float3 getEmissive(uint materialIndex, float2 texcoords) {
+    MaterialInput input = dMaterials[NonUniformResourceIndex(materialIndex)];
+    return dMaterialTextures[NonUniformResourceIndex(input.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+}

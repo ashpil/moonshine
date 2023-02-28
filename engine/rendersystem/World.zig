@@ -34,6 +34,7 @@ const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 
 pub const Material = MaterialManager.Material;
+pub const StandardPBR = MaterialManager.StandardPBR;
 pub const Instances = Accel.InstanceInfos;
 pub const MeshGroup = Accel.MeshGroup;
 
@@ -47,37 +48,38 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !Material {
+fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !std.meta.Tuple(&.{ Material, StandardPBR }) {
     var material: Material = undefined;
-    material.color = @intCast(u32, textures.items.len);
-
-    if (gltf_material.metallic_roughness.base_color_texture) |texture| {
+    material.normal = @intCast(u32, textures.items.len);
+    if (gltf_material.normal_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
 
-        // this gives us rgb --> need to convert to rgba
+        // this gives us rgb --> need to convert to rg
+        // theoretically gltf spec claims these values should already be linear
         var img = try zigimg.Image.fromMemory(allocator, image.data.?);
         defer img.deinit();
 
-        var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
+        var rg = try allocator.alloc(u8, img.pixels.len() * 2);
         for (img.pixels.rgb24) |pixel, i| {
-            rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
+            rg[i * 2 + 0] = pixel.r;
+            rg[i * 2 + 1] = pixel.g;
         }
         try textures.append(ImageManager.TextureSource {
             .raw = .{
-                .bytes = rgba.asBytes(),
+                .bytes = rg,
                 .extent = vk.Extent2D {
                     .width = @intCast(u32, img.width),
                     .height = @intCast(u32, img.height),
                 },
-                .format = .r8g8b8a8_srgb,
+                .format = .r8g8_unorm,
                 .layout = .shader_read_only_optimal,
                 .usage = .{ .sampled_bit = true },
             },
         });
     } else {
         try textures.append(ImageManager.TextureSource {
-            .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
+            .f32x2 = F32x2.new(0.5, 0.5),
         });
     }
 
@@ -112,8 +114,40 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         });
     }
 
-    material.metalness = @intCast(u32, textures.items.len);
-    material.roughness = @intCast(u32, textures.items.len + 1);
+    var standard_pbr: MaterialManager.StandardPBR = undefined;
+    standard_pbr.color = @intCast(u32, textures.items.len);
+    if (gltf_material.metallic_roughness.base_color_texture) |texture| {
+        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
+
+        // this gives us rgb --> need to convert to rgba
+        var img = try zigimg.Image.fromMemory(allocator, image.data.?);
+        defer img.deinit();
+
+        var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
+        for (img.pixels.rgb24) |pixel, i| {
+            rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
+        }
+        try textures.append(ImageManager.TextureSource {
+            .raw = .{
+                .bytes = rgba.asBytes(),
+                .extent = vk.Extent2D {
+                    .width = @intCast(u32, img.width),
+                    .height = @intCast(u32, img.height),
+                },
+                .format = .r8g8b8a8_srgb,
+                .layout = .shader_read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        });
+    } else {
+        try textures.append(ImageManager.TextureSource {
+            .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
+        });
+    }
+
+    standard_pbr.metalness = @intCast(u32, textures.items.len);
+    standard_pbr.roughness = @intCast(u32, textures.items.len + 1);
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -162,40 +196,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         });
     }
 
-    material.normal = @intCast(u32, textures.items.len);
-    if (gltf_material.normal_texture) |texture| {
-        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
-        std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
-
-        // this gives us rgb --> need to convert to rg
-        // theoretically gltf spec claims these values should already be linear
-        var img = try zigimg.Image.fromMemory(allocator, image.data.?);
-        defer img.deinit();
-
-        var rg = try allocator.alloc(u8, img.pixels.len() * 2);
-        for (img.pixels.rgb24) |pixel, i| {
-            rg[i * 2 + 0] = pixel.r;
-            rg[i * 2 + 1] = pixel.g;
-        }
-        try textures.append(ImageManager.TextureSource {
-            .raw = .{
-                .bytes = rg,
-                .extent = vk.Extent2D {
-                    .width = @intCast(u32, img.width),
-                    .height = @intCast(u32, img.height),
-                },
-                .format = .r8g8_unorm,
-                .layout = .shader_read_only_optimal,
-                .usage = .{ .sampled_bit = true },
-            },
-        });
-    } else {
-        try textures.append(ImageManager.TextureSource {
-            .f32x2 = F32x2.new(0.5, 0.5),
-        });
-    }
-
-    return material;
+    return .{ material, standard_pbr };
 }
 
 fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const WorldDescriptorLayout) !vk.DescriptorSet {
@@ -362,6 +363,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var material_manager = blk: {
         const materials = try allocator.alloc(Material, gltf.data.materials.items.len);
         defer allocator.free(materials);
+        const standard_pbrs = try allocator.alloc(StandardPBR, gltf.data.materials.items.len);
+        defer allocator.free(standard_pbrs);
 
         var textures = std.ArrayList(ImageManager.TextureSource).init(allocator);
         defer textures.deinit();
@@ -372,10 +375,13 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         };
 
         for (gltf.data.materials.items) |material, i| {
-            materials[i] = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
+            const mat_spbr = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
+            materials[i] = mat_spbr[0];
+            materials[i].addr = i;
+            standard_pbrs[i] = mat_spbr[1];
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, materials);
+        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, materials, standard_pbrs);
     };
     errdefer material_manager.destroy(vc, allocator);
 
