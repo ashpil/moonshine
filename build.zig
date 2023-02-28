@@ -21,7 +21,7 @@ pub fn build(b: *std.build.Builder) void {
         }) catch unreachable;
         break :blk vkgen.VkGenerateStep.create(b, vk_xml_path, "vk.zig").getPackage("vulkan");
     };
-    const glfw = makeGlfwLibrary(b, target) catch unreachable;
+    // const glfw = makeGlfwLibrary(b, target) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target);
     const zgltf = std.build.Pkg {
         .name = "zgltf",
@@ -61,35 +61,36 @@ pub fn build(b: *std.build.Builder) void {
     }
 
     // chess exe
-    {
-        var engine_options = default_engine_options;
-        engine_options.windowing = true;
-        engine_options.exr = true;
-        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
-        const rtchess_exe = b.addExecutable(.{
-            .name = "rtchess",
-            .root_source_file = .{ .path = "rtchess/main.zig" },
-            .target = target,
-            .optimize = optimize,
-        });
-        rtchess_exe.install();
+    // deprecated for now, will need to turn into realtime gltf viewer, then work on modifying state, then actually revive this
+    // {
+    //     var engine_options = default_engine_options;
+    //     engine_options.windowing = true;
+    //     engine_options.exr = true;
+    //     const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
+    //     const rtchess_exe = b.addExecutable(.{
+    //         .name = "rtchess",
+    //         .root_source_file = .{ .path = "rtchess/main.zig" },
+    //         .target = target,
+    //         .optimize = optimize,
+    //     });
+    //     rtchess_exe.install();
 
-        rtchess_exe.addPackage(vk);
-        rtchess_exe.addPackage(engine);
-        rtchess_exe.linkLibrary(glfw.library);
-        rtchess_exe.addIncludePath(glfw.include_path);
-        rtchess_exe.linkLibC();
-        rtchess_exe.linkLibrary(tinyexr.library);
-        rtchess_exe.addIncludePath(tinyexr.include_path);
+    //     rtchess_exe.addPackage(vk);
+    //     rtchess_exe.addPackage(engine);
+    //     rtchess_exe.linkLibrary(glfw.library);
+    //     rtchess_exe.addIncludePath(glfw.include_path);
+    //     rtchess_exe.linkLibC();
+    //     rtchess_exe.linkLibrary(tinyexr.library);
+    //     rtchess_exe.addIncludePath(tinyexr.include_path);
 
-        const run_chess = rtchess_exe.run();
-        run_chess.step.dependOn(b.getInstallStep());
-        if (b.args) |args| {
-            run_chess.addArgs(args);
-        }
+    //     const run_chess = rtchess_exe.run();
+    //     run_chess.step.dependOn(b.getInstallStep());
+    //     if (b.args) |args| {
+    //         run_chess.addArgs(args);
+    //     }
 
-        b.step("run-chess", "Run chess").dependOn(&run_chess.step);
-    }
+    //     b.step("run-chess", "Run chess").dependOn(&run_chess.step);
+    // }
 
     // offline exe
     {
