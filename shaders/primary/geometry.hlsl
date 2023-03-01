@@ -82,6 +82,7 @@ struct MeshAttributes {
 
         getTangentBitangent(p0, p1, p2, t0, t1, t2, attrs.triangleFrame.s, attrs.triangleFrame.t);
         attrs.triangleFrame.n = normalize(cross(p0 - p2, p1 - p2));
+        attrs.triangleFrame.reorthogonalize();
 
         // normals optional
         if (mesh.normalAddress != 0) {
