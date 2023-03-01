@@ -57,7 +57,8 @@ struct AliasEntry {
 
 // dxc will crash for non-uppercase enum variants
 enum class MaterialType {
-  STANDARD_PBR,
+    STANDARD_PBR,
+    LAMBERT,
 };
 
 struct AnyMaterialData {

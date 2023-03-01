@@ -152,6 +152,14 @@ struct Lambert : Material {
         return lambert;
     }
 
+    static Lambert load(uint64_t addr, float2 texcoords) {
+        uint colorTextureIndex = vk::RawBufferLoad<uint>(addr);
+
+        Lambert material;
+        material.r = dMaterialTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        return material;
+    }
+
     float pdf(float3 w_i, float3 w_o) {
         return Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) / PI : 0.0;
     }
@@ -305,25 +313,40 @@ struct AnyMaterial : Material {
 
     float pdf(float3 w_i, float3 w_o) {
         switch (type) {
-            case MaterialType::STANDARD_PBR:
+            case MaterialType::STANDARD_PBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.pdf(w_i, w_o);
+            }
+            case MaterialType::LAMBERT: {
+                Lambert m = Lambert::load(addr, texcoords);
+                return m.pdf(w_i, w_o);
+            }
         }
     }
 
     float3 eval(float3 w_i, float3 w_o) {
         switch (type) {
-            case MaterialType::STANDARD_PBR:
+            case MaterialType::STANDARD_PBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.eval(w_i, w_o);
+            }
+            case MaterialType::LAMBERT: {
+                Lambert m = Lambert::load(addr, texcoords);
+                return m.eval(w_i, w_o);
+            }
         }
     }
 
     MaterialSample sample(float3 w_o, float2 square) {
         switch (type) {
-            case MaterialType::STANDARD_PBR:
+            case MaterialType::STANDARD_PBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.sample(w_o, square);
+            }
+            case MaterialType::LAMBERT: {
+                Lambert m = Lambert::load(addr, texcoords);
+                return m.sample(w_o, square);
+            }
         }
     }
 };
