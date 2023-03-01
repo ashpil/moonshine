@@ -41,47 +41,99 @@ pub const AnyMaterial = union(MaterialType) {
     perfect_mirror: void, // no payload
 };
 
+const VariantBuffers = blk: {
+    const variants = @typeInfo(AnyMaterial).Union.fields;
+    comptime var buffer_count = 0;
+    inline for (variants) |variant| {
+        if (variant.type != void) {
+            buffer_count += 1;
+        }
+    }
+    comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
+    comptime var current_field = 0;
+    inline for (variants) |variant| {
+        if (variant.type != void) {
+            fields[current_field] = .{
+                .name = variant.name,
+                .type = VkAllocator.DeviceBuffer,
+                .default_value = null,
+                .is_comptime = false,
+                .alignment = @alignOf(VkAllocator.DeviceBuffer),
+            };
+            current_field += 1;
+        }
+    }
+    break :blk @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .fields = &fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+};
+
 textures: ImageManager,
 materials: VkAllocator.DeviceBuffer, // Material
 
-standard_pbr: VkAllocator.DeviceBuffer, // StandardPBR
-lambert: VkAllocator.DeviceBuffer, // Lambert
+variant_buffers: VariantBuffers,
 
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList) !Self {
-    const standard_pbr = blk: {
-        const standard_pbr = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(StandardPBR) * materials.standard_pbrs.items.len, .{ .shader_device_address_bit = true, .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer standard_pbr.destroy(vc);
-
-        try commands.uploadData(vc, vk_allocator, standard_pbr.handle, std.mem.sliceAsBytes(materials.standard_pbrs.items));
-        
-        break :blk standard_pbr;
+    const Addrs = blk: {
+        const variants = @typeInfo(AnyMaterial).Union.fields;
+        comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
+        inline for (fields) |*field, i| {
+            field.* = .{
+                .name = variants[i].name,
+                .type = vk.DeviceAddress,
+                .default_value = null,
+                .is_comptime = false,
+                .alignment = @alignOf(vk.DeviceAddress),
+            };
+        }
+        break :blk @Type(.{
+            .Struct = .{
+                .layout = .Auto,
+                .fields = &fields,
+                .decls = &.{},
+                .is_tuple = false,
+            },
+        });
     };
 
-    const spbr_addr = standard_pbr.getAddress(vc);
+    var variant_buffers: VariantBuffers = undefined;
+    var addrs: Addrs = undefined;
+    inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
+        if (@sizeOf(field.type) != 0) {
+            if (@field(materials.variants, field.name).items.len != 0) {
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(field.type) * @field(materials.variants, field.name).items.len, .{ .shader_device_address_bit = true, .storage_buffer_bit = true, .transfer_dst_bit = true });
+                errdefer device_buffer.destroy(vc);
 
-    const lambert = blk: {
-        const lambert = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Lambert) * materials.lamberts.items.len, .{ .shader_device_address_bit = true, .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer lambert.destroy(vc);
-
-        try commands.uploadData(vc, vk_allocator, lambert.handle, std.mem.sliceAsBytes(materials.lamberts.items));
-        
-        break :blk lambert;
-    };
-
-    const lambert_addr = lambert.getAddress(vc);
+                try commands.uploadData(vc, vk_allocator, device_buffer.handle, std.mem.sliceAsBytes(@field(materials.variants, field.name).items));
+                
+                @field(variant_buffers, field.name) = device_buffer;
+                @field(addrs, field.name) = device_buffer.getAddress(vc);
+            } else {
+                @field(variant_buffers, field.name) = VkAllocator.DeviceBuffer { .handle = vk.Buffer.null_handle };
+                @field(addrs, field.name) = 0;
+            }
+        } else {
+            @field(addrs, field.name) = 0;
+        }
+    }
 
     const materials_gpu = blk: {
         const materials_tmp = try vk_allocator.createHostBuffer(vc, Material, @intCast(u32, materials.materials.items.len), .{ .transfer_src_bit = true });
         defer materials_tmp.destroy(vc);
         for (materials.materials.items) |material, i| {
             materials_tmp.data[i] = material;
-            materials_tmp.data[i].addr = switch (material.type) {
-                .standard_pbr => spbr_addr + material.addr * @sizeOf(StandardPBR),
-                .lambert => lambert_addr + material.addr * @sizeOf(Lambert),
-                .perfect_mirror => 0,
-            };
+            inline for (@typeInfo(MaterialType).Enum.fields) |field, j| {
+                if (@intToEnum(MaterialType, field.value) == material.type) {
+                    materials_tmp.data[i].addr = @field(addrs, field.name) + material.addr * @sizeOf(@typeInfo(AnyMaterial).Union.fields[j].type);
+                }
+            }
         }
 
         const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Material) * materials.materials.items.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
@@ -100,41 +152,66 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     return Self {
         .textures = textures,
         .materials = materials_gpu,
-        .standard_pbr = standard_pbr,
-        .lambert = lambert,
+        .variant_buffers = variant_buffers,
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.textures.destroy(vc, allocator);
     self.materials.destroy(vc);
-    self.standard_pbr.destroy(vc);
-    self.lambert.destroy(vc);
+
+    inline for (@typeInfo(VariantBuffers).Struct.fields) |field| {
+        @field(self.variant_buffers, field.name).destroy(vc);
+    }
 }
 
 pub const MaterialList = struct {
+    const VariantLists = blk: {
+        const variants = @typeInfo(AnyMaterial).Union.fields;
+        comptime var buffer_count = 0;
+        inline for (variants) |variant| {
+            if (variant.type != void) {
+                buffer_count += 1;
+            }
+        }
+        comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
+        comptime var current_field = 0;
+        inline for (variants) |variant| {
+            if (variant.type != void) {
+                fields[current_field] = .{
+                    .name = variant.name,
+                    .type = std.ArrayListUnmanaged(variant.type),
+                    .default_value = &std.ArrayListUnmanaged(variant.type) {},
+                    .is_comptime = false,
+                    .alignment = @alignOf(std.ArrayListUnmanaged(variant.type)),
+                };
+                current_field += 1;
+            }
+        }
+        break :blk @Type(.{
+            .Struct = .{
+                .layout = .Auto,
+                .fields = &fields,
+                .decls = &.{},
+                .is_tuple = false,
+            },
+        });
+    };
+
     materials: std.ArrayListUnmanaged(Material) = .{},
 
-    standard_pbrs: std.ArrayListUnmanaged(StandardPBR) = .{},
-    lamberts: std.ArrayListUnmanaged(Lambert) = .{},
+    variants: VariantLists = .{},
 
     pub fn append(self: *MaterialList, allocator: std.mem.Allocator, material: Material, any_material: AnyMaterial) !void {
         var mat_local = material;
-        switch (any_material) {
-            .standard_pbr => {
-                try self.standard_pbrs.append(allocator, any_material.standard_pbr);
-                mat_local.addr = self.standard_pbrs.items.len - 1;
-                mat_local.type = .standard_pbr;
-            },
-            .lambert => {
-                try self.lamberts.append(allocator, any_material.lambert);
-                mat_local.addr = self.lamberts.items.len - 1;
-                mat_local.type = .lambert;
-            },
-            .perfect_mirror => {
-                mat_local.addr = 0;
-                mat_local.type = .perfect_mirror;
-            },
+        inline for (@typeInfo(MaterialType).Enum.fields) |field, j| {
+            if (@intToEnum(MaterialType, field.value) == any_material) {
+                mat_local.type = @intToEnum(MaterialType, field.value);
+                if (@typeInfo(AnyMaterial).Union.fields[j].type != void) {
+                    mat_local.addr = @field(self.variants, field.name).items.len;
+                    try @field(self.variants, field.name).append(allocator, @field(any_material, field.name));
+                }
+            }
         }
         try self.materials.append(allocator, mat_local);
     }
@@ -142,7 +219,8 @@ pub const MaterialList = struct {
     pub fn destroy(self: *MaterialList, allocator: std.mem.Allocator) void {
         self.materials.deinit(allocator);
 
-        self.standard_pbrs.deinit(allocator);
-        self.lamberts.deinit(allocator);
+        inline for (@typeInfo(VariantLists).Struct.fields) |field| {
+            @field(self.variants, field.name).deinit(allocator);
+        }
     }
 };
