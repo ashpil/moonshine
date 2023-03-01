@@ -204,6 +204,9 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .color = standard_pbr.color,
             };
             return .{ material, .{ .lambert = lambert } };
+        } else if (gltf_material.metallic_roughness.metallic_factor == 1.0 and gltf_material.metallic_roughness.roughness_factor == 0.0) {
+            // parse as perfect mirror
+            return .{ material, .{ .perfect_mirror = {} } };
         } else {
             try textures.append(ImageManager.TextureSource {
                 .f32x1 = gltf_material.metallic_roughness.metallic_factor,

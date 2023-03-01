@@ -59,6 +59,7 @@ struct AliasEntry {
 enum class MaterialType {
     STANDARD_PBR,
     LAMBERT,
+    PERFECT_MIRROR,
 };
 
 struct AnyMaterialData {

@@ -177,6 +177,10 @@ struct Lambert : Material {
         sample.dirFs = w_i;
         return sample;
     }
+
+    static bool isDelta() {
+        return false;
+    }
 };
 
 // blends between provided microfacet distribution
@@ -258,6 +262,10 @@ struct StandardPBR : Material {
 
         return lerp(lambertian, microfacet, this.metalness);
     }
+
+    static bool isDelta() {
+        return false;
+    }
 };
 
 // TODO: transmission
@@ -296,6 +304,31 @@ struct DisneyDiffuse : Material {
 
         return lambertian * ((1 - F_I / 2) * (1 - F_O / 2) + retro);
     }
+
+    static bool isDelta() {
+        return false;
+    }
+};
+
+struct PerfectMirror : Material {
+    MaterialSample sample(float3 w_o, float2 square) {
+        MaterialSample sample;
+        sample.pdf = 1.0;
+        sample.dirFs = float3(-w_o.x, w_o.y, -w_o.z);
+        return sample;
+    }
+
+    float pdf(float3 w_i, float3 w_o) {
+        return 0.0;
+    }
+
+    float3 eval(float3 w_i, float3 w_o) {
+        return float3(1.0, 1.0, 1.0) / abs(Frame::cosTheta(w_i));
+    }
+
+    static bool isDelta() {
+        return true;
+    }
 };
 
 struct AnyMaterial : Material {
@@ -321,6 +354,10 @@ struct AnyMaterial : Material {
                 Lambert m = Lambert::load(addr, texcoords);
                 return m.pdf(w_i, w_o);
             }
+            case MaterialType::PERFECT_MIRROR: {
+                PerfectMirror m;
+                return m.pdf(w_i, w_o);
+            }
         }
     }
 
@@ -332,6 +369,10 @@ struct AnyMaterial : Material {
             }
             case MaterialType::LAMBERT: {
                 Lambert m = Lambert::load(addr, texcoords);
+                return m.eval(w_i, w_o);
+            }
+            case MaterialType::PERFECT_MIRROR: {
+                PerfectMirror m;
                 return m.eval(w_i, w_o);
             }
         }
@@ -346,6 +387,24 @@ struct AnyMaterial : Material {
             case MaterialType::LAMBERT: {
                 Lambert m = Lambert::load(addr, texcoords);
                 return m.sample(w_o, square);
+            }
+            case MaterialType::PERFECT_MIRROR: {
+                PerfectMirror m;
+                return m.sample(w_o, square);
+            }
+        }
+    }
+
+    bool isDelta() {
+        switch (type) {
+            case MaterialType::STANDARD_PBR: {
+                return StandardPBR::isDelta();
+            }
+            case MaterialType::LAMBERT: {
+                return Lambert::isDelta();
+            }
+            case MaterialType::PERFECT_MIRROR: {
+                return PerfectMirror::isDelta();
             }
         }
     }

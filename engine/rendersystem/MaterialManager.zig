@@ -11,6 +11,7 @@ const vector = @import("../vector.zig");
 pub const MaterialType = enum(c_int) {
     standard_pbr,
     lambert,
+    perfect_mirror,
 };
 
 pub const Material = extern struct {
@@ -37,6 +38,7 @@ pub const Lambert = extern struct {
 pub const AnyMaterial = union(MaterialType) {
     standard_pbr: StandardPBR,
     lambert: Lambert,
+    perfect_mirror: void, // no payload
 };
 
 textures: ImageManager,
@@ -78,6 +80,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             materials_tmp.data[i].addr = switch (material.type) {
                 .standard_pbr => spbr_addr + material.addr * @sizeOf(StandardPBR),
                 .lambert => lambert_addr + material.addr * @sizeOf(Lambert),
+                .perfect_mirror => 0,
             };
         }
 
@@ -127,6 +130,10 @@ pub const MaterialList = struct {
                 try self.lamberts.append(allocator, any_material.lambert);
                 mat_local.addr = self.lamberts.items.len - 1;
                 mat_local.type = .lambert;
+            },
+            .perfect_mirror => {
+                mat_local.addr = 0;
+                mat_local.type = .perfect_mirror;
             },
         }
         try self.materials.append(allocator, mat_local);
