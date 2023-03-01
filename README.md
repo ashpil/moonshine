@@ -44,6 +44,15 @@ Built with Zig + Vulkan ray tracing.
       * Current scene info
     * Commands:
       * Refresh frame count
+  * Materials
+    * Metal
+    * Rough metal
+    * Glass
+    * Rough glass
+    * Plastic
+    * Rough plastic
+    * Mix
+    * Layer
 * Code
   * Make sure we have all necessary `errdefer`s
   * Proper memory allocation interface
@@ -55,12 +64,8 @@ Built with Zig + Vulkan ray tracing.
 * Asset system
   * Currently, one can either construct a scene manually with code or very inefficiently import glb
   * Ideal would be to have custom scene description format that can be quickly deserialzed
-    * Some standalone utility that can convert glb/other formats to this format, so other formats don't need to be supported in engine directly
+    * Some standalone utility that can convert glb/other formats to this format, as well as an exportt addon for Blender, so other formats don't need to be supported in engine directly
     * I think this custom format would make destinctions between scene stuff and staging stuff. It would only contain actual information about the world, but not stuff like camera position, that would be separate
-* Material system
-  * Currently, just have ubershader
-  * Would be better to have proper dynamic dispatch material system
-    * Probably should do this with callable shaders
 * Light system
   * Currently, only support skybox and mesh lights, which I think makes sense
     * Both explicitly sampled using the alias method built on CPU
