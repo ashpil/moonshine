@@ -2,6 +2,8 @@
 
 Built with Zig + Vulkan ray tracing.
 
+Latest tested Zig version: `0.11.0-dev.1568+c9b957c93`.
+
 ### Subprojects
 * offline -- a headless offline renderer
 * rtchess -- intended to be a ray traced chess game, sort of in disrepair at the moment
