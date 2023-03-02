@@ -224,7 +224,7 @@ struct StandardPBR : Material {
 
     float3 microfacetEval(float3 w_i, float3 w_o) {
         float3 h = normalize(w_i + w_o);
-        float3 F = Fresnel::tintedSchlick(dot(w_i, h), 1, ior, color, metalness);
+        float3 F = Fresnel::tintedSchlick(dot(w_i, h), AIR_IOR, ior, color, metalness);
         float G = distr.G(w_i, w_o, h);
         float D = distr.D(h);
         return (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
@@ -331,6 +331,67 @@ struct PerfectMirror : Material {
     }
 };
 
+float3 refractDir(float3 wi, float3 n, float eta) {
+    float cosThetaI = dot(n, wi);
+    float sin2ThetaI = max(0, 1 - cosThetaI * cosThetaI);
+    float sin2ThetaT = eta * eta * sin2ThetaI;
+    if (sin2ThetaT >= 1) return 0.0;
+
+    float cosThetaT = sqrt(1 - sin2ThetaT);
+
+    return eta * -wi + (eta * cosThetaI - cosThetaT) * n;
+}
+
+struct Glass : Material {
+    float intIOR;
+
+    static Glass load(uint64_t addr) {
+        Glass material;
+        material.intIOR = vk::RawBufferLoad<float>(addr);
+        return material;
+    }
+
+    MaterialSample sample(float3 w_o, float2 square) {
+        float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), AIR_IOR, intIOR);
+        MaterialSample sample;
+
+        if (square.x < fresnel) {
+            sample.pdf = fresnel;
+            sample.dirFs = float3(-w_o.x, w_o.y, -w_o.z);
+        } else {
+            float etaI;
+            float etaT;
+            if (Frame::cosTheta(w_o) > 0) {
+                etaI = AIR_IOR;
+                etaT = intIOR;
+            } else {
+                etaT = AIR_IOR;
+                etaI = intIOR;
+            }
+            sample.dirFs = refractDir(w_o, faceForward(float3(0.0, 1.0, 0.0), w_o), etaI / etaT);
+            sample.pdf = all(sample.dirFs == 0.0) ? 0.0 : 1.0 - fresnel;
+        }
+        return sample;
+    }
+
+    float pdf(float3 w_i, float3 w_o) {
+        return 0.0;
+    }
+
+    float3 eval(float3 w_i, float3 w_o) {
+        float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), AIR_IOR, intIOR);
+        if (Frame::sameHemisphere(w_i, w_o)) {
+            return fresnel / abs(Frame::cosTheta(w_i));
+        } else {
+            return (1.0 - fresnel) / abs(Frame::cosTheta(w_i));
+        }
+    }
+
+    static bool isDelta() {
+        return true;
+    }
+};
+
 struct AnyMaterial : Material {
     MaterialType type;
     uint64_t addr;
@@ -358,6 +419,10 @@ struct AnyMaterial : Material {
                 PerfectMirror m;
                 return m.pdf(w_i, w_o);
             }
+            case MaterialType::GLASS: {
+                Glass m = Glass::load(addr);
+                return m.pdf(w_i, w_o);
+            }
         }
     }
 
@@ -373,6 +438,10 @@ struct AnyMaterial : Material {
             }
             case MaterialType::PERFECT_MIRROR: {
                 PerfectMirror m;
+                return m.eval(w_i, w_o);
+            }
+            case MaterialType::GLASS: {
+                Glass m = Glass::load(addr);
                 return m.eval(w_i, w_o);
             }
         }
@@ -392,6 +461,10 @@ struct AnyMaterial : Material {
                 PerfectMirror m;
                 return m.sample(w_o, square);
             }
+            case MaterialType::GLASS: {
+                Glass m = Glass::load(addr);
+                return m.sample(w_o, square);
+            }
         }
     }
 
@@ -405,6 +478,9 @@ struct AnyMaterial : Material {
             }
             case MaterialType::PERFECT_MIRROR: {
                 return PerfectMirror::isDelta();
+            }
+            case MaterialType::GLASS: {
+                return Glass::isDelta();
             }
         }
     }

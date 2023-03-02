@@ -47,7 +47,6 @@ Built with Zig + Vulkan ray tracing.
   * Materials
     * Metal
     * Rough metal
-    * Glass
     * Rough glass
     * Plastic
     * Rough plastic

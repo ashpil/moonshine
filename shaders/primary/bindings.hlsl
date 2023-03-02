@@ -60,6 +60,7 @@ enum class MaterialType {
     STANDARD_PBR,
     LAMBERT,
     PERFECT_MIRROR,
+    GLASS,
 };
 
 struct AnyMaterialData {

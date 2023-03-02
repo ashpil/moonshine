@@ -12,6 +12,7 @@ pub const MaterialType = enum(c_int) {
     standard_pbr,
     lambert,
     perfect_mirror,
+    glass,
 };
 
 pub const Material = extern struct {
@@ -35,10 +36,15 @@ pub const Lambert = extern struct {
     color: u32,
 };
 
+pub const Glass = extern struct {
+    ior: f32,
+};
+
 pub const AnyMaterial = union(MaterialType) {
     standard_pbr: StandardPBR,
     lambert: Lambert,
     perfect_mirror: void, // no payload
+    glass: Glass,
 };
 
 const VariantBuffers = blk: {
