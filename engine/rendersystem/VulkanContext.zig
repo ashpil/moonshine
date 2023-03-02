@@ -362,7 +362,7 @@ const PhysicalDevice = struct {
         const families = utils.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
 
         var picked_family: ?u32 = null;
-        for (families) |family, i| {
+        for (families, 0..) |family, i| {
             const index = @intCast(u32, i);
             if (family.queue_flags.compute_bit and
                 family.queue_flags.graphics_bit and

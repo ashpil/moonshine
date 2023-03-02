@@ -46,8 +46,8 @@ pub fn Pipeline(
             comptime std.debug.assert(stages.len == module_to_stage.len);
 
             var set_layout_handles: [set_layout_count]vk.DescriptorSetLayout = undefined;
-            inline for (set_layout_handles) |*handle, i| {
-                handle.* = set_layouts[i].handle;
+            inline for (&set_layout_handles, set_layouts) |*handle, set_layout| {
+                handle.* = set_layout.handle;
             }
             const layout = try vc.device.createPipelineLayout(&.{
                 .set_layout_count = set_layout_handles.len,
@@ -58,8 +58,8 @@ pub fn Pipeline(
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
             var modules: [shader_codes.len]vk.ShaderModule = undefined;
-            inline for (shader_codes) |shader_code, i| {
-                modules[i] = try vc.device.createShaderModule(&.{
+            inline for (shader_codes, &modules) |shader_code, *module| {
+                module.* = try vc.device.createShaderModule(&.{
                     .code_size = shader_code.len,
                     .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
                 }, null);
@@ -69,20 +69,20 @@ pub fn Pipeline(
             };
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
-            inline for (var_stages) |*stage, i| {
-                stage.* = stages[i];
-                stage.module = modules[module_to_stage[i]];
+            inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
+                var_stage.* = stage;
+                var_stage.module = modules[map];
             }
 
-            inline for (@typeInfo(SpecConstants).Struct.fields) |field, i| {
+            inline for (@typeInfo(SpecConstants).Struct.fields, 0..) |field, i| {
                 if (@sizeOf(field.type) != 0) {
                     const inner_fields = @typeInfo(field.type).Struct.fields;
                     var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
-                    inline for (map_entries) |*map_entry, j| {
+                    inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
                         map_entry.* = vk.SpecializationMapEntry {
                             .constant_id = j,
-                            .offset = @bitOffsetOf(field.type, inner_fields[j].name) / 8,
-                            .size = @sizeOf(inner_fields[j].type),
+                            .offset = @bitOffsetOf(field.type, inner_field.name) / 8,
+                            .size = @sizeOf(inner_field.type),
                         };
                     }
                     var_stages[i].p_specialization_info = &vk.SpecializationInfo {

@@ -64,7 +64,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             defer img.deinit();
 
             var rg = try allocator.alloc(u8, img.pixels.len() * 2);
-            for (img.pixels.rgb24) |pixel, i| {
+            for (img.pixels.rgb24, 0..) |pixel, i| {
                 rg[i * 2 + 0] = pixel.r;
                 rg[i * 2 + 1] = pixel.g;
             }
@@ -96,8 +96,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             defer img.deinit();
 
             var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
-            for (img.pixels.rgb24) |pixel, i| {
-                rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
+            for (img.pixels.rgb24, rgba.rgba32) |pixel, *rgba32| {
+                rgba32.* = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
             }
             try textures.append(ImageManager.TextureSource {
                 .raw = .{
@@ -134,8 +134,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         defer img.deinit();
 
         var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
-        for (img.pixels.rgb24) |pixel, i| {
-            rgba.rgba32[i] = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
+        for (img.pixels.rgb24, rgba.rgba32) |pixel, *rgba32| {
+            rgba32.* = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
         }
         try textures.append(ImageManager.TextureSource {
             .raw = .{
@@ -166,15 +166,15 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         var img = try zigimg.Image.fromMemory(allocator, image.data.?);
         defer img.deinit();
 
-        var r = try allocator.alloc(u8, img.pixels.len());
-        var g = try allocator.alloc(u8, img.pixels.len());
-        for (img.pixels.rgb24) |pixel, i| {
-            r[i] = pixel.r;
-            g[i] = pixel.g;
+        var rs = try allocator.alloc(u8, img.pixels.len());
+        var gs = try allocator.alloc(u8, img.pixels.len());
+        for (img.pixels.rgb24, rs, gs) |pixel, *r, *g| {
+            r.* = pixel.r;
+            g.* = pixel.g;
         }
         try textures.append(ImageManager.TextureSource {
             .raw = .{
-                .bytes = r,
+                .bytes = rs,
                 .extent = vk.Extent2D {
                     .width = @intCast(u32, img.width),
                     .height = @intCast(u32, img.height),
@@ -186,7 +186,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         });
         try textures.append(ImageManager.TextureSource {
             .raw = .{
-                .bytes = g,
+                .bytes = gs,
                 .extent = vk.Extent2D {
                     .width = @intCast(u32, img.width),
                     .height = @intCast(u32, img.height),
@@ -224,10 +224,10 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
     defer allocator.free(image_infos);
 
     const texture_views = self.material_manager.textures.data.items(.view);
-    for (image_infos) |*info, i| {
+    for (image_infos, texture_views) |*info, texture_view| {
         info.* = .{
             .sampler = .null_handle,
-            .image_view = texture_views[i],
+            .image_view = texture_view,
             .image_layout = .shader_read_only_optimal,
         };
     }
@@ -414,14 +414,14 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     const skins = try allocator.alloc([]u32, gltf.data.meshes.items.len);
     defer allocator.free(skins);
 
-    for (gltf.data.meshes.items) |mesh, group_idx| {
+    for (gltf.data.meshes.items, mesh_groups, skins) |mesh, *mesh_group, *skin| {
         const mesh_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
         errdefer allocator.free(mesh_idxs);
         const material_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
         errdefer allocator.free(material_idxs);
-        for (mesh.primitives.items) |primitive, mesh_idx| {
-            mesh_idxs[mesh_idx] = @intCast(u32, objects.items.len);
-            material_idxs[mesh_idx] = @intCast(u32, primitive.material.?);
+        for (mesh.primitives.items, mesh_idxs, material_idxs) |primitive, *mesh_idx, *material_idx| {
+            mesh_idx.* = @intCast(u32, objects.items.len);
+            material_idx.* = @intCast(u32, primitive.material.?);
             // get indices
             const indices = blk2: {
                 var indices = std.ArrayList(u16).init(allocator);
@@ -432,7 +432,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
                 // convert to U32x3
                 var actual_indices = try allocator.alloc(U32x3, indices.items.len / 3);
-                for (actual_indices) |*index, i| {
+                for (actual_indices, 0..) |*index, i| {
                     index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
                 }
                 break :blk2 actual_indices;
@@ -487,8 +487,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                 .indices = indices,
             });
         }
-        mesh_groups[group_idx].meshes = mesh_idxs;
-        skins[group_idx] = material_idxs;
+        mesh_group.*.meshes = mesh_idxs;
+        skin.* = material_idxs;
     }
     defer for (mesh_groups) |group| allocator.free(group.meshes);
     defer for (skins) |skin| allocator.free(skin);
@@ -548,11 +548,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     defer allocator.free(objects);
     defer for (objects) |*object| object.destroy(allocator);
 
-    for (mesh_filepaths) |mesh_filepath, i| {
+    for (mesh_filepaths, objects) |mesh_filepath, *object| {
         const file = try asset.openAsset(allocator, mesh_filepath);
         defer file.close();
 
-        objects[i] = try MeshData.fromObj(allocator, file);
+        object.* = try MeshData.fromObj(allocator, file);
     }
 
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);

@@ -22,8 +22,8 @@ pub fn AliasTable(comptime Data: type) type {
         // Vose's Method
         // weights may not be normalized
         // O(n) where n = raw_weights.len
-        pub fn create(allocator: std.mem.Allocator, raw_weights: []const f32, data: []const Data) std.mem.Allocator.Error!Self {
-            std.debug.assert(raw_weights.len == data.len);
+        pub fn create(allocator: std.mem.Allocator, raw_weights: []const f32, datas: []const Data) std.mem.Allocator.Error!Self {
+            std.debug.assert(raw_weights.len == datas.len);
 
             const entries = try allocator.alloc(TableEntry, raw_weights.len);
             errdefer allocator.free(entries);
@@ -37,16 +37,16 @@ pub fn AliasTable(comptime Data: type) type {
             var more_head: u32 = std.math.maxInt(u32);
 
             const n = @intCast(u32, raw_weights.len);
-            for (raw_weights) |weight, i| {
-                entries[i].data = data[i];
+            for (raw_weights, entries, datas, 0..) |weight, *entry, data, i| {
+                entry.data = data;
 
                 const adjusted_weight = (weight * @intToFloat(f32, n)) / weight_sum;
-                entries[i].select = adjusted_weight;
+                entry.select = adjusted_weight;
                 if (adjusted_weight < 1.0) {
-                    entries[i].alias = less_head;
+                    entry.alias = less_head;
                     less_head = @intCast(u32, i);
                 } else {
-                    entries[i].alias = more_head;
+                    entry.alias = more_head;
                     more_head = @intCast(u32, i);
                 }
             }
@@ -116,7 +116,7 @@ pub const NormalizedAliasTable = struct {
         var more_head: u32 = std.math.maxInt(u32);
 
         const n = @intCast(u32, raw_weights.len);
-        for (raw_weights) |weight, i| {
+        for (raw_weights, 0..) |weight, i| {
             entries[i].data = weight / weight_sum;
 
             const adjusted_weight = (weight / weight_sum) * @intToFloat(f32, n);

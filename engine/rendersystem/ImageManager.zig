@@ -77,7 +77,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     defer free_bytes.deinit();
     defer for (free_bytes.items) |free_byte| allocator.free(free_byte);
 
-    for (sources) |*source, i| {
+    for (sources, extents, bytes, is_cubemaps, dst_layouts) |*source, *extent, *byte, *is_cubemap, *dst_layout| {
         const image = switch (source.*) {
             .dds_filepath => |filepath| blk: {
                 const dds_file = try asset.openAsset(allocator, filepath);
@@ -88,53 +88,53 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
                 const dds_info = std.mem.bytesToValue(dds.FileInfo, file_bytes[0..@sizeOf(dds.FileInfo)]);
                 dds_info.verify();
-                extents[i] = dds_info.getExtent();
-                is_cubemaps[i] = dds_info.isCubemap();
-                dst_layouts[i] = .shader_read_only_optimal;
-                bytes[i] = file_bytes[@sizeOf(dds.FileInfo)..];
+                extent.* = dds_info.getExtent();
+                is_cubemap.* = dds_info.isCubemap();
+                dst_layout.* = .shader_read_only_optimal;
+                byte.* = file_bytes[@sizeOf(dds.FileInfo)..];
 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemaps[i]);
+                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemap.*);
             },
             .raw => |raw_info| blk: {
-                extents[i] = raw_info.extent;
-                is_cubemaps[i] = false;
-                dst_layouts[i] = raw_info.layout;
-                bytes[i] = raw_info.bytes;
+                extent.* = raw_info.extent;
+                is_cubemap.* = false;
+                dst_layout.* = raw_info.layout;
+                byte.* = raw_info.bytes;
 
-                break :blk try Image.create(vc, vk_allocator, extents[i], raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemaps[i]);
+                break :blk try Image.create(vc, vk_allocator, extent.*, raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemap.*);
             },
             .f32x3 => blk: {
-                bytes[i] = std.mem.asBytes(&source.f32x3);
-                extents[i] = vk.Extent2D {
+                byte.* = std.mem.asBytes(&source.f32x3);
+                extent.* = vk.Extent2D {
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemaps[i] = false;
-                dst_layouts[i] = .shader_read_only_optimal;
+                is_cubemap.* = false;
+                dst_layout.* = .shader_read_only_optimal;
                 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
+                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
             },
             .f32x2 => blk: {
-                bytes[i] = std.mem.asBytes(&source.f32x2);
-                extents[i] = vk.Extent2D {
+                byte.* = std.mem.asBytes(&source.f32x2);
+                extent.* = vk.Extent2D {
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemaps[i] = false;
-                dst_layouts[i] = .shader_read_only_optimal;
+                is_cubemap.* = false;
+                dst_layout.* = .shader_read_only_optimal;
                 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32_sfloat, false);
+                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32_sfloat, false);
             },
             .f32x1 => blk: {
-                bytes[i] = std.mem.asBytes(&source.f32x1);
-                extents[i] = vk.Extent2D {
+                byte.* = std.mem.asBytes(&source.f32x1);
+                extent.* = vk.Extent2D {
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemaps[i] = false;
-                dst_layouts[i] = .shader_read_only_optimal;
+                is_cubemap.* = false;
+                dst_layout.* = .shader_read_only_optimal;
 
-                break :blk try Image.create(vc, vk_allocator, extents[i], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false);
+                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false);
             },
         };
         data.appendAssumeCapacity(image);

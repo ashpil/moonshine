@@ -149,10 +149,10 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             try utils.setDebugName(vc, handle, debug_name);
 
             comptime var pool_sizes: [bindings.len]vk.DescriptorPoolSize = undefined;
-            comptime for (pool_sizes) |*pool_size, i| {
+            comptime for (&pool_sizes, bindings) |*pool_size, binding| {
                 pool_size.* = .{
-                    .@"type" =  bindings[i].descriptor_type,
-                    .descriptor_count = bindings[i].descriptor_count * max_sets,
+                    .@"type" =  binding.descriptor_type,
+                    .descriptor_count = binding.descriptor_count * max_sets,
                 };
             };
 

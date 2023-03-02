@@ -55,7 +55,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     try commands.startRecording(vc);
 
-    for (objects) |object, i| {
+    for (objects, addresses_buffer_host.data) |object, *addresses_buffer| {
         const position_buffer = blk: {
             const bytes = std.mem.sliceAsBytes(object.positions);
 
@@ -114,7 +114,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         };
         errdefer index_buffer.destroy(vc);
 
-        addresses_buffer_host.data[i] = MeshAddresses {
+        addresses_buffer.* = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
             .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
             .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,

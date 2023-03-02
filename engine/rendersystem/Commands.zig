@@ -163,8 +163,8 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
     const barriers = try allocator.alloc(vk.ImageMemoryBarrier2, images.len);
     defer allocator.free(barriers);
     
-    for (images) |image, i| {
-        barriers[i] = .{
+    for (images, barriers) |image, *barrier| {
+        barrier.* = .{
             .old_layout = src_layout,
             .new_layout = dst_layout,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -212,8 +212,8 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         staging_buffer.destroy(vc);
     };
 
-    for (dst_images) |image, i| {
-        first_barriers[i] = .{
+    for (dst_images, first_barriers, second_barriers, dst_layouts, staging_buffers, sizes, src_datas) |image, *first_barrier, *second_barrier, dst_layout, *staging_buffer, size, src_data| {
+        first_barrier.* = .{
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .@"undefined",
@@ -230,11 +230,11 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
             },
         };
 
-        second_barriers[i] = .{
+        second_barrier.* = .{
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .transfer_dst_optimal,
-            .new_layout = dst_layouts[i],
+            .new_layout = dst_layout,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = image,
@@ -247,8 +247,8 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
             },
         };
 
-        staging_buffers[i] = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, sizes[i]), .{ .transfer_src_bit = true });
-        std.mem.copy(u8, staging_buffers[i].data, src_datas[i]);
+        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, size), .{ .transfer_src_bit = true });
+        std.mem.copy(u8, staging_buffer.data, src_data);
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
@@ -256,7 +256,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         .p_image_memory_barriers = first_barriers.ptr,
     });
 
-    for (dst_images) |image, i| {
+    for (dst_images, extents, staging_buffers, is_cubemaps) |image, extent, staging_buffer, is_cubemap| {
         const copy = vk.BufferImageCopy {
             .buffer_offset = 0,
             .buffer_row_length = 0,
@@ -265,7 +265,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .aspect_mask = .{ .color_bit = true },
                 .mip_level = 0,
                 .base_array_layer = 0,
-                .layer_count = if (is_cubemaps[i]) 6 else 1,
+                .layer_count = if (is_cubemap) 6 else 1,
             },
             .image_offset = .{
                 .x = 0,
@@ -273,12 +273,12 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .z = 0,
             },
             .image_extent = .{
-                .width = extents[i].width,
-                .height = extents[i].height,
+                .width = extent.width,
+                .height = extent.height,
                 .depth = 1,
             },  
         };
-        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffers[i].handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
+        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffer.handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {

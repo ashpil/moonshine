@@ -102,12 +102,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const build_infos = try allocator.alloc([*]vk.AccelerationStructureBuildRangeInfoKHR, mesh_groups.len);
         defer allocator.free(build_infos);
-        defer for (build_infos) |build_info, i| allocator.free(build_info[0..build_geometry_infos[i].geometry_count]);
+        defer for (build_infos, build_geometry_infos) |build_info, build_geometry_info| allocator.free(build_info[0..build_geometry_info.geometry_count]);
 
-        for (mesh_groups) |group, i| {
+        for (mesh_groups, build_infos, build_geometry_infos, scratch_buffers, uncompacted_buffers, uncompacted_blases) |group, *build_info, *build_geometry_info, *scratch_buffer, *uncompacted_buffer, *uncompacted_blas| {
             const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, group.meshes.len);
 
-            build_geometry_infos[i] = vk.AccelerationStructureBuildGeometryInfoKHR {
+            build_geometry_info.* = vk.AccelerationStructureBuildGeometryInfoKHR {
                 .@"type" = .bottom_level_khr,
                 .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
                 .mode = .build_khr,
@@ -122,12 +122,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             const primitive_counts = try allocator.alloc(u32, group.meshes.len);
             defer allocator.free(primitive_counts);
 
-            build_infos[i] = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, group.meshes.len)).ptr;
+            build_info.* = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, group.meshes.len)).ptr;
 
-            for (group.meshes) |mesh_idx, j| {
+            for (group.meshes, geometries, primitive_counts, 0..) |mesh_idx, *geometry, *primitive_count, j| {
                 const mesh = mesh_manager.meshes.get(mesh_idx);
 
-                geometries[j] = vk.AccelerationStructureGeometryKHR {
+                geometry.* = vk.AccelerationStructureGeometryKHR {
                     .geometry_type = .triangles_khr,
                     .flags = .{ .opaque_bit_khr = true },
                     .geometry = .{
@@ -149,35 +149,35 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                     }
                 };
 
-                build_infos[i][j] =  vk.AccelerationStructureBuildRangeInfoKHR {
+                build_info.*[j] =  vk.AccelerationStructureBuildRangeInfoKHR {
                     .primitive_count = @intCast(u32, mesh.index_count),
                     .primitive_offset = 0,
                     .transform_offset = 0,
                     .first_vertex = 0,
                 };
-                primitive_counts[j] = build_infos[i][j].primitive_count;
+                primitive_count.* = build_info.*[j].primitive_count;
             }
 
-            const size_info = getBuildSizesInfo(vc, &build_geometry_infos[i], primitive_counts.ptr);
+            const size_info = getBuildSizesInfo(vc, build_geometry_info, primitive_counts.ptr);
 
-            scratch_buffers[i] = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
-            errdefer scratch_buffers[i].destroy(vc);
-            build_geometry_infos[i].scratch_data.device_address = scratch_buffers[i].getAddress(vc);
+            scratch_buffer.* = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
+            errdefer scratch_buffer.destroy(vc);
+            build_geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
 
-            uncompacted_buffers[i] = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
-            errdefer uncompacted_buffers[i].destroy(vc);
+            uncompacted_buffer.* = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
+            errdefer uncompacted_buffer.destroy(vc);
 
-            build_geometry_infos[i].dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
+            build_geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
                 .create_flags = .{},
-                .buffer = uncompacted_buffers[i].handle,
+                .buffer = uncompacted_buffer.handle,
                 .offset = 0,
                 .size = size_info.acceleration_structure_size,
                 .@"type" = .bottom_level_khr,
                 .device_address = 0,
             }, null);
-            errdefer vc.device.destroyAccelerationStructureKHR(build_geometry_infos[i].dst_acceleration_structure, null);
+            errdefer vc.device.destroyAccelerationStructureKHR(build_geometry_info.dst_acceleration_structure, null);
 
-            uncompacted_blases[i] = build_geometry_infos[i].dst_acceleration_structure;
+            uncompacted_blas.* = build_geometry_info.dst_acceleration_structure;
         }
 
         const compactedSizes = try allocator.alloc(vk.DeviceSize, mesh_groups.len);
@@ -191,7 +191,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const copy_infos = try allocator.alloc(vk.CopyAccelerationStructureInfoKHR, mesh_groups.len);
         defer allocator.free(copy_infos);
 
-        for (compactedSizes) |compactedSize, i| {
+        for (compactedSizes, copy_infos, uncompacted_blases) |compactedSize, *copy_info, uncompacted_blas| {
             const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, compactedSize, .{ .acceleration_structure_storage_bit_khr = true });
             errdefer buffer.destroy(vc);
 
@@ -204,8 +204,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .device_address = 0,
             }, null);
 
-            copy_infos[i] = .{
-                .src = uncompacted_blases[i],
+            copy_info.* = .{
+                .src = uncompacted_blas,
                 .dst = handle,
                 .mode = .compact_khr,
             };
@@ -242,8 +242,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const buffer = try allocator.alloc(u24, instance_count);
         errdefer allocator.free(buffer);
 
-        for (instance_materials) |material_idxs, i| {
-            buffer[i] = geometry_count;
+        for (instance_materials, buffer) |material_idxs, *val| {
+            val.* = geometry_count;
             geometry_count += @intCast(u24, material_idxs.len);
         }
 
@@ -260,8 +260,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer allocator.free(buffer_host);
 
         var flat_idx: u32 = 0;
-        for (instance_materials) |material_idxs, i| {
-            for (material_idxs) |idx, j| {
+        for (instance_materials, 0..) |material_idxs, i| {
+            for (material_idxs, 0..) |idx, j| {
                 buffer_host[flat_idx] = .{
                     .mesh = mesh_groups[instance_mesh_groups[i]].meshes[j],
                     .material = idx,
@@ -277,22 +277,21 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer geometries.destroy(vc);
 
-    for (instances_host.data) |*instance, i| {
-        const custom_index = instance_idx_to_offset[i];
+    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups, instance_idx_to_offset) |*instance, transform, visible, mesh_group, custom_index| {
         instance.* = .{
             .transform = vk.TransformMatrixKHR {
-                .matrix = @bitCast([3][4]f32, instance_transforms[i]),
+                .matrix = @bitCast([3][4]f32, transform),
             },
             .instance_custom_index_and_mask = .{
                 .instance_custom_index = custom_index,
-                .mask = if (instance_visibles[i]) 0xFF else 0x00,
+                .mask = if (visible) 0xFF else 0x00,
             },
             .instance_shader_binding_table_record_offset_and_flags = .{
                 .instance_shader_binding_table_record_offset = 0,
                 .flags = 0,
             },
             .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{ 
-                .acceleration_structure = blas_handles[instance_mesh_groups[i]],
+                .acceleration_structure = blas_handles[mesh_group],
             }),
         };
     }
@@ -357,8 +356,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const inverses = try allocator.alloc(Mat3x4, instance_count);
         defer allocator.free(inverses);
-        for (instance_transforms) |transform, i| {
-            inverses[i] = transform.inverse_affine();
+        for (instance_transforms, inverses) |transform, *inverse| {
+            inverse.* = transform.inverse_affine();
         }
 
         try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(inverses));
@@ -381,15 +380,15 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         var table_data = std.ArrayList(TableData).init(allocator);
         defer table_data.deinit();
 
-        for (instance_sampled_geometry) |sampled_geometry, i| {
+        for (instance_sampled_geometry, 0..) |sampled_geometry, i| {
             const transform = instance_transforms[i];
-            for (sampled_geometry) |sampled, j| {
+            for (sampled_geometry, 0..) |sampled, j| {
                 if (!sampled) continue;
 
                 const mesh_idx = mesh_groups[i].meshes[j];
                 const positions = mesh_manager.meshes.items(.positions)[mesh_idx];
                 const indices = mesh_manager.meshes.items(.indices)[mesh_idx];
-                for (indices) |index, k| {
+                for (indices, 0..) |index, k| {
                     const p0 = transform.mul_point(positions[index.x]);
                     const p1 = transform.mul_point(positions[index.y]);
                     const p2 = transform.mul_point(positions[index.z]);

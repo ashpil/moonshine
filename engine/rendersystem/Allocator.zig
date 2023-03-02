@@ -19,8 +19,8 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     var memory_type_properties = try allocator.alloc(vk.MemoryPropertyFlags, properties.memory_type_count);
     errdefer allocator.free(memory_type_properties);
 
-    for (properties.memory_types[0..properties.memory_type_count]) |memory_type, i| {
-        memory_type_properties[i] = memory_type.property_flags;
+    for (properties.memory_types[0..properties.memory_type_count], memory_type_properties) |memory_type, *memory_type_property| {
+        memory_type_property.* = memory_type.property_flags;
     }
 
     return Self {

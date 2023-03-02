@@ -90,9 +90,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const Addrs = blk: {
         const variants = @typeInfo(AnyMaterial).Union.fields;
         comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
-        inline for (fields) |*field, i| {
+        inline for (&fields, variants) |*field, variant| {
             field.* = .{
-                .name = variants[i].name,
+                .name = variant.name,
                 .type = vk.DeviceAddress,
                 .default_value = null,
                 .is_comptime = false,
@@ -133,11 +133,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const materials_gpu = blk: {
         const materials_tmp = try vk_allocator.createHostBuffer(vc, Material, @intCast(u32, materials.materials.items.len), .{ .transfer_src_bit = true });
         defer materials_tmp.destroy(vc);
-        for (materials.materials.items) |material, i| {
-            materials_tmp.data[i] = material;
-            inline for (@typeInfo(MaterialType).Enum.fields) |field, j| {
-                if (@intToEnum(MaterialType, field.value) == material.type) {
-                    materials_tmp.data[i].addr = @field(addrs, field.name) + material.addr * @sizeOf(@typeInfo(AnyMaterial).Union.fields[j].type);
+        for (materials.materials.items, materials_tmp.data) |material, *data| {
+            data.* = material;
+            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
+                if (@intToEnum(MaterialType, enum_field.value) == material.type) {
+                    data.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
                 }
             }
         }
@@ -210,12 +210,12 @@ pub const MaterialList = struct {
 
     pub fn append(self: *MaterialList, allocator: std.mem.Allocator, material: Material, any_material: AnyMaterial) !void {
         var mat_local = material;
-        inline for (@typeInfo(MaterialType).Enum.fields) |field, j| {
-            if (@intToEnum(MaterialType, field.value) == any_material) {
-                mat_local.type = @intToEnum(MaterialType, field.value);
-                if (@typeInfo(AnyMaterial).Union.fields[j].type != void) {
-                    mat_local.addr = @field(self.variants, field.name).items.len;
-                    try @field(self.variants, field.name).append(allocator, @field(any_material, field.name));
+        inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
+            if (@intToEnum(MaterialType, enum_field.value) == any_material) {
+                mat_local.type = @intToEnum(MaterialType, enum_field.value);
+                if (union_field.type != void) {
+                    mat_local.addr = @field(self.variants, enum_field.name).items.len;
+                    try @field(self.variants, enum_field.name).append(allocator, @field(any_material, enum_field.name));
                 }
             }
         }
