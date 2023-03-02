@@ -127,11 +127,12 @@ struct PathTracingIntegrator : Integrator {
             float3 outgoingDirWs = -ray.Direction;
 
             // select proper shading normal
+            bool frontfacing = dot(attrs.triangleFrame.n, outgoingDirWs) > 0;
             Frame shadingFrame;
-            if (dot(outgoingDirWs, textureFrame.n) > 0) {
+            if ((frontfacing && dot(outgoingDirWs, textureFrame.n) > 0) || (!frontfacing && -dot(outgoingDirWs, textureFrame.n) > 0)) {
                 // prefer texture normal if we can
                 shadingFrame = textureFrame;
-            } else if (dot(outgoingDirWs, attrs.frame.n) > 0) {
+            } else if ((frontfacing && dot(outgoingDirWs, attrs.frame.n) > 0) || (!frontfacing && -dot(outgoingDirWs, attrs.frame.n) > 0)) {
                 // if texture normal not valid, try shading normal
                 shadingFrame = attrs.frame;
             } else {
