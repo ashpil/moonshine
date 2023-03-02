@@ -505,6 +505,11 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         for (gltf.data.nodes.items) |node| {
             if (node.mesh) |model_idx| {
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
+                // workaround for gltf not supporting this interface
+                const sampled_geometry = try allocator.alloc(bool, mesh_groups[model_idx].meshes.len);
+                for (skins[model_idx], sampled_geometry) |material_idx, *sampled_geo| {
+                    sampled_geo.* = std.mem.startsWith(u8, gltf.data.materials.items[material_idx].name, "Emitter");
+                }
                 try instances.append(allocator, .{
                     .transform = Mat3x4.new(
                         F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
@@ -513,7 +518,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     ),
                     .mesh_group = @intCast(u24, model_idx),
                     .materials = skins[model_idx],
-                    .sampled_geometry = if (std.mem.startsWith(u8, gltf.data.materials.items[gltf.data.meshes.items[model_idx].primitives.items[0].material.?].name, "Emitter")) &.{ true } else &.{}, // workaround for gltf not supporting this interface
+                    .sampled_geometry = sampled_geometry,
                 });
             }
         }
@@ -521,6 +526,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         break :blk instances;
     };
     defer instances.deinit(allocator);
+    defer for (instances.items(.sampled_geometry)) |geo| allocator.free(geo);
 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, mesh_groups);
     errdefer accel.destroy(vc, allocator);

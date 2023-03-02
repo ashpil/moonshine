@@ -260,11 +260,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer allocator.free(buffer_host);
 
         var flat_idx: u32 = 0;
-        for (instance_materials, 0..) |material_idxs, i| {
-            for (material_idxs, 0..) |idx, j| {
+        for (instance_mesh_groups, 0..) |instance_mesh_group, i| {
+            for (mesh_groups[instance_mesh_group].meshes, 0..) |mesh_idx, j| {
                 buffer_host[flat_idx] = .{
-                    .mesh = mesh_groups[instance_mesh_groups[i]].meshes[j],
-                    .material = idx,
+                    .mesh = mesh_idx,
+                    .material = instance_materials[i][j],
                     .sampled = if (instance_sampled_geometry[i].len != 0) instance_sampled_geometry[i][j] else false,
                 };
                 flat_idx += 1;
