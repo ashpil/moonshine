@@ -2,7 +2,7 @@
 
 Built with Zig + Vulkan ray tracing.
 
-Latest tested Zig version: `0.11.0-dev.1568+c9b957c93`.
+Latest tested Zig version: `0.11.0-dev.1647+c32171991`.
 
 ### Subprojects
 * offline -- a headless offline renderer

@@ -15,22 +15,19 @@ pub fn build(b: *std.build.Builder) void {
 
     // packages/libraries we'll need below
     const vk = blk: {
-        const vk_xml_path = std.fs.path.join(b.allocator, &[_][]const u8{
-            b.build_root,
+        const vk_xml_path = b.build_root.join(b.allocator, &[_][]const u8{
             "deps/vk.xml",
         }) catch unreachable;
-        break :blk vkgen.VkGenerateStep.create(b, vk_xml_path, "vk.zig").getPackage("vulkan");
+        break :blk vkgen.VkGenerateStep.create(b, vk_xml_path).getModule();
     };
     // const glfw = makeGlfwLibrary(b, target) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target);
-    const zgltf = std.build.Pkg {
-        .name = "zgltf",
-        .source = .{ .path = "deps/zgltf/src/main.zig" },
-    };
-    const zigimg = std.build.Pkg {
-        .name = "zigimg",
-        .source = .{ .path = "deps/zigimg/zigimg.zig" },
-    };
+    const zgltf = b.createModule(.{
+        .source_file = .{ .path = "deps/zgltf/src/main.zig" },
+    });
+    const zigimg = b.createModule(.{
+        .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
+    });
     const default_engine_options = EngineOptions.fromCli(b);
 
     {
@@ -46,8 +43,8 @@ pub fn build(b: *std.build.Builder) void {
             .optimize = optimize,
         });
         engine_tests.install();
-        engine_tests.addPackage(vk);
-        engine_tests.addPackage(engine);
+        engine_tests.addModule("vulkan", vk);
+        engine_tests.addModule("engine", engine);
 
         engine_tests.linkLibC();
         engine_tests.linkLibrary(tinyexr.library);
@@ -106,8 +103,8 @@ pub fn build(b: *std.build.Builder) void {
         });
         offline_exe.install();
 
-        offline_exe.addPackage(vk);
-        offline_exe.addPackage(engine);
+        offline_exe.addModule("vulkan", vk);
+        offline_exe.addModule("engine", engine);
         offline_exe.linkLibC();
         offline_exe.linkLibrary(tinyexr.library);
         offline_exe.addIncludePath(tinyexr.include_path);
@@ -143,7 +140,7 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.Pkg, zigimg: std.build.Pkg, options: EngineOptions) !std.build.Pkg {
+fn makeEnginePackage(b: *std.build.Builder, vk: *std.build.Module, zgltf: *std.build.Module, zigimg: *std.build.Module, options: EngineOptions) !*std.build.Module {
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
         "dxc",
@@ -179,24 +176,31 @@ fn makeEnginePackage(b: *std.build.Builder, vk: std.build.Pkg, zgltf: std.build.
     build_options.addOption(bool, "windowing", options.windowing);
     build_options.addOption(bool, "exr", options.exr);
 
-    const deps_local = [_]std.build.Pkg {
-        vk,
-        zgltf,
-        zigimg,
-        build_options.getPackage("build_options"),
-        hlsl_comp.getPackage("shaders"),
-    };
-
-    const engine_deps = try b.allocator.create([deps_local.len]std.build.Pkg);
-    engine_deps.* = deps_local;
-
-    const engine = std.build.Pkg {
-        .name = "engine",
-        .source = .{ .path = "engine/engine.zig" },
-        .dependencies = engine_deps,
-    };
-
-    return engine;
+    return b.createModule(.{
+        .source_file = .{ .path = "engine/engine.zig" },
+        .dependencies = &[_]std.Build.ModuleDependency {
+            .{
+                .name = "vulkan",
+                .module = vk,
+            },
+            .{
+                .name = "zgltf",
+                .module = zgltf,
+            },
+            .{
+                .name = "zigimg",
+                .module = zigimg,
+            },
+            .{
+                .name = "build_options",
+                .module = build_options.createModule(),
+            },
+            .{
+                .name = "shaders",
+                .module = hlsl_comp.getModule(),
+            },
+        },
+    });
 }
 
 const CLibrary = struct {
