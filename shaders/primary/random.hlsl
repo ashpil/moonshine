@@ -2,25 +2,31 @@
 
 #include "math.hlsl"
 
+uint pcg(uint v) {
+    uint state = v * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
 struct Rng {
     uint state;
 
-    static Rng fromSeed(uint seed) {
+    static Rng fromSeed(uint3 seed) {
         Rng rng;
-        rng.state = seed;
+        rng.state = pcg(seed.x + pcg(seed.y + pcg(seed.z)));
         return rng;
     }
 
     void stepState() {
-        this.state = this.state * 747796405 + 1;
+        state = state * 747796405u + 1u;
     }
 
     float getFloat() {
-        this.stepState();
+        stepState();
 
-        uint word = ((this.state >> ((this.state >> 28) + 4)) ^ this.state) * 277803737;
+        uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         word = (word >> 22) ^ word;
-        return float(word) / 4294967295.0;
+        return float(word) * asfloat(0x2f800004u);
     }
 };
 

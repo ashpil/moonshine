@@ -27,8 +27,7 @@ void raygen() {
 
     for (uint sampleCount = 0; sampleCount < SAMPLES_PER_RUN; sampleCount++) {
         // create rng for this sample
-        float rngSeed = ((pushConsts.sampleCount + sampleCount) * DispatchRaysDimensions().y + DispatchRaysIndex().y) * DispatchRaysDimensions().x + DispatchRaysIndex().x;
-        Rng rng = Rng::fromSeed(rngSeed);
+        Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount + sampleCount, DispatchRaysIndex().x, DispatchRaysIndex().y));
 
         // set up initial directions for first bounce
         RayDesc initialRay = pushConsts.camera.generateRay(dispatchUV(float2(rng.getFloat(), rng.getFloat())), float2(rng.getFloat(), rng.getFloat()));
