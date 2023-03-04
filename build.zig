@@ -20,7 +20,7 @@ pub fn build(b: *std.build.Builder) void {
         }) catch unreachable;
         break :blk vkgen.VkGenerateStep.create(b, vk_xml_path).getModule();
     };
-    // const glfw = makeGlfwLibrary(b, target) catch unreachable;
+    const glfw = makeGlfwLibrary(b, target) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target);
     const zgltf = b.createModule(.{
         .source_file = .{ .path = "deps/zgltf/src/main.zig" },
@@ -57,37 +57,36 @@ pub fn build(b: *std.build.Builder) void {
         test_step.dependOn(&run_test_cmd.step);
     }
 
-    // chess exe
-    // deprecated for now, will need to turn into realtime gltf viewer, then work on modifying state, then actually revive this
-    // {
-    //     var engine_options = default_engine_options;
-    //     engine_options.windowing = true;
-    //     engine_options.exr = true;
-    //     const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
-    //     const rtchess_exe = b.addExecutable(.{
-    //         .name = "rtchess",
-    //         .root_source_file = .{ .path = "rtchess/main.zig" },
-    //         .target = target,
-    //         .optimize = optimize,
-    //     });
-    //     rtchess_exe.install();
+    // online exe
+    {
+        var engine_options = default_engine_options;
+        engine_options.windowing = true;
+        engine_options.exr = true;
+        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
+        const online_exe = b.addExecutable(.{
+            .name = "online",
+            .root_source_file = .{ .path = "online/main.zig" },
+            .target = target,
+            .optimize = optimize,
+        });
+        online_exe.install();
 
-    //     rtchess_exe.addPackage(vk);
-    //     rtchess_exe.addPackage(engine);
-    //     rtchess_exe.linkLibrary(glfw.library);
-    //     rtchess_exe.addIncludePath(glfw.include_path);
-    //     rtchess_exe.linkLibC();
-    //     rtchess_exe.linkLibrary(tinyexr.library);
-    //     rtchess_exe.addIncludePath(tinyexr.include_path);
+        online_exe.addModule("vulkan", vk);
+        online_exe.addModule("engine", engine);
+        online_exe.linkLibrary(glfw.library);
+        online_exe.addIncludePath(glfw.include_path);
+        online_exe.linkLibC();
+        online_exe.linkLibrary(tinyexr.library);
+        online_exe.addIncludePath(tinyexr.include_path);
 
-    //     const run_chess = rtchess_exe.run();
-    //     run_chess.step.dependOn(b.getInstallStep());
-    //     if (b.args) |args| {
-    //         run_chess.addArgs(args);
-    //     }
+        const run_online = online_exe.run();
+        run_online.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_online.addArgs(args);
+        }
 
-    //     b.step("run-chess", "Run chess").dependOn(&run_chess.step);
-    // }
+        b.step("run-online", "Run online").dependOn(&run_online.step);
+    }
 
     // offline exe
     {
@@ -446,14 +445,10 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
 
     const protocol_path = std.mem.trimRight(u8, pkg_config_protocols_result.stdout, " \n");
 
-    const cache_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        b.build_root,
-        b.cache_root,
-    });
-    const header_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        cache_path,
-        "wayland-gen-headers",
-    });
+    const header_path = try b.cache_root.join(
+        b.allocator,
+        &.{"wayland-gen-headers"},
+    );
 
     if (std.fs.makeDirAbsolute(header_path)) |_| {
     } else |err| switch (err) {

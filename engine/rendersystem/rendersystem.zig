@@ -5,7 +5,6 @@ pub const Camera = @import("Camera.zig");
 pub const Commands = @import("Commands.zig");
 pub const descriptor = @import("descriptor.zig");
 pub const DestructionQueue = @import("DestructionQueue.zig");
-pub const Engine = @import("Engine.zig");
 pub const ImageManager = @import("ImageManager.zig");
 pub const MeshManager = @import("MeshManager.zig");
 pub const Film = @import("Film.zig");

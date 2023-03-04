@@ -6,7 +6,7 @@ Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
 
 ### Subprojects
 * offline -- a headless offline renderer
-* rtchess -- intended to be a ray traced chess game, sort of in disrepair at the moment
+* online -- a real-time windowed renderer, interactive features WIP
 
 ### Build dependencies:
 * `zig`
