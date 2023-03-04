@@ -22,6 +22,44 @@ pub const CreateInfo = struct {
     aspect: f32, // width / height
     aperture: f32,
     focus_distance: f32,
+
+    pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8) !CreateInfo {
+        var gltf = Gltf.init(allocator);
+        defer gltf.deinit();
+
+        const buffer = try std.fs.cwd().readFileAlloc(
+            allocator,
+            path,
+            std.math.maxInt(usize),
+        );
+        defer allocator.free(buffer);
+        try gltf.parse(buffer);
+
+        // just use first camera found in nodes
+        const gltf_camera_node = for (gltf.data.nodes.items) |node| {
+            if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
+        } else return error.NoCameraInGlb;
+        
+        const gltf_camera = gltf_camera_node[0];
+        const transform = blk: {
+            const mat = Gltf.getGlobalTransform(&gltf.data, gltf_camera_node[1]);
+            break :blk Mat3x4.new(
+                F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+                F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+                F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+            );
+        };
+
+        return CreateInfo {
+            .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
+            .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
+            .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
+            .vfov = gltf_camera.type.perspective.yfov,
+            .aspect = gltf_camera.type.perspective.aspect_ratio,
+            .aperture = 0.0,
+            .focus_distance = 1.0,
+        };
+    }
 };
 
 pub const Properties = struct {
@@ -71,42 +109,4 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.film.destroy(vc, allocator);
-}
-
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D, path: []const u8) !Self {
-    var gltf = Gltf.init(allocator);
-    defer gltf.deinit();
-
-    const buffer = try std.fs.cwd().readFileAlloc(
-        allocator,
-        path,
-        std.math.maxInt(usize),
-    );
-    defer allocator.free(buffer);
-    try gltf.parse(buffer);
-
-    // just use first camera found in nodes
-    const gltf_camera_node = for (gltf.data.nodes.items) |node| {
-        if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
-    } else return error.NoCameraInGlb;
-    
-    const gltf_camera = gltf_camera_node[0];
-    const transform = blk: {
-        const mat = Gltf.getGlobalTransform(&gltf.data, gltf_camera_node[1]);
-        break :blk Mat3x4.new(
-            F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-            F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-            F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-        );
-    };
-
-    return Self.create(vc, vk_allocator, allocator, descriptor_layout, extent, .{
-        .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
-        .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
-        .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
-        .vfov = gltf_camera.type.perspective.yfov,
-        .aspect = gltf_camera.type.perspective.aspect_ratio,
-        .aperture = 0.0,
-        .focus_distance = 1.0,
-    });
 }

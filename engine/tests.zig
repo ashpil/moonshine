@@ -60,7 +60,7 @@ const TestingContext = struct {
         var commands = try Commands.create(&vc);
         errdefer commands.destroy(&vc);
 
-        var camera = try Camera.fromGlb(&vc, &vk_allocator, allocator, &film_descriptor_layout, extent, in_filepath);
+        var camera = try Camera.create(&vc, &vk_allocator, allocator, &film_descriptor_layout, extent, try Camera.CreateInfo.fromGlb(allocator, in_filepath));
         errdefer camera.destroy(&vc, allocator);
 
         var world = try World.fromGlb(&vc, &vk_allocator, allocator, &commands, &world_descriptor_layout, in_filepath);

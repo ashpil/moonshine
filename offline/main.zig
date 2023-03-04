@@ -113,13 +113,13 @@ pub fn main() !void {
         .samples_per_run = 1,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
-        .mesh_samples_per_bounce = 1,
+        .mesh_samples_per_bounce = 0,
     }});
     defer pipeline.destroy(&context);
 
     try logger.log("set up initial state");
 
-    var camera = try Camera.fromGlb(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, config.in_filepath);
+    var camera = try Camera.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, try Camera.CreateInfo.fromGlb(allocator, config.in_filepath));
     defer camera.destroy(&context, allocator);
 
     var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
