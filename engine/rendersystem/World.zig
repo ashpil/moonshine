@@ -120,10 +120,13 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         break :blk material;
     };
 
-
-
     var standard_pbr: MaterialManager.StandardPBR = undefined;
-    standard_pbr.ior = 1.5;
+    standard_pbr.ior = gltf_material.ior;
+
+    if (gltf_material.transmission_factor == 1.0) {
+        return .{ material, .{ .glass = .{ .ior = standard_pbr.ior } } };
+    }
+
     standard_pbr.color = @intCast(u32, textures.items.len);
     if (gltf_material.metallic_roughness.base_color_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
