@@ -17,9 +17,6 @@ Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
 
 ### // TODO
 * Feature
-  * Interactive viewer
-  * Proper generic material system
-    * How to do this on GPU???
   * Bloom
   * Tonemapping
   * HDR display
@@ -58,14 +55,12 @@ Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
   * Make sure we have all necessary `errdefer`s
   * Proper memory allocation interface
   * Reduce unnecessary copying
-  * Build alias table or alternative on GPU?
-
 
 ### Current jankiness
 * Asset system
   * Currently, one can either construct a scene manually with code or very inefficiently import glb
   * Ideal would be to have custom scene description format that can be quickly deserialzed
-    * Some standalone utility that can convert glb/other formats to this format, as well as an exportt addon for Blender, so other formats don't need to be supported in engine directly
+    * An Blender export addon for this format, so other formats don't need to be supported in engine directly
     * I think this custom format would make destinctions between scene stuff and staging stuff. It would only contain actual information about the world, but not stuff like camera position, that would be separate
 * Light system
   * Currently, only support skybox and mesh lights, which I think makes sense
