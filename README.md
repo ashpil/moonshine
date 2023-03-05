@@ -1,5 +1,7 @@
 # Moonshine - a general purpose ray traced renderer
 
+![A scene rendered with moonshine](https://repository-images.githubusercontent.com/378788480/b9ad3836-4558-43f6-82ed-6668d99399b4)
+
 Built with Zig + Vulkan ray tracing.
 
 Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
