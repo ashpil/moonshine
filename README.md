@@ -2,15 +2,26 @@
 
 # Moonshine
 
-**A general purpose ray traced renderer built with Zig + Vulkan**
+**A general purpose GPU ray traced renderer built with Zig + Vulkan**
 </div>
 
 [![A bathroom scene rendered with moonshine](https://repository-images.githubusercontent.com/378788480/b9ad3836-4558-43f6-82ed-6668d99399b4)](https://blendswap.com/blend/12584)
 *Salle de bain by nacimus, rendered with Moonshine*
 
-### Subprojects
-* offline -- a headless offline renderer
-* online -- a real-time windowed renderer, interactive features WIP
+### Features
+* Binaries
+    * offline -- a headless offline renderer
+    * online -- a real-time windowed renderer, interactive features WIP
+* Light Transport
+    * Global Illumination
+    * Direct light sampling with multiple importance sampling for all lights and materials
+* Lights
+    * 360° environment maps
+    * Emissive meshes 
+* Materials
+    * Standard PBR with metallic + roughness
+    * Mirror
+    * Glass
 
 ### Build dependencies:
 * zig `0.11.0-dev.1824+a7a709aaa`
@@ -21,6 +32,7 @@
 
 ### Runtime dependencies:
 * A GPU supporting Vulkan ray tracing
+
 
 ### // TODO
 * Feature
