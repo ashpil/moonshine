@@ -1,4 +1,4 @@
-# My general purpose ray traced renderer
+# Moonshine - a general purpose ray traced renderer
 
 Built with Zig + Vulkan ray tracing.
 
@@ -80,10 +80,14 @@ Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
 * `+y` is up
 * phi is azimuthal angle (0-2pi) and theta is polar angle (0-pi)
 
-## Some light reading
+### Some light reading
 - [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
 - [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
 - [Multiple importance sampling](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)
 - [Microfacets](https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/)
 - [Actual materials](https://github.com/wdas/brdf) - ton of BRDF examples, in **CODE**!
 - [Better sky](https://sebh.github.io/publications/egsr2020.pdf)
+
+### License
+
+This project is licensed under the AGPL.
