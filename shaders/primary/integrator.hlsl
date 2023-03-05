@@ -145,7 +145,10 @@ struct PathTracingIntegrator : Integrator {
             // collect light from emissive meshes
             if (mesh_samples_per_bounce == 0 || bounceCount == 0 || !geometry.sampled || isLastMaterialDelta) {
                 // add emissive light at point if light not explicitly sampled or initial bounce
-                accumulatedColor += throughput * emissiveLight;
+                if (dot(outgoingDirWs, attrs.triangleFrame.n) > 0.0) {
+                    // lights only emit from front face
+                    accumulatedColor += throughput * emissiveLight;
+                }
             } else if (geometry.sampled) {
                 // MIS emissive light if it is sampled at later bounces
                 float lightPdf;
@@ -153,7 +156,12 @@ struct PathTracingIntegrator : Integrator {
                     float3 samplePositionToEmitterPositionWs = attrs.position - ray.Origin;
                     float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
                     float sum = dEmitterAliasTable[0].select;
-                    lightPdf = r2 / (abs(Frame::cosTheta(outgoingDirSs)) * sum);
+                    float lightCos = dot(outgoingDirWs, attrs.triangleFrame.n);
+                    if (lightCos > 0.0) {
+                        lightPdf = r2 / (lightCos * sum);
+                    } else {
+                        lightPdf = 0.0;
+                    }
                 }
 
                 if (lightPdf > 0.0) {

@@ -124,7 +124,11 @@ struct MeshLights : Light {
         float r = sqrt(r2);
         lightSample.radiance = emissive;
         lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-        lightSample.pdf = r2 / (abs(dot(-lightSample.dirWs, attrs.frame.n)) * sum);
+
+        float lightCos = dot(-lightSample.dirWs, attrs.triangleFrame.n);
+        if (lightCos > 0) {
+            lightSample.pdf = r2 / (lightCos * sum);
+        }
 
         // compute precise ray endpoints
         float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.triangleFrame.n);
@@ -157,7 +161,12 @@ struct MeshLights : Light {
             float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float sum = dEmitterAliasTable[0].select;
-            l.pdf = r2 / (abs(dot(-dirWs, attrs.frame.n)) * sum);
+            float lightCos = dot(-dirWs, attrs.triangleFrame.n);
+            if (lightCos > 0) {
+                l.pdf = r2 / (lightCos * sum);
+            } else {
+                l.pdf = 0.0;
+            }
             l.radiance = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
         } else {
             // geometry not sampled, pdf is zero

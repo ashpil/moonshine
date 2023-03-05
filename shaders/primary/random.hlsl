@@ -47,7 +47,7 @@ template <class Data, class Entry>
 Data sampleAlias(StructuredBuffer<Entry> entries, uint entryCount, uint offset, inout float rand, out uint idx) {
     float scaled = rand * entryCount;
     idx = uint(scaled);
-    rand = scaled - float(idx);
+    rand = frac(scaled);
     
     Entry e = entries[offset + idx];
     if (!coinFlipRemap(e.select, rand)) {
