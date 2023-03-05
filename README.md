@@ -1,21 +1,26 @@
-# Moonshine - a general purpose ray traced renderer
+<div align="center">
 
-![A scene rendered with moonshine](https://repository-images.githubusercontent.com/378788480/b9ad3836-4558-43f6-82ed-6668d99399b4)
+# Moonshine
 
-Built with Zig + Vulkan ray tracing.
+**A general purpose ray traced renderer built with Zig + Vulkan**
+</div>
 
-Latest tested Zig version: `0.11.0-dev.1824+a7a709aaa`.
+[![A bathroom scene rendered with moonshine](https://repository-images.githubusercontent.com/378788480/b9ad3836-4558-43f6-82ed-6668d99399b4)](https://blendswap.com/blend/12584)
+*Salle de bain by nacimus, rendered with Moonshine*
 
 ### Subprojects
 * offline -- a headless offline renderer
 * online -- a real-time windowed renderer, interactive features WIP
 
 ### Build dependencies:
-* `zig`
-* `dxc`
+* zig `0.11.0-dev.1824+a7a709aaa`
+* DirectXShaderCompiler
 * For Linux (Ubuntu, similar on others):
     * For Wayland: `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
     * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
+
+### Runtime dependencies:
+* A GPU supporting Vulkan ray tracing
 
 ### // TODO
 * Feature
