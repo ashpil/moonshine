@@ -113,7 +113,7 @@ pub fn main() !void {
         .samples_per_run = 1,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
-        .mesh_samples_per_bounce = 0,
+        .mesh_samples_per_bounce = 1,
     }});
     defer pipeline.destroy(&context);
 
