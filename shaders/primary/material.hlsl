@@ -21,16 +21,9 @@ struct GGX : MicrofacetDistribution {
     // GGX NDF
     // m must be in frame space
     float D(float3 m) {
-        float cos_theta_m = Frame::cosTheta(m);
-        if (cos_theta_m > 0.0) {
-            float α2 = pow(α, 2);
-            float cos_theta_m_squared = pow(cos_theta_m, 2);
-            float tan_theta_m_squared = (1.0 - cos_theta_m_squared) / cos_theta_m_squared;
-            float denominator = PI * pow(cos_theta_m_squared, 2) * pow(α2 + tan_theta_m_squared, 2);
-            return α2 / denominator;
-        } else {
-            return 0.0;
-        }
+        float α2 = pow(α, 2);
+        float denom = PI * pow(pow(Frame::cosTheta(m), 2) * (α2 - 1) + 1, 2);
+        return α2 / denom;
     }
 
     // G_1 for GGX
@@ -93,11 +86,10 @@ namespace Fresnel {
         return lerp(schlickWeight(cosTheta), 1, R0);
     }
 
-    // schlick approximation + tinting
-    float3 tintedSchlick(float cosTheta, float ηi, float ηt, float3 tint, float factor) {
-        float R0 = schlickR0(ηi, ηt);
-        float3 mixed = lerp(R0, tint, factor);
-        return schlick(cosTheta, mixed);
+    // lerp between layer1 and layer2 based on schlick fresnel
+    float3 fresnelLerp(float cosTheta, float ηi, float ηt, float3 layer1, float3 layer2) {
+        float f = schlick(cosTheta, schlickR0(ηi, ηt));
+        return lerp(layer1, layer2, f);
     }
 
     // boundary of two dielectric surfaces
@@ -201,7 +193,8 @@ struct StandardPBR : Material {
         StandardPBR material;
         material.color = dMaterialTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
         material.metalness = dMaterialTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        material.distr = GGX::create(max(dMaterialTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r, 0.004));
+        float roughness = dMaterialTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        material.distr = GGX::create(max(pow(roughness, 2), 0.001));
         material.ior = ior;
         return material;
     }
@@ -222,45 +215,54 @@ struct StandardPBR : Material {
         return sample;
     }
 
-    float3 microfacetEval(float3 w_i, float3 w_o) {
-        float3 h = normalize(w_i + w_o);
-        float3 F = Fresnel::tintedSchlick(dot(w_i, h), AIR_IOR, ior, color, metalness);
-        float G = distr.G(w_i, w_o, h);
-        float D = distr.D(h);
-        return (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
-    }
-
     MaterialSample sample(float3 w_o, float2 square) {
-        MaterialSample sample;
-        Lambert lambert = Lambert::create(color);
-        if (coinFlipRemap(this.metalness, square.x)) {
-            MaterialSample microSample = microfacetSample(w_o, square);
-            float pdf2 = lambert.pdf(microSample.dirFs, w_o);
+        float specularWeight = 1;
+        float diffuseWeight = 1 - metalness;
+        float pSpecularSample = specularWeight / (specularWeight + diffuseWeight);
 
-            sample.pdf = lerp(pdf2, microSample.pdf, this.metalness);
+        MaterialSample sample;
+        Lambert diffuse = Lambert::create(color);
+        if (coinFlipRemap(pSpecularSample, square.x)) {
+            MaterialSample microSample = microfacetSample(w_o, square);
+            float pdf2 = diffuse.pdf(microSample.dirFs, w_o);
+
+            sample.pdf = lerp(pdf2, microSample.pdf, pSpecularSample);
             sample.dirFs = microSample.dirFs;
         } else {
-            MaterialSample lambertSample = lambert.sample(w_o, square);
-            float pdf2 = microfacetPdf(lambertSample.dirFs, w_o);
+            MaterialSample diffuseSample = diffuse.sample(w_o, square);
+            float pdf2 = microfacetPdf(diffuseSample.dirFs, w_o);
 
-            sample.pdf = lerp(lambertSample.pdf, pdf2, this.metalness);
-            sample.dirFs = lambertSample.dirFs;
+            sample.pdf = lerp(diffuseSample.pdf, pdf2, pSpecularSample);
+            sample.dirFs = diffuseSample.dirFs;
         }
         return sample;
     }
 
     float pdf(float3 w_i, float3 w_o) {
+        float specularWeight = 1;
+        float diffuseWeight = 1 - metalness;
+        float pSpecularSample = specularWeight / (specularWeight + diffuseWeight);
+
         float lambert_pdf = Lambert::create(color).pdf(w_i, w_o);
         float micro_pdf = microfacetPdf(w_i, w_o);
 
-        return lerp(lambert_pdf, micro_pdf, this.metalness);
+        return lerp(lambert_pdf, micro_pdf, pSpecularSample);
     }
 
     float3 eval(float3 w_i, float3 w_o) {
-        float3 microfacet = microfacetEval(w_i, w_o);
-        float3 lambertian = Lambert::create(color).eval(w_i, w_o);
+        float3 h = normalize(w_i + w_o);
 
-        return lerp(lambertian, microfacet, this.metalness);
+        float3 fDielectric = Fresnel::dielectric(dot(w_i, h), AIR_IOR, ior);
+        float3 fMetallic = Fresnel::schlick(dot(w_i, h), color);
+
+        float3 F = lerp(fDielectric, fMetallic, metalness);
+        float G = distr.G(w_i, w_o, h);
+        float D = distr.D(h);
+        float3 specular = (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
+
+        float3 diffuse = Lambert::create(color).eval(w_i, w_o);
+
+        return specular + (1.0 - metalness) * diffuse;
     }
 
     static bool isDelta() {
@@ -268,7 +270,6 @@ struct StandardPBR : Material {
     }
 };
 
-// TODO: transmission
 struct DisneyDiffuse : Material {
     float3 color;
     float roughness;
