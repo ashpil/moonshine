@@ -16,7 +16,7 @@ const Mat3x4 = vector.Mat3x4(f32);
 
 pub const CreateInfo = struct {
     origin: F32x3,
-    target: F32x3,
+    forward: F32x3,
     up: F32x3,
     vfov: f32, // radians
     aspect: f32, // width / height
@@ -52,7 +52,7 @@ pub const CreateInfo = struct {
 
         return CreateInfo {
             .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
-            .target = transform.mul_point(F32x3.new(0.0, 0.0, -1.0)),
+            .forward = transform.mul_vec(F32x3.new(0.0, 0.0, -1.0)).unit(),
             .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
             .vfov = gltf_camera.type.perspective.yfov,
             .aspect = gltf_camera.type.perspective.aspect_ratio,
@@ -76,7 +76,7 @@ pub const Properties = struct {
         const viewport_height = 2.0 * h * create_info.focus_distance;
         const viewport_width = create_info.aspect * viewport_height;
 
-        const w = create_info.origin.sub(create_info.target).unit();
+        const w = create_info.forward.mul_scalar(-1);
         const u = create_info.up.cross(w).unit();
         const v = w.cross(u);
 

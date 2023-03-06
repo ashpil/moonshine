@@ -107,7 +107,7 @@ pub fn main() !void {
 
     var window_data = WindowData {
         .camera = &camera,
-        .camera_create_info = camera_create_info,
+        .camera_info = camera_create_info,
     };
 
     window.setAspectRatio(config.extent.width, config.extent.height);
@@ -274,25 +274,31 @@ pub fn main() !void {
 
 const WindowData = struct {
     camera: *Camera,
-    camera_create_info: Camera.CreateInfo,
+    camera_info: Camera.CreateInfo,
 };
 
-// TODO: camera movement
 fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
     const ptr = window.getUserPointer().?;
     const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
-    if (action == .repeat or action == .press) {
-        if (key == 70 and window_data.camera_create_info.aperture > 0.0) {
-            window_data.camera_create_info.aperture -= 0.0005;
-        } else if (key == 82) {
-            window_data.camera_create_info.aperture += 0.0005;
-        } else if (key == 81) {
-            window_data.camera_create_info.focus_distance -= 0.01;
-        } else if (key == 69) {
-            window_data.camera_create_info.focus_distance += 0.01;
-        } else return;
 
-        window_data.camera.properties = Camera.Properties.new(window_data.camera_create_info);
+    if (action == .repeat or action == .press) {
+        var camera_info = window_data.camera_info;
+        const side = camera_info.forward.cross(camera_info.up).unit();
+
+        switch (key) {
+            'W' => camera_info.origin = camera_info.origin.add(camera_info.forward.mul_scalar(0.1)),
+            'S' => camera_info.origin = camera_info.origin.sub(camera_info.forward.mul_scalar(0.1)),
+            'D' => camera_info.origin = camera_info.origin.add(side.mul_scalar(0.1)),
+            'A' => camera_info.origin = camera_info.origin.sub(side.mul_scalar(0.1)),
+            'F' => if (camera_info.aperture > 0.0) { camera_info.aperture -= 0.005; },
+            'R' => camera_info.aperture += 0.005,
+            'Q' => camera_info.focus_distance -= 0.01,
+            'E' => camera_info.focus_distance += 0.01,
+            else => return,
+        }
+
+        window_data.camera_info = camera_info;
+        window_data.camera.properties = Camera.Properties.new(camera_info);
         window_data.camera.film.clear();
     }
 }
