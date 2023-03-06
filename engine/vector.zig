@@ -332,7 +332,7 @@ pub fn Mat4(comptime T: type) type {
             var res = self.x.mul_scalar(v.x);
             res = self.y.mul_scalar(v.y).add(res);
             res = self.z.mul_scalar(v.z).add(res);
-            return res;
+            return Vec3T.new(res.x, res.y, res.z);
         }
 
         pub fn lookAt(eye: Vec3T, target: Vec3T, up: Vec3T) Self {

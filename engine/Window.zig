@@ -114,29 +114,37 @@ pub const MouseButton = enum(c_int) {
     _,
 };
 
-pub fn setMouseButtonCallback(self: *const Self, comptime callback: fn (*const Self, MouseButton, Action) void) void {
+pub const ModifierKeys = packed struct(c_int) {
+    shift: bool,
+    control: bool,
+    alt: bool,
+    super: bool,
+    caps_lock: bool,
+    num_lock: bool,
+    _unused: u26,
+};
+
+pub fn setMouseButtonCallback(self: *const Self, comptime callback: fn (*const Self, MouseButton, Action, ModifierKeys) void) void {
     const Callback = struct {
         fn mouseButtonCallback(handle: ?*c.GLFWwindow, button: c_int, action: c_int, mods: c_int) callconv(.C) void {
-            _ = mods;
             const window = Self {
                 .handle = handle.?,
             };
-            callback(&window, @intToEnum(MouseButton, button), @intToEnum(Action, action));
+            callback(&window, @intToEnum(MouseButton, button), @intToEnum(Action, action), @bitCast(ModifierKeys, mods));
         }
     };
     _ = c.glfwSetMouseButtonCallback(self.handle, Callback.mouseButtonCallback);
 }
 
-pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action) void) void {
+pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, ModifierKeys) void) void {
     const Callback = struct {
         fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
             _ = scancode;
-            _ = mods;
             
             const window = Self {
                 .handle = handle.?,
             };
-            callback(&window, @intCast(u32, key), @intToEnum(Action, action));
+            callback(&window, @intCast(u32, key), @intToEnum(Action, action), @bitCast(ModifierKeys, mods));
         }
     };
     _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);

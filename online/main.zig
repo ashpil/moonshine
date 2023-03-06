@@ -277,7 +277,8 @@ const WindowData = struct {
     camera_info: Camera.CreateInfo,
 };
 
-fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
+fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Window.ModifierKeys) void {
+
     const ptr = window.getUserPointer().?;
     const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
 
@@ -286,10 +287,26 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action) void {
         const side = camera_info.forward.cross(camera_info.up).unit();
 
         switch (key) {
-            'W' => camera_info.origin = camera_info.origin.add(camera_info.forward.mul_scalar(0.1)),
-            'S' => camera_info.origin = camera_info.origin.sub(camera_info.forward.mul_scalar(0.1)),
-            'D' => camera_info.origin = camera_info.origin.add(side.mul_scalar(0.1)),
-            'A' => camera_info.origin = camera_info.origin.sub(side.mul_scalar(0.1)),
+            'W' => if (mods.shift) {
+                camera_info.forward = Mat4.fromAxisAngle(side, 0.01).mul_vec(camera_info.forward).unit();
+            } else {
+                camera_info.origin = camera_info.origin.add(camera_info.forward.mul_scalar(0.1));
+            },
+            'S' => if (mods.shift) {
+                camera_info.forward = Mat4.fromAxisAngle(side, -0.01).mul_vec(camera_info.forward).unit();
+            } else {
+                camera_info.origin = camera_info.origin.sub(camera_info.forward.mul_scalar(0.1));
+            },
+            'D' => if (mods.shift) {
+                camera_info.forward = Mat4.fromAxisAngle(camera_info.up, -0.01).mul_vec(camera_info.forward).unit();
+            } else {
+                camera_info.origin = camera_info.origin.add(side.mul_scalar(0.1));
+            },
+            'A' => if (mods.shift) {
+                camera_info.forward = Mat4.fromAxisAngle(camera_info.up, 0.01).mul_vec(camera_info.forward).unit();
+            } else {
+                camera_info.origin = camera_info.origin.sub(side.mul_scalar(0.1));
+            },
             'F' => if (camera_info.aperture > 0.0) { camera_info.aperture -= 0.005; },
             'R' => camera_info.aperture += 0.005,
             'Q' => camera_info.focus_distance -= 0.01,
