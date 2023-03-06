@@ -156,11 +156,10 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     const images = data_slice.items(.handle);
     const memories = data_slice.items(.memory);
 
-    var i: u32 = 0;
-    while (i < self.data.len) : (i += 1) {
-        vc.device.destroyImageView(views[i], null);
-        vc.device.destroyImage(images[i], null);
-        vc.device.freeMemory(memories[i], null);
+    for (views, images, memories) |view, image, memory| {
+        vc.device.destroyImageView(view, null);
+        vc.device.destroyImage(image, null);
+        vc.device.freeMemory(memory, null);
     }
     self.data.deinit(allocator);
 }

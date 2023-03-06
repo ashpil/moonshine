@@ -564,8 +564,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     const blases_handles = blases_slice.items(.handle);
     const blases_buffers = blases_slice.items(.buffer);
 
-    var i: u32 = 0;
-    while (i < self.blases.len) : (i += 1) {
+    for (0..self.blases.len) |i| {
         vc.device.destroyAccelerationStructureKHR(blases_handles[i], null);
         blases_buffers[i].destroy(vc);
     }

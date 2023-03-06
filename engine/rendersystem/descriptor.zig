@@ -180,9 +180,8 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             }, @ptrCast([*]vk.DescriptorSet, &descriptor_set));
 
             var descriptor_writes = writes;
-            comptime var k = 0;
-            inline while (k < bindings.len) : (k += 1) {
-                descriptor_writes[k].dst_set = descriptor_set;
+            inline for (&descriptor_writes) |*descriptor_write| {
+                descriptor_write.dst_set = descriptor_set;
             }
 
             vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);

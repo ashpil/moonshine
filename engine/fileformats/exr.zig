@@ -116,15 +116,12 @@ pub const helpers = struct {
 
         try image_channels.ensureUnusedCapacity(allocator, pixel_count);
 
-        {
-            var i: usize = 0;
-            while (i < pixel_count) : (i += 1) {
-                image_channels.appendAssumeCapacity(.{
-                    .r = packed_channels[packed_channel_count * i + 0],
-                    .g = packed_channels[packed_channel_count * i + 1],
-                    .b = packed_channels[packed_channel_count * i + 2],
-                });
-            }
+        for (0..pixel_count) |i| {
+            image_channels.appendAssumeCapacity(.{
+                .r = packed_channels[packed_channel_count * i + 0],
+                .g = packed_channels[packed_channel_count * i + 1],
+                .b = packed_channels[packed_channel_count * i + 2],
+            });
         }
 
         const image_channels_slice = image_channels.slice();
@@ -158,12 +155,9 @@ pub const helpers = struct {
         header.pixel_types = pixel_types.ptr;
         header.requested_pixel_types = requested_pixel_types.ptr;
 
-        {
-            comptime var i: usize = 0;
-            inline while (i < channel_count) : (i += 1) {
-                header.pixel_types[i] = @enumToInt(PixelType.float);
-                header.requested_pixel_types[i] = @enumToInt(PixelType.float);
-            }
+        inline for (0..channel_count) |i| {
+            header.pixel_types[i] = @enumToInt(PixelType.float);
+            header.requested_pixel_types[i] = @enumToInt(PixelType.float);
         }
 
         try saveExrImageToFile(&image, &header, out_filename);

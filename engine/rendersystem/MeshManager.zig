@@ -158,14 +158,13 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     const positions = slice.items(.positions);
     const indices = slice.items(.indices);
 
-    var i: u32 = 0;
-    while (i < slice.len) : (i += 1) {
-        position_buffers[i].destroy(vc);
-        if (texcoord_buffers[i]) |buffer| buffer.destroy(vc);
-        if (normal_buffers[i]) |buffer| buffer.destroy(vc);
-        index_buffers[i].destroy(vc);
-        allocator.free(positions[i]);
-        allocator.free(indices[i]);
+    for (position_buffers, texcoord_buffers, normal_buffers, index_buffers, positions, indices) |position_buffer, texcoord_buffer, normal_buffer, index_buffer, position, index| {
+        position_buffer.destroy(vc);
+        if (texcoord_buffer) |buffer| buffer.destroy(vc);
+        if (normal_buffer) |buffer| buffer.destroy(vc);
+        index_buffer.destroy(vc);
+        allocator.free(position);
+        allocator.free(index);
     }
     self.meshes.deinit(allocator);
 

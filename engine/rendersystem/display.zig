@@ -31,9 +31,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
             errdefer swapchain.destroy(vc);
 
             var frames: [num_frames]Frame = undefined;
-            comptime var i = 0;
-            inline while (i < num_frames) : (i += 1) {
-                frames[i] = try Frame.create(vc);
+            for (&frames) |*frame| {
+                frame.* = try Frame.create(vc);
             }
 
             return Self {
@@ -47,9 +46,8 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
             self.swapchain.destroy(vc);
-            comptime var i = 0;
-            inline while (i < num_frames) : (i += 1) {
-                self.frames[i].destroy(vc);
+            inline for (&self.frames) |*frame| {
+                frame.destroy(vc);
             }
             self.destruction_queue.destroy(vc, allocator);
         }

@@ -65,8 +65,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const flat_entries = try allocator.alloc(AliasTable.TableEntry, color.extent.height * color.extent.width);
         defer allocator.free(flat_entries);
 
-        var row_idx: u32 = 0;
-        while (row_idx < color.extent.height) : (row_idx += 1) {
+        for (0..color.extent.height) |row_idx| {
             const row = luminance[row_idx * color.extent.width..(row_idx + 1) * color.extent.width];
             const table = try AliasTable.create(allocator, row);
             defer allocator.free(table.entries);

@@ -118,15 +118,12 @@ pub fn createOwnedDeviceBuffer(self: *Self, vc: *const VulkanContext, size: vk.D
     };
 }
 
-pub fn findMemoryType(self: *const Self, type_filter: u32, properties: vk.MemoryPropertyFlags) !u32 {
-    var i: u5 = 0;
-    while (i < self.memory_type_properties.len) : (i += 1) {
-        if (type_filter & (@as(u32, 1) << i) != 0 and self.memory_type_properties[i].contains(properties)) {
-            return i;
+pub fn findMemoryType(self: *const Self, type_filter: u32, properties: vk.MemoryPropertyFlags) !u5 {
+    return for (0..self.memory_type_properties.len) |i| {
+        if (type_filter & (@as(u32, 1) << @intCast(u5, i)) != 0 and self.memory_type_properties[i].contains(properties)) {
+            break @intCast(u5, i);
         }
-    }
-
-    return error.UnavailbleMemoryType;
+    } else error.UnavailbleMemoryType;
 }
 
 pub fn HostBuffer(comptime T: type) type {

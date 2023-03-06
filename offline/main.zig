@@ -183,10 +183,9 @@ pub fn main() !void {
         pipeline.recordBindPipeline(&context, commands.buffer);
         pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
         
-        var i: u32 = 0;
-        while (i < config.spp) : (i += 1) {
+        for (0..config.spp) |i| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ camera.properties, i });
+            const bytes = std.mem.asBytes(&.{ camera.properties, @intCast(u32, i) });
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff
