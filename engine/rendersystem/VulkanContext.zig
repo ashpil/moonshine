@@ -349,7 +349,6 @@ const PhysicalDevice = struct {
         vk.extension_info.khr_deferred_host_operations.name,
         vk.extension_info.khr_acceleration_structure.name,
         vk.extension_info.khr_ray_tracing_pipeline.name,
-        vk.extension_info.khr_synchronization_2.name,
     };
 
     const windowing_device_extensions = [_][*:0]const u8{
@@ -378,7 +377,7 @@ const PhysicalDevice = struct {
         const devices = (try utils.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
 
         return for (devices) |device| {
-            if (try PhysicalDevice.isDeviceSuitable(instance, device, allocator, surface)) {
+            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator)) {
                 if (pickQueueFamily(instance, device, surface)) |index| {
 
                     var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
@@ -402,12 +401,6 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn isDeviceSuitable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, surface: Surface) !bool {
-        const extensions_available = try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator);
-        const surface_supported = if (windowing) try PhysicalDevice.surfaceSupported(instance, device, surface) else true;
-        return extensions_available and surface_supported;
-    }
-
     fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator) !bool {
         const available_extensions = try utils.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
         defer allocator.free(available_extensions);
@@ -427,16 +420,6 @@ const PhysicalDevice = struct {
         return true;
     }
 
-    fn surfaceSupported(instance: Instance, device: vk.PhysicalDevice, surface: vk.SurfaceKHR) !bool {
-        var present_mode_count: u32 = 0;
-        _ = try instance.getPhysicalDeviceSurfacePresentModesKHR(device, surface, &present_mode_count, null);
-
-        var format_count: u32 = 0;
-        _ = try instance.getPhysicalDeviceSurfaceFormatsKHR(device, surface, &format_count, null);
-
-        return present_mode_count != 0 and format_count != 0;
-    }
-
     fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance) !Device {
         const priority = [_]f32{1.0};
         const queue_create_info = [_]vk.DeviceQueueCreateInfo{
@@ -446,14 +429,9 @@ const PhysicalDevice = struct {
                 .p_queue_priorities = &priority,
             }
         };
-
-        var sync2_features = vk.PhysicalDeviceSynchronization2FeaturesKHR {
-            .synchronization_2 = vk.TRUE,
-        };
         
         var accel_struct_features = vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
             .acceleration_structure = vk.TRUE,
-            .p_next = &sync2_features,
         };
 
         var ray_tracing_pipeline_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {
@@ -461,8 +439,13 @@ const PhysicalDevice = struct {
             .ray_tracing_pipeline = vk.TRUE,
         };
 
-        const device_features = vk.PhysicalDeviceVulkan12Features {
+        var vulkan_13_features = vk.PhysicalDeviceVulkan13Features {
             .p_next = &ray_tracing_pipeline_features,
+            .synchronization_2 = vk.TRUE,
+        };
+
+        const vulkan_12_features = vk.PhysicalDeviceVulkan12Features {
+            .p_next = &vulkan_13_features,
             .buffer_device_address = vk.TRUE,
             .scalar_block_layout = vk.TRUE,
             .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
@@ -485,7 +468,7 @@ const PhysicalDevice = struct {
                 .p_enabled_features = &.{
                     .shader_int_64 = vk.TRUE,
                 },
-                .p_next = &device_features,
+                .p_next = &vulkan_12_features,
             },
             null,
         );
