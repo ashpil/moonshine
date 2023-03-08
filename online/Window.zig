@@ -38,11 +38,23 @@ pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
     };
 }
 
-pub fn getRequiredInstanceExtensions(self: *const Self) []const [*:0]const u8 {
-    _ = self; // insure we're initialized
-    var glfw_extension_count: u32 = 0;
+pub fn getPhysicalDevicePresentationSupport(instance: vk.Instance, device: vk.PhysicalDevice, idx: u32) bool {
+    return c.glfwGetPhysicalDevicePresentationSupport(instance, device, idx) == c.GLFW_TRUE;
+}
 
-    return @ptrCast([*]const [*:0]const u8, c.glfwGetRequiredInstanceExtensions(&glfw_extension_count))[0..glfw_extension_count];
+pub fn initVulkanLoader(loader: vk.PfnGetInstanceProcAddr) void {
+    return c.glfwInitVulkanLoader(loader);
+}
+
+// abusing the fact a little bit that we know that glfw always asks for two extensions
+pub fn getRequiredInstanceExtensions(self: *const Self) [2][*:0]const u8 {
+    _ = self; // ensure we're initialized
+
+    var glfw_extension_count: u32 = 0;
+    const extensions = c.glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+    std.debug.assert(glfw_extension_count == 2);
+
+    return @ptrCast([*]const [*:0]const u8, extensions)[0..2].*;
 }
 
 pub fn shouldClose(self: *const Self) bool {

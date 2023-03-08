@@ -32,7 +32,6 @@ pub fn build(b: *std.build.Builder) void {
 
     {
         var engine_options = default_engine_options;
-        engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
 
         const engine_tests = b.addTest(.{
@@ -61,7 +60,6 @@ pub fn build(b: *std.build.Builder) void {
     {
         var engine_options = default_engine_options;
         engine_options.windowing = true;
-        engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
         const online_exe = b.addExecutable(.{
             .name = "online",
@@ -92,7 +90,6 @@ pub fn build(b: *std.build.Builder) void {
     {
         var engine_options = default_engine_options;
         engine_options.windowing = false;
-        engine_options.exr = true;
         const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
         const offline_exe = b.addExecutable(.{
             .name = "offline",
@@ -122,7 +119,6 @@ pub const EngineOptions = struct {
     vk_validation: bool = false,
     vk_measure_perf: bool = false,
     windowing: bool = false,
-    exr: bool = false,
 
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
@@ -173,7 +169,6 @@ fn makeEnginePackage(b: *std.build.Builder, vk: *std.build.Module, zgltf: *std.b
     build_options.addOption(bool, "vk_validation", options.vk_validation);
     build_options.addOption(bool, "vk_measure_perf", options.vk_measure_perf);
     build_options.addOption(bool, "windowing", options.windowing);
-    build_options.addOption(bool, "exr", options.exr);
 
     return b.createModule(.{
         .source_file = .{ .path = "engine/engine.zig" },

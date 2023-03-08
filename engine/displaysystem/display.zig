@@ -1,19 +1,17 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./VulkanContext.zig");
-const VkAllocator = @import("./Allocator.zig");
-const Window = @import("../Window.zig");
+const rendersystem = @import("../engine.zig").rendersystem;
+const VulkanContext = rendersystem.VulkanContext;
+const VkAllocator = rendersystem.Allocator;
+const Pipeline = rendersystem.pipeline.StandardPipeline;
+const Commands = rendersystem.Commands;
+const utils = rendersystem.utils;
+
 const Swapchain = @import("./Swapchain.zig");
-const ImageManager = @import("./ImageManager.zig");
-const Commands = @import("./Commands.zig");
-const DescriptorLayout = @import("./descriptor.zig").OutputDescriptorLayout;
 const DestructionQueue = @import("./DestructionQueue.zig");
-const utils = @import("./utils.zig");
 
-const measure_perf = @import("build_options").vk_measure_perf;
-
-pub fn Display(comptime num_frames: comptime_int) type {
+pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) type {
     return struct {
         const Self = @This();
 
@@ -26,14 +24,15 @@ pub fn Display(comptime num_frames: comptime_int) type {
 
         // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
         // then during rendering the render buffer is blitted into the swapchain images
-        pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D) !Self {
-            var swapchain = try Swapchain.create(vc, initial_extent);
+        pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk.SurfaceKHR) !Self {
+            var swapchain = try Swapchain.create(vc, initial_extent, surface);
             errdefer swapchain.destroy(vc);
 
             var frames: [num_frames]Frame = undefined;
             for (&frames) |*frame| {
                 frame.* = try Frame.create(vc);
             }
+            try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
 
             return Self {
                 .swapchain = swapchain,
@@ -52,27 +51,16 @@ pub fn Display(comptime num_frames: comptime_int) type {
             self.destruction_queue.destroy(vc, allocator);
         }
 
-        pub fn startFrame(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !vk.CommandBuffer {
+        pub fn startFrame(self: *Self, vc: *const VulkanContext) !vk.CommandBuffer {
             const frame = self.frames[self.frame_index];
 
-            _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
-            try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
-
+            _ = try self.swapchain.acquireNextImage(vc, frame.image_acquired);
             if (measure_perf) {
                 var timestamps: [2]u64 = undefined;
                 const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
                 const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * vc.physical_device.properties.limits.timestamp_period) / 1_000_000.0;
                 std.debug.print("{}: {d}ms\n", .{result, time});
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
-            }
-
-            // we can optionally handle swapchain recreation on suboptimal here,
-            // but I think for some reason it's better to just do it after presentation
-            while (true) {
-                if (self.swapchain.acquireNextImage(vc, frame.image_acquired)) |_| break else |err| switch (err) {
-                    error.OutOfDateKHR => try self.recreate(vc, allocator, window),
-                    else => return err,
-                }
             }
 
             try vc.device.resetCommandPool(frame.command_pool, .{});
@@ -86,12 +74,12 @@ pub fn Display(comptime num_frames: comptime_int) type {
             return frame.command_buffer;
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
-            try self.destruction_queue.add(allocator, self.swapchain);
-            try self.swapchain.recreate(vc, window.getExtent());
+        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, new_extent: vk.Extent2D) !void {
+            try self.destruction_queue.add(allocator, self.swapchain.handle);
+            try self.swapchain.recreate(vc, new_extent);
         }
 
-        pub fn endFrame(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, window: *const Window) !void {
+        pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
             const frame = self.frames[self.frame_index];
 
             if (measure_perf) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
@@ -122,17 +110,21 @@ pub fn Display(comptime num_frames: comptime_int) type {
             }}, frame.fence);
 
             if (self.swapchain.present(vc, vc.queue, frame.command_completed)) |ok| {
-                if (ok == vk.Result.suboptimal_khr) {
-                    try self.recreate(vc, allocator, window);
-                }
+                // if ok, frame presented successfully and we should wait for previous frame
+                self.frame_index = (self.frame_index + 1) % num_frames;
+
+                const new_frame = self.frames[self.frame_index];
+        
+                _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &new_frame.fence), vk.TRUE, std.math.maxInt(u64));
+                try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &new_frame.fence));
+
+                return ok;
             } else |err| {
-                if (err == error.OutOfDateKHR) {
-                    try self.recreate(vc, allocator, window);
-                }
+                // if not ok, presentation failure and we should wait for this frame
+                _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
+                try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
                 return err;
             }
-
-            self.frame_index = (self.frame_index + 1) % num_frames;
         }
 
         const Frame = struct {

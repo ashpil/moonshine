@@ -1,8 +1,9 @@
-const vk = @import("vulkan");
 const std = @import("std");
-const VulkanContext = @import("./VulkanContext.zig");
+const vk = @import("vulkan");
 
-const utils = @import("./utils.zig");
+const rendersystem = @import("../engine.zig").rendersystem;
+const VulkanContext = rendersystem.VulkanContext;
+const utils = rendersystem.utils;
 
 const SwapchainError = error {
     InvalidSurfaceDimensions,
@@ -10,6 +11,7 @@ const SwapchainError = error {
 
 const max_image_count = 3;
 
+surface: vk.SurfaceKHR,
 handle: vk.SwapchainKHR,
 images: std.BoundedArray(vk.Image, max_image_count),
 image_index: u32,
@@ -17,22 +19,22 @@ extent: vk.Extent2D,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D) !Self {
-    return try createFromOld(vc, ideal_extent, .null_handle);
+// takes ownership of surface
+pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR) !Self {
+    return try createFromOld(vc, ideal_extent, surface, .null_handle);
 }
 
-fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, old_handle: vk.SwapchainKHR) !Self {
-    var real_extent = ideal_extent;
-    const settings = try SwapSettings.find(vc, &real_extent);
+fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, old_handle: vk.SwapchainKHR) !Self {
+    const settings = try SwapSettings.find(vc, ideal_extent, surface);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
     const handle = try vc.device.createSwapchainKHR(&.{
-        .surface = vc.surface,
+        .surface = surface,
         .min_image_count = settings.image_count,
         .image_format = settings.format.format,
         .image_color_space = settings.format.color_space,
-        .image_extent = real_extent,
+        .image_extent = settings.extent,
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
@@ -49,10 +51,11 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, old_handle
     const images = try utils.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
 
     return Self {
+        .surface = surface,
         .handle = handle,
         .images = images,
         .image_index = undefined, // this is odd, is it the best?
-        .extent = real_extent,
+        .extent = settings.extent,
     };
 }
 
@@ -62,7 +65,7 @@ pub fn currentImage(self: *const Self) vk.Image {
 
 // assumes old handle destruction is handled
 pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D) !void {
-    self.* = try createFromOld(vc, extent, self.handle);
+    self.* = try createFromOld(vc, extent, self.surface, self.handle);
 }
 
 pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
@@ -90,6 +93,7 @@ pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, sem
 
 pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
     vc.device.destroySwapchainKHR(self.handle, null);
+    vc.instance.destroySurfaceKHR(self.surface, null);
 }
 
 const SwapSettings = struct {
@@ -98,25 +102,26 @@ const SwapSettings = struct {
     image_count: u32,
     image_sharing_mode: vk.SharingMode,
     pre_transform: vk.SurfaceTransformFlagsKHR,
+    extent: vk.Extent2D,
 
     // updates mutable extent
-    pub fn find(vc: *const VulkanContext, extent: *vk.Extent2D) !SwapSettings {
-        const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, vc.surface);
-        try updateExtent(extent, caps);
+    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, surface: vk.SurfaceKHR) !SwapSettings {
+        const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, surface);
 
         return SwapSettings {
-            .format = try findFormat(vc),
-            .present_mode = try findPresentMode(vc),
+            .format = try findFormat(vc, surface),
+            .present_mode = try findPresentMode(vc, surface),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else std.math.min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = .exclusive,
             .pre_transform = caps.current_transform,
+            .extent = try calculateExtent(extent, caps),
         };
     }
 
-    pub fn findPresentMode(vc: *const VulkanContext) !vk.PresentModeKHR {
+    pub fn findPresentMode(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.PresentModeKHR {
         const ideal = vk.PresentModeKHR.mailbox_khr;
 
-        const present_modes = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
+        const present_modes = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
 
         for (present_modes) |present_mode| {
             if (std.meta.eql(present_mode, ideal)) {
@@ -127,14 +132,13 @@ const SwapSettings = struct {
         return present_modes[0];
     }
 
-    pub fn findFormat(vc: *const VulkanContext) !vk.SurfaceFormatKHR {
-
+    pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.SurfaceFormatKHR {
         const ideal = vk.SurfaceFormatKHR {
             .format = .b8g8r8a8_srgb,
             .color_space = .srgb_nonlinear_khr,
         };
 
-        const formats = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, vc.surface })).slice();
+        const formats = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
 
         for (formats) |format| {
             if (std.meta.eql(format, ideal)) {
@@ -145,16 +149,16 @@ const SwapSettings = struct {
         return formats[0];
     }
 
-    pub fn updateExtent(extent: *vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !void {
+    pub fn calculateExtent(extent: vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !vk.Extent2D {
         if (caps.current_extent.width == std.math.maxInt(u32)) {
-            extent.* = vk.Extent2D {
+            return vk.Extent2D {
                 .width = std.math.clamp(extent.width, caps.min_image_extent.width, caps.max_image_extent.width),
                 .height = std.math.clamp(extent.height, caps.min_image_extent.height, caps.max_image_extent.height),
             };
         } else {
-            extent.* = caps.current_extent;
+            return caps.current_extent;
         }
-        if (extent.*.height == 0 and extent.*.width == 0) {
+        if (extent.height == 0 and extent.width == 0) {
             return SwapchainError.InvalidSurfaceDimensions;
         } 
     }

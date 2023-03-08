@@ -13,11 +13,12 @@ const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Commands = engine.rendersystem.Commands;
-const Display = engine.rendersystem.display.Display(2);
 const utils = engine.rendersystem.utils;
+const Display = engine.displaysystem.Display(2, false);
+
+const Window = @import("./Window.zig");
 
 const vector = engine.vector;
-const Window = engine.Window;
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const Mat4 = vector.Mat4(f32);
@@ -55,6 +56,10 @@ const Config = struct {
     }
 };
 
+fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: u32) bool {
+    return Window.getPhysicalDevicePresentationSupport(instance, device, idx);
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer _ = gpa.deinit();
@@ -66,8 +71,9 @@ pub fn main() !void {
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
 
-    const context = try VulkanContext.create(.{ .allocator = allocator, .window = &window, .app_name = "online" });
-
+    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &.{ vk.extension_info.khr_swapchain.name }, queueFamilyAcceptable);
+    defer context.destroy();
+    
     var vk_allocator = try VkAllocator.create(&context, allocator);
     defer vk_allocator.destroy(&context, allocator);
 
@@ -80,7 +86,7 @@ pub fn main() !void {
 
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
-    var display = try Display.create(&context, window.getExtent());
+    var display = try Display.create(&context, window.getExtent(), try window.createSurface(context.instance.handle));
     defer display.destroy(&context, allocator);
 
     std.log.info("Set up initial state!", .{});
@@ -115,8 +121,13 @@ pub fn main() !void {
     window.setKeyCallback(keyCallback);
 
     while (!window.shouldClose()) {
-        const command_buffer = try display.startFrame(&context, allocator, &window);
-
+        const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
+            error.OutOfDateKHR => blk: {
+                try display.recreate(&context, allocator, window.getExtent());
+                break :blk try display.startFrame(&context); // don't recreate on second failure
+            },
+            else => return err,
+        };
         // transition swap image to one we can blit to from display
         // and accumulation image to one we can write to in shader
         const output_image_barriers = [_]vk.ImageMemoryBarrier2 {
@@ -257,12 +268,16 @@ pub fn main() !void {
             .p_image_memory_barriers = &return_swap_image_memory_barriers,
         });
 
-        // only update frame count if we presented successfully
-        // if we got OutOfDateKHR error, just ignore and continue, next frame should be better
-        if (display.endFrame(&context, allocator, &window)) {
+        if (display.endFrame(&context)) |ok| {
+            // only update frame count if we presented successfully
             camera.film.sample_count += 1;
-        } else |err| if (err != error.OutOfDateKHR) {
-            return err;
+            if (ok == vk.Result.suboptimal_khr) {
+                try display.recreate(&context, allocator, window.getExtent());
+            }
+        } else |err| {
+            if (err == error.OutOfDateKHR) {
+                try display.recreate(&context, allocator, window.getExtent());
+            }
         }
 
         window.pollEvents();

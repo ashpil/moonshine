@@ -44,7 +44,7 @@ const TestingContext = struct {
     output_buffer: VkAllocator.HostBuffer(f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D, in_filepath: []const u8, skybox_filepath: []const u8) !TestingContext {
-        const vc = try VulkanContext.create(.{ .allocator = allocator, .app_name = "test" });
+        const vc = try VulkanContext.create(allocator, "test", &.{}, &.{}, null);
         errdefer vc.destroy();
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);

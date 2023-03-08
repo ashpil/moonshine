@@ -1,19 +1,19 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./VulkanContext.zig");
-const ImageManager = @import("./ImageManager.zig");
-const Swapchain = @import("./Swapchain.zig");
+const rendersystem = @import("../engine.zig").rendersystem;
+const VulkanContext = rendersystem.VulkanContext;
+const ImageManager = rendersystem.ImageManager;
 
 // TODO: how to make this use some sort of duck typing and take in any 
 // type with a `destroy` function
 const Item = union(enum) {
-    swapchain: Swapchain,
+    swapchain: vk.SwapchainKHR,
     image: ImageManager,
 
     fn destroy(self: *Item, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
         switch (self.*) {
-            .swapchain => |swapchain| swapchain.destroy(vc),
+            .swapchain => |swapchain| vc.device.destroySwapchainKHR(swapchain, null),
             .image => |*image| image.destroy(vc, allocator),
         }
     }
@@ -34,7 +34,7 @@ pub fn create() Self {
 pub fn add(self: *Self, allocator: std.mem.Allocator, item: anytype) !void {
     if (@TypeOf(item) == ImageManager) {
         try self.queue.append(allocator, .{ .image = item });
-    } else if (@TypeOf(item) == Swapchain) {
+    } else if (@TypeOf(item) == vk.SwapchainKHR) {
         try self.queue.append(allocator, .{ .swapchain = item });
     } else @compileError("Unknown destruction type: " ++ @typeName(@TypeOf(item)));
 }

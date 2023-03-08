@@ -1,15 +1,12 @@
 const vk = @import("vulkan");
 const std = @import("std");
 const builtin = @import("builtin");
-const Swapchain = @import("./Swapchain.zig").Swapchain;
-const Window = @import("../Window.zig");
 
 const utils = @import("./utils.zig");
 
 const validate = @import("build_options").vk_validation;
 const measure_perf = @import("build_options").vk_measure_perf;
 const windowing = @import("build_options").windowing;
-const Surface = if (windowing) vk.SurfaceKHR else void;
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
@@ -19,14 +16,13 @@ const VulkanContextError = error {
     UnavailableValidationLayers,
     UnavailableInstanceExtensions,
     UnavailableDevices,
-    SurfaceCreateFail,
     UnavailableQueues,
 };
 
 const Base = struct {
-    dispatch: BaseDispatch,
+    vulkan_lib: std.DynLib,
     pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
-    vulkan_lib: if (windowing) void else std.DynLib, // if no glfw, must load vulkan dynlib ourselves
+    dispatch: BaseDispatch,
 
     const BaseDispatch = vk.BaseWrapper(.{
         .createInstance = true,
@@ -35,50 +31,43 @@ const Base = struct {
     });
 
     fn new() !Base {
-        var pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr = undefined;
-        var vulkan_lib: if (windowing) void else std.DynLib = undefined;
-        if (windowing) {
-            pfn_get_instance_proc_addr = Window.getInstanceProcAddress;
-        } else {
-            const vulkan_lib_name = if (builtin.os.tag == .windows) "vulkan-1.dll" else "libvulkan.so.1";
-            vulkan_lib = std.DynLib.open(vulkan_lib_name) catch std.DynLib.open("libvulkan.so") catch return VulkanContextError.VulkanDynLibLoadFail;
-            pfn_get_instance_proc_addr = vulkan_lib.lookup(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr") orelse return VulkanContextError.InstanceProcAddrNotFound;
-        }
+        const vulkan_lib_name = if (builtin.os.tag == .windows) "vulkan-1.dll" else "libvulkan.so.1";
+        var vulkan_lib = std.DynLib.open(vulkan_lib_name) catch std.DynLib.open("libvulkan.so") catch return VulkanContextError.VulkanDynLibLoadFail;
+        const pfn_get_instance_proc_addr = vulkan_lib.lookup(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr") orelse return VulkanContextError.InstanceProcAddrNotFound;
         return Base {
-            .dispatch = try BaseDispatch.load(pfn_get_instance_proc_addr),
-            .pfn_get_instance_proc_addr = pfn_get_instance_proc_addr,
             .vulkan_lib = vulkan_lib,
+            .pfn_get_instance_proc_addr = pfn_get_instance_proc_addr,
+            .dispatch = try BaseDispatch.load(pfn_get_instance_proc_addr),
         };
     }
 
     fn destroy(self: Base) void {
         var self_mut = self;
-        if (!windowing) self_mut.vulkan_lib.close();
+        self_mut.vulkan_lib.close();
     }
 
-    fn getRequiredExtensions(allocator: std.mem.Allocator, window: if (windowing) *const Window else void) std.mem.Allocator.Error![]const [*:0]const u8 {
-        const window_extensions = if (windowing) window.getRequiredInstanceExtensions() else &[_] [*:0]const u8{};
+    fn getRequiredExtensions(allocator: std.mem.Allocator, required_extension_names: []const [*:0]const u8) std.mem.Allocator.Error![]const [*:0]const u8 {
         if (validate) {
             const debug_extensions = [_][*:0]const u8{
                 vk.extension_info.ext_debug_utils.name,
             };
-            return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &debug_extensions, window_extensions });
+            return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &debug_extensions, required_extension_names });
         } else {
-            return window_extensions;
+            return allocator.dupe([*:0]const u8, required_extension_names);
         }
     }
 
-    fn createInstance(self: Base, args: if (windowing) WindowingArgs else NoWindowingArgs) !Instance {
-        const required_extensions = try getRequiredExtensions(args.allocator, if (windowing) args.window else {});
-        defer if (validate) args.allocator.free(required_extensions);
+    fn createInstance(self: Base, allocator: std.mem.Allocator, app_name: [*:0]const u8, required_extension_names: []const [*:0]const u8) !Instance {
+        const required_extensions = try getRequiredExtensions(allocator, required_extension_names);
+        defer allocator.free(required_extensions);
 
-        if (validate and !(try self.validationLayersAvailable(args.allocator))) return VulkanContextError.UnavailableValidationLayers;
-        if (!try self.instanceExtensionsAvailable(args.allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
+        if (validate and !(try self.validationLayersAvailable(allocator))) return VulkanContextError.UnavailableValidationLayers;
+        if (!try self.instanceExtensionsAvailable(allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
 
         const app_info = .{
-            .p_application_name = args.app_name,
+            .p_application_name = app_name,
             .application_version = 0,
-            .p_engine_name = "engine? i barely know 'in",
+            .p_engine_name = "moonshine",
             .engine_version = 0,
             .api_version = vk.API_VERSION_1_3,
         };
@@ -281,7 +270,6 @@ instance: Instance,
 device: Device,
 
 physical_device: PhysicalDevice,
-surface: Surface,
 
 debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
@@ -289,32 +277,23 @@ queue: vk.Queue,
 
 const Self = @This();
 
-const WindowingArgs = struct {
-    allocator: std.mem.Allocator,
-    window: *const Window,
-    app_name: [*:0]const u8
-};
+const QueueFamilyAcceptable = fn(vk.Instance, vk.PhysicalDevice, u32) bool;
+fn returnsTrue(_: vk.Instance, _: vk.PhysicalDevice, _: u32) bool { return true; }
 
-const NoWindowingArgs = struct {
-    allocator: std.mem.Allocator,
-    app_name: [*:0]const u8
-};
-
-pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
+pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, required_instance_extensions: []const [*:0]const u8, required_device_extensions: []const [*:0]const u8, comptime queueFamilyAcceptable: ?QueueFamilyAcceptable) !Self {
     var base = try Base.new();
     errdefer base.destroy();
 
-    const instance = try base.createInstance(args);
+    const instance = try base.createInstance(allocator, app_name, required_instance_extensions);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const surface = if (windowing) try args.window.createSurface(instance.handle) else {};
-    errdefer if (windowing) instance.destroySurfaceKHR(surface, null);
-
-    const physical_device = try PhysicalDevice.pick(instance, args.allocator, surface);
-    const device = try physical_device.createLogicalDevice(instance);
+    const device_extensions = try PhysicalDevice.getRequiredExtensions(allocator, required_device_extensions);
+    defer allocator.free(device_extensions);
+    const physical_device = try PhysicalDevice.pick(instance, allocator, if (queueFamilyAcceptable) |acc| acc else returnsTrue, device_extensions);
+    const device = try physical_device.createLogicalDevice(instance, device_extensions);
     errdefer device.destroyDevice(null);
 
     const queue = device.getDeviceQueue(physical_device.queue_family_index, 0);
@@ -323,7 +302,6 @@ pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
         .base = base,
         .instance = instance,
         .debug_messenger = debug_messenger,
-        .surface = surface,
         .device = device,
         .physical_device = physical_device,
 
@@ -333,7 +311,6 @@ pub fn create(args: if (windowing) WindowingArgs else NoWindowingArgs) !Self {
 
 pub fn destroy(self: Self) void {
     self.device.destroyDevice(null);
-    if (windowing) self.instance.destroySurfaceKHR(self.surface, null);
 
     if (validate) self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
     self.instance.destroyInstance(null);
@@ -345,19 +322,7 @@ const PhysicalDevice = struct {
     queue_family_index: u32,
     raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR, // TODO: should this live somewhere else?
 
-    const base_device_extensions = [_][*:0]const u8{
-        vk.extension_info.khr_deferred_host_operations.name,
-        vk.extension_info.khr_acceleration_structure.name,
-        vk.extension_info.khr_ray_tracing_pipeline.name,
-    };
-
-    const windowing_device_extensions = [_][*:0]const u8{
-        vk.extension_info.khr_swapchain.name,
-    };
-
-    const device_extensions = if (windowing) base_device_extensions ++ windowing_device_extensions else base_device_extensions;
-
-    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, surface: Surface) !u32 {
+    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, comptime queueFamilyAcceptable: QueueFamilyAcceptable) !u32 {
         const families = utils.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
 
         var picked_family: ?u32 = null;
@@ -365,7 +330,7 @@ const PhysicalDevice = struct {
             const index = @intCast(u32, i);
             if (family.queue_flags.compute_bit and
                 family.queue_flags.graphics_bit and
-                if (windowing) (try instance.getPhysicalDeviceSurfaceSupportKHR(device, index, surface)) == vk.TRUE else true) picked_family = index;
+                queueFamilyAcceptable(instance.handle, device, index)) picked_family = index;
         }
 
         if (picked_family) |index| {
@@ -373,12 +338,12 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableQueues;
     }
 
-    fn pick(instance: Instance, allocator: std.mem.Allocator, surface: Surface) !PhysicalDevice {
+    fn pick(instance: Instance, allocator: std.mem.Allocator, comptime queueFamilyAcceptable: QueueFamilyAcceptable, extensions: []const [*:0]const u8) !PhysicalDevice {
         const devices = (try utils.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
 
         return for (devices) |device| {
-            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator)) {
-                if (pickQueueFamily(instance, device, surface)) |index| {
+            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator, extensions)) {
+                if (pickQueueFamily(instance, device, queueFamilyAcceptable)) |index| {
 
                     var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
                     raytracing_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
@@ -401,11 +366,20 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator) !bool {
+    fn getRequiredExtensions(allocator: std.mem.Allocator, required_extension_names: []const [*:0]const u8) std.mem.Allocator.Error![]const [*:0]const u8 {
+        const base_extensions = [_][*:0]const u8{
+            vk.extension_info.khr_deferred_host_operations.name,
+            vk.extension_info.khr_acceleration_structure.name,
+            vk.extension_info.khr_ray_tracing_pipeline.name,
+        };
+        return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &base_extensions, required_extension_names });
+    }
+
+    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
         const available_extensions = try utils.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
         defer allocator.free(available_extensions);
 
-        for (device_extensions) |extension_name| {
+        for (extensions) |extension_name| {
             const extension_found = for (available_extensions) |extension| {
                 if (std.cstr.cmp(extension_name, @ptrCast([*:0]const u8, &extension.extension_name)) == 0) {
                     break true;
@@ -420,7 +394,7 @@ const PhysicalDevice = struct {
         return true;
     }
 
-    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance) !Device {
+    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8) !Device {
         const priority = [_]f32{1.0};
         const queue_create_info = [_]vk.DeviceQueueCreateInfo{
             .{
@@ -463,8 +437,8 @@ const PhysicalDevice = struct {
                 .p_queue_create_infos = &queue_create_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
-                .enabled_extension_count = device_extensions.len,
-                .pp_enabled_extension_names = &device_extensions,
+                .enabled_extension_count = @intCast(u32, extensions.len),
+                .pp_enabled_extension_names = extensions.ptr,
                 .p_enabled_features = &.{
                     .shader_int_64 = vk.TRUE,
                 },

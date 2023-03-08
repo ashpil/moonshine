@@ -93,7 +93,7 @@ pub fn main() !void {
     const config = try Config.fromCli(allocator);
     defer config.destroy(allocator);
 
-    const context = try VulkanContext.create(.{ .allocator = allocator, .app_name = "offline" });
+    const context = try VulkanContext.create(allocator, "offline", &.{}, &.{}, null);
     defer context.destroy();
 
     var vk_allocator = try VkAllocator.create(&context, allocator);
