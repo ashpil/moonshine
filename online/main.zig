@@ -14,7 +14,10 @@ const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Commands = engine.rendersystem.Commands;
 const utils = engine.rendersystem.utils;
-const Display = engine.displaysystem.Display(2, false);
+const displaysystem = engine.displaysystem;
+
+const report_perf = false;
+const Display = displaysystem.Display(2, report_perf);
 
 const Window = @import("./Window.zig");
 
@@ -59,6 +62,9 @@ const Config = struct {
 fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: u32) bool {
     return Window.getPhysicalDevicePresentationSupport(instance, device, idx);
 }
+
+pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
+pub const vulkan_context_device_functions = if (report_perf) displaysystem.required_device_functions.merge(displaysystem.measure_perf_device_functions) else displaysystem.required_device_functions;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};

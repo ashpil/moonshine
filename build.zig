@@ -28,12 +28,9 @@ pub fn build(b: *std.build.Builder) void {
     const zigimg = b.createModule(.{
         .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
     });
-    const default_engine_options = EngineOptions.fromCli(b);
+    const engine = makeEnginePackage(b, vk, zgltf, zigimg, EngineOptions.fromCli(b)) catch unreachable;
 
     {
-        var engine_options = default_engine_options;
-        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
-
         const engine_tests = b.addTest(.{
             .name = "test",
             .root_source_file = .{ .path = "engine/tests.zig" },
@@ -58,9 +55,6 @@ pub fn build(b: *std.build.Builder) void {
 
     // online exe
     {
-        var engine_options = default_engine_options;
-        engine_options.windowing = true;
-        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
         const online_exe = b.addExecutable(.{
             .name = "online",
             .root_source_file = .{ .path = "online/main.zig" },
@@ -88,9 +82,6 @@ pub fn build(b: *std.build.Builder) void {
 
     // offline exe
     {
-        var engine_options = default_engine_options;
-        engine_options.windowing = false;
-        const engine = makeEnginePackage(b, vk, zgltf, zigimg, engine_options) catch unreachable;
         const offline_exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
@@ -117,18 +108,12 @@ pub fn build(b: *std.build.Builder) void {
 
 pub const EngineOptions = struct {
     vk_validation: bool = false,
-    vk_measure_perf: bool = false,
-    windowing: bool = false,
 
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
 
         if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
             options.vk_validation = vk_validation;
-        }
-
-        if (b.option(bool, "vk-measure-perf", "Report frame times")) |vk_measure_perf| {
-            options.vk_measure_perf = vk_measure_perf;
         }
 
         return options;
@@ -167,8 +152,6 @@ fn makeEnginePackage(b: *std.build.Builder, vk: *std.build.Module, zgltf: *std.b
     // actual engine
     const build_options = b.addOptions();
     build_options.addOption(bool, "vk_validation", options.vk_validation);
-    build_options.addOption(bool, "vk_measure_perf", options.vk_measure_perf);
-    build_options.addOption(bool, "windowing", options.windowing);
 
     return b.createModule(.{
         .source_file = .{ .path = "engine/engine.zig" },

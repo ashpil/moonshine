@@ -22,6 +22,8 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
 
         destruction_queue: DestructionQueue,
 
+        timestamp_period: if (measure_perf) f32 else void,
+
         // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
         // then during rendering the render buffer is blitted into the swapchain images
         pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk.SurfaceKHR) !Self {
@@ -34,12 +36,25 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             }
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
 
+            const timestamp_period = if (measure_perf) blk: {
+                var properties = vk.PhysicalDeviceProperties2 {
+                    .properties = undefined,
+                    .p_next = null,
+                };
+
+                vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &properties);
+
+                break :blk properties.properties.limits.timestamp_period;
+            } else {};
+
             return Self {
                 .swapchain = swapchain,
                 .frames = frames,
                 .frame_index = 0,
 
                 .destruction_queue = DestructionQueue.create(), // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
+
+                .timestamp_period = timestamp_period,
             };
         }
 
@@ -58,7 +73,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             if (measure_perf) {
                 var timestamps: [2]u64 = undefined;
                 const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
-                const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * vc.physical_device.properties.limits.timestamp_period) / 1_000_000.0;
+                const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * self.timestamp_period) / 1_000_000.0;
                 std.debug.print("{}: {d}ms\n", .{result, time});
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
             }

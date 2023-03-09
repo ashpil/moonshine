@@ -5,8 +5,11 @@ const builtin = @import("builtin");
 const utils = @import("./utils.zig");
 
 const validate = @import("build_options").vk_validation;
-const measure_perf = @import("build_options").vk_measure_perf;
-const windowing = @import("build_options").windowing;
+
+const root = @import("root");
+
+const additional_instance_functions = if (@hasDecl(root, "vulkan_context_instance_functions")) root.vulkan_context_instance_functions else .{};
+const additional_device_functions = if (@hasDecl(root, "vulkan_context_device_functions")) root.vulkan_context_device_functions else .{};
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
@@ -131,20 +134,12 @@ const instance_cmds = vk.InstanceCommandFlags {
     .getPhysicalDeviceProperties2 = true,
 };
 
-const windowing_instance_cmds = if (windowing) vk.InstanceCommandFlags {
-    .destroySurfaceKHR = true,
-    .getPhysicalDeviceSurfacePresentModesKHR = true,
-    .getPhysicalDeviceSurfaceFormatsKHR = true,
-    .getPhysicalDeviceSurfaceSupportKHR = true,
-    .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
-} else .{};
-
 const validation_instance_cmds = if (validate) vk.InstanceCommandFlags {
     .createDebugUtilsMessengerEXT = true,
     .destroyDebugUtilsMessengerEXT = true,
 } else .{};
 
-const Instance = vk.InstanceWrapper(instance_cmds.merge(validation_instance_cmds).merge(windowing_instance_cmds));
+const Instance = vk.InstanceWrapper(instance_cmds.merge(validation_instance_cmds).merge(additional_instance_functions));
 
 const device_commands = vk.DeviceCommandFlags {
     .getDeviceQueue = true,
@@ -218,23 +213,11 @@ const device_commands = vk.DeviceCommandFlags {
     .cmdUpdateBuffer = true,
 };
 
-const windowing_device_commands = if (windowing) vk.DeviceCommandFlags {
-    .getSwapchainImagesKHR = true,
-    .createSwapchainKHR = true,
-    .acquireNextImage2KHR = true,
-    .queuePresentKHR = true,
-    .destroySwapchainKHR = true,
-} else .{};
-
-const perf_device_commands = if (measure_perf) vk.DeviceCommandFlags {
-    .cmdWriteTimestamp2 = true,
-} else .{};
-
 const validation_device_commands = if (validate) vk.DeviceCommandFlags {
     .setDebugUtilsObjectNameEXT = true,
 } else .{};
 
-const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(perf_device_commands).merge(windowing_device_commands).merge(validation_device_commands);});
+const Device = vk.DeviceWrapper(blk: {@setEvalBranchQuota(10000); break :blk device_commands.merge(validation_device_commands).merge(additional_device_functions);});
 
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
