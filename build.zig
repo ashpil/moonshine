@@ -22,87 +22,80 @@ pub fn build(b: *std.build.Builder) void {
     };
     const glfw = makeGlfwLibrary(b, target) catch unreachable;
     const tinyexr = makeTinyExrLibrary(b, target);
-    const zgltf = b.createModule(.{
-        .source_file = .{ .path = "deps/zgltf/src/main.zig" },
-    });
-    const zigimg = b.createModule(.{
-        .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
-    });
-    const engine = makeEnginePackage(b, vk, zgltf, zigimg, EngineOptions.fromCli(b)) catch unreachable;
+    const engine = makeEngineModule(b, vk, EngineOptions.fromCli(b)) catch unreachable;
 
     {
-        const engine_tests = b.addTest(.{
-            .name = "test",
+        const tests = b.addTest(.{
+            .name = "tests",
             .root_source_file = .{ .path = "engine/tests.zig" },
             .kind = .test_exe,
             .target = target,
             .optimize = optimize,
         });
-        engine_tests.install();
-        engine_tests.addModule("vulkan", vk);
-        engine_tests.addModule("engine", engine);
+        tests.install();
+        tests.addModule("vulkan", vk);
+        tests.addModule("engine", engine);
 
-        engine_tests.linkLibC();
-        engine_tests.linkLibrary(tinyexr.library);
-        engine_tests.addIncludePath(tinyexr.include_path);
+        tests.linkLibC();
+        tests.linkLibrary(tinyexr.library);
+        tests.addIncludePath(tinyexr.include_path);
 
-        const run_test_cmd = engine_tests.run();
-        run_test_cmd.step.dependOn(b.getInstallStep());
+        const run = tests.run();
+        run.step.dependOn(b.getInstallStep());
 
-        const test_step = b.step("test", "Run engine tests");
-        test_step.dependOn(&run_test_cmd.step);
+        b.step("test", "Run engine tests").dependOn(&run.step);
     }
 
     // online exe
     {
-        const online_exe = b.addExecutable(.{
+        const exe = b.addExecutable(.{
             .name = "online",
             .root_source_file = .{ .path = "online/main.zig" },
             .target = target,
             .optimize = optimize,
         });
-        online_exe.install();
+        exe.install();
 
-        online_exe.addModule("vulkan", vk);
-        online_exe.addModule("engine", engine);
-        online_exe.linkLibrary(glfw.library);
-        online_exe.addIncludePath(glfw.include_path);
-        online_exe.linkLibC();
-        online_exe.linkLibrary(tinyexr.library);
-        online_exe.addIncludePath(tinyexr.include_path);
+        exe.addModule("vulkan", vk);
+        exe.addModule("engine", engine);
+        exe.linkLibrary(glfw.library);
+        exe.addIncludePath(glfw.include_path);
+        exe.linkLibC();
+        exe.linkLibrary(tinyexr.library);
+        exe.addIncludePath(tinyexr.include_path);
 
-        const run_online = online_exe.run();
-        run_online.step.dependOn(b.getInstallStep());
+        const run = exe.run();
+        run.step.dependOn(b.getInstallStep());
         if (b.args) |args| {
-            run_online.addArgs(args);
+            run.addArgs(args);
         }
 
-        b.step("run-online", "Run online").dependOn(&run_online.step);
+        b.step("run-online", "Run online").dependOn(&run.step);
     }
 
     // offline exe
     {
-        const offline_exe = b.addExecutable(.{
+        const exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
             .target = target,
             .optimize = optimize,
         });
-        offline_exe.install();
+        exe.install();
 
-        offline_exe.addModule("vulkan", vk);
-        offline_exe.addModule("engine", engine);
-        offline_exe.linkLibC();
-        offline_exe.linkLibrary(tinyexr.library);
-        offline_exe.addIncludePath(tinyexr.include_path);
+        exe.addModule("vulkan", vk);
+        exe.addModule("engine", engine);
+        exe.linkLibC();
+        exe.linkLibrary(tinyexr.library);
+        exe.addIncludePath(tinyexr.include_path);
 
-        const run_offline = offline_exe.run();
-        run_offline.step.dependOn(b.getInstallStep());
+        const run = exe.run();
+        run.step.dependOn(b.getInstallStep());
         if (b.args) |args| {
-            run_offline.addArgs(args);
+            run.addArgs(args);
         }
 
-        b.step("run-offline", "Run offline").dependOn(&run_offline.step);
+        b.step("run-offline", "Run offline").dependOn(&run.step);
     }
 }
 
@@ -120,7 +113,14 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEnginePackage(b: *std.build.Builder, vk: *std.build.Module, zgltf: *std.build.Module, zigimg: *std.build.Module, options: EngineOptions) !*std.build.Module {
+fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: EngineOptions) !*std.build.Module {
+    const zgltf = b.createModule(.{
+        .source_file = .{ .path = "deps/zgltf/src/main.zig" },
+    });
+    const zigimg = b.createModule(.{
+        .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
+    });
+
     // hlsl
     const hlsl_shader_cmd = [_][]const u8 {
         "dxc",
