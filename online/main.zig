@@ -200,7 +200,7 @@ pub fn main() !void {
                 .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
                 .src_access_mask = .{ .shader_storage_write_bit = true, },
                 .dst_stage_mask = .{ .blit_bit = true, },
-                .dst_access_mask = .{ .transfer_write_bit = true, },
+                .dst_access_mask = .{ .transfer_read_bit = true, },
                 .old_layout = .general,
                 .new_layout = .transfer_src_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,

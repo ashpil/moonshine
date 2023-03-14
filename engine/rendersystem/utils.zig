@@ -7,6 +7,7 @@ fn typeToObjectType(comptime in: type) vk.ObjectType {
         vk.DescriptorSetLayout => .descriptor_set_layout,
         vk.DescriptorSet => .descriptor_set,
         vk.Buffer => .buffer,
+        vk.CommandBuffer => .command_buffer,
         else => unreachable, // TODO: add more
     };
 }

@@ -31,8 +31,9 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             errdefer swapchain.destroy(vc);
 
             var frames: [num_frames]Frame = undefined;
-            for (&frames) |*frame| {
+            inline for (&frames, 0..) |*frame, i| {
                 frame.* = try Frame.create(vc);
+                try utils.setDebugName(vc, frame.command_buffer, std.fmt.comptimePrint("frame {}", .{i}));
             }
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
 
@@ -101,6 +102,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
+            // TODO: these sync stage flags are probably wrong
             try vc.device.queueSubmit2(vc.queue, 1, &[_]vk.SubmitInfo2 { .{
                 .flags = .{},
                 .wait_semaphore_info_count = 1,

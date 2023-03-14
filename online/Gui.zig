@@ -21,7 +21,7 @@ const Window = @import("./Window.zig");
 
 pub const required_device_functions = vk.DeviceCommandFlags {
     .createGraphicsPipelines = true,
-    .createRenderPass = true,
+    .createRenderPass2 = true,
     .destroyRenderPass = true,
     .createFramebuffer = true,
     .destroyFramebuffer = true,
@@ -78,7 +78,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
     }, null);
 
     const render_pass = blk: {
-        const attachment = vk.AttachmentDescription {
+        const attachment = vk.AttachmentDescription2 {
             .format = .b8g8r8a8_srgb,
             .samples = .{ .@"1_bit" = true },
             .load_op = .load,
@@ -88,27 +88,28 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .initial_layout = .present_src_khr,
             .final_layout = .present_src_khr,
         };
-        const attachment_ref = vk.AttachmentReference {
+        const attachment_ref = vk.AttachmentReference2 {
             .attachment = 0,
             .layout = .general,
+            .aspect_mask = .{ .color_bit = true },
         };
-        break :blk try vc.device.createRenderPass(&vk.RenderPassCreateInfo {
+        break :blk try vc.device.createRenderPass2(&vk.RenderPassCreateInfo2 {
             .subpass_count = 1,
-            .p_subpasses = utils.toPointerType(&vk.SubpassDescription {
+            .p_subpasses = utils.toPointerType(&vk.SubpassDescription2 {
                 .pipeline_bind_point = .graphics,
+                .view_mask = 0,
                 .color_attachment_count = 1,
                 .p_color_attachments = utils.toPointerType(&attachment_ref),
             }),
             .attachment_count = 1,
             .p_attachments = utils.toPointerType(&attachment),
             .dependency_count = 1,
-            .p_dependencies = utils.toPointerType(&vk.SubpassDependency {
+            .p_dependencies = utils.toPointerType(&vk.SubpassDependency2 {
                 .src_subpass = vk.SUBPASS_EXTERNAL,
                 .dst_subpass = 0,
-                .src_stage_mask = .{ .color_attachment_output_bit = true },
-                .src_access_mask = .{},
-                .dst_stage_mask = .{ .color_attachment_output_bit = true },
-                .dst_access_mask = .{ .color_attachment_write_bit = true },
+                .src_stage_mask = .{ .transfer_bit = true },
+                .src_access_mask = .{ .transfer_write_bit = true },
+                .view_offset = 0,
             }),
         }, null);
     };
