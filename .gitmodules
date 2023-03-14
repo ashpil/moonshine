@@ -13,3 +13,6 @@
 [submodule "deps/zigimg"]
 	path = deps/zigimg
 	url = https://github.com/zigimg/zigimg.git
+[submodule "deps/cimgui"]
+	path = deps/cimgui
+	url = https://github.com/cimgui/cimgui.git

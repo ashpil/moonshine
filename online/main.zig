@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const engine = @import("engine");
-const Engine = engine.rendersystem.Engine;
 const Camera = engine.rendersystem.Camera;
 const World = engine.rendersystem.World;
 const Background = engine.rendersystem.Background;
@@ -20,6 +19,8 @@ const report_perf = false;
 const Display = displaysystem.Display(2, report_perf);
 
 const Window = @import("./Window.zig");
+const Gui = @import("./Gui.zig");
+const imgui = @import("./imgui.zig");
 
 const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
@@ -64,7 +65,7 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 }
 
 pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
-pub const vulkan_context_device_functions = if (report_perf) displaysystem.required_device_functions.merge(displaysystem.measure_perf_device_functions) else displaysystem.required_device_functions;
+pub const vulkan_context_device_functions = if (report_perf) displaysystem.required_device_functions.merge(displaysystem.measure_perf_device_functions).merge(Gui.required_device_functions) else displaysystem.required_device_functions.merge(Gui.required_device_functions);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -83,17 +84,22 @@ pub fn main() !void {
     var vk_allocator = try VkAllocator.create(&context, allocator);
     defer vk_allocator.destroy(&context, allocator);
 
+    const window_extent = window.getExtent();
+    var display = try Display.create(&context, window_extent, try window.createSurface(context.instance.handle));
+    defer display.destroy(&context, allocator);
+
+    var commands = try Commands.create(&context);
+    defer commands.destroy(&context);
+
+    var gui = try Gui.create(&context, display.swapchain, window, window_extent, &vk_allocator, allocator, &commands);
+    defer gui.destroy(&context, allocator);
+
     var world_descriptor_layout = try WorldDescriptorLayout.create(&context, 1, .{});
     defer world_descriptor_layout.destroy(&context);
     var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
     defer background_descriptor_layout.destroy(&context);
     var film_descriptor_layout = try FilmDescriptorLayout.create(&context, 1, .{});
     defer film_descriptor_layout.destroy(&context);
-
-    var commands = try Commands.create(&context);
-    defer commands.destroy(&context);
-    var display = try Display.create(&context, window.getExtent(), try window.createSurface(context.instance.handle));
-    defer display.destroy(&context, allocator);
 
     std.log.info("Set up initial state!", .{});
 
@@ -130,6 +136,7 @@ pub fn main() !void {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
                 try display.recreate(&context, allocator, window.getExtent());
+                try gui.resize(&context, display.swapchain);
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
@@ -274,15 +281,21 @@ pub fn main() !void {
             .p_image_memory_barriers = &return_swap_image_memory_barriers,
         });
 
+        gui.startFrame();
+        imgui.showDemoWindow();
+        gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
+
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
             camera.film.sample_count += 1;
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, allocator, window.getExtent());
+                try gui.resize(&context, display.swapchain);
             }
         } else |err| {
             if (err == error.OutOfDateKHR) {
                 try display.recreate(&context, allocator, window.getExtent());
+                try gui.resize(&context, display.swapchain);
             }
         }
 

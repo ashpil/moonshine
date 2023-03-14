@@ -21,6 +21,7 @@ pub fn build(b: *std.build.Builder) void {
         break :blk vkgen.VkGenerateStep.create(b, vk_xml_path).getModule();
     };
     const glfw = makeGlfwLibrary(b, target) catch unreachable;
+    const cimgui = makeCImguiLibrary(b, target);
     const tinyexr = makeTinyExrLibrary(b, target);
     const engine = makeEngineModule(b, vk, EngineOptions.fromCli(b)) catch unreachable;
 
@@ -37,8 +38,7 @@ pub fn build(b: *std.build.Builder) void {
         tests.addModule("engine", engine);
 
         tests.linkLibC();
-        tests.linkLibrary(tinyexr.library);
-        tests.addIncludePath(tinyexr.include_path);
+        tinyexr.add(tests);
 
         const run = tests.run();
         run.step.dependOn(b.getInstallStep());
@@ -58,11 +58,9 @@ pub fn build(b: *std.build.Builder) void {
 
         exe.addModule("vulkan", vk);
         exe.addModule("engine", engine);
-        exe.linkLibrary(glfw.library);
-        exe.addIncludePath(glfw.include_path);
-        exe.linkLibC();
-        exe.linkLibrary(tinyexr.library);
-        exe.addIncludePath(tinyexr.include_path);
+        glfw.add(exe);
+        tinyexr.add(exe);
+        cimgui.add(exe);
 
         const run = exe.run();
         run.step.dependOn(b.getInstallStep());
@@ -85,9 +83,7 @@ pub fn build(b: *std.build.Builder) void {
 
         exe.addModule("vulkan", vk);
         exe.addModule("engine", engine);
-        exe.linkLibC();
-        exe.linkLibrary(tinyexr.library);
-        exe.addIncludePath(tinyexr.include_path);
+        tinyexr.add(exe);
 
         const run = exe.run();
         run.step.dependOn(b.getInstallStep());
@@ -183,7 +179,40 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
 const CLibrary = struct {
     include_path: []const u8,
     library: *std.build.LibExeObjStep,
+
+    fn add(self: CLibrary, exe: *std.Build.CompileStep) void {
+        exe.linkLibrary(self.library);
+        exe.addIncludePath(self.include_path);
+    }
 };
+
+fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrary {
+    const path = "./deps/cimgui/";
+
+    const lib = b.addStaticLibrary(.{
+        .name = "cimgui",
+        .target = target,
+        .optimize = .Debug,
+    });
+    lib.linkLibCpp();
+    lib.addCSourceFiles(&.{
+        path ++ "cimgui.cpp",
+        path ++ "imgui/imgui.cpp",
+        path ++ "imgui/imgui_draw.cpp",
+        path ++ "imgui/imgui_demo.cpp",
+        path ++ "imgui/imgui_widgets.cpp",
+        path ++ "imgui/imgui_tables.cpp",
+        path ++ "imgui/backends/imgui_impl_glfw.cpp",
+    }, &.{
+        "-DIMGUI_IMPL_API=extern \"C\"",
+    });
+    lib.addIncludePath(path ++ "imgui/");
+
+    return CLibrary {
+        .include_path = path,
+        .library = lib,
+    };
+}
 
 fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrary {
     const tinyexr_path = "./deps/tinyexr/";

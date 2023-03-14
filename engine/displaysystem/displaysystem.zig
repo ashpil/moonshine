@@ -1,4 +1,5 @@
 pub const Display = @import("./display.zig").Display;
+pub const Swapchain = @import("./Swapchain.zig");
 
 const vk = @import("vulkan");
 pub const required_instance_functions = vk.InstanceCommandFlags {
