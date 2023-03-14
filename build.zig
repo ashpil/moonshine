@@ -21,7 +21,7 @@ pub fn build(b: *std.build.Builder) void {
         break :blk vkgen.VkGenerateStep.create(b, vk_xml_path).getModule();
     };
     const glfw = makeGlfwLibrary(b, target) catch unreachable;
-    const cimgui = makeCImguiLibrary(b, target);
+    const cimgui = makeCImguiLibrary(b, target, glfw);
     const tinyexr = makeTinyExrLibrary(b, target);
     const engine = makeEngineModule(b, vk, EngineOptions.fromCli(b)) catch unreachable;
 
@@ -186,7 +186,7 @@ const CLibrary = struct {
     }
 };
 
-fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrary {
+fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: CLibrary) CLibrary {
     const path = "./deps/cimgui/";
 
     const lib = b.addStaticLibrary(.{
@@ -207,6 +207,7 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrar
         "-DIMGUI_IMPL_API=extern \"C\"",
     });
     lib.addIncludePath(path ++ "imgui/");
+    lib.addIncludePath(glfw.include_path);
 
     return CLibrary {
         .include_path = path,
