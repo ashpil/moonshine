@@ -11,7 +11,9 @@ const utils = rendersystem.utils;
 const Swapchain = @import("./Swapchain.zig");
 const DestructionQueue = @import("./DestructionQueue.zig");
 
-pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) type {
+const metrics = @import("build_options").vk_metrics;
+
+pub fn Display(comptime num_frames: comptime_int) type {
     return struct {
         const Self = @This();
 
@@ -22,7 +24,8 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
 
         destruction_queue: DestructionQueue,
 
-        timestamp_period: if (measure_perf) f32 else void,
+        timestamp_period: if (metrics) f32 else void,
+        last_frame_time_ns: if (metrics) f64 else void,
 
         // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
         // then during rendering the render buffer is blitted into the swapchain images
@@ -37,7 +40,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             }
             try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
 
-            const timestamp_period = if (measure_perf) blk: {
+            const timestamp_period = if (metrics) blk: {
                 var properties = vk.PhysicalDeviceProperties2 {
                     .properties = undefined,
                     .p_next = null,
@@ -56,6 +59,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
                 .destruction_queue = DestructionQueue.create(), // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
 
                 .timestamp_period = timestamp_period,
+                .last_frame_time_ns = if (metrics) 0.0 else {},
             };
         }
 
@@ -71,11 +75,10 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             const frame = self.frames[self.frame_index];
 
             _ = try self.swapchain.acquireNextImage(vc, frame.image_acquired);
-            if (measure_perf) {
+            if (metrics) {
                 var timestamps: [2]u64 = undefined;
                 const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
-                const time = (@intToFloat(f64, timestamps[1] - timestamps[0]) * self.timestamp_period) / 1_000_000.0;
-                std.debug.print("{}: {d}ms\n", .{result, time});
+                self.last_frame_time_ns = if (result == .success) @intToFloat(f64, timestamps[1] - timestamps[0]) * self.timestamp_period else std.math.nan(f64);
                 vc.device.resetQueryPool(frame.query_pool, 0, 2);
             }
 
@@ -85,7 +88,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
                 .p_inheritance_info = null,
             });
 
-            if (measure_perf) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .top_of_pipe_bit = true }, frame.query_pool, 0);
+            if (metrics) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .top_of_pipe_bit = true }, frame.query_pool, 0);
 
             return frame.command_buffer;
         }
@@ -98,7 +101,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
         pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
             const frame = self.frames[self.frame_index];
 
-            if (measure_perf) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
+            if (metrics) vc.device.cmdWriteTimestamp2(frame.command_buffer, .{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
 
             try vc.device.endCommandBuffer(frame.command_buffer);
 
@@ -152,7 +155,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
             command_pool: vk.CommandPool,
             command_buffer: vk.CommandBuffer,
 
-            query_pool: if (measure_perf) vk.QueryPool else void,
+            query_pool: if (metrics) vk.QueryPool else void,
 
             fn create(vc: *const VulkanContext) !Frame {
                 const image_acquired = try vc.device.createSemaphore(&.{}, null);
@@ -178,12 +181,12 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
                     .command_buffer_count = 1,
                 }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
 
-                const query_pool = if (measure_perf) try vc.device.createQueryPool(&.{
+                const query_pool = if (metrics) try vc.device.createQueryPool(&.{
                     .query_type = .timestamp,
                     .query_count = 2,
                 }, null) else undefined;
-                errdefer if (measure_perf) vc.device.destroyQueryPool(query_pool, null);
-                if (measure_perf) vc.device.resetQueryPool(query_pool, 0, 2);
+                errdefer if (metrics) vc.device.destroyQueryPool(query_pool, null);
+                if (metrics) vc.device.resetQueryPool(query_pool, 0, 2);
 
                 return Frame {
                     .image_acquired = image_acquired,
@@ -202,7 +205,7 @@ pub fn Display(comptime num_frames: comptime_int, comptime measure_perf: bool) t
                 vc.device.destroySemaphore(self.command_completed, null);
                 vc.device.destroyFence(self.fence, null);
                 vc.device.destroyCommandPool(self.command_pool, null);
-                if (measure_perf) vc.device.destroyQueryPool(self.query_pool, null);
+                if (metrics) vc.device.destroyQueryPool(self.query_pool, null);
             }
         };
     };

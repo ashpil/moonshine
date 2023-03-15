@@ -1,5 +1,6 @@
 pub const Display = @import("./display.zig").Display;
 pub const Swapchain = @import("./Swapchain.zig");
+const metrics = @import("build_options").vk_metrics;
 
 const vk = @import("vulkan");
 pub const required_instance_functions = vk.InstanceCommandFlags {
@@ -9,7 +10,7 @@ pub const required_instance_functions = vk.InstanceCommandFlags {
     .getPhysicalDeviceSurfaceSupportKHR = true,
     .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
 };
-pub const required_device_functions = vk.DeviceCommandFlags {
+const base_required_device_functions = vk.DeviceCommandFlags {
     .getSwapchainImagesKHR = true,
     .createSwapchainKHR = true,
     .acquireNextImage2KHR = true,
@@ -17,6 +18,8 @@ pub const required_device_functions = vk.DeviceCommandFlags {
     .destroySwapchainKHR = true,
 };
 
-pub const measure_perf_device_functions = vk.DeviceCommandFlags {
+const metrics_device_functions = vk.DeviceCommandFlags {
     .cmdWriteTimestamp2 = true,
 };
+
+pub const required_device_functions = if (metrics) base_required_device_functions.merge(metrics_device_functions) else base_required_device_functions;

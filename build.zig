@@ -23,7 +23,8 @@ pub fn build(b: *std.build.Builder) void {
     const glfw = makeGlfwLibrary(b, target) catch unreachable;
     const cimgui = makeCImguiLibrary(b, target, glfw);
     const tinyexr = makeTinyExrLibrary(b, target);
-    const engine = makeEngineModule(b, vk, EngineOptions.fromCli(b)) catch unreachable;
+    const default_engine_options = EngineOptions.fromCli(b);
+    const default_engine = makeEngineModule(b, vk, default_engine_options) catch unreachable;
 
     {
         const tests = b.addTest(.{
@@ -35,7 +36,7 @@ pub fn build(b: *std.build.Builder) void {
         });
         tests.install();
         tests.addModule("vulkan", vk);
-        tests.addModule("engine", engine);
+        tests.addModule("engine", default_engine);
 
         tests.linkLibC();
         tinyexr.add(tests);
@@ -48,6 +49,9 @@ pub fn build(b: *std.build.Builder) void {
 
     // online exe
     {
+        var engine_options = default_engine_options;
+        engine_options.vk_metrics = true;
+        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
         const exe = b.addExecutable(.{
             .name = "online",
             .root_source_file = .{ .path = "online/main.zig" },
@@ -82,7 +86,7 @@ pub fn build(b: *std.build.Builder) void {
         exe.install();
 
         exe.addModule("vulkan", vk);
-        exe.addModule("engine", engine);
+        exe.addModule("engine", default_engine);
         tinyexr.add(exe);
 
         const run = exe.run();
@@ -97,6 +101,7 @@ pub fn build(b: *std.build.Builder) void {
 
 pub const EngineOptions = struct {
     vk_validation: bool = false,
+    vk_metrics: bool = false,
 
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
@@ -148,6 +153,7 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
     // actual engine
     const build_options = b.addOptions();
     build_options.addOption(bool, "vk_validation", options.vk_validation);
+    build_options.addOption(bool, "vk_metrics", options.vk_metrics);
 
     return b.createModule(.{
         .source_file = .{ .path = "engine/engine.zig" },

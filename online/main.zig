@@ -15,8 +15,7 @@ const Commands = engine.rendersystem.Commands;
 const utils = engine.rendersystem.utils;
 const displaysystem = engine.displaysystem;
 
-const report_perf = false;
-const Display = displaysystem.Display(2, report_perf);
+const Display = displaysystem.Display(2);
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");
@@ -65,7 +64,7 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 }
 
 pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
-pub const vulkan_context_device_functions = if (report_perf) displaysystem.required_device_functions.merge(displaysystem.measure_perf_device_functions).merge(Gui.required_device_functions) else displaysystem.required_device_functions.merge(Gui.required_device_functions);
+pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -282,6 +281,7 @@ pub fn main() !void {
     
         gui.startFrame();
         imgui.setNextWindowPos(50, 50);
+        imgui.setNextWindowSize(250, 150);
         imgui.begin("Camera");
         try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
         try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
@@ -289,6 +289,12 @@ pub fn main() !void {
         try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
         try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
         try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
+        imgui.end();
+        imgui.setNextWindowPos(50, 250);
+        imgui.setNextWindowSize(250, 100);
+        imgui.begin("Metrics");
+        try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
+        try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
         imgui.end();
         gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
 
