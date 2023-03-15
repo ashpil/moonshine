@@ -398,6 +398,7 @@ const PhysicalDevice = struct {
         var vulkan_13_features = vk.PhysicalDeviceVulkan13Features {
             .p_next = &ray_tracing_pipeline_features,
             .synchronization_2 = vk.TRUE,
+            .dynamic_rendering = vk.TRUE, // technically not required by core lib, but afaik since vk 1.3 requires it this can't hurt?
         };
 
         const vulkan_12_features = vk.PhysicalDeviceVulkan12Features {

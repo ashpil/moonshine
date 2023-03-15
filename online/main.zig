@@ -256,13 +256,40 @@ pub fn main() !void {
         };
 
         context.device.cmdBlitImage(command_buffer, camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+            .image_memory_barrier_count = 1,
+            .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
+                .{
+                    .src_stage_mask = .{ .blit_bit = true, },
+                    .src_access_mask = .{ .transfer_write_bit = true, },
+                    .dst_stage_mask = .{ .color_attachment_output_bit = true, },
+                    .dst_access_mask = .{ .color_attachment_write_bit = true, },
+                    .old_layout = .transfer_dst_optimal,
+                    .new_layout = .color_attachment_optimal,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = display.swapchain.currentImage(),
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                }
+            },
+        });
+    
+        gui.startFrame();
+        imgui.showDemoWindow();
+        gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
 
         // transition swapchain back to present mode
         const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
             .{
-                .src_stage_mask = .{ .blit_bit = true, },
-                .src_access_mask = .{ .transfer_write_bit = true, },
-                .old_layout = .transfer_dst_optimal,
+                .src_stage_mask = .{ .color_attachment_output_bit = true, },
+                .src_access_mask = .{ .color_attachment_write_bit = true, },
+                .old_layout = .color_attachment_optimal,
                 .new_layout = .present_src_khr,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -280,10 +307,6 @@ pub fn main() !void {
             .image_memory_barrier_count = return_swap_image_memory_barriers.len,
             .p_image_memory_barriers = &return_swap_image_memory_barriers,
         });
-
-        gui.startFrame();
-        imgui.showDemoWindow();
-        gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully

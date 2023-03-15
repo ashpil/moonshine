@@ -21,17 +21,13 @@ const Window = @import("./Window.zig");
 
 pub const required_device_functions = vk.DeviceCommandFlags {
     .createGraphicsPipelines = true,
-    .createRenderPass2 = true,
-    .destroyRenderPass = true,
-    .createFramebuffer = true,
-    .destroyFramebuffer = true,
     .cmdBindVertexBuffers = true,
     .cmdBindIndexBuffer = true,
     .cmdSetViewport = true,
     .cmdSetScissor = true,
     .cmdDrawIndexed = true,
-    .cmdBeginRenderPass = true,
-    .cmdEndRenderPass = true,
+    .cmdBeginRendering = true,
+    .cmdEndRendering = true,
 };
 
 const swapchain_image_count = 3; // TODO: expose
@@ -39,8 +35,6 @@ const frames_in_flight = 2; // TODO: expose
 const Self = @This();
 
 extent: vk.Extent2D,
-
-render_pass: vk.RenderPass,
 
 descriptor_set_layout: GuiDescriptorLayout,
 pipeline_layout: vk.PipelineLayout,
@@ -53,7 +47,6 @@ font_image_set: vk.DescriptorSet,
 vertex_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawVert),
 index_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawIdx),
 
-framebuffers: [swapchain_image_count]vk.Framebuffer,
 views: [swapchain_image_count]vk.ImageView,
 
 pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, extent: vk.Extent2D, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
@@ -76,43 +69,6 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .size = @sizeOf(f32) * 4,
         }),
     }, null);
-
-    const render_pass = blk: {
-        const attachment = vk.AttachmentDescription2 {
-            .format = .b8g8r8a8_srgb,
-            .samples = .{ .@"1_bit" = true },
-            .load_op = .load,
-            .store_op = .store,
-            .stencil_load_op = .dont_care,
-            .stencil_store_op = .dont_care,
-            .initial_layout = .present_src_khr,
-            .final_layout = .present_src_khr,
-        };
-        const attachment_ref = vk.AttachmentReference2 {
-            .attachment = 0,
-            .layout = .general,
-            .aspect_mask = .{ .color_bit = true },
-        };
-        break :blk try vc.device.createRenderPass2(&vk.RenderPassCreateInfo2 {
-            .subpass_count = 1,
-            .p_subpasses = utils.toPointerType(&vk.SubpassDescription2 {
-                .pipeline_bind_point = .graphics,
-                .view_mask = 0,
-                .color_attachment_count = 1,
-                .p_color_attachments = utils.toPointerType(&attachment_ref),
-            }),
-            .attachment_count = 1,
-            .p_attachments = utils.toPointerType(&attachment),
-            .dependency_count = 1,
-            .p_dependencies = utils.toPointerType(&vk.SubpassDependency2 {
-                .src_subpass = vk.SUBPASS_EXTERNAL,
-                .dst_subpass = 0,
-                .src_stage_mask = .{ .transfer_bit = true },
-                .src_access_mask = .{ .transfer_write_bit = true },
-                .view_offset = 0,
-            }),
-        }, null);
-    };
 
     const pipeline = blk: {
         const vert_module = try vc.device.createShaderModule(&.{
@@ -213,9 +169,16 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .p_dynamic_states = &dynamic_states,
             },
             .layout = pipeline_layout,
-            .render_pass = render_pass,
+            .render_pass = .null_handle,
             .subpass = 0,
             .base_pipeline_index = 0,
+            .p_next = &vk.PipelineRenderingCreateInfo {
+                .view_mask = 0,
+                .color_attachment_count = 1,
+                .p_color_attachment_formats = utils.toPointerType(&vk.Format.b8g8r8a8_srgb), // TODO: unhardcode
+                .depth_attachment_format = .undefined,
+                .stencil_attachment_format = .undefined,
+            },
         }), null, @ptrCast([*]vk.Pipeline, &pipeline));
         break :blk pipeline;
     };
@@ -283,9 +246,8 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         buffer.* = try vk_allocator.createHostBuffer(vc, imgui.DrawIdx, std.math.maxInt(imgui.DrawIdx), .{ .index_buffer_bit = true });
     }
 
-    var framebuffers: [swapchain_image_count]vk.Framebuffer = undefined;
     var views: [swapchain_image_count]vk.ImageView = undefined;
-    for (&framebuffers, &views, 0..) |*framebuffer, *view, i| {
+    for (&views, 0..) |*view, i| {
         view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
@@ -304,20 +266,10 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .layer_count = 1,
             },
         }, null);
-        framebuffer.* = try vc.device.createFramebuffer(&vk.FramebufferCreateInfo {
-            .attachment_count = 1,
-            .p_attachments = utils.toPointerType(view),
-            .render_pass = render_pass,
-            .width = extent.width,
-            .height = extent.height,
-            .layers = 1,
-        }, null);
     }
 
     return Self {
         .extent = extent,
-
-        .render_pass = render_pass,
 
         .descriptor_set_layout = descriptor_set_layout,
         .pipeline_layout = pipeline_layout,
@@ -330,16 +282,14 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         .vertex_buffers = vertex_buffers,
         .index_buffers = index_buffers,
 
-        .framebuffers = framebuffers,
         .views = views,
     };
 }
 
 pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void {
-    for (self.framebuffers) |framebuffer| vc.device.destroyFramebuffer(framebuffer, null);
     for (self.views) |view| vc.device.destroyImageView(view, null);
 
-    for (&self.framebuffers, &self.views, 0..) |*framebuffer, *view, i| {
+    for (&self.views, 0..) |*view, i| {
         view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
@@ -358,22 +308,12 @@ pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void
                 .layer_count = 1,
             },
         }, null);
-        framebuffer.* = try vc.device.createFramebuffer(&vk.FramebufferCreateInfo {
-            .attachment_count = 1,
-            .p_attachments = utils.toPointerType(view),
-            .render_pass = self.render_pass,
-            .width = swapchain.extent.width,
-            .height = swapchain.extent.height,
-            .layers = 1,
-        }, null);
     }
     self.extent = swapchain.extent;
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    for (self.framebuffers) |framebuffer| vc.device.destroyFramebuffer(framebuffer, null);
     for (self.views) |view| vc.device.destroyImageView(view, null);
-    vc.device.destroyRenderPass(self.render_pass, null);
 
     self.descriptor_set_layout.destroy(vc);
     vc.device.destroyPipelineLayout(self.pipeline_layout, null);
@@ -417,14 +357,24 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         }
     } else return;
 
-    vc.device.cmdBeginRenderPass(command_buffer, &vk.RenderPassBeginInfo {
-        .render_pass = self.render_pass,
-        .framebuffer = self.framebuffers[swapchain_image_index],
+    vc.device.cmdBeginRendering(command_buffer, &vk.RenderingInfo {
         .render_area = vk.Rect2D {
             .offset = vk.Offset2D { .x = 0.0, .y = 0.0, },
             .extent = self.extent,
         },
-    }, .@"inline");
+        .layer_count = 1,
+        .view_mask = 0,
+        .color_attachment_count = 1,
+        .p_color_attachments = utils.toPointerType(&vk.RenderingAttachmentInfo {
+            .image_view = self.views[swapchain_image_index],
+            .image_layout = .color_attachment_optimal,
+            .resolve_mode = .{},
+            .resolve_image_layout = .undefined,
+            .load_op = .load,
+            .store_op = .store,
+            .clear_value = undefined,
+        }),
+    });
     vc.device.cmdBindPipeline(command_buffer, .graphics, self.pipeline);
     vc.device.cmdBindVertexBuffers(command_buffer, 0, 1, utils.toPointerType(&vertex_buffer.handle), utils.toPointerType(&@as(vk.DeviceSize, 0)));
     vc.device.cmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, .uint16);
@@ -469,7 +419,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         global_idx_offset += @intCast(u32, cmd_list.*.IdxBuffer.Size);
         global_vtx_offset += @intCast(u32, cmd_list.*.VtxBuffer.Size);
     }
-    vc.device.cmdEndRenderPass(command_buffer);
+    vc.device.cmdEndRendering(command_buffer);
 }
 
 pub const GuiDescriptorLayout = DescriptorLayout(&.{
