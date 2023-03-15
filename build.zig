@@ -204,6 +204,7 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: C
         path ++ "imgui/imgui_tables.cpp",
         path ++ "imgui/backends/imgui_impl_glfw.cpp",
     }, &.{
+        "-DGLFW_INCLUDE_NONE",
         "-DIMGUI_IMPL_API=extern \"C\"",
     });
     lib.addIncludePath(path ++ "imgui/");
