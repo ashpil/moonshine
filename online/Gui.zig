@@ -30,7 +30,6 @@ pub const required_device_functions = vk.DeviceCommandFlags {
     .cmdEndRendering = true,
 };
 
-const swapchain_image_count = 3; // TODO: expose
 const frames_in_flight = 2; // TODO: expose
 const Self = @This();
 
@@ -47,7 +46,7 @@ font_image_set: vk.DescriptorSet,
 vertex_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawVert),
 index_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawIdx),
 
-views: [swapchain_image_count]vk.ImageView,
+views: std.BoundedArray(vk.ImageView, Swapchain.max_image_count),
 
 pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, extent: vk.Extent2D, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
     if (imgui.getCurrentContext()) |_| @panic("cannot create more than one Gui");
@@ -175,7 +174,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .p_next = &vk.PipelineRenderingCreateInfo {
                 .view_mask = 0,
                 .color_attachment_count = 1,
-                .p_color_attachment_formats = utils.toPointerType(&vk.Format.b8g8r8a8_srgb), // TODO: unhardcode
+                .p_color_attachment_formats = utils.toPointerType(&swapchain.image_format),
                 .depth_attachment_format = .undefined,
                 .stencil_attachment_format = .undefined,
             },
@@ -246,8 +245,11 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         buffer.* = try vk_allocator.createHostBuffer(vc, imgui.DrawIdx, std.math.maxInt(imgui.DrawIdx), .{ .index_buffer_bit = true });
     }
 
-    var views: [swapchain_image_count]vk.ImageView = undefined;
-    for (&views, 0..) |*view, i| {
+    var views = std.BoundedArray(vk.ImageView, Swapchain.max_image_count) {
+        .buffer = undefined,
+        .len = swapchain.images.len,
+    };
+    for (views.slice(), 0..) |*view, i| {
         view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
@@ -287,9 +289,9 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 }
 
 pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void {
-    for (self.views) |view| vc.device.destroyImageView(view, null);
+    for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
 
-    for (&self.views, 0..) |*view, i| {
+    for (self.views.slice(), 0..) |*view, i| {
         view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
@@ -313,7 +315,7 @@ pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    for (self.views) |view| vc.device.destroyImageView(view, null);
+    for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
 
     self.descriptor_set_layout.destroy(vc);
     vc.device.destroyPipelineLayout(self.pipeline_layout, null);
@@ -366,7 +368,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         .view_mask = 0,
         .color_attachment_count = 1,
         .p_color_attachments = utils.toPointerType(&vk.RenderingAttachmentInfo {
-            .image_view = self.views[swapchain_image_index],
+            .image_view = self.views.slice()[swapchain_image_index],
             .image_layout = .color_attachment_optimal,
             .resolve_mode = .{},
             .resolve_image_layout = .undefined,

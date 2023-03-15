@@ -9,13 +9,14 @@ const SwapchainError = error {
     InvalidSurfaceDimensions,
 };
 
-const max_image_count = 3;
+pub const max_image_count = 3;
 
 surface: vk.SurfaceKHR,
 handle: vk.SwapchainKHR,
 images: std.BoundedArray(vk.Image, max_image_count),
 image_index: u32,
 extent: vk.Extent2D,
+image_format: vk.Format,
 
 const Self = @This();
 
@@ -54,6 +55,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
         .surface = surface,
         .handle = handle,
         .images = images,
+        .image_format = settings.format.format,
         .image_index = undefined, // this is odd, is it the best?
         .extent = settings.extent,
     };
