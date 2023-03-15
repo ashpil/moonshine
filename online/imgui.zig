@@ -46,6 +46,49 @@ pub fn showDemoWindow() void {
     c.igShowDemoWindow(null);
 }
 
+pub fn setNextWindowSize(width: f32, height: f32) void {
+    _ = c.igSetNextWindowSize(c.ImVec2 {
+        .x = width,
+        .y = height,
+    }, c.ImGuiCond_FirstUseEver);
+}
+
+pub fn setNextWindowPos(x: f32, y: f32) void {
+    _ = c.igSetNextWindowPos(c.ImVec2 {
+        .x = x,
+        .y = y,
+    }, c.ImGuiCond_FirstUseEver, c.ImVec2 {
+        .x = 0.0,
+        .y = 0.0,
+    });
+}
+
+pub fn text(msg: [*:0]const u8) void {
+    c.igTextUnformatted(msg, null);
+}
+
+pub fn textFmt(comptime fmt: []const u8, args: anytype) !void {
+    var buf: [256]u8 = undefined;
+    const str = try std.fmt.bufPrintZ(&buf, fmt, args);
+    c.igTextUnformatted(str, null);
+}
+
+pub fn separator() void {
+    c.igSeparator();
+}
+
+pub fn separatorText(msg: [*:0]const u8) void {
+    c.igSeparatorText(msg);
+}
+
+pub fn begin(name: [*:0]const u8) void {
+    _ = c.igBegin(name, null, 0);
+}
+
+pub fn end() void {
+    c.igEnd();
+}
+
 pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.Extent2D }) {
     var width: c_int = undefined;
     var height: c_int = undefined;

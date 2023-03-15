@@ -108,7 +108,7 @@ pub fn main() !void {
 
     std.log.info("Created pipeline!", .{});
 
-    const camera_create_info = try Camera.CreateInfo.fromGlb(allocator, config.in_filepath);
+    var camera_create_info = try Camera.CreateInfo.fromGlb(allocator, config.in_filepath);
     var camera = try Camera.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, camera_create_info);
     defer camera.destroy(&context, allocator);
     try commands.transitionImageLayout(&context, allocator, camera.film.images.data.items(.handle)[1..], .@"undefined", .general);
@@ -125,7 +125,7 @@ pub fn main() !void {
 
     var window_data = WindowData {
         .camera = &camera,
-        .camera_info = camera_create_info,
+        .camera_info = &camera_create_info,
     };
 
     window.setAspectRatio(config.extent.width, config.extent.height);
@@ -281,7 +281,15 @@ pub fn main() !void {
         });
     
         gui.startFrame();
-        imgui.showDemoWindow();
+        imgui.setNextWindowPos(50, 50);
+        imgui.begin("Camera");
+        try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
+        try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
+        try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
+        try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
+        try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
+        try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
+        imgui.end();
         gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
 
         // transition swapchain back to present mode
@@ -331,7 +339,7 @@ pub fn main() !void {
 
 const WindowData = struct {
     camera: *Camera,
-    camera_info: Camera.CreateInfo,
+    camera_info: *Camera.CreateInfo,
 };
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Window.ModifierKeys) void {
@@ -372,7 +380,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
         }
 
         window_data.camera_info = camera_info;
-        window_data.camera.properties = Camera.Properties.new(camera_info);
+        window_data.camera.properties = Camera.Properties.new(camera_info.*);
         window_data.camera.film.clear();
     }
 }
