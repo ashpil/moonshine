@@ -14,8 +14,7 @@ const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Commands = engine.rendersystem.Commands;
 const utils = engine.rendersystem.utils;
 const displaysystem = engine.displaysystem;
-
-const Display = displaysystem.Display(2);
+const Display = displaysystem.Display;
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");

@@ -198,7 +198,7 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: C
     const lib = b.addStaticLibrary(.{
         .name = "cimgui",
         .target = target,
-        .optimize = .Debug,
+        .optimize = .ReleaseFast,
     });
     lib.linkLibCpp();
     lib.addCSourceFiles(&.{

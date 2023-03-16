@@ -30,7 +30,7 @@ pub const required_device_functions = vk.DeviceCommandFlags {
     .cmdEndRendering = true,
 };
 
-const frames_in_flight = 2; // TODO: expose
+const frames_in_flight = Display.frames_in_flight;
 const Self = @This();
 
 extent: vk.Extent2D,

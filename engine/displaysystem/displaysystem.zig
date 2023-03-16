@@ -1,4 +1,4 @@
-pub const Display = @import("./display.zig").Display;
+pub const Display = @import("./Display.zig");
 pub const Swapchain = @import("./Swapchain.zig");
 const metrics = @import("build_options").vk_metrics;
 
