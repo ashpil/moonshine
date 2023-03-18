@@ -15,8 +15,9 @@ const utils = @import("./rendersystem/utils.zig");
 
 const Self = @This();
 
-pub const ClickData = struct {
+pub const ClickData = extern struct {
     instance_index: i32,
+    geometry_index: u32,
     primitive_index: u32,
     barycentrics: F32x2,
 };

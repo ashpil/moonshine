@@ -203,6 +203,7 @@ pub fn main() !void {
         imgui.begin("Object");
         if (current_object_data) |data| {
             try imgui.textFmt("Instance index: {d}", .{ data.instance_index });
+            try imgui.textFmt("Geometry index: {d}", .{ data.geometry_index });
         } else {
             imgui.text("No object selected!");
         }

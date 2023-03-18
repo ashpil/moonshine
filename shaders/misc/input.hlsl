@@ -1,5 +1,6 @@
 struct ClickData {
     int instance_index; // -1 if invalid
+    uint geometry_index;
     uint primitive_index;
     float2 barycentrics;
 };
@@ -57,5 +58,6 @@ void miss(inout Payload payload) {
 void chit(inout Payload payload, in float2 attribs) {
     payload.click_data.instance_index = InstanceIndex();
     payload.click_data.primitive_index = PrimitiveIndex();
+    payload.click_data.geometry_index = GeometryIndex();
     payload.click_data.barycentrics = attribs;
 }
