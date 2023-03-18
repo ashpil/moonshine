@@ -135,6 +135,8 @@ pub fn main() !void {
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
 
+    var max_sample_count: u32 = 0; // unlimited
+
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
@@ -154,11 +156,14 @@ pub fn main() !void {
             try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
         }
         if (imgui.collapsingHeader("Film")) {
-            try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
-            imgui.sameLine();
-            if (imgui.smallButton("Reset")) {
+            if (imgui.button("Reset", imgui.Vec2 { .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
                 camera.film.clear();
             }
+            imgui.sameLine();
+            try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
+            imgui.pushItemWidth(imgui.getFontSize() * -10);
+            _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
+            imgui.popItemWidth();
         }
         if (imgui.collapsingHeader("Camera")) {
             try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
@@ -180,13 +185,76 @@ pub fn main() !void {
                 camera.film.clear();
             }
         }
+        imgui.popItemWidth();
         imgui.end();
         imgui.showDemoWindow();
 
-        // transition swap image to one we can blit to from display
-        // and accumulation image to one we can write to in shader
-        const output_image_barriers = [_]vk.ImageMemoryBarrier2 {
-            .{
+        if (max_sample_count != 0 and camera.film.sample_count > max_sample_count) camera.film.clear();
+        if (max_sample_count == 0 or camera.film.sample_count < max_sample_count) {
+            // transition display image to one we can write to in shader
+            context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+                .image_memory_barrier_count = 1,
+                .p_image_memory_barriers = utils.toPointerType(&vk.ImageMemoryBarrier2{
+                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
+                    .dst_access_mask = .{ .shader_storage_write_bit = true, },
+                    .old_layout = .@"undefined",
+                    .new_layout = .general,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = camera.film.images.data.items(.handle)[0],
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                }),
+            });
+
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
+
+            // bind some stuff
+            pipeline.recordBindPipeline(&context, command_buffer);
+            
+            // push some stuff
+            const bytes = std.mem.asBytes(&.{camera.properties, camera.film.sample_count });
+            context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+
+            // trace some stuff
+            pipeline.recordTraceRays(&context, command_buffer, camera.film.extent);
+
+            // transition display image to one we can blit from
+            const image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
+                .{
+                    .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
+                    .src_access_mask = .{ .shader_storage_write_bit = true, },
+                    .dst_stage_mask = .{ .blit_bit = true, },
+                    .dst_access_mask = .{ .transfer_read_bit = true, },
+                    .old_layout = .general,
+                    .new_layout = .transfer_src_optimal,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = camera.film.images.data.items(.handle)[0],
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = 0,
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = 1,
+                    },
+                }
+            };
+            context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+                .image_memory_barrier_count = image_memory_barriers.len,
+                .p_image_memory_barriers = &image_memory_barriers,
+            });
+        }
+
+        // transition swap image to one we can blit to
+        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+            .image_memory_barrier_count = 1,
+            .p_image_memory_barriers = utils.toPointerType(&vk.ImageMemoryBarrier2 {
                 .dst_stage_mask = .{ .blit_bit = true, },
                 .dst_access_mask = .{ .transfer_write_bit = true, },
                 .old_layout = .@"undefined",
@@ -201,65 +269,7 @@ pub fn main() !void {
                     .base_array_layer = 0,
                     .layer_count = 1,
                 },
-            },
-            .{
-                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
-                .dst_access_mask = .{ .shader_storage_write_bit = true, },
-                .old_layout = .@"undefined",
-                .new_layout = .general,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = camera.film.images.data.items(.handle)[0],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = 1,
-                },
-            },
-        };
-        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = output_image_barriers.len,
-            .p_image_memory_barriers = &output_image_barriers,
-        });
-
-        pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
-
-        // bind some stuff
-        pipeline.recordBindPipeline(&context, command_buffer);
-        
-        // push some stuff
-        const bytes = std.mem.asBytes(&.{camera.properties, camera.film.sample_count });
-        context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
-
-        // trace some stuff
-        pipeline.recordTraceRays(&context, command_buffer, camera.film.extent);
-
-        // transition storage image to one we can blit from
-        const image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
-            .{
-                .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
-                .src_access_mask = .{ .shader_storage_write_bit = true, },
-                .dst_stage_mask = .{ .blit_bit = true, },
-                .dst_access_mask = .{ .transfer_read_bit = true, },
-                .old_layout = .general,
-                .new_layout = .transfer_src_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = camera.film.images.data.items(.handle)[0],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = 1,
-                },
-            }
-        };
-        context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = image_memory_barriers.len,
-            .p_image_memory_barriers = &image_memory_barriers,
+            }),
         });
 
         // blit storage image onto swap image
@@ -351,6 +361,7 @@ pub fn main() !void {
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
             camera.film.sample_count += 1;
+            if (max_sample_count != 0) camera.film.sample_count = std.math.min(camera.film.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);

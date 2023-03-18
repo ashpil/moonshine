@@ -90,12 +90,24 @@ pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
     return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, "%d", c.ImGuiSliderFlags_AlwaysClamp);
 }
 
+pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: T, step_fast: T) bool {
+    const data_type = switch (T) {
+        u32 => c.ImGuiDataType_U32,
+        else => unreachable, // TODO
+    };
+    return c.igInputScalar(label, data_type, p_data, &step, &step_fast, "%d", c.ImGuiSliderFlags_AlwaysClamp);
+}
+
 pub fn getFontSize() f32 {
     return c.igGetFontSize();
 }
 
 pub fn pushItemWidth(width: f32) void {
     c.igPushItemWidth(width);
+}
+
+pub fn popItemWidth() void {
+    c.igPopItemWidth();
 }
 
 pub fn button(label: [*:0]const u8, size: Vec2) bool {
