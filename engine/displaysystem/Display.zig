@@ -9,7 +9,7 @@ const Commands = rendersystem.Commands;
 const utils = rendersystem.utils;
 
 const Swapchain = @import("./Swapchain.zig");
-const DestructionQueue = @import("./DestructionQueue.zig");
+const DestructionQueue = @import("../engine.zig").DestructionQueue;
 
 const metrics = @import("build_options").vk_metrics;
 
@@ -21,8 +21,6 @@ frames: [frames_in_flight]Frame,
 frame_index: u8,
 
 swapchain: Swapchain,
-
-destruction_queue: DestructionQueue,
 
 timestamp_period: if (metrics) f32 else void,
 last_frame_time_ns: if (metrics) f64 else void,
@@ -56,19 +54,16 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
         .frames = frames,
         .frame_index = 0,
 
-        .destruction_queue = DestructionQueue.create(), // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
-
         .timestamp_period = timestamp_period,
         .last_frame_time_ns = if (metrics) 0.0 else {},
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.swapchain.destroy(vc);
     inline for (&self.frames) |*frame| {
         frame.destroy(vc);
     }
-    self.destruction_queue.destroy(vc, allocator);
 }
 
 pub fn startFrame(self: *Self, vc: *const VulkanContext) !vk.CommandBuffer {
@@ -93,8 +88,8 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !vk.CommandBuffer {
     return frame.command_buffer;
 }
 
-pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, new_extent: vk.Extent2D) !void {
-    try self.destruction_queue.add(allocator, self.swapchain.handle);
+pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D, destruction_queue: *DestructionQueue, allocator: std.mem.Allocator) !void {
+    try destruction_queue.add(allocator, self.swapchain.handle);
     try self.swapchain.recreate(vc, new_extent);
 }
 

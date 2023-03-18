@@ -1,6 +1,7 @@
 // structs
 pub const Object = @import("./Object.zig");
 pub const ObjectPicker = @import("./ObjectPicker.zig");
+pub const DestructionQueue = @import("./DestructionQueue.zig");
 
 // systems
 pub const rendersystem = @import("./rendersystem/rendersystem.zig");

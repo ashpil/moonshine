@@ -96,6 +96,7 @@
   * Ideally this can be vastly minimized, depending on hardware
     * At most should be doing filesystem to staging buffer
     * On some machines, can do filesystem to GPU directly
+* Destruction queue needs work
 
 ### Some notes about conventions, as idk where else to put them:
 * `+y` is up

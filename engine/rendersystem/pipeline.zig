@@ -27,7 +27,7 @@ pub fn Pipeline(
         comptime shader_codes: anytype,
         comptime module_to_stage: []const comptime_int,
         comptime SetLayouts: type,
-        comptime SpecConstants: type,
+        comptime SpecConstantsT: type,
         comptime push_constant_ranges: []const vk.PushConstantRange,
         comptime stages: []const vk.PipelineShaderStageCreateInfo,
         comptime groups: []const vk.RayTracingShaderGroupCreateInfoKHR,
@@ -39,6 +39,8 @@ pub fn Pipeline(
         sbt: ShaderBindingTable,
 
         const Self = @This();
+
+        pub const SpecConstants = SpecConstantsT;
 
         const set_layout_count = @typeInfo(SetLayouts).Struct.fields.len;
 
@@ -81,7 +83,7 @@ pub fn Pipeline(
                     inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
                         map_entry.* = vk.SpecializationMapEntry {
                             .constant_id = j,
-                            .offset = @bitOffsetOf(field.type, inner_field.name) / 8,
+                            .offset = @offsetOf(field.type, inner_field.name),
                             .size = @sizeOf(inner_field.type),
                         };
                     }
@@ -94,8 +96,7 @@ pub fn Pipeline(
                 }
             }
 
-            var handle: vk.Pipeline = undefined;
-            const createInfo = vk.RayTracingPipelineCreateInfoKHR {
+            const create_info = vk.RayTracingPipelineCreateInfoKHR {
                 .stage_count = var_stages.len,
                 .p_stages = &var_stages,
                 .group_count = groups.len,
@@ -105,7 +106,8 @@ pub fn Pipeline(
                 .base_pipeline_handle = .null_handle,
                 .base_pipeline_index = -1,
             };
-            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &createInfo), null, @ptrCast([*]vk.Pipeline, &handle));
+            var handle: vk.Pipeline = undefined;
+            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &create_info), null, @ptrCast([*]vk.Pipeline, &handle));
             errdefer vc.device.destroyPipeline(handle, null);
 
             const shader_info = ShaderInfo.find(stages);

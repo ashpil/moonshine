@@ -3,6 +3,7 @@ const std = @import("std");
 const engine = @import("engine");
 const Camera = engine.rendersystem.Camera;
 const World = engine.rendersystem.World;
+const DestructionQueue = engine.DestructionQueue;
 const Background = engine.rendersystem.Background;
 const VulkanContext = engine.rendersystem.VulkanContext;
 const VkAllocator = engine.rendersystem.Allocator;
@@ -84,7 +85,7 @@ pub fn main() !void {
 
     const window_extent = window.getExtent();
     var display = try Display.create(&context, window_extent, try window.createSurface(context.instance.handle));
-    defer display.destroy(&context, allocator);
+    defer display.destroy(&context);
 
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
@@ -99,9 +100,13 @@ pub fn main() !void {
     var film_descriptor_layout = try FilmDescriptorLayout.create(&context, 1, .{});
     defer film_descriptor_layout.destroy(&context);
 
+    var destruction_queue = DestructionQueue.create(); // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
+    defer destruction_queue.destroy(&context, allocator);
+
     std.log.info("Set up initial state!", .{});
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ .{} });
+    var pipeline_opts = (Pipeline.SpecConstants {}).@"0";
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipeline!", .{});
@@ -133,12 +138,51 @@ pub fn main() !void {
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
-                try display.recreate(&context, allocator, window.getExtent());
+                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
         };
+
+        gui.startFrame();
+        imgui.setNextWindowPos(50, 50);
+        imgui.setNextWindowSize(250, 150);
+        imgui.begin("Camera");
+        try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
+        imgui.sameLine();
+        if (imgui.smallButton("Reset")) {
+            camera.film.clear();
+        }
+        try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
+        try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
+        try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
+        try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
+        try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
+        imgui.end();
+        imgui.setNextWindowPos(50, 250);
+        imgui.setNextWindowSize(250, 100);
+        imgui.begin("Metrics");
+        try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
+        try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
+        imgui.end();
+        imgui.setNextWindowPos(50, 400);
+        imgui.setNextWindowSize(250, 150);
+        imgui.begin("Pipeline");
+        imgui.pushItemWidth(imgui.getFontSize() * -14.2);
+        _ = imgui.dragScalar(u32, "Samples per frame", &pipeline_opts.samples_per_run, 1.0, 1, std.math.maxInt(u32));
+        _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
+        _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+        _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+        if (imgui.button("Rebuild", imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
+            try destruction_queue.add(allocator, pipeline.layout);
+            try destruction_queue.add(allocator, pipeline.handle);
+            try destruction_queue.add(allocator, pipeline.sbt.handle);
+            pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
+            camera.film.clear();
+        }
+        imgui.end();
+
         // transition swap image to one we can blit to from display
         // and accumulation image to one we can write to in shader
         const output_image_barriers = [_]vk.ImageMemoryBarrier2 {
@@ -277,24 +321,7 @@ pub fn main() !void {
                 }
             },
         });
-    
-        gui.startFrame();
-        imgui.setNextWindowPos(50, 50);
-        imgui.setNextWindowSize(250, 150);
-        imgui.begin("Camera");
-        try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
-        try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
-        try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
-        try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
-        try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
-        try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
-        imgui.end();
-        imgui.setNextWindowPos(50, 250);
-        imgui.setNextWindowSize(250, 100);
-        imgui.begin("Metrics");
-        try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
-        try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
-        imgui.end();
+
         gui.endFrame(&context, command_buffer, display.swapchain.image_index, display.frame_index);
 
         // transition swapchain back to present mode
@@ -325,12 +352,12 @@ pub fn main() !void {
             // only update frame count if we presented successfully
             camera.film.sample_count += 1;
             if (ok == vk.Result.suboptimal_khr) {
-                try display.recreate(&context, allocator, window.getExtent());
+                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
             }
         } else |err| {
             if (err == error.OutOfDateKHR) {
-                try display.recreate(&context, allocator, window.getExtent());
+                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
             }
         }

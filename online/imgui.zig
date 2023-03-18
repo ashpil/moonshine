@@ -11,6 +11,7 @@ pub const Context = c.ImGuiContext;
 pub const IO = c.ImGuiIO;
 pub const FontAtlas = c.ImFontAtlas;
 pub const DrawData = c.ImDrawData;
+pub const Vec2 = c.ImVec2;
 
 pub fn createContext() void {
     _ = c.igCreateContext(null);
@@ -79,6 +80,40 @@ pub fn separator() void {
 
 pub fn separatorText(msg: [*:0]const u8) void {
     c.igSeparatorText(msg);
+}
+
+pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T, max: T) bool {
+    const data_type = switch (T) {
+        u32 => c.ImGuiDataType_U32,
+        else => unreachable, // TODO
+    };
+    return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, "%d", c.ImGuiSliderFlags_AlwaysClamp);
+}
+
+pub fn getFontSize() f32 {
+    return c.igGetFontSize();
+}
+
+pub fn pushItemWidth(width: f32) void {
+    c.igPushItemWidth(width);
+}
+
+pub fn button(label: [*:0]const u8, size: Vec2) bool {
+    return c.igButton(label, size);
+}
+
+pub fn smallButton(label: [*:0]const u8) bool {
+    return c.igSmallButton(label);
+}
+
+pub fn getContentRegionAvail() Vec2 {
+    var vec2: c.ImVec2 = undefined;
+    c.igGetContentRegionAvail(&vec2);
+    return vec2;
+}
+
+pub fn sameLine() void {
+    c.igSameLine(0.0, -1.0);
 }
 
 pub fn begin(name: [*:0]const u8) void {
