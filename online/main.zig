@@ -135,9 +135,11 @@ pub fn main() !void {
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
 
+    // random state we need for gui
     var max_sample_count: u32 = 0; // unlimited
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
+    var current_samples_per_run = pipeline_opts.samples_per_run;
 
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -184,6 +186,7 @@ pub fn main() !void {
                 try pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{ pipeline_opts }, &destruction_queue);
                 const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                 rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{ elapsed });
+                current_samples_per_run = pipeline_opts.samples_per_run;
                 camera.film.clear();
             }
         }
@@ -362,7 +365,7 @@ pub fn main() !void {
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
-            camera.film.sample_count += 1;
+            camera.film.sample_count += current_samples_per_run;
             if (max_sample_count != 0) camera.film.sample_count = std.math.min(camera.film.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
