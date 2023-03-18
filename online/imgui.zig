@@ -12,6 +12,11 @@ pub const IO = c.ImGuiIO;
 pub const FontAtlas = c.ImFontAtlas;
 pub const DrawData = c.ImDrawData;
 pub const Vec2 = c.ImVec2;
+pub const MouseButton = enum(c_int) {
+    left = c.ImGuiMouseButton_Left,
+    right = c.ImGuiMouseButton_Right,
+    middle = c.ImGuiMouseButton_Middle,
+};
 
 pub fn createContext() void {
     _ = c.igCreateContext(null);
@@ -96,6 +101,10 @@ pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: T, 
         else => unreachable, // TODO
     };
     return c.igInputScalar(label, data_type, p_data, &step, &step_fast, "%d", c.ImGuiSliderFlags_AlwaysClamp);
+}
+
+pub fn isMouseClicked(mouse_button: MouseButton) bool {
+    return c.igIsMouseClicked_Bool(@enumToInt(mouse_button), false);
 }
 
 pub fn getFontSize() f32 {

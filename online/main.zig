@@ -15,6 +15,7 @@ const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Commands = engine.rendersystem.Commands;
 const utils = engine.rendersystem.utils;
 const displaysystem = engine.displaysystem;
+const ObjectPicker = engine.ObjectPicker;
 const Display = displaysystem.Display;
 
 const Window = @import("./Window.zig");
@@ -111,6 +112,9 @@ pub fn main() !void {
 
     std.log.info("Created pipeline!", .{});
 
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, world_descriptor_layout, &commands);
+    defer object_picker.destroy(&context);
+
     var camera_create_info = try Camera.CreateInfo.fromGlb(allocator, config.in_filepath);
     var camera = try Camera.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, camera_create_info);
     defer camera.destroy(&context, allocator);
@@ -140,6 +144,7 @@ pub fn main() !void {
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var current_samples_per_run = pipeline_opts.samples_per_run;
+    var current_object_data: ?ObjectPicker.ClickData = null;
 
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -152,6 +157,7 @@ pub fn main() !void {
         };
 
         gui.startFrame();
+        imgui.setNextWindowPos(50, 50);
         imgui.setNextWindowSize(250, 400);
         imgui.begin("Settings");
         imgui.pushItemWidth(imgui.getFontSize() * -14.2);
@@ -192,6 +198,22 @@ pub fn main() !void {
         }
         imgui.popItemWidth();
         imgui.end();
+        imgui.setNextWindowPos(50, 475);
+        imgui.setNextWindowSize(250, 200);
+        imgui.begin("Object");
+        if (current_object_data) |data| {
+            try imgui.textFmt("Instance index: {d}", .{ data.instance_index });
+        } else {
+            imgui.text("No object selected!");
+        }
+        imgui.end();
+        if (imgui.isMouseClicked(.left) and !imgui.getIO().WantCaptureMouse) {
+            const pos = window.getCursorPos();
+            const x = @floatCast(f32, pos.x) / @intToFloat(f32, display.swapchain.extent.width);
+            const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
+            const new_object_data = try object_picker.getClick(&context, F32x2.new(x, y), camera, world.descriptor_set);
+            if (new_object_data.instance_index != -1) current_object_data = new_object_data;
+        }
         imgui.showDemoWindow();
 
         if (max_sample_count != 0 and camera.film.sample_count > max_sample_count) camera.film.clear();
