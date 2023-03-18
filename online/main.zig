@@ -136,6 +136,8 @@ pub fn main() !void {
     window.setKeyCallback(keyCallback);
 
     var max_sample_count: u32 = 0; // unlimited
+    var rebuild_label_buffer: [20]u8 = undefined;
+    var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
 
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -177,11 +179,11 @@ pub fn main() !void {
             _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-            if (imgui.button("Rebuild", imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
-                try destruction_queue.add(allocator, pipeline.layout);
-                try destruction_queue.add(allocator, pipeline.handle);
-                try destruction_queue.add(allocator, pipeline.sbt.handle);
-                pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
+            if (imgui.button(rebuild_label, imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
+                const start = try std.time.Instant.now();
+                try pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{ pipeline_opts }, &destruction_queue);
+                const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
+                rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{ elapsed });
                 camera.film.clear();
             }
         }

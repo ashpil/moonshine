@@ -18,6 +18,8 @@ const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
 
+const DestructionQueue = @import("../engine.zig").DestructionQueue;
+
 const PushConstant = struct {
     type: type,
     stage_flags: vk.ShaderStageFlags,
@@ -120,6 +122,65 @@ pub fn Pipeline(
 
                 .sbt = sbt,
             };
+        }
+
+        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
+            try destruction_queue.add(allocator, self.handle);
+
+            var modules: [shader_codes.len]vk.ShaderModule = undefined;
+            inline for (shader_codes, &modules) |shader_code, *module| {
+                module.* = try vc.device.createShaderModule(&.{
+                    .code_size = shader_code.len,
+                    .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
+                }, null);
+            }
+            defer for (modules) |module| {
+                vc.device.destroyShaderModule(module, null);
+            };
+
+            var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
+            inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
+                var_stage.* = stage;
+                var_stage.module = modules[map];
+            }
+
+            inline for (@typeInfo(SpecConstants).Struct.fields, 0..) |field, i| {
+                if (@sizeOf(field.type) != 0) {
+                    const inner_fields = @typeInfo(field.type).Struct.fields;
+                    var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
+                    inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
+                        map_entry.* = vk.SpecializationMapEntry {
+                            .constant_id = j,
+                            .offset = @offsetOf(field.type, inner_field.name),
+                            .size = @sizeOf(inner_field.type),
+                        };
+                    }
+                    var_stages[i].p_specialization_info = &vk.SpecializationInfo {
+                        .map_entry_count = map_entries.len,
+                        .p_map_entries = &map_entries,
+                        .data_size = @sizeOf(field.type),
+                        .p_data = &@field(constants, field.name),
+                    };
+                }
+            }
+
+            const create_info = vk.RayTracingPipelineCreateInfoKHR {
+                .stage_count = var_stages.len,
+                .p_stages = &var_stages,
+                .group_count = groups.len,
+                .p_groups = groups.ptr,
+                .max_pipeline_ray_recursion_depth = 1,
+                .layout = self.layout,
+                .base_pipeline_handle = .null_handle,
+                .base_pipeline_index = -1,
+            };
+            var handle: vk.Pipeline = undefined;
+            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &create_info), null, @ptrCast([*]vk.Pipeline, &handle));
+            errdefer vc.device.destroyPipeline(handle, null);
+
+            try self.sbt.recreate(vc, vk_allocator, handle, cmd);
+
+            self.handle = handle;
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {
@@ -242,6 +303,7 @@ const ShaderInfo = struct {
     }
 };
 
+// TODO: maybe use vkCmdUploadBuffer here
 const ShaderBindingTable = struct {
     handle: VkAllocator.DeviceBuffer,
 
@@ -311,6 +373,37 @@ const ShaderBindingTable = struct {
 
             .handle_size_aligned = handle_size_aligned,
         };
+    }
+
+    // recreate with with same table entries but new pipeline
+    fn recreate(self: *ShaderBindingTable, vc: *const VulkanContext, vk_allocator: *VkAllocator, pipeline: vk.Pipeline, cmd: *Commands) !void {
+        const handle_size_aligned = self.handle_size_aligned;
+        const group_count = self.raygen_count + self.miss_count + self.hit_count + self.callable_count;
+        
+        const raygen_index = 0;
+        const miss_index = std.mem.alignForwardGeneric(u32, raygen_index + self.raygen_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
+        const hit_index = std.mem.alignForwardGeneric(u32, miss_index + self.miss_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
+        const callable_index = std.mem.alignForwardGeneric(u32, hit_index + self.hit_count * handle_size_aligned, vc.physical_device.raytracing_properties.shader_group_base_alignment);
+        const sbt_size = callable_index + self.callable_count * handle_size_aligned;
+
+        // query sbt from pipeline
+        const sbt = try vk_allocator.createHostBuffer(vc, u8, sbt_size, .{ .transfer_src_bit = true });
+        defer sbt.destroy(vc);
+        try vc.device.getRayTracingShaderGroupHandlesKHR(pipeline, 0, group_count, sbt.data.len, sbt.data.ptr);
+
+        const raygen_size = handle_size_aligned * self.raygen_count;
+        const miss_size = handle_size_aligned * self.miss_count;
+        const hit_size = handle_size_aligned * self.hit_count;
+        const callable_size = handle_size_aligned * self.callable_count;
+        
+        // must align up to shader_group_base_alignment
+        std.mem.copyBackwards(u8, sbt.data[callable_index..callable_index + callable_size], sbt.data[raygen_size + miss_size + hit_size..raygen_size + miss_size + hit_size + callable_size]);
+        std.mem.copyBackwards(u8, sbt.data[hit_index..hit_index + hit_size], sbt.data[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
+        std.mem.copyBackwards(u8, sbt.data[miss_index..miss_index + miss_size], sbt.data[raygen_size..raygen_size + miss_size]);
+        
+        try cmd.startRecording(vc);
+        cmd.recordUploadBuffer(u8, vc, self.handle, sbt);
+        try cmd.submitAndIdleUntilDone(vc);
     }
 
     pub fn getRaygenSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
