@@ -116,6 +116,10 @@ pub fn sameLine() void {
     c.igSameLine(0.0, -1.0);
 }
 
+pub fn collapsingHeader(label: [*:0]const u8) bool {
+    return c.igCollapsingHeader_TreeNodeFlags(label, 0);
+}
+
 pub fn begin(name: [*:0]const u8) void {
     _ = c.igBegin(name, null, 0);
 }

@@ -146,42 +146,42 @@ pub fn main() !void {
         };
 
         gui.startFrame();
-        imgui.setNextWindowPos(50, 50);
-        imgui.setNextWindowSize(250, 150);
-        imgui.begin("Camera");
-        try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
-        imgui.sameLine();
-        if (imgui.smallButton("Reset")) {
-            camera.film.clear();
-        }
-        try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
-        try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
-        try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
-        try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
-        try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
-        imgui.end();
-        imgui.setNextWindowPos(50, 250);
-        imgui.setNextWindowSize(250, 100);
-        imgui.begin("Metrics");
-        try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
-        try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
-        imgui.end();
-        imgui.setNextWindowPos(50, 400);
-        imgui.setNextWindowSize(250, 150);
-        imgui.begin("Pipeline");
+        imgui.setNextWindowSize(250, 400);
+        imgui.begin("Settings");
         imgui.pushItemWidth(imgui.getFontSize() * -14.2);
-        _ = imgui.dragScalar(u32, "Samples per frame", &pipeline_opts.samples_per_run, 1.0, 1, std.math.maxInt(u32));
-        _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
-        _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-        _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-        if (imgui.button("Rebuild", imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
-            try destruction_queue.add(allocator, pipeline.layout);
-            try destruction_queue.add(allocator, pipeline.handle);
-            try destruction_queue.add(allocator, pipeline.sbt.handle);
-            pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
-            camera.film.clear();
+        if (imgui.collapsingHeader("Metrics")) {
+            try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
+            try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
+        }
+        if (imgui.collapsingHeader("Film")) {
+            try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
+            imgui.sameLine();
+            if (imgui.smallButton("Reset")) {
+                camera.film.clear();
+            }
+        }
+        if (imgui.collapsingHeader("Camera")) {
+            try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
+            try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
+            try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
+            try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
+            try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
+        }
+        if (imgui.collapsingHeader("Pipeline")) {
+            _ = imgui.dragScalar(u32, "Samples per frame", &pipeline_opts.samples_per_run, 1.0, 1, std.math.maxInt(u32));
+            _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
+            _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+            _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+            if (imgui.button("Rebuild", imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
+                try destruction_queue.add(allocator, pipeline.layout);
+                try destruction_queue.add(allocator, pipeline.handle);
+                try destruction_queue.add(allocator, pipeline.sbt.handle);
+                pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
+                camera.film.clear();
+            }
         }
         imgui.end();
+        imgui.showDemoWindow();
 
         // transition swap image to one we can blit to from display
         // and accumulation image to one we can write to in shader
