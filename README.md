@@ -44,26 +44,6 @@
   * Figure out proper way to do whole shader binding thing -- how to avoid globals?
   * More camera models
     * Orthographic
-  * Add dev interface:
-    * UI vs CLI?
-      * UI prettier, better for demos
-      * UI better learning curve 
-      * CLI easier to get set up
-      * Probably do CLI first then UI after if still want
-    * Set:
-      * certain debug modes
-      * whether certain path tracing techniques are used
-      * Scene
-      * Background
-      * Samples per pixel, light samples, etc
-      * Camera settings (ortho vs persp)
-      * Max samples
-    * Display:
-      * Perf stuff
-      * Current camera settings
-      * Current scene info
-    * Commands:
-      * Refresh frame count
   * Materials
     * Metal
     * Rough metal
