@@ -211,7 +211,7 @@ pub fn main() !void {
             imgui.alignTextToFramePadding();
             imgui.text("Material index:");
             imgui.sameLine();
-            if (imgui.inputScalar(u32, "", &geometry.material, null, null)) {
+            if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.materials_host.data.len) {
                 world.accel.recordUpdateSingleMaterial(&context, command_buffer, @intCast(u32, data.instance_index), data.geometry_index, geometry.material);
                 camera.film.clear();
             }
@@ -222,6 +222,9 @@ pub fn main() !void {
             try imgui.textFmt("Index count: {d}", .{ mesh.index_count });
             try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
             try imgui.textFmt("Has normals: {}", .{ mesh.normal_buffer != null });
+            imgui.separatorText("material");
+            const material_type = world.material_manager.materials_host.data[geometry.material].type;
+            try imgui.textFmt("type: {s}", .{ @tagName(material_type) });
         } else {
             imgui.text("No object selected!");
         }
