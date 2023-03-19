@@ -30,7 +30,6 @@ pub fn build(b: *std.build.Builder) void {
         const tests = b.addTest(.{
             .name = "tests",
             .root_source_file = .{ .path = "engine/tests.zig" },
-            .kind = .test_exe,
             .target = target,
             .optimize = optimize,
         });
@@ -44,7 +43,7 @@ pub fn build(b: *std.build.Builder) void {
         const run = tests.run();
         run.step.dependOn(b.getInstallStep());
 
-        b.step("test", "Run engine tests").dependOn(&run.step);
+        b.step("tests", "Run engine tests").dependOn(&run.step);
     }
 
     // online exe
