@@ -15,14 +15,34 @@ const utils = @import("./rendersystem/utils.zig");
 
 const Self = @This();
 
-pub const ClickData = extern struct {
-    instance_index: i32,
+const ClickDataShader = extern struct {
+    instance_index: i32, // -1 if clicked background
+    geometry_index: u32,
+    primitive_index: u32,
+    barycentrics: F32x2,
+
+    pub fn toClickedObject(self: ClickDataShader) ?ClickedObject {
+        if (self.instance_index == -1) {
+            return null;
+        } else {
+            return ClickedObject {
+                .instance_index = @intCast(u32, self.instance_index),
+                .geometry_index = self.geometry_index,
+                .primitive_index = self.primitive_index,
+                .barycentrics = self.barycentrics,
+            };
+        }
+    }
+};
+
+pub const ClickedObject = struct {
+    instance_index: u32,
     geometry_index: u32,
     primitive_index: u32,
     barycentrics: F32x2,
 };
 
-buffer: VkAllocator.HostBuffer(ClickData),
+buffer: VkAllocator.HostBuffer(ClickDataShader),
 pipeline: Pipeline,
 
 descriptor_layout: InputDescriptorLayout,
@@ -33,7 +53,7 @@ command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, commands: *Commands) !Self {
-    const buffer = try vk_allocator.createHostBuffer(vc, ClickData, 1, .{ .storage_buffer_bit = true });
+    const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
 
     const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
 
@@ -93,7 +113,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn getClick(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet) !ClickData {
+pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet) !?ClickedObject {
     // begin
     try vc.device.beginCommandBuffer(self.command_buffer, &.{
         .flags = .{},
@@ -136,7 +156,7 @@ pub fn getClick(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2,
     try vc.device.resetFences(1, utils.toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});
 
-    return self.buffer.data[0];
+    return self.buffer.data[0].toClickedObject();
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {

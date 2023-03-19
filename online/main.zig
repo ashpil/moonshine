@@ -144,7 +144,7 @@ pub fn main() !void {
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var current_samples_per_run = pipeline_opts.samples_per_run;
-    var current_object_data: ?ObjectPicker.ClickData = null;
+    var current_clicked_object: ?ObjectPicker.ClickedObject = null;
 
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -211,11 +211,11 @@ pub fn main() !void {
         imgui.setNextWindowSize(250, 200);
         imgui.begin("Object");
         imgui.pushItemWidth(imgui.getFontSize() * 2);
-        if (current_object_data) |data| {
+        if (current_clicked_object) |object| {
             imgui.separatorText("data");
-            try imgui.textFmt("Instance index: {d}", .{ data.instance_index });
-            try imgui.textFmt("Geometry index: {d}", .{ data.geometry_index });
-            var geometry = world.accel.getGeometry(@intCast(u32, data.instance_index), data.geometry_index);
+            try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
+            try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
+            var geometry = world.accel.getGeometry(object.instance_index, object.geometry_index);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
             imgui.alignTextToFramePadding();
             imgui.text("Material index:");
@@ -223,7 +223,7 @@ pub fn main() !void {
             imgui.pushItemWidth(imgui.getFontSize() * 2);
             const material_type = world.material_manager.materials_host.data[geometry.material].type;
             if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.materials_host.data.len) {
-                world.accel.recordUpdateSingleMaterial(&context, command_buffer, @intCast(u32, data.instance_index), data.geometry_index, geometry.material);
+                world.accel.recordUpdateSingleMaterial(&context, command_buffer, object.instance_index, object.geometry_index, geometry.material);
                 camera.film.clear();
             }
             imgui.popItemWidth();
@@ -237,12 +237,12 @@ pub fn main() !void {
             imgui.separatorText("material");
             try imgui.textFmt("type: {s}", .{ @tagName(material_type) });
             imgui.separatorText("transform");
-            const instance = world.accel.instances_host.data[@intCast(u32, data.instance_index)];
+            const instance = world.accel.instances_host.data[object.instance_index];
             const old_transform = @bitCast(Mat3x4, instance.transform);
             var translation = old_transform.extract_translation();
             imgui.pushItemWidth(imgui.getFontSize() * -6);
             if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
-                world.accel.recordUpdateSingleTransform(&context, command_buffer, @intCast(u32, data.instance_index), old_transform.with_translation(translation));
+                world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
                 try world.accel.recordRebuild(&context, command_buffer);
                 camera.film.clear();
             }
@@ -255,8 +255,7 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @floatCast(f32, pos.x) / @intToFloat(f32, display.swapchain.extent.width);
             const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
-            const new_object_data = try object_picker.getClick(&context, F32x2.new(x, y), camera, world.descriptor_set);
-            if (new_object_data.instance_index != -1) current_object_data = new_object_data;
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), camera, world.descriptor_set);
         }
         imgui.showDemoWindow();
 
