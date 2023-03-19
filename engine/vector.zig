@@ -22,6 +22,9 @@ pub fn Vec2(comptime T: type) type {
         x: T,
         y: T,
 
+        pub const element_count = 2;
+        pub const Inner = T;
+
         const Self = @This();
 
         pub fn new(x: T, y: T) Self {
@@ -45,6 +48,9 @@ pub fn Vec3(comptime T: type) type {
 
         const zero = intToT(T, 0);
         const one = intToT(T, 1);
+
+        pub const element_count = 3;
+        pub const Inner = T;
 
         pub const e_0 = Self.new(one, zero, zero);
         pub const e_1 = Self.new(zero, one, zero);
@@ -126,6 +132,9 @@ pub fn Vec4(comptime T: type) type {
 
         const zero = intToT(T, 0);
         const one = intToT(T, 1);
+
+        pub const element_count = 4;
+        pub const Inner = T;
 
         pub const e_0 = Self.new(one, zero, zero, zero);
         pub const e_1 = Self.new(zero, one, zero, zero);

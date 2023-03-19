@@ -160,7 +160,6 @@ pub fn main() !void {
         imgui.setNextWindowPos(50, 50);
         imgui.setNextWindowSize(250, 400);
         imgui.begin("Settings");
-        imgui.pushItemWidth(imgui.getFontSize() * -14.2);
         if (imgui.collapsingHeader("Metrics")) {
             try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
             try imgui.textFmt("Framerate: {d:.2} FPS", .{ imgui.getIO().Framerate });
@@ -176,13 +175,23 @@ pub fn main() !void {
             imgui.popItemWidth();
         }
         if (imgui.collapsingHeader("Camera")) {
-            try imgui.textFmt("Focus distance: {d:.2}", .{ camera_create_info.focus_distance });
-            try imgui.textFmt("Aperture size: {d:.2}", .{ camera_create_info.aperture });
-            try imgui.textFmt("Origin: {d:.2}", .{ camera_create_info.origin });
-            try imgui.textFmt("Forward: {d:.2}", .{ camera_create_info.forward });
-            try imgui.textFmt("Up: {d:.2}", .{ camera_create_info.forward });
+            imgui.pushItemWidth(imgui.getFontSize() * -7.5);
+            var changed = imgui.sliderAngle("Vertical FOV", &camera_create_info.vfov, 1, 179);
+            changed = imgui.dragScalar(f32, "Focus distance", &camera_create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &camera_create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Origin", &camera_create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Forward", &camera_create_info.forward, 0.1, -1.0, 1.0) or changed;
+            changed = imgui.dragVector(F32x3, "Up", &camera_create_info.up, 0.1, -1.0, 1.0) or changed;
+            if (changed) {
+                camera_create_info.forward = camera_create_info.forward.unit();
+                camera_create_info.up = camera_create_info.up.unit();
+                camera.properties = Camera.Properties.new(camera_create_info);
+                camera.film.clear();
+            }
+            imgui.popItemWidth();
         }
         if (imgui.collapsingHeader("Pipeline")) {
+            imgui.pushItemWidth(imgui.getFontSize() * -14.2);
             _ = imgui.dragScalar(u32, "Samples per frame", &pipeline_opts.samples_per_run, 1.0, 1, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
@@ -195,8 +204,8 @@ pub fn main() !void {
                 current_samples_per_run = pipeline_opts.samples_per_run;
                 camera.film.clear();
             }
+            imgui.popItemWidth();
         }
-        imgui.popItemWidth();
         imgui.end();
         imgui.setNextWindowPos(50, 475);
         imgui.setNextWindowSize(250, 200);

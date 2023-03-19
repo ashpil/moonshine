@@ -90,9 +90,35 @@ pub fn separatorText(msg: [*:0]const u8) void {
 pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T, max: T) bool {
     const data_type = switch (T) {
         u32 => c.ImGuiDataType_U32,
+        f32 => c.ImGuiDataType_Float,
         else => unreachable, // TODO
     };
-    return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, "%d", c.ImGuiSliderFlags_AlwaysClamp);
+    const format = switch (T) {
+        u32 => "%d",
+        f32 => "%.2f",
+        else => unreachable, // TODO
+    };
+    return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
+}
+
+pub fn dragVector(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.Inner, max: T.Inner) bool {
+    const data_type = switch (T.Inner) {
+        u32 => c.ImGuiDataType_U32,
+        f32 => c.ImGuiDataType_Float,
+        else => unreachable, // TODO
+    };
+    const format = switch (T.Inner) {
+        u32 => "%d",
+        f32 => "%.2f",
+        else => unreachable, // TODO
+    };
+    const component_count = T.element_count;
+
+    return c.igDragScalarN(label, data_type, p_data, component_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
+}
+
+pub fn sliderAngle(label: [*:0]const u8, p_rad: *f32, degrees_min: f32, degrees_max: f32) bool {
+    return c.igSliderAngle(label, p_rad, degrees_min, degrees_max, "%.0f deg", c.ImGuiSliderFlags_AlwaysClamp);
 }
 
 pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T, step_fast: ?T) bool {
