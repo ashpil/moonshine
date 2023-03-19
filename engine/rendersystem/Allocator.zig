@@ -135,9 +135,11 @@ pub fn HostBuffer(comptime T: type) type {
         const BufferSelf = @This();
 
         pub fn destroy(self: BufferSelf, vc: *const VulkanContext) void {
-            vc.device.destroyBuffer(self.handle, null);
-            vc.device.unmapMemory(self.memory);
-            vc.device.freeMemory(self.memory, null);
+            if (self.handle != .null_handle) {
+                vc.device.destroyBuffer(self.handle, null);
+                vc.device.unmapMemory(self.memory);
+                vc.device.freeMemory(self.memory, null);
+            }
         }
 
         // must've been created with shader device address bit enabled
