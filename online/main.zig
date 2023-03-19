@@ -158,7 +158,7 @@ pub fn main() !void {
 
         gui.startFrame();
         imgui.setNextWindowPos(50, 50);
-        imgui.setNextWindowSize(250, 400);
+        imgui.setNextWindowSize(250, 350);
         imgui.begin("Settings");
         if (imgui.collapsingHeader("Metrics")) {
             try imgui.textFmt("Last frame time: {d:.3}ms", .{ display.last_frame_time_ns / std.time.ns_per_ms });
@@ -207,8 +207,8 @@ pub fn main() !void {
             imgui.popItemWidth();
         }
         imgui.end();
-        imgui.setNextWindowPos(50, 475);
-        imgui.setNextWindowSize(250, 200);
+        imgui.setNextWindowPos(@intToFloat(f32, display.swapchain.extent.width - 50) - 250, 50);
+        imgui.setNextWindowSize(250, 350);
         imgui.begin("Object");
         imgui.pushItemWidth(imgui.getFontSize() * 2);
         if (current_clicked_object) |object| {
@@ -257,7 +257,6 @@ pub fn main() !void {
             const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), camera, world.descriptor_set);
         }
-        imgui.showDemoWindow();
 
         if (max_sample_count != 0 and camera.film.sample_count > max_sample_count) camera.film.clear();
         if (max_sample_count == 0 or camera.film.sample_count < max_sample_count) {
