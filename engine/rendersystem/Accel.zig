@@ -77,8 +77,6 @@ tlas_update_scratch_address: vk.DeviceAddress,
 
 alias_table: VkAllocator.DeviceBuffer, // to sample lights
 
-changed: bool,
-
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance_infos: InstanceInfos, mesh_groups: []const MeshGroup) !Self {
@@ -455,23 +453,52 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .instance_idx_to_offset = instance_idx_to_offset,
 
         .alias_table = alias_table,
-
-        .changed = false,
     };
 }
 
-// TODO: these working with new transform buffers
-pub fn updateTransform(self: *Self, instance_idx: u32, transform: Mat3x4) void {
-    self.changed = true;
-
+// probably bad idea if you're changing many
+// must recordRebuild to see changes
+pub fn recordUpdateSingleTransform(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, new_transform: Mat3x4) void {
     self.instances_host.data[instance_idx].transform = vk.TransformMatrixKHR {
-        .matrix = @bitCast([3][4]f32, transform),
+        .matrix = @bitCast([3][4]f32, new_transform),
     };
+    const offset = @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_idx + @offsetOf(vk.AccelerationStructureInstanceKHR, "transform");
+    const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
+    const size = @sizeOf(vk.TransformMatrixKHR);
+    vc.device.cmdUpdateBuffer(command_buffer, self.instances_device.handle, offset, size, &new_transform);
+    vc.device.cmdUpdateBuffer(command_buffer, self.world_to_instance.handle, offset_inverse, size, &new_transform.inverse_affine());
+    const barriers = [_]vk.BufferMemoryBarrier2 {
+        .{
+            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .buffer = self.instances_device.handle,
+            .offset = offset,
+            .size = size,
+        },
+        .{
+            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .shader_storage_read_bit = true },
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .buffer = self.world_to_instance.handle,
+            .offset = offset_inverse,
+            .size = size,
+        },
+    };
+    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        .buffer_memory_barrier_count = barriers.len,
+        .p_buffer_memory_barriers = &barriers,
+    });
 }
 
+// TODO: get it working
 pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
-    self.changed = true;
-    
     self.instances_host.data[instance_idx].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
 }
 
@@ -479,67 +506,76 @@ pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
 pub fn recordUpdateSingleMaterial(self: Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, geometry_idx: u32, new_material_idx: u32) void {
     const idx = self.instance_idx_to_offset[instance_idx] + geometry_idx;
     self.geometries_host.data[idx].material = new_material_idx;
-    vc.device.cmdUpdateBuffer(command_buffer, self.geometries.handle, @sizeOf(Geometry) * idx + @offsetOf(Geometry, "material"), @sizeOf(u32), &new_material_idx);
+    const offset = @sizeOf(Geometry) * idx + @offsetOf(Geometry, "material");
+    const size = @sizeOf(u32);
+    vc.device.cmdUpdateBuffer(command_buffer, self.geometries.handle, offset, size, &new_material_idx);
+    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        .buffer_memory_barrier_count = 1,
+        .p_buffer_memory_barriers = utils.toPointerType(&vk.BufferMemoryBarrier2 {
+            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .shader_storage_read_bit = true },
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .buffer = self.geometries.handle,
+            .offset = offset,
+            .size = size,
+        }),
+    });
 }
 
-pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
-    if (self.changed) {
-        const geometry = vk.AccelerationStructureGeometryKHR {
-            .geometry_type = .instances_khr,
-            .flags = .{ .opaque_bit_khr = true },
-            .geometry = .{
-                .instances = .{
-                    .array_of_pointers = vk.FALSE,
-                    .data = .{
-                        .device_address = self.instances_address,
-                    }
+pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
+    const geometry = vk.AccelerationStructureGeometryKHR {
+        .geometry_type = .instances_khr,
+        .flags = .{ .opaque_bit_khr = true },
+        .geometry = .{
+            .instances = .{
+                .array_of_pointers = vk.FALSE,
+                .data = .{
+                    .device_address = self.instances_address,
                 }
-            },
-        };
-
-        var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-            .@"type" = .top_level_khr,
-            .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
-            .mode = .update_khr,
-            .src_acceleration_structure = self.tlas_handle,
-            .dst_acceleration_structure = self.tlas_handle,
-            .geometry_count = 1,
-            .p_geometries = utils.toPointerType(&geometry),
-            .pp_geometries = null,
-            .scratch_data = .{
-                .device_address = self.tlas_update_scratch_address,
-            },
-        };
-
-        const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
-            .primitive_count = @intCast(u32, self.instances_host.data.len),
-            .first_vertex = 0,
-            .primitive_offset = 0,
-            .transform_offset = 0,
-        };
-
-        const build_info_ref = utils.toPointerType(&build_info);
-
-        vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
-
-        const barriers = [_]vk.MemoryBarrier2 {
-            .{
-                .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-                .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
-                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
             }
-        };
-        vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
-            .dependency_flags = .{},
-            .memory_barrier_count = barriers.len,
-            .p_memory_barriers = &barriers,
-            .buffer_memory_barrier_count = 0,
-            .p_buffer_memory_barriers = undefined,
-            .image_memory_barrier_count = 0,
-            .p_image_memory_barriers = undefined,
-        });
-    }
+        },
+    };
+
+    var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
+        .@"type" = .top_level_khr,
+        .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
+        .mode = .update_khr,
+        .src_acceleration_structure = self.tlas_handle,
+        .dst_acceleration_structure = self.tlas_handle,
+        .geometry_count = 1,
+        .p_geometries = utils.toPointerType(&geometry),
+        .pp_geometries = null,
+        .scratch_data = .{
+            .device_address = self.tlas_update_scratch_address,
+        },
+    };
+
+    const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
+        .primitive_count = @intCast(u32, self.instances_host.data.len),
+        .first_vertex = 0,
+        .primitive_offset = 0,
+        .transform_offset = 0,
+    };
+
+    const build_info_ref = utils.toPointerType(&build_info);
+
+    vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
+
+    const barriers = [_]vk.MemoryBarrier2 {
+        .{
+            .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+            .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
+            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
+        }
+    };
+    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        .memory_barrier_count = barriers.len,
+        .p_memory_barriers = &barriers,
+    });
 }
 
 pub fn getGeometry(self: Self, instance_index: u32, geometry_index: u32) Geometry {

@@ -220,10 +220,13 @@ pub fn main() !void {
             imgui.alignTextToFramePadding();
             imgui.text("Material index:");
             imgui.sameLine();
+            imgui.pushItemWidth(imgui.getFontSize() * 2);
+            const material_type = world.material_manager.materials_host.data[geometry.material].type;
             if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.materials_host.data.len) {
                 world.accel.recordUpdateSingleMaterial(&context, command_buffer, @intCast(u32, data.instance_index), data.geometry_index, geometry.material);
                 camera.film.clear();
             }
+            imgui.popItemWidth();
             try imgui.textFmt("Sampled: {}", .{ geometry.sampled });
             imgui.separatorText("mesh");
             const mesh = world.mesh_manager.meshes.get(geometry.mesh);
@@ -232,12 +235,21 @@ pub fn main() !void {
             try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
             try imgui.textFmt("Has normals: {}", .{ mesh.normal_buffer != null });
             imgui.separatorText("material");
-            const material_type = world.material_manager.materials_host.data[geometry.material].type;
             try imgui.textFmt("type: {s}", .{ @tagName(material_type) });
+            imgui.separatorText("transform");
+            const instance = world.accel.instances_host.data[@intCast(u32, data.instance_index)];
+            const old_transform = @bitCast(Mat3x4, instance.transform);
+            var translation = old_transform.extract_translation();
+            imgui.pushItemWidth(imgui.getFontSize() * -6);
+            if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
+                world.accel.recordUpdateSingleTransform(&context, command_buffer, @intCast(u32, data.instance_index), old_transform.with_translation(translation));
+                try world.accel.recordRebuild(&context, command_buffer);
+                camera.film.clear();
+            }
+            imgui.popItemWidth();
         } else {
             imgui.text("No object selected!");
         }
-        imgui.popItemWidth();
         imgui.end();
         if (imgui.isMouseClicked(.left) and !imgui.getIO().WantCaptureMouse) {
             const pos = window.getCursorPos();

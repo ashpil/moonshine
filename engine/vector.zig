@@ -219,11 +219,11 @@ pub fn Mat3x4(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z };
         }
 
-        pub fn from_translation(translation: Vec3T) Self {
+        pub fn from_translation(v: Vec3T) Self {
             return Self {
-                .x = Vec3T.e_0.extend(translation.x),
-                .y = Vec3T.e_1.extend(translation.y),
-                .z = Vec3T.e_2.extend(translation.z),
+                .x = Vec3T.e_0.extend(v.x),
+                .y = Vec3T.e_1.extend(v.y),
+                .z = Vec3T.e_2.extend(v.z),
             };
         }
 
@@ -257,6 +257,18 @@ pub fn Mat3x4(comptime T: type) type {
                 Vec4T.new(self.y.dot(transposed.x.extend(0.0)), self.y.dot(transposed.y.extend(0.0)), self.y.dot(transposed.z.extend(0.0)), self.y.dot(transposed.w.extend(1.0))),
                 Vec4T.new(self.z.dot(transposed.x.extend(0.0)), self.z.dot(transposed.y.extend(0.0)), self.z.dot(transposed.z.extend(0.0)), self.z.dot(transposed.w.extend(1.0))),
             );
+        }
+
+        pub fn extract_translation(self: Self) Vec3T {
+            return Vec3T.new(self.x.w, self.y.w, self.z.w);
+        }
+
+        pub fn with_translation(self: Self, v: Vec3T) Self {
+            var self_mut = self;
+            self_mut.x.w = v.x;
+            self_mut.y.w = v.y;
+            self_mut.z.w = v.z;
+            return self_mut;
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
