@@ -13,6 +13,20 @@ const DestructionQueue = @import("../engine.zig").DestructionQueue;
 
 const metrics = @import("build_options").vk_metrics;
 
+// DOUBLE BUFFER STRATEGY
+// This uses the strategy that I think is most decent while being the simplest to implement.
+//
+// We have two "frames in flight", frame A and frame B, which cycle.
+// While frame A is being processed by the GPU and displayed, we are recording frame B.
+// Essentially this means that while frame A is doing GPU work, frame B is doing CPU work.
+//
+// This means that for e.g., vertex animation, we don't need to keep two separate GPU vertex buffers,
+// as just one GPU task is being done at a time. We just queue the update in command buffer B via a
+// buffer copy or update command, which doesn't affect the work of command buffer A.
+//
+// The catch here is that we must keep two copies of non-static GPU-accesible host data, as when we are updating
+// the data for command buffer B, command buffer A could be using that data in another operation.
+// In many cases, this can be avoided by using vkCmdUpdateBuffer rather than a transfer operation.
 pub const frames_in_flight = 2;
 
 const Self = @This();
