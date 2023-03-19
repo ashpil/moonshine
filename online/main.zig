@@ -201,12 +201,31 @@ pub fn main() !void {
         imgui.setNextWindowPos(50, 475);
         imgui.setNextWindowSize(250, 200);
         imgui.begin("Object");
+        imgui.pushItemWidth(imgui.getFontSize() * 2);
         if (current_object_data) |data| {
+            imgui.separatorText("data");
             try imgui.textFmt("Instance index: {d}", .{ data.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ data.geometry_index });
+            var geometry = world.accel.getGeometry(@intCast(u32, data.instance_index), data.geometry_index);
+            try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
+            imgui.alignTextToFramePadding();
+            imgui.text("Material index:");
+            imgui.sameLine();
+            if (imgui.inputScalar(u32, "", &geometry.material, null, null)) {
+                world.accel.recordUpdateSingleMaterial(&context, command_buffer, @intCast(u32, data.instance_index), data.geometry_index, geometry.material);
+                camera.film.clear();
+            }
+            try imgui.textFmt("Sampled: {}", .{ geometry.sampled });
+            imgui.separatorText("mesh");
+            const mesh = world.mesh_manager.meshes.get(geometry.mesh);
+            try imgui.textFmt("Vertex count: {d}", .{ mesh.vertex_count });
+            try imgui.textFmt("Index count: {d}", .{ mesh.index_count });
+            try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
+            try imgui.textFmt("Has normals: {}", .{ mesh.normal_buffer != null });
         } else {
             imgui.text("No object selected!");
         }
+        imgui.popItemWidth();
         imgui.end();
         if (imgui.isMouseClicked(.left) and !imgui.getIO().WantCaptureMouse) {
             const pos = window.getCursorPos();

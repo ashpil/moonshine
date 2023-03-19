@@ -64,6 +64,7 @@ world_to_instance: VkAllocator.DeviceBuffer,
 
 // flat jagged array for geometries -- 
 // use instanceCustomIndex + GeometryID() here to get geometry
+geometries_host: VkAllocator.HostBuffer(Geometry),
 geometries: VkAllocator.DeviceBuffer,
 instance_idx_to_offset: []u24, // instance_idx_to_offset[instanceIdx] is instanceCustomIndex
 
@@ -252,17 +253,15 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer allocator.free(instance_idx_to_offset);
 
     // create geometries flat jagged array
-    const geometries = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Geometry) * geometry_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const buffer_host = try allocator.alloc(Geometry, geometry_count);
-        defer allocator.free(buffer_host);
-
+    const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
+    errdefer geometries_host.destroy(vc);
+    const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Geometry) * geometry_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+    errdefer geometries.destroy(vc);
+    {
         var flat_idx: u32 = 0;
         for (instance_mesh_groups, 0..) |instance_mesh_group, i| {
             for (mesh_groups[instance_mesh_group].meshes, 0..) |mesh_idx, j| {
-                buffer_host[flat_idx] = .{
+                geometries_host.data[flat_idx] = .{
                     .mesh = mesh_idx,
                     .material = instance_materials[i][j],
                     .sampled = if (instance_sampled_geometry[i].len != 0) instance_sampled_geometry[i][j] else false,
@@ -271,11 +270,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }
         }
 
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(buffer_host));
-
-        break :blk buffer;
-    };
-    errdefer geometries.destroy(vc);
+        try commands.startRecording(vc);
+        commands.recordUploadBuffer(Geometry, vc, geometries, geometries_host);
+        try commands.submitAndIdleUntilDone(vc);
+    }
 
     for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups, instance_idx_to_offset) |*instance, transform, visible, mesh_group, custom_index| {
         instance.* = .{
@@ -452,6 +450,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .tlas_update_scratch_buffer = update_scratch_buffer,
         .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
 
+        .geometries_host = geometries_host,
         .geometries = geometries,
         .instance_idx_to_offset = instance_idx_to_offset,
 
@@ -476,15 +475,11 @@ pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
     self.instances_host.data[instance_idx].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
 }
 
-pub fn updateSkin(self: *Self, instance_idx: u32, skin_idx: u12) void {
-    _ = self;
-    _ = instance_idx;
-    _ = skin_idx;
-    // TODO
-    // self.changed = true;
-    // var custom_index = @bitCast(CustomIndex, self.instances_host.data[instance_idx].instance_custom_index_and_mask.instance_custom_index);
-    // custom_index.skin_idx = self.skin_idx_to_offset[skin_idx];
-    // self.instances_host.data[instance_idx].instance_custom_index_and_mask.instance_custom_index = @bitCast(u24, custom_index);
+// probably bad idea if you're changing many
+pub fn recordUpdateSingleMaterial(self: Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, geometry_idx: u32, new_material_idx: u32) void {
+    const idx = self.instance_idx_to_offset[instance_idx] + geometry_idx;
+    self.geometries_host.data[idx].material = new_material_idx;
+    vc.device.cmdUpdateBuffer(command_buffer, self.geometries.handle, @sizeOf(Geometry) * idx + @offsetOf(Geometry, "material"), @sizeOf(u32), &new_material_idx);
 }
 
 pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) !void {
@@ -547,12 +542,18 @@ pub fn recordChanges(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
     }
 }
 
+pub fn getGeometry(self: Self, instance_index: u32, geometry_index: u32) Geometry {
+    const custom_index = self.instance_idx_to_offset[instance_index];
+    return self.geometries_host.data[custom_index + geometry_index];
+}
+
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instances_device.destroy(vc);
     self.instances_host.destroy(vc);
     self.world_to_instance.destroy(vc);
 
     self.geometries.destroy(vc);
+    self.geometries_host.destroy(vc);
 
     self.alias_table.destroy(vc);
 

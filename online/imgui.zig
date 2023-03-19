@@ -95,12 +95,12 @@ pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
     return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, "%d", c.ImGuiSliderFlags_AlwaysClamp);
 }
 
-pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: T, step_fast: T) bool {
+pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T, step_fast: ?T) bool {
     const data_type = switch (T) {
         u32 => c.ImGuiDataType_U32,
         else => unreachable, // TODO
     };
-    return c.igInputScalar(label, data_type, p_data, &step, &step_fast, "%d", c.ImGuiSliderFlags_AlwaysClamp);
+    return c.igInputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
 }
 
 pub fn isMouseClicked(mouse_button: MouseButton) bool {
@@ -117,6 +117,10 @@ pub fn pushItemWidth(width: f32) void {
 
 pub fn popItemWidth() void {
     c.igPopItemWidth();
+}
+
+pub fn alignTextToFramePadding() void {
+    c.igAlignTextToFramePadding();
 }
 
 pub fn button(label: [*:0]const u8, size: Vec2) bool {
