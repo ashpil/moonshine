@@ -25,7 +25,7 @@
 
 ### Dependencies
 #### Build
-* zig `0.11.0-dev.2160+49d37e2d1`
+* zig `0.11.0-dev.2168+322ace70f`
 * DirectXShaderCompiler
 * For the online (real-time) renderer:
   * For Linux (Ubuntu, similar on others):
@@ -37,6 +37,8 @@
 
 
 ### // TODO
+* Debug/dev speed
+  * Hot shader reload
 * Feature
   * Bloom
   * Tonemapping
