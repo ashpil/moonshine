@@ -367,7 +367,8 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, filepath: []const u8) !Self {
+// inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, filepath: []const u8, inspection: bool) !Self {
     const sampler = try ImageManager.createSampler(vc);
 
     // get the gltf
@@ -531,7 +532,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     defer instances.deinit(allocator);
     defer for (instances.items(.sampled_geometry)) |geo| allocator.free(geo);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, mesh_groups);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, mesh_groups, inspection);
     errdefer accel.destroy(vc, allocator);
 
     var world = Self {

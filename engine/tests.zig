@@ -63,7 +63,7 @@ const TestingContext = struct {
         var camera = try Camera.create(&vc, &vk_allocator, allocator, &film_descriptor_layout, extent, try Camera.CreateInfo.fromGlb(allocator, in_filepath));
         errdefer camera.destroy(&vc, allocator);
 
-        var world = try World.fromGlb(&vc, &vk_allocator, allocator, &commands, &world_descriptor_layout, in_filepath);
+        var world = try World.fromGlb(&vc, &vk_allocator, allocator, &commands, &world_descriptor_layout, in_filepath, false);
         errdefer world.destroy(&vc, allocator);
 
         var background = try Background.create(&vc, &vk_allocator, allocator, &commands, &background_descriptor_layout, world.sampler, skybox_filepath);

@@ -122,7 +122,7 @@ pub fn main() !void {
     var camera = try Camera.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, try Camera.CreateInfo.fromGlb(allocator, config.in_filepath));
     defer camera.destroy(&context, allocator);
 
-    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
+    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath, false);
     defer world.destroy(&context, allocator);
 
     try logger.log("load world");

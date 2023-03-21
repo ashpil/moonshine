@@ -55,7 +55,7 @@ const BottomLevelAccels = std.MultiArrayList(struct {
 
 blases: BottomLevelAccels,
 
-instances_host: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR),
+instance_count: u32,
 instances_device: VkAllocator.DeviceBuffer,
 instances_address: vk.DeviceAddress,
 
@@ -64,9 +64,7 @@ world_to_instance: VkAllocator.DeviceBuffer,
 
 // flat jagged array for geometries -- 
 // use instanceCustomIndex + GeometryID() here to get geometry
-geometries_host: VkAllocator.HostBuffer(Geometry),
 geometries: VkAllocator.DeviceBuffer,
-instance_idx_to_offset: []u24, // instance_idx_to_offset[instanceIdx] is instanceCustomIndex
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR,
@@ -79,7 +77,8 @@ alias_table: VkAllocator.DeviceBuffer, // to sample lights
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance_infos: InstanceInfos, mesh_groups: []const MeshGroup) !Self {
+// inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance_infos: InstanceInfos, mesh_groups: []const MeshGroup, inspection: bool) !Self {
     // create a BLAS for each model
     // lots of temp memory allocations here
     const blases = blk: {
@@ -222,11 +221,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     // create instance info, tlas, and tlas state
     const instance_count = @intCast(u32, instance_infos.len);
-    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true });
+    var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
+    if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
+    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_count, instances_buffer_flags);
     errdefer instances_device.destroy(vc);
+    try utils.setDebugName(vc, instances_device.handle, "instances");
 
     const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
-    errdefer instances_host.destroy(vc);
+    defer instances_host.destroy(vc);
 
     const instance_transforms = instance_infos.items(.transform);
     const instance_visibles = instance_infos.items(.visible);
@@ -237,25 +239,21 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const blas_handles = blases.items(.handle);
 
     var geometry_count: u24 = 0;
-    const instance_idx_to_offset = blk: {
-        const buffer = try allocator.alloc(u24, instance_count);
-        errdefer allocator.free(buffer);
-
-        for (instance_materials, buffer) |material_idxs, *val| {
-            val.* = geometry_count;
-            geometry_count += @intCast(u24, material_idxs.len);
-        }
-
-        break :blk buffer;
-    };
-    errdefer allocator.free(instance_idx_to_offset);
+    for (instance_materials) |material_idxs| {
+        geometry_count += @intCast(u24, material_idxs.len);
+    }
 
     // create geometries flat jagged array
-    const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
-    errdefer geometries_host.destroy(vc);
-    const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Geometry) * geometry_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-    errdefer geometries.destroy(vc);
-    {
+    const geometries = blk: {
+        const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
+        defer geometries_host.destroy(vc);
+
+        var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
+        if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
+        const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Geometry) * geometry_count, buffer_flags);
+        errdefer geometries.destroy(vc);
+        try utils.setDebugName(vc, geometries.handle, "geometries");
+
         var flat_idx: u32 = 0;
         for (instance_mesh_groups, 0..) |instance_mesh_group, i| {
             for (mesh_groups[instance_mesh_group].meshes, 0..) |mesh_idx, j| {
@@ -271,9 +269,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         try commands.startRecording(vc);
         commands.recordUploadBuffer(Geometry, vc, geometries, geometries_host);
         try commands.submitAndIdleUntilDone(vc);
-    }
 
-    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups, instance_idx_to_offset) |*instance, transform, visible, mesh_group, custom_index| {
+        break :blk geometries;
+    };
+    errdefer geometries.destroy(vc);
+
+    var custom_index: u24 = 0;
+    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups, instance_materials) |*instance, transform, visible, mesh_group, material_idxs| {
         instance.* = .{
             .transform = vk.TransformMatrixKHR {
                 .matrix = @bitCast([3][4]f32, transform),
@@ -290,6 +292,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .acceleration_structure = blas_handles[mesh_group],
             }),
         };
+        custom_index += @intCast(u24, material_idxs.len);
     }
 
     try commands.startRecording(vc);
@@ -436,7 +439,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     return Self {
         .blases = blases,
 
-        .instances_host = instances_host,
+        .instance_count = instance_count,
         .instances_device = instances_device,
         .instances_address = instances_address,
 
@@ -448,9 +451,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .tlas_update_scratch_buffer = update_scratch_buffer,
         .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
 
-        .geometries_host = geometries_host,
         .geometries = geometries,
-        .instance_idx_to_offset = instance_idx_to_offset,
 
         .alias_table = alias_table,
     };
@@ -459,9 +460,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
 pub fn recordUpdateSingleTransform(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, new_transform: Mat3x4) void {
-    self.instances_host.data[instance_idx].transform = vk.TransformMatrixKHR {
-        .matrix = @bitCast([3][4]f32, new_transform),
-    };
     const offset = @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_idx + @offsetOf(vk.AccelerationStructureInstanceKHR, "transform");
     const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
     const size = @sizeOf(vk.TransformMatrixKHR);
@@ -503,10 +501,8 @@ pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
 }
 
 // probably bad idea if you're changing many
-pub fn recordUpdateSingleMaterial(self: Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, geometry_idx: u32, new_material_idx: u32) void {
-    const idx = self.instance_idx_to_offset[instance_idx] + geometry_idx;
-    self.geometries_host.data[idx].material = new_material_idx;
-    const offset = @sizeOf(Geometry) * idx + @offsetOf(Geometry, "material");
+pub fn recordUpdateSingleMaterial(self: Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, geometry_idx: u32, new_material_idx: u32) void {
+    const offset = @sizeOf(Geometry) * geometry_idx + @offsetOf(Geometry, "material");
     const size = @sizeOf(u32);
     vc.device.cmdUpdateBuffer(command_buffer, self.geometries.handle, offset, size, &new_material_idx);
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
@@ -554,7 +550,7 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
     };
 
     const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
-        .primitive_count = @intCast(u32, self.instances_host.data.len),
+        .primitive_count = self.instance_count,
         .first_vertex = 0,
         .primitive_offset = 0,
         .transform_offset = 0,
@@ -578,22 +574,13 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
     });
 }
 
-pub fn getGeometry(self: Self, instance_index: u32, geometry_index: u32) Geometry {
-    const custom_index = self.instance_idx_to_offset[instance_index];
-    return self.geometries_host.data[custom_index + geometry_index];
-}
-
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instances_device.destroy(vc);
-    self.instances_host.destroy(vc);
     self.world_to_instance.destroy(vc);
 
     self.geometries.destroy(vc);
-    self.geometries_host.destroy(vc);
 
     self.alias_table.destroy(vc);
-
-    allocator.free(self.instance_idx_to_offset);
 
     self.tlas_update_scratch_buffer.destroy(vc);
 

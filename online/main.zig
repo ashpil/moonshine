@@ -3,6 +3,7 @@ const std = @import("std");
 const engine = @import("engine");
 const Camera = engine.rendersystem.Camera;
 const World = engine.rendersystem.World;
+const Accel = engine.rendersystem.Accel;
 const DestructionQueue = engine.DestructionQueue;
 const Background = engine.rendersystem.Background;
 const VulkanContext = engine.rendersystem.VulkanContext;
@@ -21,6 +22,7 @@ const Display = displaysystem.Display;
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");
 const imgui = @import("./imgui.zig");
+const SyncCopier = @import("./SyncCopier.zig");
 
 const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
@@ -120,8 +122,11 @@ pub fn main() !void {
     defer camera.destroy(&context, allocator);
     try commands.transitionImageLayout(&context, allocator, camera.film.images.data.items(.handle)[1..], .@"undefined", .general);
 
-    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath);
+    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath, true);
     defer world.destroy(&context, allocator);
+
+    var sync_copier = try SyncCopier.create(&context, &vk_allocator, @sizeOf(vk.AccelerationStructureInstanceKHR));
+    defer sync_copier.destroy(&context);
 
     std.log.info("Loaded world!", .{});
 
@@ -218,7 +223,9 @@ pub fn main() !void {
             imgui.separatorText("data");
             try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
-            var geometry = world.accel.getGeometry(object.instance_index, object.geometry_index);
+            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, world.accel.instances_device, object.instance_index * @sizeOf(vk.AccelerationStructureInstanceKHR));
+            const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
+            var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, @sizeOf(Accel.Geometry) * accel_geometry_index);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
             imgui.alignTextToFramePadding();
             imgui.text("Material index:");
@@ -226,7 +233,7 @@ pub fn main() !void {
             imgui.pushItemWidth(imgui.getFontSize() * 2);
             const material_type = world.material_manager.materials_host.data[geometry.material].type;
             if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.materials_host.data.len) {
-                world.accel.recordUpdateSingleMaterial(&context, command_buffer, object.instance_index, object.geometry_index, geometry.material);
+                world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
                 camera.film.clear();
             }
             imgui.popItemWidth();
@@ -240,7 +247,6 @@ pub fn main() !void {
             imgui.separatorText("material");
             try imgui.textFmt("type: {s}", .{ @tagName(material_type) });
             imgui.separatorText("transform");
-            const instance = world.accel.instances_host.data[object.instance_index];
             const old_transform = @bitCast(Mat3x4, instance.transform);
             var translation = old_transform.extract_translation();
             imgui.pushItemWidth(imgui.getFontSize() * -6);
