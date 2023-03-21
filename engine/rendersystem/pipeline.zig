@@ -7,6 +7,7 @@ const Camera = @import("./Camera.zig");
 const shaders = @import("shaders");
 const vk = @import("vulkan");
 const std = @import("std");
+const build_options = @import("build_options");
 
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
@@ -25,8 +26,47 @@ const PushConstant = struct {
     stage_flags: vk.ShaderStageFlags,
 };
 
+fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []const []const u8, allocator: std.mem.Allocator) ![shader_names.len]vk.ShaderModule {
+    var modules: [shader_names.len]vk.ShaderModule = undefined;
+    inline for (shader_names, &modules) |shader_name, *module| {
+        var to_free: []const u8 = undefined;
+        defer if (build_options.shader_source == .load) allocator.free(to_free);
+        const shader_code = if (build_options.shader_source == .embed) @field(shaders, shader_name) else blk: {
+            var compile_process = std.ChildProcess.init(build_options.shader_compile_cmd ++ &[_][]const u8{ "shaders/" ++ shader_name }, allocator);
+            compile_process.stdout_behavior = .Pipe;
+            try compile_process.spawn();
+            const stdout = blk_inner: {
+                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
+                defer poller.deinit();
+
+                while (try poller.poll()) {}
+
+                var fifo = poller.fifo(.stdout);
+                if (fifo.head > 0) {
+                    std.mem.copy(u8, fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
+                }
+
+                to_free = fifo.buf;
+                const stdout = fifo.buf[0..fifo.count];
+                fifo.* = std.io.PollFifo.init(allocator);
+
+                break :blk_inner stdout;
+            };
+
+            const term = try compile_process.wait();
+            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
+            break :blk stdout;
+        };
+        module.* = try vc.device.createShaderModule(&.{
+            .code_size = shader_code.len,
+            .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), if (build_options.shader_source == .embed) &shader_code else shader_code.ptr)),
+        }, null);
+    }
+    return modules;
+}
+
 pub fn Pipeline(
-        comptime shader_codes: anytype,
+        comptime shader_names: []const []const u8,
         comptime module_to_stage: []const comptime_int,
         comptime SetLayouts: type,
         comptime SpecConstantsT: type,
@@ -61,16 +101,8 @@ pub fn Pipeline(
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            var modules: [shader_codes.len]vk.ShaderModule = undefined;
-            inline for (shader_codes, &modules) |shader_code, *module| {
-                module.* = try vc.device.createShaderModule(&.{
-                    .code_size = shader_code.len,
-                    .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
-                }, null);
-            }
-            defer for (modules) |module| {
-                vc.device.destroyShaderModule(module, null);
-            };
+            const modules = try createShaderModules(vc, shader_names, allocator);
+            defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
             inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
@@ -125,18 +157,8 @@ pub fn Pipeline(
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
-            try destruction_queue.add(allocator, self.handle);
-
-            var modules: [shader_codes.len]vk.ShaderModule = undefined;
-            inline for (shader_codes, &modules) |shader_code, *module| {
-                module.* = try vc.device.createShaderModule(&.{
-                    .code_size = shader_code.len,
-                    .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), &shader_code)),
-                }, null);
-            }
-            defer for (modules) |module| {
-                vc.device.destroyShaderModule(module, null);
-            };
+            const modules = try createShaderModules(vc, shader_names, allocator);
+            defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
             inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
@@ -177,6 +199,7 @@ pub fn Pipeline(
             var handle: vk.Pipeline = undefined;
             _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &create_info), null, @ptrCast([*]vk.Pipeline, &handle));
             errdefer vc.device.destroyPipeline(handle, null);
+            try destruction_queue.add(allocator, self.handle);
 
             try self.sbt.recreate(vc, vk_allocator, handle, cmd);
 
@@ -204,7 +227,7 @@ pub fn Pipeline(
 }
 
 pub const ObjectPickPipeline = Pipeline(
-    .{ shaders.input },
+    &.{ "misc/input.hlsl" },
     &.{ 0, 0, 0 },
     struct {
         InputDescriptorLayout,
@@ -233,7 +256,7 @@ pub const ObjectPickPipeline = Pipeline(
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub const StandardPipeline = Pipeline(
-    .{ shaders.main },
+    &.{ "primary/main.hlsl" },
     &.{ 0, 0, 0, 0 },
     struct {
         WorldDescriptorLayout,

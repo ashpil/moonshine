@@ -74,13 +74,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
     });
 
-    const shader_module = try vc.device.createShaderModule(&.{
-        .flags = .{},
-        .code_size = shaders.input.len,
-        .p_code = @ptrCast([*]const u32, &shaders.input),
-    }, null);
-    defer vc.device.destroyShaderModule(shader_module, null);
-
     const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, world_layout }, .{});
 
     const command_pool = try vc.device.createCommandPool(&.{

@@ -198,11 +198,14 @@ pub fn main() !void {
             _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
             if (imgui.button(rebuild_label, imgui.Vec2 { .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
-                try pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{ pipeline_opts }, &destruction_queue);
-                const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
-                rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{ elapsed });
-                current_samples_per_run = pipeline_opts.samples_per_run;
-                camera.film.clear();
+                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{ pipeline_opts }, &destruction_queue)) {
+                    const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
+                    rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{ elapsed });
+                    current_samples_per_run = pipeline_opts.samples_per_run;
+                    camera.film.clear();
+                } else |err| if (err == error.ShaderCompileFail) {
+                    rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
+                } else return err;
             }
             imgui.popItemWidth();
         }
