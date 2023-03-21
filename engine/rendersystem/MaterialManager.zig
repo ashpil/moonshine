@@ -16,6 +16,8 @@ pub const MaterialType = enum(c_int) {
 };
 
 pub const Material = extern struct {
+    const normal_components = 2;
+    const emissive_components = 3;
     // all materials have normal and emissive
     normal: u32,
     emissive: u32,
@@ -26,6 +28,10 @@ pub const Material = extern struct {
 };
 
 pub const StandardPBR = extern struct {
+    const color_components = 3;
+    const metalness_components = 1;
+    const roughness_components = 1;
+
     color: u32,
     metalness: u32,
     roughness: u32,
@@ -33,6 +39,7 @@ pub const StandardPBR = extern struct {
 };
 
 pub const Lambert = extern struct {
+    const color_components = 3;
     color: u32,
 };
 
@@ -79,9 +86,32 @@ const VariantBuffers = blk: {
     });
 };
 
+const Addrs = blk: {
+    const variants = @typeInfo(AnyMaterial).Union.fields;
+    comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
+    inline for (&fields, variants) |*field, variant| {
+        field.* = .{
+            .name = variant.name,
+            .type = vk.DeviceAddress,
+            .default_value = null,
+            .is_comptime = false,
+            .alignment = @alignOf(vk.DeviceAddress),
+        };
+    }
+    break :blk @Type(.{
+        .Struct = .{
+            .layout = .Auto,
+            .fields = &fields,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+};
+
 material_count: u32,
 textures: ImageManager,
 materials: VkAllocator.DeviceBuffer, // Material
+addrs: Addrs,
 
 variant_buffers: VariantBuffers,
 
@@ -89,27 +119,6 @@ const Self = @This();
 
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList, inspection: bool) !Self {
-    const Addrs = blk: {
-        const variants = @typeInfo(AnyMaterial).Union.fields;
-        comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
-        inline for (&fields, variants) |*field, variant| {
-            field.* = .{
-                .name = variant.name,
-                .type = vk.DeviceAddress,
-                .default_value = null,
-                .is_comptime = false,
-                .alignment = @alignOf(vk.DeviceAddress),
-            };
-        }
-        break :blk @Type(.{
-            .Struct = .{
-                .layout = .Auto,
-                .fields = &fields,
-                .decls = &.{},
-                .is_tuple = false,
-            },
-        });
-    };
 
     var variant_buffers: VariantBuffers = undefined;
     var addrs: Addrs = undefined;
@@ -119,7 +128,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 const data = @field(materials.variants, field.name).items;
                 const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, @intCast(u32, data.len), .{ .transfer_src_bit = true });
                 defer host_buffer.destroy(vc);
-                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(field.type) * data.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+
+                var buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true };
+                if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(field.type) * data.len, buffer_flags);
                 errdefer device_buffer.destroy(vc);
 
                 std.mem.copy(field.type, host_buffer.data, data);
@@ -171,6 +183,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .material_count = material_count,
         .materials = materials_gpu,
         .variant_buffers = variant_buffers,
+        .addrs = addrs,
     };
 }
 

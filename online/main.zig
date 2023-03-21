@@ -247,7 +247,23 @@ pub fn main() !void {
             try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
             try imgui.textFmt("Has normals: {}", .{ mesh.normal_buffer != null });
             imgui.separatorText("material");
+            try imgui.textFmt("normal: {}", .{ material.normal });
+            try imgui.textFmt("emissive: {}", .{ material.emissive });
             try imgui.textFmt("type: {s}", .{ @tagName(material.type) });
+            inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
+                const VariantType = union_field.type;
+                if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
+                    const material_idx = (material.addr - @field(world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType);
+                    const material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), @sizeOf(VariantType) * material_idx);
+                    inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
+                        switch (struct_field.type) {
+                            f32 => try imgui.textFmt("{s}: {d:.2}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
+                            u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
+                            else => unreachable,
+                        }
+                    }
+                }
+            }
             imgui.separatorText("transform");
             const old_transform = @bitCast(Mat3x4, instance.transform);
             var translation = old_transform.extract_translation();
