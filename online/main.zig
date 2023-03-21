@@ -4,6 +4,7 @@ const engine = @import("engine");
 const Camera = engine.rendersystem.Camera;
 const World = engine.rendersystem.World;
 const Accel = engine.rendersystem.Accel;
+const MaterialManager = engine.rendersystem.MaterialManager;
 const DestructionQueue = engine.DestructionQueue;
 const Background = engine.rendersystem.Background;
 const VulkanContext = engine.rendersystem.VulkanContext;
@@ -223,16 +224,17 @@ pub fn main() !void {
             imgui.separatorText("data");
             try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
+            // TODO: all of the copying below should be done once, on object pick
             const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, world.accel.instances_device, object.instance_index * @sizeOf(vk.AccelerationStructureInstanceKHR));
             const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
             var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, @sizeOf(Accel.Geometry) * accel_geometry_index);
+            const material = try sync_copier.copy(&context, MaterialManager.Material, world.material_manager.materials, @sizeOf(MaterialManager.Material) * geometry.material);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
             imgui.alignTextToFramePadding();
             imgui.text("Material index:");
             imgui.sameLine();
             imgui.pushItemWidth(imgui.getFontSize() * 2);
-            const material_type = world.material_manager.materials_host.data[geometry.material].type;
-            if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.materials_host.data.len) {
+            if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.material_count) {
                 world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
                 camera.film.clear();
             }
@@ -245,7 +247,7 @@ pub fn main() !void {
             try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
             try imgui.textFmt("Has normals: {}", .{ mesh.normal_buffer != null });
             imgui.separatorText("material");
-            try imgui.textFmt("type: {s}", .{ @tagName(material_type) });
+            try imgui.textFmt("type: {s}", .{ @tagName(material.type) });
             imgui.separatorText("transform");
             const old_transform = @bitCast(Mat3x4, instance.transform);
             var translation = old_transform.extract_translation();

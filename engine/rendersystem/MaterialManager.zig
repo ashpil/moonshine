@@ -79,48 +79,16 @@ const VariantBuffers = blk: {
     });
 };
 
-const VariantBuffersHost = blk: {
-    const variants = @typeInfo(AnyMaterial).Union.fields;
-    comptime var buffer_count = 0;
-    inline for (variants) |variant| {
-        if (variant.type != void) {
-            buffer_count += 1;
-        }
-    }
-    comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
-    comptime var current_field = 0;
-    inline for (variants) |variant| {
-        if (variant.type != void) {
-            fields[current_field] = .{
-                .name = variant.name,
-                .type = VkAllocator.HostBuffer(variant.type),
-                .default_value = null,
-                .is_comptime = false,
-                .alignment = @alignOf(VkAllocator.DeviceBuffer),
-            };
-            current_field += 1;
-        }
-    }
-    break :blk @Type(.{
-        .Struct = .{
-            .layout = .Auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
-};
-
+material_count: u32,
 textures: ImageManager,
 materials: VkAllocator.DeviceBuffer, // Material
-materials_host: VkAllocator.HostBuffer(Material),
 
 variant_buffers: VariantBuffers,
-variant_buffers_host: VariantBuffersHost,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList) !Self {
+// inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList, inspection: bool) !Self {
     const Addrs = blk: {
         const variants = @typeInfo(AnyMaterial).Union.fields;
         comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
@@ -144,14 +112,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 
     var variant_buffers: VariantBuffers = undefined;
-    var variant_buffers_host: VariantBuffersHost = undefined;
     var addrs: Addrs = undefined;
     inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             if (@field(materials.variants, field.name).items.len != 0) {
                 const data = @field(materials.variants, field.name).items;
                 const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, @intCast(u32, data.len), .{ .transfer_src_bit = true });
-                errdefer host_buffer.destroy(vc);
+                defer host_buffer.destroy(vc);
                 const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(field.type) * data.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
                 errdefer device_buffer.destroy(vc);
 
@@ -161,11 +128,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 try commands.submitAndIdleUntilDone(vc);
                 
                 @field(variant_buffers, field.name) = device_buffer;
-                @field(variant_buffers_host, field.name) = host_buffer;
                 @field(addrs, field.name) = device_buffer.getAddress(vc);
             } else {
                 @field(variant_buffers, field.name) = VkAllocator.DeviceBuffer { .handle = .null_handle };
-                @field(variant_buffers_host, field.name) = VkAllocator.HostBuffer(field.type) { .handle = .null_handle, .memory = .null_handle, .data = &.{} };
                 @field(addrs, field.name) = 0;
             }
         } else {
@@ -173,11 +138,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         }
     }
 
-    var materials_gpu: VkAllocator.DeviceBuffer = undefined;
-    var materials_host: VkAllocator.HostBuffer(Material) = undefined;
-    {
-        materials_host = try vk_allocator.createHostBuffer(vc, Material, @intCast(u32, materials.materials.items.len), .{ .transfer_src_bit = true });
-        errdefer materials_host.destroy(vc);
+    const material_count = @intCast(u32, materials.materials.items.len);
+    const materials_gpu = blk: {
+        var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
+        defer materials_host.destroy(vc);
         for (materials.materials.items, materials_host.data) |material, *data| {
             data.* = material;
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
@@ -187,37 +151,35 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }
         }
 
-        materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Material) * materials.materials.items.len, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
+        if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
+        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Material) * material_count, buffer_flags);
         errdefer materials_gpu.destroy(vc);
         
         try commands.startRecording(vc);
         commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
         try commands.submitAndIdleUntilDone(vc);
-    }
+
+        break :blk materials_gpu;
+    };
 
     var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, texture_sources, commands);
     errdefer textures.destroy(vc, allocator);
 
     return Self {
         .textures = textures,
+        .material_count = material_count,
         .materials = materials_gpu,
-        .materials_host = materials_host,
         .variant_buffers = variant_buffers,
-        .variant_buffers_host = variant_buffers_host,
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.textures.destroy(vc, allocator);
     self.materials.destroy(vc);
-    self.materials_host.destroy(vc);
 
     inline for (@typeInfo(VariantBuffers).Struct.fields) |field| {
         @field(self.variant_buffers, field.name).destroy(vc);
-    }
-
-    inline for (@typeInfo(VariantBuffersHost).Struct.fields) |field| {
-        @field(self.variant_buffers_host, field.name).destroy(vc);
     }
 }
 

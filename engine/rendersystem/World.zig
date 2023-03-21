@@ -401,7 +401,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             try material_list.append(allocator, mat_spbr[0], mat_spbr[1]);
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, material_list);
+        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, material_list, inspection);
     };
     errdefer material_manager.destroy(vc, allocator);
 
