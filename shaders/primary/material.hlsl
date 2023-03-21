@@ -50,8 +50,8 @@ struct GGX : MicrofacetDistribution {
     // samples a half vector from the distribution
     float3 sample(float3 w_o, float2 square) {
         // figure out spherical coords of half vector
-        float tanTheta = α * sqrt(square.x) / sqrt(1 - square.x);
-        float cosThetaSquared = 1 / (1 + (tanTheta * tanTheta));
+        float tanThetaSquared = α * α * square.x / (1 - square.x);
+        float cosThetaSquared = 1 / (1 + tanThetaSquared);
         float sinTheta = sqrt(max(0, 1 - cosThetaSquared));
         float cosTheta = sqrt(cosThetaSquared);
         float phi = 2 * PI * square.y;
