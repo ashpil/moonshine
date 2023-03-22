@@ -10,13 +10,6 @@ const utils = @import("./utils.zig");
 
 const vector = @import("../vector.zig");
 
-pub const MaterialType = enum(u32) {
-    standard_pbr,
-    lambert,
-    perfect_mirror,
-    glass,
-};
-
 pub const Material = extern struct {
     const normal_components = 2;
     const emissive_components = 3;
@@ -27,6 +20,20 @@ pub const Material = extern struct {
     // then each material has specific type which influences what buffer addr looks into
     type: MaterialType = .standard_pbr,
     addr: vk.DeviceAddress,
+};
+
+pub const MaterialType = enum(u32) {
+    glass,
+    lambert,
+    perfect_mirror,
+    standard_pbr,
+};
+
+pub const AnyMaterial = union(MaterialType) {
+    glass: Glass,
+    lambert: Lambert,
+    perfect_mirror: void, // no payload
+    standard_pbr: StandardPBR,
 };
 
 pub const StandardPBR = extern struct {
@@ -47,13 +54,6 @@ pub const Lambert = extern struct {
 
 pub const Glass = extern struct {
     ior: f32,
-};
-
-pub const AnyMaterial = union(MaterialType) {
-    standard_pbr: StandardPBR,
-    lambert: Lambert,
-    perfect_mirror: void, // no payload
-    glass: Glass,
 };
 
 const VariantBuffers = blk: {

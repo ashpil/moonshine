@@ -57,10 +57,10 @@ struct AliasEntry {
 
 // dxc will crash for non-uppercase enum variants
 enum class MaterialType : uint {
-    STANDARD_PBR,
+    GLASS,
     LAMBERT,
     PERFECT_MIRROR,
-    GLASS,
+    STANDARD_PBR,
 };
 
 struct AnyMaterialData {
