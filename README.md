@@ -37,13 +37,10 @@
 
 
 ### // TODO
-* Debug/dev speed
-  * Hot shader reload
 * Feature
   * Bloom
   * Tonemapping
   * HDR display
-  * Figure out proper way to do whole shader binding thing -- how to avoid globals?
   * More camera models
     * Orthographic
   * Materials
