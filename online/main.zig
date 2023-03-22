@@ -219,8 +219,8 @@ pub fn main() !void {
         imgui.setNextWindowPos(@intToFloat(f32, display.swapchain.extent.width - 50) - 250, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Object");
-        imgui.pushItemWidth(imgui.getFontSize() * 2);
         if (current_clicked_object) |object| {
+            imgui.pushItemWidth(imgui.getFontSize() * -12);
             imgui.separatorText("data");
             try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
@@ -230,15 +230,10 @@ pub fn main() !void {
             var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, @sizeOf(Accel.Geometry) * accel_geometry_index);
             const material = try sync_copier.copy(&context, MaterialManager.Material, world.material_manager.materials, @sizeOf(MaterialManager.Material) * geometry.material);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
-            imgui.alignTextToFramePadding();
-            imgui.text("Material index:");
-            imgui.sameLine();
-            imgui.pushItemWidth(imgui.getFontSize() * 2);
-            if (imgui.inputScalar(u32, "", &geometry.material, null, null) and geometry.material < world.material_manager.material_count) {
+            if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < world.material_manager.material_count) {
                 world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
                 camera.film.clear();
             }
-            imgui.popItemWidth();
             try imgui.textFmt("Sampled: {}", .{ geometry.sampled });
             imgui.separatorText("mesh");
             const mesh = world.mesh_manager.meshes.get(geometry.mesh);
@@ -253,11 +248,14 @@ pub fn main() !void {
             inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
                 const VariantType = union_field.type;
                 if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
-                    const material_idx = (material.addr - @field(world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType);
-                    const material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), @sizeOf(VariantType) * material_idx);
+                    const material_idx = @intCast(u32, (material.addr - @field(world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
+                    var material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), @sizeOf(VariantType) * material_idx);
                     inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                         switch (struct_field.type) {
-                            f32 => try imgui.textFmt("{s}: {d:.2}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
+                            f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
+                                world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
+                                camera.film.clear();
+                            },
                             u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
                             else => unreachable,
                         }

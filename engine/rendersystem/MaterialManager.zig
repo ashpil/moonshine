@@ -6,6 +6,8 @@ const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 
+const utils = @import("./utils.zig");
+
 const vector = @import("../vector.zig");
 
 pub const MaterialType = enum(c_int) {
@@ -185,6 +187,33 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .variant_buffers = variant_buffers,
         .addrs = addrs,
     };
+}
+
+pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime VariantType: type, command_buffer: vk.CommandBuffer, variant_idx: u32, new_data: VariantType) void {
+    const variant_name = inline for (@typeInfo(AnyMaterial).Union.fields) |union_field| {
+        if (union_field.type == VariantType) {
+            break union_field.name;
+        }
+    } else @compileError("Not a material variant: " ++ @typeName(VariantType));
+
+    const offset = @sizeOf(VariantType) * variant_idx;
+    const size = @sizeOf(VariantType);
+    vc.device.cmdUpdateBuffer(command_buffer, @field(self.variant_buffers, variant_name).handle, offset, size, &new_data);
+
+    vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
+        .buffer_memory_barrier_count = 1,
+        .p_buffer_memory_barriers = utils.toPointerType(&vk.BufferMemoryBarrier2 {
+            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .shader_storage_read_bit = true },
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .buffer = @field(self.variant_buffers, variant_name).handle,
+            .offset = offset,
+            .size = size,
+        }),
+    });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
