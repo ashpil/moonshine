@@ -10,7 +10,7 @@ const utils = @import("./utils.zig");
 
 const vector = @import("../vector.zig");
 
-pub const MaterialType = enum(c_int) {
+pub const MaterialType = enum(u32) {
     standard_pbr,
     lambert,
     perfect_mirror,
