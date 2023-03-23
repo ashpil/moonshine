@@ -365,12 +365,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         var table_data = std.ArrayList(TableData).init(allocator);
         defer table_data.deinit();
 
-        for (instance_sampled_geometry, 0..) |sampled_geometry, i| {
-            const transform = instance_transforms[i];
+        for (instance_sampled_geometry, instance_transforms, instance_mesh_groups, 0..) |sampled_geometry, transform, mesh_group_idx, i| {
             for (sampled_geometry, 0..) |sampled, j| {
                 if (!sampled) continue;
 
-                const mesh_idx = mesh_groups[i].meshes[j];
+                const mesh_idx = mesh_groups[mesh_group_idx].meshes[j];
                 const positions = mesh_manager.meshes.items(.positions)[mesh_idx];
                 const indices = mesh_manager.meshes.items(.indices)[mesh_idx];
                 for (indices, 0..) |index, k| {
