@@ -31,7 +31,7 @@ const F32x3 = vector.Vec3(f32);
 pub const InstanceInfo = struct {
     transform: Mat3x4, // transform of this instance
     visible: bool = true, // whether this instance is visible
-    mesh_group: u24, // index of mesh group used by this instance
+    mesh_group: u32, // index of mesh group used by this instance
     materials: []const u32, // indices of material used by each geometry in mesh group
     sampled_geometry: []const bool = &.{}, // whether each geometry in this instance is sampled, empty for no sampled
 };
@@ -113,14 +113,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, group.meshes.len);
 
             build_geometry_info.* = vk.AccelerationStructureBuildGeometryInfoKHR {
-                .@"type" = .bottom_level_khr,
+                .type = .bottom_level_khr,
                 .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
                 .mode = .build_khr,
-                .src_acceleration_structure = .null_handle,
-                .dst_acceleration_structure = .null_handle,
                 .geometry_count = @intCast(u32, geometries.len),
                 .p_geometries = geometries.ptr,
-                .pp_geometries = null,
                 .scratch_data = undefined,
             };
 
@@ -173,12 +170,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             errdefer uncompacted_buffer.destroy(vc);
 
             build_geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
-                .create_flags = .{},
                 .buffer = uncompacted_buffer.handle,
                 .offset = 0,
                 .size = size_info.acceleration_structure_size,
-                .@"type" = .bottom_level_khr,
-                .device_address = 0,
+                .type = .bottom_level_khr,
             }, null);
             errdefer vc.device.destroyAccelerationStructureKHR(build_geometry_info.dst_acceleration_structure, null);
 
@@ -201,12 +196,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             errdefer buffer.destroy(vc);
 
             const handle = try vc.device.createAccelerationStructureKHR(&.{
-                .create_flags = .{},
                 .buffer = buffer.handle,
                 .offset = 0,
                 .size = compactedSize,
-                .@"type" = .bottom_level_khr,
-                .device_address = 0,
+                .type = .bottom_level_khr,
             }, null);
 
             copy_info.* = .{
@@ -325,11 +318,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .@"type" = .top_level_khr,
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .build_khr,
-        .src_acceleration_structure = .null_handle,
-        .dst_acceleration_structure = .null_handle,
         .geometry_count = 1,
         .p_geometries = utils.toPointerType(&geometry),
-        .pp_geometries = null,
         .scratch_data = undefined,
     };
 
@@ -342,12 +332,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer tlas_buffer.destroy(vc);
 
     geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
-        .create_flags = .{},
         .buffer = tlas_buffer.handle,
         .offset = 0,
         .size = size_info.acceleration_structure_size,
-        .@"type" = .top_level_khr,
-        .device_address = 0,
+        .type = .top_level_khr,
     }, null);
     errdefer vc.device.destroyAccelerationStructureKHR(geometry_info.dst_acceleration_structure, null);
 
