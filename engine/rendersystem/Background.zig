@@ -73,7 +73,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             std.mem.copy(AliasTable.TableEntry, flat_entries[row_idx * color.extent.width..(row_idx + 1) * color.extent.width], table.entries);
         }
 
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(flat_entries));
+        try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, flat_entries);
 
         break :blk buffer;
     };
@@ -86,7 +86,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const table = try AliasTable.create(allocator, marginal_weights);
         defer allocator.free(table.entries);
 
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(table.entries));
+        try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, table.entries);
 
         break :blk buffer;
     };

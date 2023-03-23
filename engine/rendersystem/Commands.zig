@@ -307,13 +307,13 @@ pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContex
     vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, utils.toPointerType(&region));
 }
 
-pub fn uploadData(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_buffer: vk.Buffer, bytes: []const u8) !void {
-    const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len), .{ .transfer_src_bit = true });
+pub fn uploadData(self: *Self, comptime T: type, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst: VkAllocator.DeviceBuffer(T), src: []const T) !void {
+    const staging_buffer = try vk_allocator.createHostBuffer(vc, T, src.len, .{ .transfer_src_bit = true });
     defer staging_buffer.destroy(vc);
 
-    std.mem.copy(u8, staging_buffer.data, bytes);
+    std.mem.copy(T, staging_buffer.data, src);
 
     try self.startRecording(vc);
-    self.recordUploadBuffer(u8, vc, .{ .handle = dst_buffer }, staging_buffer);
+    self.recordUploadBuffer(T, vc, dst, staging_buffer);
     try self.submitAndIdleUntilDone(vc);
 }

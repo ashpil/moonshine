@@ -351,7 +351,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             inverse.* = transform.inverse_affine();
         }
 
-        try commands.uploadData(vc, vk_allocator, buffer.handle, std.mem.sliceAsBytes(inverses));
+        try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
 
         break :blk buffer;
     };
