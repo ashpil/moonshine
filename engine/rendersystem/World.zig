@@ -35,8 +35,8 @@ const U32x3 = vector.Vec3(u32);
 
 pub const Material = MaterialManager.Material;
 pub const AnyMaterial = MaterialManager.AnyMaterial;
-pub const Instances = Accel.InstanceInfos;
-pub const MeshGroup = Accel.MeshGroup;
+pub const Instance = Accel.Instance;
+pub const Geometry = Accel.Geometry;
 
 material_manager: MaterialManager,
 
@@ -405,173 +405,108 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     };
     errdefer material_manager.destroy(vc, allocator);
 
-    // meshes
-    // for each gltf mesh we create a mesh group
-    // for each gltf primitive we create a mesh
     var objects = std.ArrayList(MeshData).init(allocator);
     defer objects.deinit();
     defer for (objects.items) |*object| object.destroy(allocator);
 
-    const mesh_groups = try allocator.alloc(MeshGroup, gltf.data.meshes.items.len);
-    defer allocator.free(mesh_groups);
+    // go over heirarchy, finding meshes
+    var instances = std.ArrayList(Instance).init(allocator);
+    defer instances.deinit();
+    defer for (instances.items) |instance| allocator.free(instance.geometries);
 
-    const skins = try allocator.alloc([]u32, gltf.data.meshes.items.len);
-    defer allocator.free(skins);
-
-    for (gltf.data.meshes.items, mesh_groups, skins) |mesh, *mesh_group, *skin| {
-        const mesh_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
-        errdefer allocator.free(mesh_idxs);
-        const material_idxs = try allocator.alloc(u32, mesh.primitives.items.len);
-        errdefer allocator.free(material_idxs);
-        for (mesh.primitives.items, mesh_idxs, material_idxs) |primitive, *mesh_idx, *material_idx| {
-            mesh_idx.* = @intCast(u32, objects.items.len);
-            material_idx.* = @intCast(u32, primitive.material.?);
-            // get indices
-            const indices = blk2: {
-                var indices = std.ArrayList(u16).init(allocator);
-                defer indices.deinit();
-
-                const accessor = gltf.data.accessors.items[primitive.indices.?];
-                gltf.getDataFromBufferView(u16, &indices, accessor, gltf.glb_binary.?);
-
-                // convert to U32x3
-                var actual_indices = try allocator.alloc(U32x3, indices.items.len / 3);
-                for (actual_indices, 0..) |*index, i| {
-                    index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
-                }
-                break :blk2 actual_indices;
-            };
-            errdefer allocator.free(indices);
-
-            const vertices = blk2: {
-                var positions = std.ArrayList(f32).init(allocator);
-                var texcoords = std.ArrayList(f32).init(allocator);
-                var normals = std.ArrayList(f32).init(allocator);
-
-                for (primitive.attributes.items) |attribute| {
-                    switch (attribute) {
-                        .position => |accessor_index| {
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            gltf.getDataFromBufferView(f32, &positions, accessor, gltf.glb_binary.?);
-                        },
-                        .texcoord => |accessor_index| {
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            gltf.getDataFromBufferView(f32, &texcoords, accessor, gltf.glb_binary.?);
-                        },
-                        .normal => |accessor_index| {
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            gltf.getDataFromBufferView(f32, &normals, accessor, gltf.glb_binary.?);
-                        },
-                        else => {
-                            std.debug.print("{any}\n", .{ attribute });
-                            return error.UnhandledAttribute;
-                        },
-                    }
-                }
-
-                const positions_slice = try positions.toOwnedSlice();
-                const texcoords_slice = try texcoords.toOwnedSlice();
-                const normals_slice = try normals.toOwnedSlice();
-
-                // TODO: remove ptrcast workaround below once ptrcast works on slices
-                break :blk2 .{
-                    .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3],
-                    .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2],
-                    .normals = @ptrCast([*]F32x3, normals_slice.ptr)[0..normals_slice.len / 3],
+    for (gltf.data.nodes.items) |node| {
+        if (node.mesh) |model_idx| {
+            const mesh = gltf.data.meshes.items[model_idx];
+            const geometries = try allocator.alloc(Geometry, mesh.primitives.items.len);
+            for (mesh.primitives.items, geometries) |primitive, *geometry| {
+                geometry.* = Geometry {
+                    .mesh = @intCast(u32, objects.items.len),
+                    .material = @intCast(u32, primitive.material.?),
+                    .sampled = std.mem.startsWith(u8, gltf.data.materials.items[primitive.material.?].name, "Emitter"),
                 };
-            };
-            errdefer allocator.free(vertices.positions);
-            errdefer allocator.free(vertices.texcoords);
+                // get indices
+                const indices = blk2: {
+                    var indices = std.ArrayList(u16).init(allocator);
+                    defer indices.deinit();
 
-            // get vertices
-            try objects.append(MeshData {
-                .positions = vertices.positions,
-                .texcoords = if (vertices.texcoords.len != 0) vertices.texcoords else null,
-                .normals = if (vertices.normals.len != 0) vertices.normals else null,
-                .indices = indices,
+                    const accessor = gltf.data.accessors.items[primitive.indices.?];
+                    gltf.getDataFromBufferView(u16, &indices, accessor, gltf.glb_binary.?);
+
+                    // convert to U32x3
+                    var actual_indices = try allocator.alloc(U32x3, indices.items.len / 3);
+                    for (actual_indices, 0..) |*index, i| {
+                        index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                    }
+                    break :blk2 actual_indices;
+                };
+                errdefer allocator.free(indices);
+
+                const vertices = blk2: {
+                    var positions = std.ArrayList(f32).init(allocator);
+                    var texcoords = std.ArrayList(f32).init(allocator);
+                    var normals = std.ArrayList(f32).init(allocator);
+
+                    for (primitive.attributes.items) |attribute| {
+                        switch (attribute) {
+                            .position => |accessor_index| {
+                                const accessor = gltf.data.accessors.items[accessor_index];
+                                gltf.getDataFromBufferView(f32, &positions, accessor, gltf.glb_binary.?);
+                            },
+                            .texcoord => |accessor_index| {
+                                const accessor = gltf.data.accessors.items[accessor_index];
+                                gltf.getDataFromBufferView(f32, &texcoords, accessor, gltf.glb_binary.?);
+                            },
+                            .normal => |accessor_index| {
+                                const accessor = gltf.data.accessors.items[accessor_index];
+                                gltf.getDataFromBufferView(f32, &normals, accessor, gltf.glb_binary.?);
+                            },
+                            else => {
+                                std.debug.print("{any}\n", .{ attribute });
+                                return error.UnhandledAttribute;
+                            },
+                        }
+                    }
+
+                    const positions_slice = try positions.toOwnedSlice();
+                    const texcoords_slice = try texcoords.toOwnedSlice();
+                    const normals_slice = try normals.toOwnedSlice();
+
+                    // TODO: remove ptrcast workaround below once ptrcast works on slices
+                    break :blk2 .{
+                        .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3],
+                        .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2],
+                        .normals = @ptrCast([*]F32x3, normals_slice.ptr)[0..normals_slice.len / 3],
+                    };
+                };
+                errdefer allocator.free(vertices.positions);
+                errdefer allocator.free(vertices.texcoords);
+
+                // get vertices
+                try objects.append(MeshData {
+                    .positions = vertices.positions,
+                    .texcoords = if (vertices.texcoords.len != 0) vertices.texcoords else null,
+                    .normals = if (vertices.normals.len != 0) vertices.normals else null,
+                    .indices = indices,
+                });
+            }
+
+            const mat = Gltf.getGlobalTransform(&gltf.data, node);
+            try instances.append(Instance {
+                .transform = Mat3x4.new(
+                    F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+                    F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+                ),
+                .geometries = geometries,
             });
         }
-        mesh_group.*.meshes = mesh_idxs;
-        skin.* = material_idxs;
     }
-    defer for (mesh_groups) |group| allocator.free(group.meshes);
-    defer for (skins) |skin| allocator.free(skin);
 
     var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
     errdefer mesh_manager.destroy(vc, allocator);
 
-    // go over heirarchy, finding meshes
-    var instances = blk: {
-        var instances = Instances {};
-        errdefer instances.deinit(allocator);
-
-        // not most efficient way but simplest and does the trick
-        for (gltf.data.nodes.items) |node| {
-            if (node.mesh) |model_idx| {
-                const mat = Gltf.getGlobalTransform(&gltf.data, node);
-                // workaround for gltf not supporting this interface
-                const sampled_geometry = try allocator.alloc(bool, mesh_groups[model_idx].meshes.len);
-                for (skins[model_idx], sampled_geometry) |material_idx, *sampled_geo| {
-                    sampled_geo.* = std.mem.startsWith(u8, gltf.data.materials.items[material_idx].name, "Emitter");
-                }
-                try instances.append(allocator, .{
-                    .transform = Mat3x4.new(
-                        F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                        F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-                        F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-                    ),
-                    .mesh_group = @intCast(u24, model_idx),
-                    .materials = skins[model_idx],
-                    .sampled_geometry = sampled_geometry,
-                });
-            }
-        }
-
-        break :blk instances;
-    };
-    defer instances.deinit(allocator);
-    defer for (instances.items(.sampled_geometry)) |geo| allocator.free(geo);
-
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, mesh_groups, inspection);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
-
-    var world = Self {
-        .material_manager = material_manager,
-        .mesh_manager = mesh_manager,
-
-        .accel = accel,
-
-        .sampler = sampler,
-        .descriptor_set = undefined,
-    };
-
-    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
-
-    return world;
-}
-
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, textures: []const ImageManager.TextureSource, materials: []const Material, mesh_filepaths: []const []const u8, instances: Instances, models: []const MeshGroup, descriptor_layout: *const WorldDescriptorLayout) !Self {
-    var material_manager = try MaterialManager.create(vc, vk_allocator, allocator, commands, textures, materials);
-    errdefer material_manager.destroy(vc, allocator);
-
-    const objects = try allocator.alloc(MeshData, mesh_filepaths.len);
-    defer allocator.free(objects);
-    defer for (objects) |*object| object.destroy(allocator);
-
-    for (mesh_filepaths, objects) |mesh_filepath, *object| {
-        const file = try asset.openAsset(allocator, mesh_filepath);
-        defer file.close();
-
-        object.* = try MeshData.fromObj(allocator, file);
-    }
-
-    var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects);
-    errdefer mesh_manager.destroy(vc, allocator);
-
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances, models);
-    errdefer accel.destroy(vc, allocator);
-
-    const sampler = try ImageManager.createSampler(vc);
 
     var world = Self {
         .material_manager = material_manager,

@@ -28,24 +28,16 @@ const F32x3 = vector.Vec3(f32);
 // - a list of meshes
 //
 
-pub const InstanceInfo = struct {
+pub const Instance = struct {
     transform: Mat3x4, // transform of this instance
     visible: bool = true, // whether this instance is visible
-    mesh_group: u32, // index of mesh group used by this instance
-    materials: []const u32, // indices of material used by each geometry in mesh group
-    sampled_geometry: []const bool, // whether each geometry in this instance is sampled
+    geometries: []const Geometry, // geometries in this instance
 };
 
 pub const Geometry = extern struct {
     mesh: u32, // idx of mesh that this geometry uses
     material: u32, // idx of material that this geometry uses
     sampled: bool, // whether this geometry is explicitly sampled for emitted light
-};
-
-pub const InstanceInfos = std.MultiArrayList(InstanceInfo);
-
-pub const MeshGroup = struct {
-    meshes: []const u32, // indices of meshes in this group
 };
 
 const BottomLevelAccels = std.MultiArrayList(struct {
@@ -85,32 +77,61 @@ alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry), // to sample ligh
 const Self = @This();
 
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance_infos: InstanceInfos, mesh_groups: []const MeshGroup, inspection: bool) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instances: []const Instance, inspection: bool) !Self {
+    // as an optimization, see if any instances contain identical mesh lists,
+    // because we only need to create as many BLASes as there are unique mesh lists
+    var unique_mesh_lists_hash = std.ArrayHashMap([]const Geometry, usize, struct {
+        const Context = @This();
+        pub fn hash(self: Context, key: []const Geometry) u32 {
+            _ = self;
+            var wy = std.hash.Wyhash.init(0);
+            for (key) |geo| {
+                wy.update(std.mem.asBytes(&geo.mesh));
+            }
+            return @truncate(u32, wy.final());
+        }
+        pub fn eql(self: Context, key1: []const Geometry, key2: []const Geometry, b_index: usize) bool {
+            _ = self;
+            _ = b_index;
+            // like mem.eql but only checks meshes
+            if (key1.len != key2.len) return false;
+            if (key1.ptr == key2.ptr) return true;
+            for (key1, key2) |a, b| {
+                if (a.mesh != b.mesh) return false;
+            }
+            return true;
+        }
+    }, false).init(allocator); // last param maybe should be true
+    defer unique_mesh_lists_hash.deinit();
+    for (instances, 0..) |instance, i| {
+        try unique_mesh_lists_hash.put(instance.geometries, i);
+    }
     // create a BLAS for each model
     // lots of temp memory allocations here
     const blases = blk: {
-        const uncompacted_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, mesh_groups.len);
+        const unique_mesh_lists = unique_mesh_lists_hash.keys();
+        const uncompacted_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, unique_mesh_lists.len);
         defer allocator.free(uncompacted_buffers);
         defer for (uncompacted_buffers) |buffer| buffer.destroy(vc);
 
-        const uncompacted_blases = try allocator.alloc(vk.AccelerationStructureKHR, mesh_groups.len);
+        const uncompacted_blases = try allocator.alloc(vk.AccelerationStructureKHR, unique_mesh_lists.len);
         defer allocator.free(uncompacted_blases);
         defer for (uncompacted_blases) |handle| vc.device.destroyAccelerationStructureKHR(handle, null);
 
-        var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, mesh_groups.len);
+        var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, unique_mesh_lists.len);
         defer allocator.free(build_geometry_infos);
         defer for (build_geometry_infos) |build_geometry_info| allocator.free(build_geometry_info.p_geometries.?[0..build_geometry_info.geometry_count]);
 
-        const scratch_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, mesh_groups.len);
+        const scratch_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, unique_mesh_lists.len);
         defer allocator.free(scratch_buffers);
         defer for (scratch_buffers) |scratch_buffer| scratch_buffer.destroy(vc);
 
-        const build_infos = try allocator.alloc([*]vk.AccelerationStructureBuildRangeInfoKHR, mesh_groups.len);
+        const build_infos = try allocator.alloc([*]vk.AccelerationStructureBuildRangeInfoKHR, unique_mesh_lists.len);
         defer allocator.free(build_infos);
         defer for (build_infos, build_geometry_infos) |build_info, build_geometry_info| allocator.free(build_info[0..build_geometry_info.geometry_count]);
 
-        for (mesh_groups, build_infos, build_geometry_infos, scratch_buffers, uncompacted_buffers, uncompacted_blases) |group, *build_info, *build_geometry_info, *scratch_buffer, *uncompacted_buffer, *uncompacted_blas| {
-            const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, group.meshes.len);
+        for (unique_mesh_lists, build_infos, build_geometry_infos, scratch_buffers, uncompacted_buffers, uncompacted_blases) |list, *build_info, *build_geometry_info, *scratch_buffer, *uncompacted_buffer, *uncompacted_blas| {
+            const geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, list.len);
 
             build_geometry_info.* = vk.AccelerationStructureBuildGeometryInfoKHR {
                 .type = .bottom_level_khr,
@@ -121,13 +142,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .scratch_data = undefined,
             };
 
-            const primitive_counts = try allocator.alloc(u32, group.meshes.len);
+            const primitive_counts = try allocator.alloc(u32, list.len);
             defer allocator.free(primitive_counts);
 
-            build_info.* = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, group.meshes.len)).ptr;
+            build_info.* = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, list.len)).ptr;
 
-            for (group.meshes, geometries, primitive_counts, 0..) |mesh_idx, *geometry, *primitive_count, j| {
-                const mesh = mesh_manager.meshes.get(mesh_idx);
+            for (list, geometries, primitive_counts, 0..) |geo, *geometry, *primitive_count, j| {
+                const mesh = mesh_manager.meshes.get(geo.mesh);
 
                 geometry.* = vk.AccelerationStructureGeometryKHR {
                     .geometry_type = .triangles_khr,
@@ -180,15 +201,15 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             uncompacted_blas.* = build_geometry_info.dst_acceleration_structure;
         }
 
-        const compactedSizes = try allocator.alloc(vk.DeviceSize, mesh_groups.len);
+        const compactedSizes = try allocator.alloc(vk.DeviceSize, unique_mesh_lists.len);
         defer allocator.free(compactedSizes);
         try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos, uncompacted_blases, compactedSizes);
 
         var blases = BottomLevelAccels {};
-        try blases.ensureTotalCapacity(allocator, mesh_groups.len);
+        try blases.ensureTotalCapacity(allocator, unique_mesh_lists.len);
         errdefer blases.deinit(allocator);
 
-        const copy_infos = try allocator.alloc(vk.CopyAccelerationStructureInfoKHR, mesh_groups.len);
+        const copy_infos = try allocator.alloc(vk.CopyAccelerationStructureInfoKHR, unique_mesh_lists.len);
         defer allocator.free(copy_infos);
 
         for (compactedSizes, copy_infos, uncompacted_blases) |compactedSize, *copy_info, uncompacted_blas| {
@@ -220,16 +241,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 
     // create geometries flat jagged array
-    const instance_transforms = instance_infos.items(.transform);
-    const instance_visibles = instance_infos.items(.visible);
-    const instance_mesh_groups = instance_infos.items(.mesh_group);
-    const instance_materials = instance_infos.items(.materials);
-    const instance_sampled_geometry = instance_infos.items(.sampled_geometry);
-
     const geometries = blk: {
         var geometry_count: u24 = 0;
-        for (instance_mesh_groups) |mesh_group_idx| {
-            geometry_count += @intCast(u24, mesh_groups[mesh_group_idx].meshes.len);
+        for (instances) |instance| {
+            geometry_count += @intCast(u24, instance.geometries.len);
         }
         const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
         defer geometries_host.destroy(vc);
@@ -241,13 +256,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         try utils.setDebugName(vc, geometries.handle, "geometries");
 
         var flat_idx: u32 = 0;
-        for (instance_mesh_groups, instance_materials, instance_sampled_geometry) |mesh_group_idx, materials, sampled_geometry| {
-            for (mesh_groups[mesh_group_idx].meshes, materials, sampled_geometry) |mesh_idx, material, sampled| {
-                geometries_host.data[flat_idx] = .{
-                    .mesh = mesh_idx,
-                    .material = material,
-                    .sampled = sampled,
-                };
+        for (instances) |instance| {
+            for (instance.geometries) |geometry| {
+                geometries_host.data[flat_idx] = geometry;
                 flat_idx += 1;
             }
         }
@@ -261,7 +272,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer geometries.destroy(vc);
 
     // create instance info, tlas, and tlas state
-    const instance_count = @intCast(u32, instance_infos.len);
+    const instance_count = @intCast(u32, instances.len);
     var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
     if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
     const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
@@ -272,24 +283,24 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     defer instances_host.destroy(vc);
 
     var custom_index: u24 = 0;
-    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups) |*instance, transform, visible, mesh_group_idx| {
-        instance.* = .{
+    for (instances_host.data, instances) |*instance_host, instance| {
+        instance_host.* = .{
             .transform = vk.TransformMatrixKHR {
-                .matrix = @bitCast([3][4]f32, transform),
+                .matrix = @bitCast([3][4]f32, instance.transform),
             },
             .instance_custom_index_and_mask = .{
                 .instance_custom_index = custom_index,
-                .mask = if (visible) 0xFF else 0x00,
+                .mask = if (instance.visible) 0xFF else 0x00,
             },
             .instance_shader_binding_table_record_offset_and_flags = .{
                 .instance_shader_binding_table_record_offset = 0,
                 .flags = 0,
             },
             .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{ 
-                .acceleration_structure = blases.items(.handle)[mesh_group_idx],
+                .acceleration_structure = blases.items(.handle)[unique_mesh_lists_hash.get(instance.geometries).?],
             }),
         };
-        custom_index += @intCast(u24, mesh_groups[mesh_group_idx].meshes.len);
+        custom_index += @intCast(u24, instance.geometries.len);
     }
 
     try commands.startRecording(vc);
@@ -347,8 +358,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const inverses = try allocator.alloc(Mat3x4, instance_count);
         defer allocator.free(inverses);
-        for (instance_transforms, inverses) |transform, *inverse| {
-            inverse.* = transform.inverse_affine();
+        for (instances, inverses) |instance, *inverse| {
+            inverse.* = instance.transform.inverse_affine();
         }
 
         try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
@@ -365,17 +376,17 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         var table_data = std.ArrayList(TableData).init(allocator);
         defer table_data.deinit();
 
-        for (instance_sampled_geometry, instance_transforms, instance_mesh_groups, 0..) |sampled_geometry, transform, mesh_group_idx, i| {
-            for (sampled_geometry, 0..) |sampled, j| {
-                if (!sampled) continue;
+        for (instances, 0..) |instance, i| {
+            for (instance.geometries, 0..) |instance_geometry, j| {
+                if (!instance_geometry.sampled) continue;
 
-                const mesh_idx = mesh_groups[mesh_group_idx].meshes[j];
+                const mesh_idx = instance_geometry.mesh;
                 const positions = mesh_manager.meshes.items(.positions)[mesh_idx];
                 const indices = mesh_manager.meshes.items(.indices)[mesh_idx];
                 for (indices, 0..) |index, k| {
-                    const p0 = transform.mul_point(positions[index.x]);
-                    const p1 = transform.mul_point(positions[index.y]);
-                    const p2 = transform.mul_point(positions[index.z]);
+                    const p0 = instance.transform.mul_point(positions[index.x]);
+                    const p1 = instance.transform.mul_point(positions[index.y]);
+                    const p2 = instance.transform.mul_point(positions[index.z]);
                     const area = p1.sub(p0).cross(p2.sub(p0)).length() / 2.0;
                     try weights.append(area);
                     try table_data.append(.{
