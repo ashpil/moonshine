@@ -33,7 +33,7 @@ pub const InstanceInfo = struct {
     visible: bool = true, // whether this instance is visible
     mesh_group: u32, // index of mesh group used by this instance
     materials: []const u32, // indices of material used by each geometry in mesh group
-    sampled_geometry: []const bool = &.{}, // whether each geometry in this instance is sampled, empty for no sampled
+    sampled_geometry: []const bool, // whether each geometry in this instance is sampled
 };
 
 pub const Geometry = extern struct {
@@ -242,11 +242,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         var flat_idx: u32 = 0;
         for (instance_mesh_groups, instance_materials, instance_sampled_geometry) |mesh_group_idx, materials, sampled_geometry| {
-            for (mesh_groups[mesh_group_idx].meshes, 0..) |mesh_idx, j| {
+            for (mesh_groups[mesh_group_idx].meshes, materials, sampled_geometry) |mesh_idx, material, sampled| {
                 geometries_host.data[flat_idx] = .{
                     .mesh = mesh_idx,
-                    .material = materials[j],
-                    .sampled = if (sampled_geometry.len != 0) sampled_geometry[j] else false,
+                    .material = material,
+                    .sampled = sampled,
                 };
                 flat_idx += 1;
             }
