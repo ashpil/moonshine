@@ -219,32 +219,18 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         break :blk blases;
     };
 
-    // create instance info, tlas, and tlas state
-    const instance_count = @intCast(u32, instance_infos.len);
-    var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
-    if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
-    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
-    errdefer instances_device.destroy(vc);
-    try utils.setDebugName(vc, instances_device.handle, "instances");
-
-    const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
-    defer instances_host.destroy(vc);
-
+    // create geometries flat jagged array
     const instance_transforms = instance_infos.items(.transform);
     const instance_visibles = instance_infos.items(.visible);
     const instance_mesh_groups = instance_infos.items(.mesh_group);
     const instance_materials = instance_infos.items(.materials);
     const instance_sampled_geometry = instance_infos.items(.sampled_geometry);
 
-    const blas_handles = blases.items(.handle);
-
-    var geometry_count: u24 = 0;
-    for (instance_materials) |material_idxs| {
-        geometry_count += @intCast(u24, material_idxs.len);
-    }
-
-    // create geometries flat jagged array
     const geometries = blk: {
+        var geometry_count: u24 = 0;
+        for (instance_mesh_groups) |mesh_group_idx| {
+            geometry_count += @intCast(u24, mesh_groups[mesh_group_idx].meshes.len);
+        }
         const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
         defer geometries_host.destroy(vc);
 
@@ -255,12 +241,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         try utils.setDebugName(vc, geometries.handle, "geometries");
 
         var flat_idx: u32 = 0;
-        for (instance_mesh_groups, 0..) |instance_mesh_group, i| {
-            for (mesh_groups[instance_mesh_group].meshes, 0..) |mesh_idx, j| {
+        for (instance_mesh_groups, instance_materials, instance_sampled_geometry) |mesh_group_idx, materials, sampled_geometry| {
+            for (mesh_groups[mesh_group_idx].meshes, 0..) |mesh_idx, j| {
                 geometries_host.data[flat_idx] = .{
                     .mesh = mesh_idx,
-                    .material = instance_materials[i][j],
-                    .sampled = if (instance_sampled_geometry[i].len != 0) instance_sampled_geometry[i][j] else false,
+                    .material = materials[j],
+                    .sampled = if (sampled_geometry.len != 0) sampled_geometry[j] else false,
                 };
                 flat_idx += 1;
             }
@@ -274,8 +260,19 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer geometries.destroy(vc);
 
+    // create instance info, tlas, and tlas state
+    const instance_count = @intCast(u32, instance_infos.len);
+    var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
+    if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
+    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
+    errdefer instances_device.destroy(vc);
+    try utils.setDebugName(vc, instances_device.handle, "instances");
+
+    const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
+    defer instances_host.destroy(vc);
+
     var custom_index: u24 = 0;
-    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups, instance_materials) |*instance, transform, visible, mesh_group, material_idxs| {
+    for (instances_host.data, instance_transforms, instance_visibles, instance_mesh_groups) |*instance, transform, visible, mesh_group_idx| {
         instance.* = .{
             .transform = vk.TransformMatrixKHR {
                 .matrix = @bitCast([3][4]f32, transform),
@@ -289,10 +286,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .flags = 0,
             },
             .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{ 
-                .acceleration_structure = blas_handles[mesh_group],
+                .acceleration_structure = blases.items(.handle)[mesh_group_idx],
             }),
         };
-        custom_index += @intCast(u24, material_idxs.len);
+        custom_index += @intCast(u24, mesh_groups[mesh_group_idx].meshes.len);
     }
 
     try commands.startRecording(vc);
