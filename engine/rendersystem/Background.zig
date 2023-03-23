@@ -13,8 +13,8 @@ const asset = @import("../asset.zig");
 const exr = @import("../fileformats/exr.zig");
 
 images: ImageManager,
-marginal: VkAllocator.DeviceBuffer,
-conditional: VkAllocator.DeviceBuffer,
+marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
+conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
 descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
@@ -59,7 +59,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     defer allocator.free(marginal_weights);
 
     const conditional = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(AliasTable.TableEntry) * color.extent.height * color.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, color.extent.height * color.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
         const flat_entries = try allocator.alloc(AliasTable.TableEntry, color.extent.height * color.extent.width);
@@ -80,7 +80,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer conditional.destroy(vc);
 
     const marginal = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(AliasTable.TableEntry) * color.extent.height, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, color.extent.height, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
         const table = try AliasTable.create(allocator, marginal_weights);

@@ -37,6 +37,15 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     allocator.free(self.memory_type_properties);
 }
 
+
+pub fn findMemoryType(self: *const Self, type_filter: u32, properties: vk.MemoryPropertyFlags) !u5 {
+    return for (0..self.memory_type_properties.len) |i| {
+        if (type_filter & (@as(u32, 1) << @intCast(u5, i)) != 0 and self.memory_type_properties[i].contains(properties)) {
+            break @intCast(u5, i);
+        }
+    } else error.UnavailbleMemoryType;
+}
+
 fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags, buffer: *vk.Buffer, buffer_memory: *vk.DeviceMemory) !void {
     buffer.* = try vc.device.createBuffer(&.{
             .size = size,
@@ -62,29 +71,35 @@ fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, u
     try vc.device.bindBufferMemory(buffer.*, buffer_memory.*, 0);
 }
 
-pub const DeviceBuffer = struct {
-    handle: vk.Buffer,
+pub fn DeviceBuffer(comptime T: type) type {
+    const type_info = @typeInfo(T);
+    if (type_info == .Struct and type_info.Struct.layout == .Auto) @compileError("If you have a DeviceBuffer of a struct, you probably want to specify the struct layout explicitly");
+    return struct {
+        handle: vk.Buffer,
 
-    pub fn destroy(self: DeviceBuffer, vc: *const VulkanContext) void {
-        vc.device.destroyBuffer(self.handle, null);
-    }
+        const BufferSelf = @This();
 
-    // must've been created with shader device address bit enabled
-    pub fn getAddress(self: DeviceBuffer, vc: *const VulkanContext) vk.DeviceAddress {
-        return vc.device.getBufferDeviceAddress(&.{
-            .buffer = self.handle,
-        });
-    }
-};
+        pub fn destroy(self: BufferSelf, vc: *const VulkanContext) void {
+            vc.device.destroyBuffer(self.handle, null);
+        }
 
-pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, size: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer {
+        // must've been created with shader device address bit enabled
+        pub fn getAddress(self: BufferSelf, vc: *const VulkanContext) vk.DeviceAddress {
+            return vc.device.getBufferDeviceAddress(&.{
+                .buffer = self.handle,
+            });
+        }
+    };
+}
+
+pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, comptime T: type, count: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer(T) {
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;
-    try self.createRawBuffer(vc, size, usage, .{ .device_local_bit = true }, &buffer, &memory);
+    try self.createRawBuffer(vc, @sizeOf(T) * count, usage, .{ .device_local_bit = true }, &buffer, &memory);
 
     try self.memory.append(allocator, memory);
 
-    return DeviceBuffer {
+    return DeviceBuffer(T) {
         .handle = buffer,
     };
 }
@@ -118,14 +133,6 @@ pub fn createOwnedDeviceBuffer(self: *Self, vc: *const VulkanContext, size: vk.D
     };
 }
 
-pub fn findMemoryType(self: *const Self, type_filter: u32, properties: vk.MemoryPropertyFlags) !u5 {
-    return for (0..self.memory_type_properties.len) |i| {
-        if (type_filter & (@as(u32, 1) << @intCast(u5, i)) != 0 and self.memory_type_properties[i].contains(properties)) {
-            break @intCast(u5, i);
-        }
-    } else error.UnavailbleMemoryType;
-}
-
 pub fn HostBuffer(comptime T: type) type {
     return struct {
         handle: vk.Buffer,
@@ -148,11 +155,19 @@ pub fn HostBuffer(comptime T: type) type {
                 .buffer = self.handle,
             });
         }
+
+        pub fn toBytes(self: BufferSelf) HostBuffer(u8) {
+            return HostBuffer(u8) {
+                .handle = self.handle,
+                .memory = self.memory,
+                .data = @ptrCast([*]u8, self.data)[0..self.data.len * @sizeOf(T)],
+            };
+        }
     };
 }
 
 // count not in bytes, but number of T
-pub fn createHostBuffer(self: *Self, vc: *const VulkanContext, comptime T: type, count: u32, usage: vk.BufferUsageFlags) !HostBuffer(T) {
+pub fn createHostBuffer(self: *Self, vc: *const VulkanContext, comptime T: type, count: vk.DeviceSize, usage: vk.BufferUsageFlags) !HostBuffer(T) {
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;
     const size = @sizeOf(T) * count;

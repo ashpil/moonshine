@@ -70,10 +70,10 @@ const VariantBuffers = blk: {
         if (variant.type != void) {
             fields[current_field] = .{
                 .name = variant.name,
-                .type = VkAllocator.DeviceBuffer,
+                .type = VkAllocator.DeviceBuffer(variant.type),
                 .default_value = null,
                 .is_comptime = false,
-                .alignment = @alignOf(VkAllocator.DeviceBuffer),
+                .alignment = @alignOf(VkAllocator.DeviceBuffer(variant.type)),
             };
             current_field += 1;
         }
@@ -112,7 +112,7 @@ const Addrs = blk: {
 
 material_count: u32,
 textures: ImageManager,
-materials: VkAllocator.DeviceBuffer, // Material
+materials: VkAllocator.DeviceBuffer(Material),
 addrs: Addrs,
 
 variant_buffers: VariantBuffers,
@@ -133,7 +133,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
                 var buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true };
                 if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(field.type) * data.len, buffer_flags);
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(u32, data.len), buffer_flags);
                 errdefer device_buffer.destroy(vc);
 
                 std.mem.copy(field.type, host_buffer.data, data);
@@ -144,7 +144,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 @field(variant_buffers, field.name) = device_buffer;
                 @field(addrs, field.name) = device_buffer.getAddress(vc);
             } else {
-                @field(variant_buffers, field.name) = VkAllocator.DeviceBuffer { .handle = .null_handle };
+                @field(variant_buffers, field.name) = .{ .handle = .null_handle };
                 @field(addrs, field.name) = 0;
             }
         } else {
@@ -167,7 +167,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
         if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Material) * material_count, buffer_flags);
+        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
         errdefer materials_gpu.destroy(vc);
         
         try commands.startRecording(vc);

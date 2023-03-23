@@ -296,7 +296,7 @@ pub fn recordCopyBuffer(self: *Self, vc: *const VulkanContext, dst: vk.Buffer, s
 
 // buffers must have appropriate flags
 // uploads whole host buffer to gpu buffer
-pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContext, dst: VkAllocator.DeviceBuffer, src: VkAllocator.HostBuffer(T)) void {
+pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContext, dst: VkAllocator.DeviceBuffer(T), src: VkAllocator.HostBuffer(T)) void {
     const bytes = std.mem.sliceAsBytes(src.data);
     const region = vk.BufferCopy {
         .src_offset = 0,

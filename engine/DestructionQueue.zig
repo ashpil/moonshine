@@ -12,8 +12,8 @@ const Item = union(enum) {
     swapchain: vk.SwapchainKHR,
     pipeline_layout: vk.PipelineLayout,
     pipeline: vk.Pipeline,
+    buffer: vk.Buffer,
     image: ImageManager,
-    device_buffer: DeviceBuffer,
 
     fn destroy(self: *Item, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
         switch (self.*) {
@@ -21,7 +21,7 @@ const Item = union(enum) {
             .pipeline_layout => |pipeline_layout| vc.device.destroyPipelineLayout(pipeline_layout, null),
             .pipeline => |pipeline| vc.device.destroyPipeline(pipeline, null),
             .image => |*image| image.destroy(vc, allocator),
-            .device_buffer => |*device_buffer| device_buffer.destroy(vc),
+            .buffer => |buffer| vc.device.destroyBuffer(buffer, null),
         }
     }
 };
@@ -47,8 +47,8 @@ pub fn add(self: *Self, allocator: std.mem.Allocator, item: anytype) !void {
         try self.queue.append(allocator, .{ .pipeline_layout = item });
     } else if (@TypeOf(item) == vk.Pipeline) {
         try self.queue.append(allocator, .{ .pipeline = item });
-    } else if (@TypeOf(item) == DeviceBuffer) {
-        try self.queue.append(allocator, .{ .device_buffer = item });
+    } else if (@TypeOf(item) == vk.Buffer) {
+        try self.queue.append(allocator, .{ .buffer = item });
     } else @compileError("Unknown destruction type: " ++ @typeName(@TypeOf(item)));
 }
 

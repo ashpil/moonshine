@@ -328,7 +328,7 @@ const ShaderInfo = struct {
 
 // TODO: maybe use vkCmdUploadBuffer here
 const ShaderBindingTable = struct {
-    handle: VkAllocator.DeviceBuffer,
+    handle: VkAllocator.DeviceBuffer(u8),
 
     raygen_address: vk.DeviceAddress,
     miss_address: vk.DeviceAddress,
@@ -367,7 +367,7 @@ const ShaderBindingTable = struct {
         std.mem.copyBackwards(u8, sbt.data[hit_index..hit_index + hit_size], sbt.data[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
         std.mem.copyBackwards(u8, sbt.data[miss_index..miss_index + miss_size], sbt.data[raygen_size..raygen_size + miss_size]);
         
-        const handle = try vk_allocator.createDeviceBuffer(vc, allocator, sbt_size, .{ .shader_binding_table_bit_khr = true, .transfer_dst_bit = true, .shader_device_address_bit = true });
+        const handle = try vk_allocator.createDeviceBuffer(vc, allocator, u8, sbt_size, .{ .shader_binding_table_bit_khr = true, .transfer_dst_bit = true, .shader_device_address_bit = true });
         errdefer handle.destroy(vc);
 
         try cmd.startRecording(vc);

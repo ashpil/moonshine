@@ -50,30 +50,37 @@ pub const MeshGroup = struct {
 
 const BottomLevelAccels = std.MultiArrayList(struct {
     handle: vk.AccelerationStructureKHR,
-    buffer: VkAllocator.DeviceBuffer,
+    buffer: VkAllocator.DeviceBuffer(u8),
 });
+
+const TableData = extern struct {
+    instance: u32,
+    geometry: u32,
+    primitive: u32,
+};
+const AliasTableT = AliasTable(TableData);
 
 blases: BottomLevelAccels,
 
 instance_count: u32,
-instances_device: VkAllocator.DeviceBuffer,
+instances_device: VkAllocator.DeviceBuffer(vk.AccelerationStructureInstanceKHR),
 instances_address: vk.DeviceAddress,
 
 // keep track of inverse transform -- non-inverse we can get from instances_device
-world_to_instance: VkAllocator.DeviceBuffer,
+world_to_instance: VkAllocator.DeviceBuffer(Mat3x4),
 
 // flat jagged array for geometries -- 
 // use instanceCustomIndex + GeometryID() here to get geometry
-geometries: VkAllocator.DeviceBuffer,
+geometries: VkAllocator.DeviceBuffer(Geometry),
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR,
-tlas_buffer: VkAllocator.DeviceBuffer,
+tlas_buffer: VkAllocator.DeviceBuffer(u8),
 
-tlas_update_scratch_buffer: VkAllocator.DeviceBuffer,
+tlas_update_scratch_buffer: VkAllocator.DeviceBuffer(u8),
 tlas_update_scratch_address: vk.DeviceAddress,
 
-alias_table: VkAllocator.DeviceBuffer, // to sample lights
+alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry), // to sample lights
 
 const Self = @This();
 
@@ -190,7 +197,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer allocator.free(copy_infos);
 
         for (compactedSizes, copy_infos, uncompacted_blases) |compactedSize, *copy_info, uncompacted_blas| {
-            const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, compactedSize, .{ .acceleration_structure_storage_bit_khr = true });
+            const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, compactedSize, .{ .acceleration_structure_storage_bit_khr = true });
             errdefer buffer.destroy(vc);
 
             const handle = try vc.device.createAccelerationStructureKHR(&.{
@@ -223,7 +230,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const instance_count = @intCast(u32, instance_infos.len);
     var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
     if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
-    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_count, instances_buffer_flags);
+    const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
     errdefer instances_device.destroy(vc);
     try utils.setDebugName(vc, instances_device.handle, "instances");
 
@@ -250,7 +257,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
         if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-        const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Geometry) * geometry_count, buffer_flags);
+        const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, Geometry, geometry_count, buffer_flags);
         errdefer geometries.destroy(vc);
         try utils.setDebugName(vc, geometries.handle, "geometries");
 
@@ -331,7 +338,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const scratch_buffer = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     defer scratch_buffer.destroy(vc);
 
-    const tlas_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
+    const tlas_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
     errdefer tlas_buffer.destroy(vc);
 
     geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
@@ -346,11 +353,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
 
-    const update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
+    const update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     errdefer update_scratch_buffer.destroy(vc);
 
     const world_to_instance = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(Mat3x4) * instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
         const inverses = try allocator.alloc(Mat3x4, instance_count);
@@ -366,12 +373,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer world_to_instance.destroy(vc);
 
     const alias_table = blk: {
-
-        const TableData = extern struct {
-            instance: u32,
-            geometry: u32,
-            primitive: u32,
-        };
 
         var weights = std.ArrayList(f32).init(allocator);
         defer weights.deinit();
@@ -402,25 +403,21 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }
         }
 
-        const AliasTableT = AliasTable(TableData);
-
         const table = try AliasTableT.create(allocator, weights.items, table_data.items);
         defer allocator.free(table.entries);
 
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, @sizeOf(AliasTableT.TableEntry) * (table.entries.len + 1), .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTableT.TableEntry, table.entries.len + 1, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
-        const bytes = std.mem.sliceAsBytes(table.entries);
-
-        const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, bytes.len) + @sizeOf(AliasTableT.TableEntry), .{ .transfer_src_bit = true });
+        const staging_buffer = try vk_allocator.createHostBuffer(vc, AliasTableT.TableEntry, table.entries.len + 1, .{ .transfer_src_bit = true });
         defer staging_buffer.destroy(vc);
 
-        std.mem.copy(u8, staging_buffer.data, &std.mem.toBytes(@intCast(u32, table.entries.len)));
-        std.mem.copy(u8, staging_buffer.data[@sizeOf(u32)..], &std.mem.toBytes(table.sum));
-        std.mem.copy(u8, staging_buffer.data[@sizeOf(AliasTableT.TableEntry)..], bytes);
+        staging_buffer.data[0].alias = @intCast(u32, table.entries.len);
+        staging_buffer.data[0].select = table.sum;
+        std.mem.copy(AliasTableT.TableEntry, staging_buffer.data[1..], table.entries);
 
         try commands.startRecording(vc);
-        commands.recordUploadBuffer(u8, vc, buffer, staging_buffer);
+        commands.recordUploadBuffer(AliasTableT.TableEntry, vc, buffer, staging_buffer);
         try commands.submitAndIdleUntilDone(vc);
 
         break :blk buffer;

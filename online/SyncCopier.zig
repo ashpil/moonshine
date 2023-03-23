@@ -48,12 +48,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, max_bytes: u
     };
 }
 
-pub fn copy(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, buffer: VkAllocator.DeviceBuffer, byte_offset: usize) !BufferInner {
+pub fn copy(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, buffer: VkAllocator.DeviceBuffer(BufferInner), idx: vk.DeviceSize) !BufferInner {
     std.debug.assert(@sizeOf(BufferInner) <= self.buffer.data.len);
 
     try vc.device.beginCommandBuffer(self.command_buffer, &.{});
     vc.device.cmdCopyBuffer(self.command_buffer, buffer.handle, self.buffer.handle, 1, utils.toPointerType(&vk.BufferCopy {
-        .src_offset = byte_offset,
+        .src_offset = @sizeOf(BufferInner) * idx,
         .dst_offset = 0,
         .size = @sizeOf(BufferInner),
     }));

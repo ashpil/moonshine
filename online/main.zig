@@ -225,10 +225,10 @@ pub fn main() !void {
             try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
             // TODO: all of the copying below should be done once, on object pick
-            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, world.accel.instances_device, object.instance_index * @sizeOf(vk.AccelerationStructureInstanceKHR));
+            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, world.accel.instances_device, object.instance_index);
             const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
-            var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, @sizeOf(Accel.Geometry) * accel_geometry_index);
-            const material = try sync_copier.copy(&context, MaterialManager.Material, world.material_manager.materials, @sizeOf(MaterialManager.Material) * geometry.material);
+            var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, accel_geometry_index);
+            const material = try sync_copier.copy(&context, MaterialManager.Material, world.material_manager.materials, geometry.material);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
             if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < world.material_manager.material_count) {
                 world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
@@ -249,7 +249,7 @@ pub fn main() !void {
                 const VariantType = union_field.type;
                 if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
                     const material_idx = @intCast(u32, (material.addr - @field(world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
-                    var material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), @sizeOf(VariantType) * material_idx);
+                    var material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), material_idx);
                     inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                         switch (struct_field.type) {
                             f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
