@@ -20,7 +20,6 @@ const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
 const MeshManager = @import("./MeshManager.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
-const asset = @import("../asset.zig");
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);

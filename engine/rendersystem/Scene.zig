@@ -16,7 +16,6 @@ const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
 
 const utils = @import("./utils.zig");
-const asset = @import("../asset.zig");
 
 const Self = @This();
 

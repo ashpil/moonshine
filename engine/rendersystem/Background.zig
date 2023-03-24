@@ -9,7 +9,6 @@ const Commands = @import("./Commands.zig");
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
 const utils = @import("./utils.zig");
-const asset = @import("../asset.zig");
 const exr = @import("../fileformats/exr.zig");
 
 images: ImageManager,
@@ -22,10 +21,7 @@ const Self = @This();
 // a lot of unnecessary copying if this ever needs to be optimized
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler, color_texture_path: []const u8) !Self {
     const color = blk: {
-        const path = try asset.absoluteAssetPath(allocator, color_texture_path);
-        defer allocator.free(path);
-
-        const pathZ = try allocator.dupeZ(u8, path);
+        const pathZ = try allocator.dupeZ(u8, color_texture_path);
         defer allocator.free(pathZ);
 
         break :blk try exr.helpers.load(allocator, pathZ);

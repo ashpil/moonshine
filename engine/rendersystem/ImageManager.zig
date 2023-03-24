@@ -5,12 +5,12 @@ const utils = @import("./utils.zig");
 
 const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
+const Commands = @import("./Commands.zig");
+const dds = @import("../fileformats/dds.zig");
+
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
-const Commands = @import("./Commands.zig");
-const dds = @import("../fileformats/dds.zig");
-const asset = @import("../asset.zig");
 
 pub const ImageCreateRawInfo = struct {
     extent: vk.Extent2D,
@@ -79,21 +79,23 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
 
     for (sources, extents, bytes, is_cubemaps, dst_layouts) |*source, *extent, *byte, *is_cubemap, *dst_layout| {
         const image = switch (source.*) {
-            .dds_filepath => |filepath| blk: {
-                const dds_file = try asset.openAsset(allocator, filepath);
-                defer dds_file.close();
+            .dds_filepath => |filepath| {
+                _ = filepath;
+                unreachable; // TODO: restore
+                // const dds_file = try asset.openAsset(allocator, filepath);
+                // defer dds_file.close();
 
-                const file_bytes = try dds_file.readToEndAlloc(allocator, std.math.maxInt(u32));
-                try free_bytes.append(file_bytes);
+                // const file_bytes = try dds_file.readToEndAlloc(allocator, std.math.maxInt(u32));
+                // try free_bytes.append(file_bytes);
 
-                const dds_info = std.mem.bytesToValue(dds.FileInfo, file_bytes[0..@sizeOf(dds.FileInfo)]);
-                dds_info.verify();
-                extent.* = dds_info.getExtent();
-                is_cubemap.* = dds_info.isCubemap();
-                dst_layout.* = .shader_read_only_optimal;
-                byte.* = file_bytes[@sizeOf(dds.FileInfo)..];
+                // const dds_info = std.mem.bytesToValue(dds.FileInfo, file_bytes[0..@sizeOf(dds.FileInfo)]);
+                // dds_info.verify();
+                // extent.* = dds_info.getExtent();
+                // is_cubemap.* = dds_info.isCubemap();
+                // dst_layout.* = .shader_read_only_optimal;
+                // byte.* = file_bytes[@sizeOf(dds.FileInfo)..];
 
-                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemap.*);
+                // break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, dds_info.getFormat(), is_cubemap.*);
             },
             .raw => |raw_info| blk: {
                 extent.* = raw_info.extent;
