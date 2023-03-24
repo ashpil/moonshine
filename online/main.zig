@@ -2,18 +2,13 @@ const std = @import("std");
 
 const engine = @import("engine");
 const Camera = engine.rendersystem.Camera;
-const World = engine.rendersystem.World;
 const Accel = engine.rendersystem.Accel;
 const MaterialManager = engine.rendersystem.MaterialManager;
 const DestructionQueue = engine.DestructionQueue;
-const Background = engine.rendersystem.Background;
+const Scene = engine.rendersystem.Scene;
 const VulkanContext = engine.rendersystem.VulkanContext;
 const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
-const descriptor = engine.rendersystem.descriptor;
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Commands = engine.rendersystem.Commands;
 const utils = engine.rendersystem.utils;
 const displaysystem = engine.displaysystem;
@@ -97,48 +92,31 @@ pub fn main() !void {
     var gui = try Gui.create(&context, display.swapchain, window, window_extent, &vk_allocator, allocator, &commands);
     defer gui.destroy(&context, allocator);
 
-    var world_descriptor_layout = try WorldDescriptorLayout.create(&context, 1, .{});
-    defer world_descriptor_layout.destroy(&context);
-    var background_descriptor_layout = try BackgroundDescriptorLayout.create(&context, 1, .{});
-    defer background_descriptor_layout.destroy(&context);
-    var film_descriptor_layout = try FilmDescriptorLayout.create(&context, 1, .{});
-    defer film_descriptor_layout.destroy(&context);
-
     var destruction_queue = DestructionQueue.create(); // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
     defer destruction_queue.destroy(&context, allocator);
-
-    std.log.info("Set up initial state!", .{});
-
-    var pipeline_opts = (Pipeline.SpecConstants {}).@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ world_descriptor_layout, background_descriptor_layout, film_descriptor_layout }, .{ pipeline_opts });
-    defer pipeline.destroy(&context);
-
-    std.log.info("Created pipeline!", .{});
-
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, world_descriptor_layout, &commands);
-    defer object_picker.destroy(&context);
-
-    var camera_create_info = try Camera.CreateInfo.fromGlb(allocator, config.in_filepath);
-    var camera = try Camera.create(&context, &vk_allocator, allocator, &film_descriptor_layout, config.extent, camera_create_info);
-    defer camera.destroy(&context, allocator);
-    try commands.transitionImageLayout(&context, allocator, camera.film.images.data.items(.handle)[1..], .@"undefined", .general);
-
-    var world = try World.fromGlb(&context, &vk_allocator, allocator, &commands, &world_descriptor_layout, config.in_filepath, true);
-    defer world.destroy(&context, allocator);
 
     var sync_copier = try SyncCopier.create(&context, &vk_allocator, @sizeOf(vk.AccelerationStructureInstanceKHR));
     defer sync_copier.destroy(&context);
 
-    std.log.info("Loaded world!", .{});
+    std.log.info("Set up initial state!", .{});
 
-    var background = try Background.create(&context, &vk_allocator, allocator, &commands, &background_descriptor_layout, world.sampler, config.skybox_filepath);
-    defer background.destroy(&context, allocator);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
+    defer scene.destroy(&context, allocator);
 
-    std.log.info("Created background!", .{});
+    std.log.info("Loaded scene!", .{});
+
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world_descriptor_layout, &commands);
+    defer object_picker.destroy(&context);
+
+    var pipeline_opts = (Pipeline.SpecConstants {}).@"0";
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background_descriptor_layout, scene.film_descriptor_layout }, .{ pipeline_opts });
+    defer pipeline.destroy(&context);
+
+    std.log.info("Created pipelines!", .{});
 
     var window_data = WindowData {
-        .camera = &camera,
-        .camera_info = &camera_create_info,
+        .camera = &scene.camera,
+        .camera_info = &scene.camera_create_info,
     };
 
     window.setAspectRatio(config.extent.width, config.extent.height);
@@ -172,27 +150,27 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Film")) {
             if (imgui.button("Reset", imgui.Vec2 { .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
-                camera.film.clear();
+                scene.camera.film.clear();
             }
             imgui.sameLine();
-            try imgui.textFmt("Sample count: {}", .{ camera.film.sample_count });
+            try imgui.textFmt("Sample count: {}", .{ scene.camera.film.sample_count });
             imgui.pushItemWidth(imgui.getFontSize() * -10);
             _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
             imgui.popItemWidth();
         }
         if (imgui.collapsingHeader("Camera")) {
             imgui.pushItemWidth(imgui.getFontSize() * -7.5);
-            var changed = imgui.sliderAngle("Vertical FOV", &camera_create_info.vfov, 1, 179);
-            changed = imgui.dragScalar(f32, "Focus distance", &camera_create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &camera_create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Origin", &camera_create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Forward", &camera_create_info.forward, 0.1, -1.0, 1.0) or changed;
-            changed = imgui.dragVector(F32x3, "Up", &camera_create_info.up, 0.1, -1.0, 1.0) or changed;
+            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera_create_info.vfov, 1, 179);
+            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera_create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera_create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Origin", &scene.camera_create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Forward", &scene.camera_create_info.forward, 0.1, -1.0, 1.0) or changed;
+            changed = imgui.dragVector(F32x3, "Up", &scene.camera_create_info.up, 0.1, -1.0, 1.0) or changed;
             if (changed) {
-                camera_create_info.forward = camera_create_info.forward.unit();
-                camera_create_info.up = camera_create_info.up.unit();
-                camera.properties = Camera.Properties.new(camera_create_info);
-                camera.film.clear();
+                scene.camera_create_info.forward = scene.camera_create_info.forward.unit();
+                scene.camera_create_info.up = scene.camera_create_info.up.unit();
+                scene.camera.properties = Camera.Properties.new(scene.camera_create_info);
+                scene.camera.film.clear();
             }
             imgui.popItemWidth();
         }
@@ -208,7 +186,7 @@ pub fn main() !void {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{ elapsed });
                     current_samples_per_run = pipeline_opts.samples_per_run;
-                    camera.film.clear();
+                    scene.camera.film.clear();
                 } else |err| if (err == error.ShaderCompileFail) {
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
                 } else return err;
@@ -225,18 +203,18 @@ pub fn main() !void {
             try imgui.textFmt("Instance index: {d}", .{ object.instance_index });
             try imgui.textFmt("Geometry index: {d}", .{ object.geometry_index });
             // TODO: all of the copying below should be done once, on object pick
-            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, world.accel.instances_device, object.instance_index);
+            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device, object.instance_index);
             const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
-            var geometry = try sync_copier.copy(&context, Accel.Geometry, world.accel.geometries, accel_geometry_index);
-            const material = try sync_copier.copy(&context, MaterialManager.Material, world.material_manager.materials, geometry.material);
+            var geometry = try sync_copier.copy(&context, Accel.Geometry, scene.world.accel.geometries, accel_geometry_index);
+            const material = try sync_copier.copy(&context, MaterialManager.Material, scene.world.material_manager.materials, geometry.material);
             try imgui.textFmt("Mesh index: {d}", .{ geometry.mesh });
-            if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < world.material_manager.material_count) {
-                world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
-                camera.film.clear();
+            if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.material_manager.material_count) {
+                scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
+                scene.camera.film.clear();
             }
             try imgui.textFmt("Sampled: {}", .{ geometry.sampled });
             imgui.separatorText("mesh");
-            const mesh = world.mesh_manager.meshes.get(geometry.mesh);
+            const mesh = scene.world.mesh_manager.meshes.get(geometry.mesh);
             try imgui.textFmt("Vertex count: {d}", .{ mesh.vertex_count });
             try imgui.textFmt("Index count: {d}", .{ mesh.index_count });
             try imgui.textFmt("Has texcoords: {}", .{ mesh.texcoord_buffer != null });
@@ -248,13 +226,13 @@ pub fn main() !void {
             inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
                 const VariantType = union_field.type;
                 if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
-                    const material_idx = @intCast(u32, (material.addr - @field(world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
-                    var material_variant = try sync_copier.copy(&context, VariantType, @field(world.material_manager.variant_buffers, enum_field.name), material_idx);
+                    const material_idx = @intCast(u32, (material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
+                    var material_variant = try sync_copier.copy(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name), material_idx);
                     inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                         switch (struct_field.type) {
                             f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
-                                world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
-                                camera.film.clear();
+                                scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
+                                scene.camera.film.clear();
                             },
                             u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
                             else => unreachable,
@@ -267,9 +245,9 @@ pub fn main() !void {
             var translation = old_transform.extract_translation();
             imgui.pushItemWidth(imgui.getFontSize() * -6);
             if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
-                world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
-                try world.accel.recordRebuild(&context, command_buffer);
-                camera.film.clear();
+                scene.world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
+                try scene.world.accel.recordRebuild(&context, command_buffer);
+                scene.camera.film.clear();
             }
             imgui.popItemWidth();
         } else {
@@ -280,11 +258,11 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @floatCast(f32, pos.x) / @intToFloat(f32, display.swapchain.extent.width);
             const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), camera, world.descriptor_set);
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
         }
 
-        if (max_sample_count != 0 and camera.film.sample_count > max_sample_count) camera.film.clear();
-        if (max_sample_count == 0 or camera.film.sample_count < max_sample_count) {
+        if (max_sample_count != 0 and scene.camera.film.sample_count > max_sample_count) scene.camera.film.clear();
+        if (max_sample_count == 0 or scene.camera.film.sample_count < max_sample_count) {
             // transition display image to one we can write to in shader
             context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
                 .image_memory_barrier_count = 1,
@@ -295,7 +273,7 @@ pub fn main() !void {
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = camera.film.images.data.items(.handle)[0],
+                    .image = scene.camera.film.images.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -306,17 +284,17 @@ pub fn main() !void {
                 }),
             });
 
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { world.descriptor_set, background.descriptor_set, camera.film.descriptor_set });
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.descriptor_set, scene.camera.film.descriptor_set });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
             
             // push some stuff
-            const bytes = std.mem.asBytes(&.{camera.properties, camera.film.sample_count });
+            const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.film.sample_count });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff
-            pipeline.recordTraceRays(&context, command_buffer, camera.film.extent);
+            pipeline.recordTraceRays(&context, command_buffer, scene.camera.film.extent);
 
             // transition display image to one we can blit from
             const image_memory_barriers = [_]vk.ImageMemoryBarrier2 {
@@ -329,7 +307,7 @@ pub fn main() !void {
                     .new_layout = .transfer_src_optimal,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = camera.film.images.data.items(.handle)[0],
+                    .image = scene.camera.film.images.data.items(.handle)[0],
                     .subresource_range = .{
                         .aspect_mask = .{ .color_bit = true },
                         .base_mip_level = 0,
@@ -382,8 +360,8 @@ pub fn main() !void {
                     .y = 0,
                     .z = 0,
                 }, .{
-                    .x = @intCast(i32, camera.film.extent.width),
-                    .y = @intCast(i32, camera.film.extent.height),
+                    .x = @intCast(i32, scene.camera.film.extent.width),
+                    .y = @intCast(i32, scene.camera.film.extent.height),
                     .z = 1,
                 }
             },
@@ -401,7 +379,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
@@ -454,8 +432,8 @@ pub fn main() !void {
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
-            camera.film.sample_count += current_samples_per_run;
-            if (max_sample_count != 0) camera.film.sample_count = std.math.min(camera.film.sample_count, max_sample_count);
+            scene.camera.film.sample_count += current_samples_per_run;
+            if (max_sample_count != 0) scene.camera.film.sample_count = std.math.min(scene.camera.film.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);

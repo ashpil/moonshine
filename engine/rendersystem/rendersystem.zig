@@ -10,6 +10,7 @@ pub const MaterialManager = @import("MaterialManager.zig");
 pub const Film = @import("Film.zig");
 pub const pipeline = @import("pipeline.zig");
 pub const World = @import("World.zig");
+pub const Scene = @import("Scene.zig");
 pub const VulkanContext = @import("VulkanContext.zig");
 
 pub const utils = @import("utils.zig");

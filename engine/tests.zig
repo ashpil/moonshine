@@ -7,40 +7,15 @@ const VulkanContext = engine.rendersystem.VulkanContext;
 const Commands = engine.rendersystem.Commands;
 const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
-const ImageManager = engine.rendersystem.ImageManager;
-const Camera = engine.rendersystem.Camera;
-const World = engine.rendersystem.World;
-const Material = engine.rendersystem.World.Material;
-const Background = engine.rendersystem.Background;
+const Scene = engine.rendersystem.Scene;
 
 const utils = engine.rendersystem.utils;
-const exr = engine.fileformats.exr;
-
-const descriptor = engine.rendersystem.descriptor;
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
-
-const vector = engine.vector;
-const F32x3 = vector.Vec3(f32);
-const Mat3x4 = vector.Mat3x4(f32);
 
 const TestingContext = struct {
-
     vc: VulkanContext,
-
     vk_allocator: VkAllocator,
-
-    world_descriptor_layout: WorldDescriptorLayout,
-    background_descriptor_layout: BackgroundDescriptorLayout,
-    film_descriptor_layout: FilmDescriptorLayout,
-
     commands: Commands,
-
-    camera: Camera,
-    world: World,
-    background: Background,
-
+    scene: Scene,
     output_buffer: VkAllocator.HostBuffer(f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D, in_filepath: []const u8, skybox_filepath: []const u8) !TestingContext {
@@ -50,43 +25,20 @@ const TestingContext = struct {
         var vk_allocator = try VkAllocator.create(&vc, allocator);
         errdefer vk_allocator.destroy(&vc, allocator);
 
-        var world_descriptor_layout = try WorldDescriptorLayout.create(&vc, 1, .{});
-        errdefer world_descriptor_layout.destroy(&vc);
-        var background_descriptor_layout = try BackgroundDescriptorLayout.create(&vc, 1, .{});
-        errdefer background_descriptor_layout.destroy(&vc);
-        var film_descriptor_layout = try FilmDescriptorLayout.create(&vc, 1, .{});
-        errdefer film_descriptor_layout.destroy(&vc);
-
         var commands = try Commands.create(&vc);
         errdefer commands.destroy(&vc);
 
-        var camera = try Camera.create(&vc, &vk_allocator, allocator, &film_descriptor_layout, extent, try Camera.CreateInfo.fromGlb(allocator, in_filepath));
-        errdefer camera.destroy(&vc, allocator);
+        var scene = try Scene.fromGlbExr(&vc, &vk_allocator, allocator, &commands, in_filepath, skybox_filepath, extent, false);
+        errdefer scene.destroy(&vc, allocator);
 
-        var world = try World.fromGlb(&vc, &vk_allocator, allocator, &commands, &world_descriptor_layout, in_filepath, false);
-        errdefer world.destroy(&vc, allocator);
-
-        var background = try Background.create(&vc, &vk_allocator, allocator, &commands, &background_descriptor_layout, world.sampler, skybox_filepath);
-        errdefer background.destroy(&vc, allocator);
-
-        const output_buffer = try vk_allocator.createHostBuffer(&vc, f32, 4 * camera.film.extent.width * camera.film.extent.height, .{ .transfer_dst_bit = true });
+        const output_buffer = try vk_allocator.createHostBuffer(&vc, f32, 4 * scene.camera.film.extent.width * scene.camera.film.extent.height, .{ .transfer_dst_bit = true });
         errdefer output_buffer.destroy(&vc);
 
         return TestingContext {
             .vc = vc,
-
             .vk_allocator = vk_allocator,
-
-            .world_descriptor_layout = world_descriptor_layout,
-            .background_descriptor_layout = background_descriptor_layout,
-            .film_descriptor_layout = film_descriptor_layout,
-
             .commands = commands,
-
-            .camera = camera,
-            .world = world,
-            .background = background,
-
+            .scene = scene,
             .output_buffer = output_buffer,
         };
     }
@@ -103,7 +55,7 @@ const TestingContext = struct {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = self.camera.film.images.data.items(.handle)[0],
+                .image = self.scene.camera.film.images.data.items(.handle)[0],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -119,7 +71,7 @@ const TestingContext = struct {
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = self.camera.film.images.data.items(.handle)[1],
+                .image = self.scene.camera.film.images.data.items(.handle)[1],
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
@@ -137,14 +89,14 @@ const TestingContext = struct {
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.world.descriptor_set, self.background.descriptor_set, self.camera.film.descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.scene.world.descriptor_set, self.scene.background.descriptor_set, self.scene.camera.film.descriptor_set });
         
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ self.camera.properties, self.camera.film.sample_count });
+        const bytes = std.mem.asBytes(&.{ self.scene.camera.properties, self.scene.camera.film.sample_count });
         self.vc.device.cmdPushConstants(self.commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.camera.film.extent);
+        pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.scene.camera.film.extent);
 
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
@@ -156,7 +108,7 @@ const TestingContext = struct {
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.camera.film.images.data.items(.handle)[0],
+            .image = self.scene.camera.film.images.data.items(.handle)[0],
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -187,31 +139,21 @@ const TestingContext = struct {
                 .z = 0,
             },
             .image_extent = .{
-                .width = self.camera.film.extent.width,
-                .height = self.camera.film.extent.height,
+                .width = self.scene.camera.film.extent.width,
+                .height = self.scene.camera.film.extent.height,
                 .depth = 1,
             },  
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, utils.toPointerType(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, utils.toPointerType(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
 
     fn destroy(self: *TestingContext, allocator: std.mem.Allocator) void {
         self.output_buffer.destroy(&self.vc);
-
-        self.background.destroy(&self.vc, allocator);
-        self.world.destroy(&self.vc, allocator);
-        self.camera.destroy(&self.vc, allocator);
-
+        self.scene.destroy(&self.vc, allocator);
         self.commands.destroy(&self.vc);
-
-        self.film_descriptor_layout.destroy(&self.vc);
-        self.background_descriptor_layout.destroy(&self.vc);
-        self.world_descriptor_layout.destroy(&self.vc);
-
         self.vk_allocator.destroy(&self.vc, allocator);
-
         self.vc.destroy();
     }
 };
@@ -224,7 +166,7 @@ test "white on white background is white" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_external.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.world_descriptor_layout, tc.background_descriptor_layout, tc.film_descriptor_layout }, .{ .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{ .{
         .samples_per_run = 16,
         .max_bounces = 1024,
         .env_samples_per_bounce = 0,
@@ -245,7 +187,7 @@ test "inside illuminating sphere is white" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.world_descriptor_layout, tc.background_descriptor_layout, tc.film_descriptor_layout }, .{ .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{ .{
         .samples_per_run = 512,
         .max_bounces = 1024,
         .env_samples_per_bounce = 0,
@@ -266,7 +208,7 @@ test "inside illuminating sphere is white with mesh sampling" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.world_descriptor_layout, tc.background_descriptor_layout, tc.film_descriptor_layout }, .{ .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{ .{
         .samples_per_run = 512,
         .max_bounces = 1024,
         .env_samples_per_bounce = 0,

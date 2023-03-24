@@ -2,7 +2,6 @@
 // - a list of meshes
 // - an acceleration structure/mesh heirarchy
 // - materials
-// - a background
 
 const std = @import("std");
 const vk = @import("vulkan");
@@ -16,11 +15,8 @@ const MaterialManager = @import("./MaterialManager.zig");
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
-const descriptor = @import("./descriptor.zig");
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
+const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
 
-const Background = @import("./Background.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Accel = @import("./Accel.zig");
 const utils = @import("./utils.zig");
