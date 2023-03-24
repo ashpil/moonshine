@@ -23,18 +23,7 @@ pub const CreateInfo = struct {
     aperture: f32,
     focus_distance: f32,
 
-    pub fn fromGlb(allocator: std.mem.Allocator, path: []const u8) !CreateInfo {
-        var gltf = Gltf.init(allocator);
-        defer gltf.deinit();
-
-        const buffer = try std.fs.cwd().readFileAlloc(
-            allocator,
-            path,
-            std.math.maxInt(usize),
-        );
-        defer allocator.free(buffer);
-        try gltf.parse(buffer);
-
+    pub fn fromGlb(gltf: Gltf) !CreateInfo {
         // just use first camera found in nodes
         const gltf_camera_node = for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
