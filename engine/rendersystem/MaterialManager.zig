@@ -9,6 +9,8 @@ const ImageManager = @import("./ImageManager.zig");
 const utils = @import("./utils.zig");
 
 const vector = @import("../vector.zig");
+const F32x2 = vector.Vec2(f32);
+const F32x3 = vector.Vec3(f32);
 
 pub const Material = extern struct {
     const normal_components = 2;
@@ -214,6 +216,106 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
             .size = size,
         }),
     });
+}
+
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, reader: anytype, inspection: bool) !Self {
+    const textures = blk: {
+        const total_texture_count = try reader.readIntLittle(u32);
+
+        var sources = try allocator.alloc(ImageManager.TextureSource, total_texture_count);
+        defer allocator.free(sources);
+
+        if (total_texture_count != 0) {
+            const texture_count_1x1 = try reader.readIntLittle(u32);
+            for (0..texture_count_1x1) |i| {
+                sources[i] = .{
+                    .f32x1 = @bitCast(f32, try reader.readBytesNoEof(4)),
+                };
+            }
+
+            const texture_count_2x2 = try reader.readIntLittle(u32);
+            for (0..texture_count_2x2) |i| {
+                sources[texture_count_1x1 + i] = .{
+                    .f32x2 = @bitCast(F32x2, try reader.readBytesNoEof(8)),
+                };
+            }
+
+            const texture_count_3x3 = try reader.readIntLittle(u32);
+            for (0..texture_count_3x3) |i| {
+                sources[texture_count_1x1 + texture_count_2x2 + i] = .{
+                    .f32x3 = @bitCast(F32x3, try reader.readBytesNoEof(12)),
+                };
+            }
+            const texture_count_dds = try reader.readIntLittle(u32);
+            std.debug.assert(texture_count_dds == 0); // TODO
+        }
+
+        break :blk try ImageManager.createTexture(vc, vk_allocator, allocator, sources, commands);
+    };
+
+    var variant_buffers: VariantBuffers = undefined;
+    var addrs: Addrs = undefined;
+    inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
+        if (@sizeOf(field.type) != 0) {
+            const variant_instance_count = try reader.readIntLittle(u32);
+            if (variant_instance_count != 0) {
+                const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, variant_instance_count, .{ .transfer_src_bit = true });
+                defer host_buffer.destroy(vc);
+
+                try reader.readNoEof(std.mem.sliceAsBytes(host_buffer.data));
+
+                var buffer_flags = vk.BufferUsageFlags{ .shader_device_address_bit = true, .transfer_dst_bit = true };
+                if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, variant_instance_count, buffer_flags);
+                errdefer device_buffer.destroy(vc);
+
+                try commands.startRecording(vc);
+                commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
+                try commands.submitAndIdleUntilDone(vc);
+
+                @field(variant_buffers, field.name) = device_buffer;
+                @field(addrs, field.name) = device_buffer.getAddress(vc);
+            } else {
+                @field(variant_buffers, field.name) = .{ .handle = .null_handle };
+                @field(addrs, field.name) = 0;
+            }
+        } else {
+            @field(addrs, field.name) = 0;
+        }
+    }
+
+    const material_count = try reader.readIntLittle(u32);
+    const materials_gpu = blk: {
+        var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
+        defer materials_host.destroy(vc);
+        try reader.readNoEof(std.mem.sliceAsBytes(materials_host.data));
+        for (materials_host.data) |*material| {
+            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
+                if (@intToEnum(MaterialType, enum_field.value) == material.type) {
+                    material.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
+                }
+            }
+        }
+
+        var buffer_flags = vk.BufferUsageFlags{ .storage_buffer_bit = true, .transfer_dst_bit = true };
+        if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
+        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
+        errdefer materials_gpu.destroy(vc);
+
+        try commands.startRecording(vc);
+        commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
+        try commands.submitAndIdleUntilDone(vc);
+
+        break :blk materials_gpu;
+    };
+
+    return Self{
+        .textures = textures,
+        .material_count = material_count,
+        .materials = materials_gpu,
+        .variant_buffers = variant_buffers,
+        .addrs = addrs,
+    };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

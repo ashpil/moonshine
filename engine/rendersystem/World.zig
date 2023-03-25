@@ -507,6 +507,31 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return world;
 }
 
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, reader: anytype, inspection: bool) !Self {
+    var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, reader, inspection);
+    errdefer material_manager.destroy(vc, allocator);
+
+    var mesh_manager = try MeshManager.fromMsne(vc, vk_allocator, allocator, commands, reader);
+    errdefer mesh_manager.destroy(vc, allocator);
+
+    var accel = try Accel.fromMsne(vc, vk_allocator, allocator, commands, mesh_manager, reader, inspection);
+    errdefer accel.destroy(vc, allocator);
+
+    var world = Self {
+        .material_manager = material_manager,
+        .mesh_manager = mesh_manager,
+
+        .accel = accel,
+
+        .sampler = try ImageManager.createSampler(vc),
+        .descriptor_set = undefined,
+    };
+
+    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
+
+    return world;
+}
+
 pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
     self.accel.updateTransform(index, new_transform);
 }

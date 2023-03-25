@@ -453,6 +453,30 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, reader: anytype, inspection: bool) !Self {
+    const instance_count = try reader.readIntLittle(u32);
+    const instances = try allocator.alloc(Instance, instance_count);
+    defer allocator.free(instances);
+    for (instances) |*instance| {
+        const transform = try reader.readStruct(Mat3x4);
+        const visible = try reader.readByte() == 1;
+        const geometry_count = try reader.readIntLittle(u32);
+
+        const geometries = try allocator.alloc(Geometry, geometry_count);
+        errdefer allocator.free(geometries);
+        try reader.readNoEof(std.mem.sliceAsBytes(geometries));
+
+        instance.* = .{
+            .transform = transform,
+            .visible = visible,
+            .geometries = geometries,
+        };
+    }
+    defer for (instances) |instance| allocator.free(instance.geometries);
+
+    return try create(vc, vk_allocator, allocator, commands, mesh_manager, instances, inspection);
+}
+
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
 pub fn recordUpdateSingleTransform(self: *Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, instance_idx: u32, new_transform: Mat3x4) void {

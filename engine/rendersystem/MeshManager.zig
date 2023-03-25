@@ -143,6 +143,102 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, reader: anytype) !Self {
+    const mesh_count = try reader.readIntLittle(u32);
+    var meshes = Meshes {};
+    try meshes.ensureTotalCapacity(allocator, mesh_count);
+    errdefer meshes.deinit(allocator);
+    
+    var addresses_buffer_host = try vk_allocator.createHostBuffer(vc, MeshAddresses, mesh_count, .{ .transfer_src_bit = true });
+    defer addresses_buffer_host.destroy(vc);
+
+    var staging_buffers = std.ArrayList(VkAllocator.HostBuffer(u8)).init(allocator);
+    defer staging_buffers.deinit();
+    defer for (staging_buffers.items) |buffer| buffer.destroy(vc);
+
+    try commands.startRecording(vc);
+
+    for (addresses_buffer_host.data) |*addresses_buffer| {
+        const index_count = try reader.readIntLittle(u32);
+        const index_staging_buffer = try vk_allocator.createHostBuffer(vc, U32x3, index_count, .{ .transfer_src_bit = true });
+        const index_buffer = blk: {
+            try staging_buffers.append(index_staging_buffer.toBytes());
+            try reader.readNoEof(std.mem.sliceAsBytes(index_staging_buffer.data));
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, U32x3, index_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+            commands.recordUploadBuffer(U32x3, vc, gpu_buffer, index_staging_buffer);
+
+            break :blk gpu_buffer;
+        };
+        errdefer index_buffer.destroy(vc);
+
+        const vertex_count = try reader.readIntLittle(u32);
+
+        const position_staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, vertex_count, .{ .transfer_src_bit = true });
+        const position_buffer = blk: {
+            try staging_buffers.append(position_staging_buffer.toBytes());
+            try reader.readNoEof(std.mem.sliceAsBytes(position_staging_buffer.data));
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
+            commands.recordUploadBuffer(F32x3, vc, gpu_buffer, position_staging_buffer);
+
+            break :blk gpu_buffer;
+        };
+        errdefer position_buffer.destroy(vc);
+
+        const texcoord_buffer = if (try reader.readByte() != 0) blk: {
+            const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, vertex_count, .{ .transfer_src_bit = true });
+            try staging_buffers.append(staging_buffer.toBytes());
+            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+            commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
+            break :blk gpu_buffer;
+        } else null;
+        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
+
+        const normal_buffer = if (try reader.readByte() != 0) blk: {
+            const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, vertex_count, .{ .transfer_src_bit = true });
+            try staging_buffers.append(staging_buffer.toBytes());
+            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+            commands.recordUploadBuffer(F32x3, vc, gpu_buffer, staging_buffer);
+            break :blk gpu_buffer;
+        } else null;
+        errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
+
+        addresses_buffer.* = MeshAddresses {
+            .position_address = position_buffer.getAddress(vc),
+            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
+            .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
+
+            .index_address = index_buffer.getAddress(vc),
+        };
+
+        meshes.appendAssumeCapacity(.{
+            .position_buffer = position_buffer,
+            .texcoord_buffer = texcoord_buffer,
+            .normal_buffer = normal_buffer,
+
+            .vertex_count = vertex_count,
+
+            .index_buffer = index_buffer,
+            .index_count = index_count,
+
+            .positions = try allocator.dupe(F32x3, position_staging_buffer.data),
+            .indices = try allocator.dupe(U32x3, index_staging_buffer.data),
+        });
+    }
+
+    const addresses_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, MeshAddresses, addresses_buffer_host.data.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
+    errdefer addresses_buffer.destroy(vc);
+    commands.recordUploadBuffer(MeshAddresses, vc, addresses_buffer, addresses_buffer_host);
+
+    try commands.submitAndIdleUntilDone(vc);
+    
+    return Self {
+        .meshes = meshes,
+        .addresses_buffer = addresses_buffer,
+    };
+}
+
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     const slice = self.meshes.slice();
     const position_buffers = slice.items(.position_buffer);

@@ -14,7 +14,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
-pub const CreateInfo = struct {
+pub const CreateInfo = extern struct {
     origin: F32x3,
     forward: F32x3,
     up: F32x3,
@@ -49,6 +49,10 @@ pub const CreateInfo = struct {
             .aperture = 0.0,
             .focus_distance = 1.0,
         };
+    }
+
+    pub fn fromMsne(reader: anytype) !CreateInfo {
+        return try reader.readStruct(CreateInfo);
     }
 };
 

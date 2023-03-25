@@ -30,7 +30,13 @@ const Vec3 = vector.Vec3(f32);
 const vk = @import("vulkan");
 
 const Config = struct {
-    in_filepath: []const u8, // must be glb
+    const InFileType = enum {
+        msne,
+        glb,
+    };
+
+    in_filepath: []const u8,
+    in_file_type: InFileType,
     skybox_filepath: []const u8, // must be exr
     extent: vk.Extent2D,
 
@@ -40,13 +46,16 @@ const Config = struct {
         if (args.len != 3) return error.BadArgs;
 
         const in_filepath = args[1];
-        if (!std.mem.eql(u8, std.fs.path.extension(in_filepath), ".glb")) return error.OnlySupportsGlbInput;
+        const in_file_type = if (std.mem.eql(u8, std.fs.path.extension(in_filepath), ".msne")) InFileType.msne
+            else if (std.mem.eql(u8, std.fs.path.extension(in_filepath), ".glb")) InFileType.glb
+            else return error.OnlySupportsMsneOrGlbInput;
 
         const skybox_filepath = args[2];
         if (!std.mem.eql(u8, std.fs.path.extension(skybox_filepath), ".exr")) return error.OnlySupportsExrSkybox;
 
         return Config {
             .in_filepath = try allocator.dupe(u8, in_filepath),
+            .in_file_type = in_file_type,
             .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
             .extent = vk.Extent2D { .width = 1280, .height = 720 }, // TODO: cli
         };
@@ -100,7 +109,11 @@ pub fn main() !void {
 
     std.log.info("Set up initial state!", .{});
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
+    var scene = switch(config.in_file_type) {
+        .msne => try Scene.fromMsneExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true),
+        .glb => try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true),
+    };
+    
     defer scene.destroy(&context, allocator);
 
     std.log.info("Loaded scene!", .{});
