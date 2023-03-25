@@ -184,16 +184,6 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         };
         errdefer position_buffer.destroy(vc);
 
-        const texcoord_buffer = if (try reader.readByte() != 0) blk: {
-            const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, vertex_count, .{ .transfer_src_bit = true });
-            try staging_buffers.append(staging_buffer.toBytes());
-            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
-            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
-            commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
-            break :blk gpu_buffer;
-        } else null;
-        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
-
         const normal_buffer = if (try reader.readByte() != 0) blk: {
             const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, vertex_count, .{ .transfer_src_bit = true });
             try staging_buffers.append(staging_buffer.toBytes());
@@ -204,10 +194,20 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         } else null;
         errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
 
+        const texcoord_buffer = if (try reader.readByte() != 0) blk: {
+            const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, vertex_count, .{ .transfer_src_bit = true });
+            try staging_buffers.append(staging_buffer.toBytes());
+            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
+            const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+            commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
+            break :blk gpu_buffer;
+        } else null;
+        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
+
         addresses_buffer.* = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
-            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
             .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
+            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
 
             .index_address = index_buffer.getAddress(vc),
         };
