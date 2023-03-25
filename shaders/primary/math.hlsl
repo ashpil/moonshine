@@ -7,15 +7,15 @@ static const uint MAX_UINT = 0xFFFFFFFF;
 static const float AIR_IOR = 1.000277;
 
 float3 sphericalToCartesian(float sinTheta, float cosTheta, float phi) {
-    return float3(sinTheta * cos(phi), cosTheta, sinTheta * sin(phi));
+    return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
 }
 
 // (phi, theta) -- ([0, 2pi], [0, pi])
 // assumes vector normalized
 float2 cartesianToSpherical(float3 v) {
-    float p = atan2(v.z, v.x);
+    float p = atan2(v.y, v.x);
     float phi = (p < 0) ? (p + 2 * PI) : p;
-    float theta = acos(v.y);
+    float theta = acos(v.z);
     return float2(phi, theta);
 }
 

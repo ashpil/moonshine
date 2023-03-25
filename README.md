@@ -77,8 +77,8 @@
     * On some machines, can do filesystem to GPU directly
 * Destruction queue needs work
 
-### Some notes about conventions, as idk where else to put them:
-* `+y` is up
+### Some notes about conventions
+* `+z` is up
 * phi is azimuthal angle (0-2pi) and theta is polar angle (0-pi)
 
 ### Some light reading

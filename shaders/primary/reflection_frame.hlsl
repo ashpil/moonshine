@@ -34,21 +34,21 @@ struct Frame {
     }
 
     float3 worldToFrame(float3 v) {
-        float3x3 toFrame = { s, n, t };
+        float3x3 toFrame = { s, t, n };
         return mul(toFrame, v);
     }
 
     float3 frameToWorld(float3 v) {
-        float3x3 toFrame = { s, n, t };
+        float3x3 toFrame = { s, t, n };
         return mul(transpose(toFrame), v);
     }
 
     static float cosTheta(float3 v) {
-        return v.y;
+        return v.z;
     }
 
     static float cos2Theta(float3 v) {
-        return v.y * v.y;
+        return v.z * v.z;
     }
 
     static float sin2Theta(float3 v) {
@@ -74,11 +74,11 @@ struct Frame {
 
     static float sinPhi(float3 v) {
         float sinTheta = Frame::sinTheta(v);
-        return (sinTheta == 0.0) ? 0.0 : clamp(v.z / sinTheta, -1.0, 1.0);
+        return (sinTheta == 0.0) ? 0.0 : clamp(v.y / sinTheta, -1.0, 1.0);
     }
 
     static bool sameHemisphere(float3 v1, float3 v2) {
-        return v1.y * v2.y > 0.0;
+        return v1.z * v2.z > 0.0;
     }
 };
 

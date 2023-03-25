@@ -474,11 +474,12 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             }
 
             const mat = Gltf.getGlobalTransform(&gltf.data, node);
+            // convert to Z-up
             try instances.append(Instance {
                 .transform = Mat3x4.new(
                     F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                     F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                 ),
                 .geometries = geometries,
             });

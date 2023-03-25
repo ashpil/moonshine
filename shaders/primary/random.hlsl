@@ -95,12 +95,12 @@ float3 squareToCosineHemisphere(float2 square) {
     float2 d = squareToUniformDiskConcentric(square);
     float z = sqrt(max(0.0, 1.0 - dot(d, d)));
 
-    return float3(d.x, z, d.y);
+    return float3(d.x, d.y, z);
 }
 
 float3 squareToUniformHemisphere(float2 square) {
     float z = square.x;
     float r = sqrt(max(0.0, 1.0 - z * z));
     float phi = 2 * PI * square.y;
-    return float3(r * cos(phi), z, r * sin(phi));
+    return float3(r * cos(phi), r * sin(phi), z);
 }

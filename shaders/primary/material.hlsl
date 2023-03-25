@@ -162,7 +162,7 @@ struct Lambert : Material {
 
     MaterialSample sample(float3 w_o, float2 square) {
         float3 w_i = squareToCosineHemisphere(square);
-        if (w_o.y < 0.0) w_i.y *= -1;
+        if (w_o.z < 0.0) w_i.z *= -1;
 
         MaterialSample sample;
         sample.pdf = pdf(w_i, w_o);
@@ -315,7 +315,7 @@ struct PerfectMirror : Material {
     MaterialSample sample(float3 w_o, float2 square) {
         MaterialSample sample;
         sample.pdf = 1.0;
-        sample.dirFs = float3(-w_o.x, w_o.y, -w_o.z);
+        sample.dirFs = float3(-w_o.x, -w_o.y, w_o.z);
         return sample;
     }
 
@@ -324,7 +324,7 @@ struct PerfectMirror : Material {
     }
 
     float3 eval(float3 w_i, float3 w_o) {
-        return float3(1.0, 1.0, 1.0) / abs(Frame::cosTheta(w_i));
+        return 1.0 / abs(Frame::cosTheta(w_i));
     }
 
     static bool isDelta() {
@@ -358,7 +358,7 @@ struct Glass : Material {
 
         if (square.x < fresnel) {
             sample.pdf = fresnel;
-            sample.dirFs = float3(-w_o.x, w_o.y, -w_o.z);
+            sample.dirFs = float3(-w_o.x, -w_o.y, w_o.z);
         } else {
             float etaI;
             float etaT;
@@ -369,7 +369,7 @@ struct Glass : Material {
                 etaT = AIR_IOR;
                 etaI = intIOR;
             }
-            sample.dirFs = refractDir(w_o, faceForward(float3(0.0, 1.0, 0.0), w_o), etaI / etaT);
+            sample.dirFs = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
             sample.pdf = all(sample.dirFs == 0.0) ? 0.0 : 1.0 - fresnel;
         }
         return sample;
@@ -493,10 +493,6 @@ float3 decodeNormal(float2 rg) {
 }
 
 float3 tangentNormalToWorld(float3 normalTangentSpace, Frame tangentFrame) {
-    float3 tmp = tangentFrame.n;
-    tangentFrame.n = tangentFrame.t;
-    tangentFrame.t = tmp;
-
     return normalize(tangentFrame.frameToWorld(normalTangentSpace)).xyz;
 }
 
