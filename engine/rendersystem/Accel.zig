@@ -80,7 +80,7 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instances: []const Instance, inspection: bool) !Self {
     // as an optimization, see if any instances contain identical mesh lists,
     // because we only need to create as many BLASes as there are unique mesh lists
-    var unique_mesh_lists_hash = std.ArrayHashMap([]const Geometry, usize, struct {
+    var unique_mesh_lists_hash = std.ArrayHashMap([]const Geometry, u32, struct {
         const Context = @This();
         pub fn hash(self: Context, key: []const Geometry) u32 {
             _ = self;
@@ -103,9 +103,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         }
     }, false).init(allocator); // last param maybe should be true
     defer unique_mesh_lists_hash.deinit();
-    for (instances, 0..) |instance, i| {
-        try unique_mesh_lists_hash.put(instance.geometries, i);
+
+    var idx: u32 = 0;
+    for (instances) |instance| {
+        const res = try unique_mesh_lists_hash.getOrPutValue(instance.geometries, idx);
+        if (!res.found_existing) idx += 1;
     }
+
     // create a BLAS for each model
     // lots of temp memory allocations here
     const blases = blk: {
