@@ -51,14 +51,14 @@ def write_some_data(context, filepath):
                 write_f32(file, normal.vector[2])
         write_bool(file, False) # TODO: if texcoords
         
-    def write_object(file, object):
+    def write_object(file, object, meshes):
         # transformation matrix
         for v in object.matrix_world[0:3]:
             for el in v:
                 write_f32(file, el)
         write_bool(file, True) # visibility
         write_u32(file, 1) # geometry count
-        write_u32(file, 0) # mesh index
+        write_u32(file, meshes[object.data]) # mesh index
         write_u32(file, 0) # material index
         write_u32(file, 0) # sampled bool
 
@@ -116,9 +116,16 @@ def write_some_data(context, filepath):
         write_u64(file, 0) # material variant index
 
         # MESHES
-        meshes = set([ obj.data for obj in context.scene.objects if obj.type == 'MESH' ])
-        write_u32(file, len(meshes)) # mesh count
-        for mesh in meshes:
+        meshes = {}
+        i = 0
+        for obj in context.scene.objects:
+            if obj.type == 'MESH':
+                if obj.data not in meshes:
+                    meshes[obj.data] = i
+                    i += 1
+
+        write_u32(file, len(meshes.keys())) # mesh count
+        for mesh in meshes.keys():
             write_mesh(file, mesh)
 
         # HEIRARCHY
@@ -126,7 +133,7 @@ def write_some_data(context, filepath):
         objects = [ obj for obj in context.scene.objects if obj.type == 'MESH' ]
         write_u32(file, len(objects)) # instance count
         for object in objects:
-            write_object(file, object)
+            write_object(file, object, meshes)
 
         # CAMERA
         assert len([ obj for obj in context.scene.objects if obj.type == 'CAMERA' ]) == 1, "Must have exactly one camera"
