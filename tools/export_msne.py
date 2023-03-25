@@ -14,7 +14,7 @@ import bpy
 from mathutils import *
 import struct
 
-def write_some_data(context, filepath):
+def write(context, filepath):
     def write_u32(file, u32):
         file.write(u32.to_bytes(length=4, byteorder='little'))
 
@@ -146,7 +146,7 @@ def write_some_data(context, filepath):
 # ExportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ExportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.props import StringProperty
 from bpy.types import Operator
 
 
@@ -160,7 +160,7 @@ class MoonshineExporter(Operator, ExportHelper):
     filter_glob: StringProperty(default="*.msne", options={'HIDDEN'})
 
     def execute(self, context):
-        return write_some_data(context, self.filepath)
+        return write(context, self.filepath)
 
 
 def menu_func_export(self, context):
