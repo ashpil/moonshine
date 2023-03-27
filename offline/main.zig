@@ -74,6 +74,8 @@ const IntervalLogger = struct {
     }
 };
 
+pub const vulkan_context_device_functions = engine.rendersystem.required_device_functions;
+
 pub fn main() !void {
     var logger = try IntervalLogger.start();
 
@@ -84,7 +86,7 @@ pub fn main() !void {
     const config = try Config.fromCli(allocator);
     defer config.destroy(allocator);
 
-    const context = try VulkanContext.create(allocator, "offline", &.{}, &.{}, null);
+    const context = try VulkanContext.create(allocator, "offline", &.{}, &engine.rendersystem.required_device_extensions, &engine.rendersystem.required_device_features, null);
     defer context.destroy();
 
     var vk_allocator = try VkAllocator.create(&context, allocator);

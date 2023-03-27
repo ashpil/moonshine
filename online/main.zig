@@ -1,19 +1,22 @@
 const std = @import("std");
 
 const engine = @import("engine");
-const Camera = engine.rendersystem.Camera;
-const Accel = engine.rendersystem.Accel;
-const MaterialManager = engine.rendersystem.MaterialManager;
-const DestructionQueue = engine.DestructionQueue;
-const Scene = engine.rendersystem.Scene;
-const VulkanContext = engine.rendersystem.VulkanContext;
-const VkAllocator = engine.rendersystem.Allocator;
-const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
-const Commands = engine.rendersystem.Commands;
-const utils = engine.rendersystem.utils;
+const rendersystem = engine.rendersystem;
+const Camera = rendersystem.Camera;
+const Accel = rendersystem.Accel;
+const MaterialManager = rendersystem.MaterialManager;
+const Scene = rendersystem.Scene;
+const VulkanContext = rendersystem.VulkanContext;
+const VkAllocator = rendersystem.Allocator;
+const Pipeline = rendersystem.pipeline.StandardPipeline;
+const Commands = rendersystem.Commands;
+
 const displaysystem = engine.displaysystem;
-const ObjectPicker = engine.ObjectPicker;
 const Display = displaysystem.Display;
+
+const ObjectPicker = engine.ObjectPicker;
+const DestructionQueue = engine.DestructionQueue;
+const utils = engine.rendersystem.utils;
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");
@@ -72,7 +75,7 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 }
 
 pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
-pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions);
+pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions).merge(rendersystem.required_device_functions);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -85,7 +88,7 @@ pub fn main() !void {
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
 
-    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &.{ vk.extension_info.khr_swapchain.name }, queueFamilyAcceptable);
+    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ rendersystem.required_device_extensions), &rendersystem.required_device_features, queueFamilyAcceptable);
     defer context.destroy();
     
     var vk_allocator = try VkAllocator.create(&context, allocator);

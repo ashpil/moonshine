@@ -11,6 +11,8 @@ const Scene = engine.rendersystem.Scene;
 
 const utils = engine.rendersystem.utils;
 
+pub const vulkan_context_device_functions = engine.rendersystem.required_device_functions;
+
 const TestingContext = struct {
     vc: VulkanContext,
     vk_allocator: VkAllocator,
@@ -19,7 +21,7 @@ const TestingContext = struct {
     output_buffer: VkAllocator.HostBuffer(f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D, in_filepath: []const u8, skybox_filepath: []const u8) !TestingContext {
-        const vc = try VulkanContext.create(allocator, "test", &.{}, &.{}, null);
+        const vc = try VulkanContext.create(allocator, "offline", &.{}, &engine.rendersystem.required_device_extensions, &engine.rendersystem.required_device_features, null);
         errdefer vc.destroy();
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);

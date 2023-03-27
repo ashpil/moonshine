@@ -10,6 +10,7 @@ pub const required_instance_functions = vk.InstanceCommandFlags {
     .getPhysicalDeviceSurfaceSupportKHR = true,
     .getPhysicalDeviceSurfaceCapabilitiesKHR = true,
 };
+
 const base_required_device_functions = vk.DeviceCommandFlags {
     .getSwapchainImagesKHR = true,
     .createSwapchainKHR = true,
@@ -17,9 +18,11 @@ const base_required_device_functions = vk.DeviceCommandFlags {
     .queuePresentKHR = true,
     .destroySwapchainKHR = true,
 };
-
 const metrics_device_functions = vk.DeviceCommandFlags {
     .cmdWriteTimestamp2 = true,
 };
-
 pub const required_device_functions = if (metrics) base_required_device_functions.merge(metrics_device_functions) else base_required_device_functions;
+
+pub const required_device_extensions = [_][*:0]const u8{
+    vk.extension_info.khr_swapchain.name,
+};

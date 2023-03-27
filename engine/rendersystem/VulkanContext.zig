@@ -162,7 +162,6 @@ const device_commands = vk.DeviceCommandFlags {
     .cmdCopyBuffer = true,
     .endCommandBuffer = true,
     .queueWaitIdle = true,
-    .createRayTracingPipelinesKHR = true,
     .destroyPipeline = true,
     .createPipelineLayout = true,
     .destroyPipelineLayout = true,
@@ -172,13 +171,8 @@ const device_commands = vk.DeviceCommandFlags {
     .destroyDescriptorSetLayout = true,
     .cmdBindPipeline = true,
     .cmdBindDescriptorSets = true,
-    .cmdBuildAccelerationStructuresKHR = true,
     .resetCommandPool = true,
     .getBufferDeviceAddress = true,
-    .destroyAccelerationStructureKHR = true,
-    .createAccelerationStructureKHR = true,
-    .getAccelerationStructureBuildSizesKHR = true,
-    .getAccelerationStructureDeviceAddressKHR = true,
     .createSemaphore = true,
     .destroySemaphore = true,
     .allocateDescriptorSets = true,
@@ -189,8 +183,6 @@ const device_commands = vk.DeviceCommandFlags {
     .destroyImage = true,
     .getImageMemoryRequirements = true,
     .bindImageMemory = true,
-    .getRayTracingShaderGroupHandlesKHR = true,
-    .cmdTraceRaysKHR = true,
     .cmdPipelineBarrier2 = true,
     .cmdBlitImage = true,
     .deviceWaitIdle = true,
@@ -204,11 +196,9 @@ const device_commands = vk.DeviceCommandFlags {
     .createSampler = true,
     .destroySampler = true,
     .createQueryPool = true,
-    .cmdWriteAccelerationStructuresPropertiesKHR = true,
     .resetQueryPool = true,
     .getQueryPoolResults = true,
     .destroyQueryPool = true,
-    .cmdCopyAccelerationStructureKHR = true,
     .cmdCopyImageToBuffer = true,
     .cmdUpdateBuffer = true,
 };
@@ -263,20 +253,18 @@ const Self = @This();
 const QueueFamilyAcceptable = fn(vk.Instance, vk.PhysicalDevice, u32) bool;
 fn returnsTrue(_: vk.Instance, _: vk.PhysicalDevice, _: u32) bool { return true; }
 
-pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, required_instance_extensions: []const [*:0]const u8, required_device_extensions: []const [*:0]const u8, comptime queueFamilyAcceptable: ?QueueFamilyAcceptable) !Self {
+pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, instance_extensions: []const [*:0]const u8, device_extensions: []const [*:0]const u8, features: *const anyopaque, comptime queueFamilyAcceptable: ?QueueFamilyAcceptable) !Self {
     var base = try Base.new();
     errdefer base.destroy();
 
-    const instance = try base.createInstance(allocator, app_name, required_instance_extensions);
+    const instance = try base.createInstance(allocator, app_name, instance_extensions);
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const device_extensions = try PhysicalDevice.getRequiredExtensions(allocator, required_device_extensions);
-    defer allocator.free(device_extensions);
     const physical_device = try PhysicalDevice.pick(instance, allocator, if (queueFamilyAcceptable) |acc| acc else returnsTrue, device_extensions);
-    const device = try physical_device.createLogicalDevice(instance, device_extensions);
+    const device = try physical_device.createLogicalDevice(instance, device_extensions, features);
     errdefer device.destroyDevice(null);
 
     const queue = device.getDeviceQueue(physical_device.queue_family_index, 0);
@@ -335,15 +323,6 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn getRequiredExtensions(allocator: std.mem.Allocator, required_extension_names: []const [*:0]const u8) std.mem.Allocator.Error![]const [*:0]const u8 {
-        const base_extensions = [_][*:0]const u8{
-            vk.extension_info.khr_deferred_host_operations.name,
-            vk.extension_info.khr_acceleration_structure.name,
-            vk.extension_info.khr_ray_tracing_pipeline.name,
-        };
-        return std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &base_extensions, required_extension_names });
-    }
-
     fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
         const available_extensions = try utils.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
         defer allocator.free(available_extensions);
@@ -363,7 +342,7 @@ const PhysicalDevice = struct {
         return true;
     }
 
-    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8) !Device {
+    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8, features: *const anyopaque) !Device {
         const priority = [_]f32{1.0};
         const queue_create_info = [_]vk.DeviceQueueCreateInfo{
             .{
@@ -372,18 +351,9 @@ const PhysicalDevice = struct {
                 .p_queue_priorities = &priority,
             }
         };
-        
-        var accel_struct_features = vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
-            .acceleration_structure = vk.TRUE,
-        };
-
-        var ray_tracing_pipeline_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {
-            .p_next = &accel_struct_features,
-            .ray_tracing_pipeline = vk.TRUE,
-        };
 
         var vulkan_13_features = vk.PhysicalDeviceVulkan13Features {
-            .p_next = &ray_tracing_pipeline_features,
+            .p_next = @constCast(features),
             .synchronization_2 = vk.TRUE,
             .dynamic_rendering = vk.TRUE, // technically not required by core lib, but afaik since vk 1.3 requires it this can't hurt?
         };
