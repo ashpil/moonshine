@@ -5,11 +5,11 @@ const Gltf = @import("zgltf");
 const engine = @import("../engine.zig");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
+const VkAllocator = core.Allocator;
+const Commands = core.Commands;
 
 const Film = @import("./Film.zig");
-const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
-const Commands = @import("./Commands.zig");
 const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
 
 const vector = @import("../vector.zig");

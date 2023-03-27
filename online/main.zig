@@ -4,6 +4,9 @@ const engine = @import("engine");
 
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
+const Commands = core.Commands;
+const VkAllocator = core.Allocator;
+const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
 
 const rendersystem = engine.rendersystem;
@@ -11,15 +14,12 @@ const Camera = rendersystem.Camera;
 const Accel = rendersystem.Accel;
 const MaterialManager = rendersystem.MaterialManager;
 const Scene = rendersystem.Scene;
-const VkAllocator = rendersystem.Allocator;
 const Pipeline = rendersystem.pipeline.StandardPipeline;
-const Commands = rendersystem.Commands;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
 
 const ObjectPicker = engine.ObjectPicker;
-const DestructionQueue = engine.DestructionQueue;
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");

@@ -11,14 +11,13 @@ const zigimg = @import("zigimg");
 const engine = @import("../engine.zig");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
+const Commands = core.Commands;
+const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 
 const MeshData = @import("../Object.zig");
 const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
-
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
 const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
 
 const MeshManager = @import("./MeshManager.zig");

@@ -4,11 +4,11 @@ const std = @import("std");
 
 const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
+const Commands = engine.core.Commands;
+const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
 const ImageManager = engine.rendersystem.ImageManager;
-const VkAllocator = engine.rendersystem.Allocator;
-const Commands = engine.rendersystem.Commands;
 const DescriptorLayout = engine.rendersystem.descriptor.DescriptorLayout;
 
 const Swapchain = engine.displaysystem.Swapchain;

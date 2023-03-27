@@ -4,10 +4,10 @@ const vk = @import("vulkan");
 const engine = @import("../engine.zig");
 const toPointerType = engine.core.vk_helpers.toPointerType;
 const VulkanContext =  engine.core.VulkanContext;
+const VkAllocator =  engine.core.Allocator;
+const Commands =  engine.core.Commands;
 
-const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
-const Commands = @import("./Commands.zig");
 const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
 
 // 2 images -- first is display image, second is accumulation image

@@ -6,13 +6,11 @@ const build_options = @import("build_options");
 const engine = @import("../engine.zig");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
-const Camera = @import("./Camera.zig");
+const Commands = core.Commands;
+const VkAllocator = core.Allocator;
+const DestructionQueue = core.DestructionQueue;
 
-const vector = engine.vector;
-const F32x2 = vector.Vec2(f32);
-const F32x3 = vector.Vec3(f32);
+const Camera = @import("./Camera.zig");
 
 const descriptor = @import("./descriptor.zig");
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
@@ -20,7 +18,9 @@ const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
 const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
 
-const DestructionQueue = @import("../engine.zig").DestructionQueue;
+const vector = engine.vector;
+const F32x2 = vector.Vec2(f32);
+const F32x3 = vector.Vec3(f32);
 
 const PushConstant = struct {
     type: type,

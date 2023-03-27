@@ -1,17 +1,13 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const engine = @import("../engine.zig");
-const VulkanContext = engine.core.VulkanContext;
-const vk_helpers = engine.core.vk_helpers;
-
-const rendersystem = engine.rendersystem;
-const VkAllocator = rendersystem.Allocator;
-const Pipeline = rendersystem.pipeline.StandardPipeline;
-const Commands = rendersystem.Commands;
+const core = @import("../engine.zig").core;
+const VulkanContext = core.VulkanContext;
+const DestructionQueue = core.DestructionQueue;
+const VkAllocator = core.Allocator;
+const vk_helpers = core.vk_helpers;
 
 const Swapchain = @import("./Swapchain.zig");
-const DestructionQueue = @import("../engine.zig").DestructionQueue;
 
 const metrics = @import("build_options").vk_metrics;
 

@@ -4,9 +4,9 @@ const Gltf = @import("zgltf");
 
 const core = @import("../engine.zig").core;
 const VulkanContext = core.VulkanContext;
+const VkAllocator = core.Allocator;
+const Commands = core.Commands;
 
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
 const descriptor = @import("./descriptor.zig");
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;

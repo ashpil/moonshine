@@ -3,11 +3,10 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const engine = @import("../engine.zig");
-const VulkanContext = engine.core.VulkanContext;
-const vk_helpers = engine.core.vk_helpers;
-
-const VkAllocator = @import("./Allocator.zig");
+const core = @import("./core.zig");
+const VulkanContext = core.VulkanContext;
+const VkAllocator = core.Allocator;
+const vk_helpers = core.vk_helpers;
 
 pool: vk.CommandPool,
 buffer: vk.CommandBuffer,

@@ -3,9 +3,9 @@ const std = @import("std");
 
 const core = @import("../engine.zig").core;
 const VulkanContext = core.VulkanContext;
+const Commands = core.Commands;
+const VkAllocator = core.Allocator;
 
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
 const Object = @import("../Object.zig");
 
 const vector = @import("../vector.zig");

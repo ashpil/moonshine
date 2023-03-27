@@ -3,12 +3,12 @@ const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
+const Commands = engine.core.Commands;
+const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
 const ImageManager = @import("./ImageManager.zig");
-const VkAllocator = @import("./Allocator.zig");
 const BackgroundDescriptorLayout = @import("./descriptor.zig").BackgroundDescriptorLayout;
-const Commands = @import("./Commands.zig");
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
 const exr = engine.fileformats.exr;

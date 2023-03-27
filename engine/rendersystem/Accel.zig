@@ -3,10 +3,10 @@ const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
+const Commands = engine.core.Commands;
+const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Vertex = @import("../Object.zig").Vertex;
 const AliasTable = @import("./alias_table.zig").AliasTable;

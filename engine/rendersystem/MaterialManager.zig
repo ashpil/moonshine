@@ -3,10 +3,10 @@ const vk = @import("vulkan");
 
 const core = @import("../engine.zig").core;
 const VulkanContext = core.VulkanContext;
+const Commands = core.Commands;
+const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 
 const vector = @import("../vector.zig");

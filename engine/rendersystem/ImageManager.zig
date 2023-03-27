@@ -4,8 +4,8 @@ const std = @import("std");
 const engine = @import("../engine.zig");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
-const VkAllocator = @import("./Allocator.zig");
-const Commands = @import("./Commands.zig");
+const VkAllocator = core.Allocator;
+const Commands = core.Commands;
 const dds = engine.fileformats.dds;
 
 const vector = @import("../vector.zig");

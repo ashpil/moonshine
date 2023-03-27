@@ -5,10 +5,9 @@
 
 const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
+const VkAllocator = engine.core.Allocator;
+const Commands = engine.core.Commands;
 const vk_helpers = engine.core.vk_helpers;
-
-const VkAllocator = engine.rendersystem.Allocator;
-const Commands = engine.rendersystem.Commands;
 
 const std = @import("std");
 const vk = @import("vulkan");
