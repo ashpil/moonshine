@@ -2,7 +2,7 @@ const vk = @import("vulkan");
 const std = @import("std");
 const builtin = @import("builtin");
 
-const utils = @import("./utils.zig");
+const vk_helpers = @import("../engine.zig").core.vk_helpers;
 
 const validate = @import("build_options").vk_validation;
 
@@ -91,7 +91,7 @@ const Base = struct {
     }
 
     fn validationLayersAvailable(self: Base, allocator: std.mem.Allocator) !bool {
-        const available_layers = try utils.getVkSlice(allocator, BaseDispatch.enumerateInstanceLayerProperties, .{ self.dispatch });
+        const available_layers = try vk_helpers.getVkSlice(allocator, BaseDispatch.enumerateInstanceLayerProperties, .{ self.dispatch });
         defer allocator.free(available_layers);
 
         for (validation_layers) |layer_name| {
@@ -107,7 +107,7 @@ const Base = struct {
     }
 
     fn instanceExtensionsAvailable(self: Base, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        const available_extensions = try utils.getVkSlice(allocator, BaseDispatch.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
+        const available_extensions = try vk_helpers.getVkSlice(allocator, BaseDispatch.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
         defer allocator.free(available_extensions);
 
         for (extensions) |extension_name| {
@@ -293,7 +293,7 @@ const PhysicalDevice = struct {
     queue_family_index: u32,
 
     fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, comptime queueFamilyAcceptable: QueueFamilyAcceptable) !u32 {
-        const families = utils.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
+        const families = vk_helpers.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
 
         var picked_family: ?u32 = null;
         for (families, 0..) |family, i| {
@@ -309,7 +309,7 @@ const PhysicalDevice = struct {
     }
 
     fn pick(instance: Instance, allocator: std.mem.Allocator, comptime queueFamilyAcceptable: QueueFamilyAcceptable, extensions: []const [*:0]const u8) !PhysicalDevice {
-        const devices = (try utils.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
+        const devices = (try vk_helpers.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
 
         return for (devices) |device| {
             if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator, extensions)) {
@@ -324,7 +324,7 @@ const PhysicalDevice = struct {
     }
 
     fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        const available_extensions = try utils.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
+        const available_extensions = try vk_helpers.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
         defer allocator.free(available_extensions);
 
         for (extensions) |extension_name| {

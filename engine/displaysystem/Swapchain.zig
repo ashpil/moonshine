@@ -1,9 +1,9 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const rendersystem = @import("../engine.zig").rendersystem;
-const VulkanContext = rendersystem.VulkanContext;
-const utils = rendersystem.utils;
+const engine = @import("../engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
 
 const SwapchainError = error {
     InvalidSurfaceDimensions,
@@ -49,7 +49,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
-    const images = try utils.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
+    const images = try vk_helpers.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
 
     return Self {
         .surface = surface,
@@ -85,10 +85,10 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
 pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !vk.Result {
     return try vc.device.queuePresentKHR(queue, &.{
         .wait_semaphore_count = 1,
-        .p_wait_semaphores = utils.toPointerType(&semaphore),
+        .p_wait_semaphores = vk_helpers.toPointerType(&semaphore),
         .swapchain_count = 1,
-        .p_swapchains = utils.toPointerType(&self.handle),
-        .p_image_indices = utils.toPointerType(&self.image_index),
+        .p_swapchains = vk_helpers.toPointerType(&self.handle),
+        .p_image_indices = vk_helpers.toPointerType(&self.image_index),
         .p_results = null,
     });
 }
@@ -123,7 +123,7 @@ const SwapSettings = struct {
     pub fn findPresentMode(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.PresentModeKHR {
         const ideal = vk.PresentModeKHR.immediate_khr;
 
-        const present_modes = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
+        const present_modes = (try vk_helpers.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
 
         for (present_modes) |present_mode| {
             if (std.meta.eql(present_mode, ideal)) {
@@ -140,7 +140,7 @@ const SwapSettings = struct {
             .color_space = .srgb_nonlinear_khr,
         };
 
-        const formats = (try utils.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
+        const formats = (try vk_helpers.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
 
         for (formats) |format| {
             if (std.meta.eql(format, ideal)) {

@@ -1,7 +1,8 @@
 const std = @import("std");
 const vk = @import("vulkan");
-const utils = @import("./utils.zig");
-const VulkanContext = @import("./VulkanContext.zig");
+const core = @import("../engine.zig").core;
+const vk_helpers = core.vk_helpers;
+const VulkanContext = core.VulkanContext;
 
 // must be kept in sync with shader
 pub const InputDescriptorLayout = DescriptorLayout(&.{
@@ -146,7 +147,7 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             const handle = try vc.device.createDescriptorSetLayout(&create_info, null);
             errdefer vc.device.destroyDescriptorSetLayout(handle, null);
 
-            try utils.setDebugName(vc, handle, debug_name);
+            try vk_helpers.setDebugName(vc, handle, debug_name);
 
             comptime var pool_sizes: [bindings.len]vk.DescriptorPoolSize = undefined;
             comptime for (&pool_sizes, bindings) |*pool_size, binding| {
@@ -176,7 +177,7 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             try vc.device.allocateDescriptorSets(&.{
                 .descriptor_pool = self.pool,
                 .descriptor_set_count = 1,
-                .p_set_layouts = utils.toPointerType(&self.handle),
+                .p_set_layouts = vk_helpers.toPointerType(&self.handle),
             }, @ptrCast([*]vk.DescriptorSet, &descriptor_set));
 
             var descriptor_writes = writes;

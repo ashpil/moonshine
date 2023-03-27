@@ -1,12 +1,14 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const rendersystem = @import("../engine.zig").rendersystem;
-const VulkanContext = rendersystem.VulkanContext;
+const engine = @import("../engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
+const rendersystem = engine.rendersystem;
 const VkAllocator = rendersystem.Allocator;
 const Pipeline = rendersystem.pipeline.StandardPipeline;
 const Commands = rendersystem.Commands;
-const utils = rendersystem.utils;
 
 const Swapchain = @import("./Swapchain.zig");
 const DestructionQueue = @import("../engine.zig").DestructionQueue;
@@ -48,7 +50,7 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
     var frames: [frames_in_flight]Frame = undefined;
     inline for (&frames, 0..) |*frame, i| {
         frame.* = try Frame.create(vc);
-        try utils.setDebugName(vc, frame.command_buffer, std.fmt.comptimePrint("frame {}", .{i}));
+        try vk_helpers.setDebugName(vc, frame.command_buffer, std.fmt.comptimePrint("frame {}", .{i}));
     }
     try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
 
@@ -118,19 +120,19 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     try vc.device.queueSubmit2(vc.queue, 1, &[_]vk.SubmitInfo2 { .{
         .flags = .{},
         .wait_semaphore_info_count = 1,
-        .p_wait_semaphore_infos = utils.toPointerType(&vk.SemaphoreSubmitInfoKHR{
+        .p_wait_semaphore_infos = vk_helpers.toPointerType(&vk.SemaphoreSubmitInfoKHR{
             .semaphore = frame.image_acquired,
             .value = 0,
             .stage_mask = .{ .color_attachment_output_bit = true },
             .device_index = 0,
         }),
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = vk_helpers.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = frame.command_buffer,
             .device_mask = 0,
         }),
         .signal_semaphore_info_count = 1,
-        .p_signal_semaphore_infos = utils.toPointerType(&vk.SemaphoreSubmitInfoKHR {
+        .p_signal_semaphore_infos = vk_helpers.toPointerType(&vk.SemaphoreSubmitInfoKHR {
             .semaphore = frame.command_completed,
             .value = 0,
             .stage_mask =  .{ .color_attachment_output_bit = true },

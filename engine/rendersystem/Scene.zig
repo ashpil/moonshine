@@ -2,7 +2,8 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Gltf = @import("zgltf");
 
-const VulkanContext = @import("./VulkanContext.zig");
+const core = @import("../engine.zig").core;
+const VulkanContext = core.VulkanContext;
 
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
@@ -14,8 +15,6 @@ const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Background = @import("./Background.zig");
 const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
-
-const utils = @import("./utils.zig");
 
 const Self = @This();
 

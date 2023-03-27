@@ -1,10 +1,13 @@
 // abstraction for GPU commands
 
 const std = @import("std");
-const VulkanContext = @import("./VulkanContext.zig");
-const VkAllocator = @import("./Allocator.zig");
 const vk = @import("vulkan");
-const utils = @import("./utils.zig");
+
+const engine = @import("../engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
+const VkAllocator = @import("./Allocator.zig");
 
 pool: vk.CommandPool,
 buffer: vk.CommandBuffer,
@@ -52,7 +55,7 @@ pub fn submit(self: *Self, vc: *const VulkanContext) !void {
 
     const submit_info = vk.SubmitInfo2 {
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = vk_helpers.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.buffer,
             .device_mask = 0,
         }),
@@ -62,7 +65,7 @@ pub fn submit(self: *Self, vc: *const VulkanContext) !void {
         .p_signal_semaphore_infos = undefined,
     };
 
-    try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), .null_handle);
+    try vc.device.queueSubmit2(vc.queue, 1, vk_helpers.toPointerType(&submit_info), .null_handle);
 }
 
 pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
@@ -153,7 +156,7 @@ pub fn copyBufferToImage(self: *Self, vc: *const VulkanContext, src: vk.Buffer, 
             .depth = 1,
         },  
     };
-    vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
+    vc.device.cmdCopyBufferToImage(self.buffer, src, dst, .transfer_dst_optimal, 1, vk_helpers.toPointerType(&copy));
     try self.submitAndIdleUntilDone(vc);
 }
 
@@ -278,7 +281,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .depth = 1,
             },  
         };
-        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffer.handle, image, .transfer_dst_optimal, 1, utils.toPointerType(&copy));
+        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffer.handle, image, .transfer_dst_optimal, 1, vk_helpers.toPointerType(&copy));
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
@@ -304,7 +307,7 @@ pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContex
         .size = bytes.len,
     };
 
-    vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, utils.toPointerType(&region));
+    vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, vk_helpers.toPointerType(&region));
 }
 
 pub fn uploadData(self: *Self, comptime T: type, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst: VkAllocator.DeviceBuffer(T), src: []const T) !void {

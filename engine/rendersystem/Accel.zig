@@ -1,11 +1,14 @@
 const std = @import("std");
 const vk = @import("vulkan");
+
+const engine = @import("../engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
 const Commands = @import("./Commands.zig");
-const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const MeshManager = @import("./MeshManager.zig");
 const Vertex = @import("../Object.zig").Vertex;
-const utils = @import("./utils.zig");
 const AliasTable = @import("./alias_table.zig").AliasTable;
 
 const vector = @import("../vector.zig");
@@ -257,7 +260,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
         const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, Geometry, geometry_count, buffer_flags);
         errdefer geometries.destroy(vc);
-        try utils.setDebugName(vc, geometries.handle, "geometries");
+        try vk_helpers.setDebugName(vc, geometries.handle, "geometries");
 
         var flat_idx: u32 = 0;
         for (instances) |instance| {
@@ -281,7 +284,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
     const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
     errdefer instances_device.destroy(vc);
-    try utils.setDebugName(vc, instances_device.handle, "instances");
+    try vk_helpers.setDebugName(vc, instances_device.handle, "instances");
 
     const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
     defer instances_host.destroy(vc);
@@ -331,11 +334,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
-        .p_geometries = utils.toPointerType(&geometry),
+        .p_geometries = vk_helpers.toPointerType(&geometry),
         .scratch_data = undefined,
     };
 
-    const size_info = getBuildSizesInfo(vc, &geometry_info, utils.toPointerType(&instance_count));
+    const size_info = getBuildSizesInfo(vc, &geometry_info, vk_helpers.toPointerType(&instance_count));
 
     const scratch_buffer = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     defer scratch_buffer.destroy(vc);
@@ -430,7 +433,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .primitive_offset = 0,
         .transform_offset = 0,
     };
-    try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ utils.toPointerType(&build_info) });
+    try commands.createAccelStructs(vc, &.{ geometry_info }, &.{ vk_helpers.toPointerType(&build_info) });
 
     return Self {
         .blases = blases,
@@ -527,7 +530,7 @@ pub fn recordUpdateSingleMaterial(self: Self, vc: *const VulkanContext, command_
     vc.device.cmdUpdateBuffer(command_buffer, self.geometries.handle, offset, size, &new_material_idx);
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = utils.toPointerType(&vk.BufferMemoryBarrier2 {
+        .p_buffer_memory_barriers = vk_helpers.toPointerType(&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
@@ -562,7 +565,7 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
         .src_acceleration_structure = self.tlas_handle,
         .dst_acceleration_structure = self.tlas_handle,
         .geometry_count = 1,
-        .p_geometries = utils.toPointerType(&geometry),
+        .p_geometries = vk_helpers.toPointerType(&geometry),
         .pp_geometries = null,
         .scratch_data = .{
             .device_address = self.tlas_update_scratch_address,
@@ -576,9 +579,9 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
         .transform_offset = 0,
     };
 
-    const build_info_ref = utils.toPointerType(&build_info);
+    const build_info_ref = vk_helpers.toPointerType(&build_info);
 
-    vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, utils.toPointerType(&geometry_info), utils.toPointerType(&build_info_ref));
+    vc.device.cmdBuildAccelerationStructuresKHR(command_buffer, 1, vk_helpers.toPointerType(&geometry_info), vk_helpers.toPointerType(&build_info_ref));
 
     const barriers = [_]vk.MemoryBarrier2 {
         .{

@@ -1,12 +1,13 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./VulkanContext.zig");
+const core = @import("../engine.zig").core;
+const VulkanContext = core.VulkanContext;
+const vk_helpers = core.vk_helpers;
+
 const Commands = @import("./Commands.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
-
-const utils = @import("./utils.zig");
 
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
@@ -204,7 +205,7 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
 
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = utils.toPointerType(&vk.BufferMemoryBarrier2 {
+        .p_buffer_memory_barriers = vk_helpers.toPointerType(&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },

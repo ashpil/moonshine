@@ -4,10 +4,11 @@
 // more-so designed for ease-of-use for debugging and inspecting stuff that doesn't usually need to be inspected
 
 const engine = @import("engine");
-const VulkanContext = engine.rendersystem.VulkanContext;
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
 const VkAllocator = engine.rendersystem.Allocator;
 const Commands = engine.rendersystem.Commands;
-const utils = engine.rendersystem.utils;
 
 const std = @import("std");
 const vk = @import("vulkan");
@@ -22,7 +23,7 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, max_bytes: u32) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, u8, max_bytes, .{ .transfer_dst_bit = true });
-    try utils.setDebugName(vc, buffer.handle, "sync copier");
+    try vk_helpers.setDebugName(vc, buffer.handle, "sync copier");
 
     const command_pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
@@ -52,22 +53,22 @@ pub fn copy(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, b
     std.debug.assert(@sizeOf(BufferInner) <= self.buffer.data.len);
 
     try vc.device.beginCommandBuffer(self.command_buffer, &.{});
-    vc.device.cmdCopyBuffer(self.command_buffer, buffer.handle, self.buffer.handle, 1, utils.toPointerType(&vk.BufferCopy {
+    vc.device.cmdCopyBuffer(self.command_buffer, buffer.handle, self.buffer.handle, 1, vk_helpers.toPointerType(&vk.BufferCopy {
         .src_offset = @sizeOf(BufferInner) * idx,
         .dst_offset = 0,
         .size = @sizeOf(BufferInner),
     }));
     try vc.device.endCommandBuffer(self.command_buffer);
 
-    try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&vk.SubmitInfo2 {
+    try vc.device.queueSubmit2(vc.queue, 1, vk_helpers.toPointerType(&vk.SubmitInfo2 {
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = vk_helpers.toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.command_buffer,
             .device_mask = 0,
         }),
     }), self.ready_fence);
-    _ = try vc.device.waitForFences(1, utils.toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
-    try vc.device.resetFences(1, utils.toPointerType(&self.ready_fence));
+    _ = try vc.device.waitForFences(1, vk_helpers.toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, vk_helpers.toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});
 
     return @ptrCast(*BufferInner, @alignCast(@alignOf(BufferInner), self.buffer.data.ptr)).*;

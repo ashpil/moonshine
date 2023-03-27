@@ -2,16 +2,20 @@ const std = @import("std");
 const vk = @import("vulkan");
 const shaders = @import("shaders");
 
-const VulkanContext = @import("./rendersystem/VulkanContext.zig");
-const VkAllocator = @import("./rendersystem/Allocator.zig");
-const Pipeline = @import("./rendersystem/pipeline.zig").ObjectPickPipeline;
-const descriptor = @import("./rendersystem/descriptor.zig");
+const engine = @import("./engine.zig");
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
+
+const rendersystem = engine.rendersystem;
+const VkAllocator = rendersystem.Allocator;
+const Pipeline = rendersystem.pipeline.ObjectPickPipeline;
+const descriptor = rendersystem.descriptor;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const Commands = @import("./rendersystem/Commands.zig");
-const Camera = @import("./rendersystem/Camera.zig");
+const Commands = rendersystem.Commands;
+const Camera = rendersystem.Camera;
 const F32x2 = @import("./vector.zig").Vec2(f32);
-const utils = @import("./rendersystem/utils.zig");
+const toPointerType = engine.core.vk_helpers.toPointerType;
 
 const Self = @This();
 
@@ -65,7 +69,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = buffer.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -134,7 +138,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
     const submit_info = vk.SubmitInfo2 {
         .flags = .{},
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = utils.toPointerType(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = toPointerType(&vk.CommandBufferSubmitInfo {
             .command_buffer = self.command_buffer,
             .device_mask = 0,
         }),
@@ -144,9 +148,9 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
         .p_signal_semaphore_infos = undefined,
     };
 
-    try vc.device.queueSubmit2(vc.queue, 1, utils.toPointerType(&submit_info), self.ready_fence);
-    _ = try vc.device.waitForFences(1, utils.toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
-    try vc.device.resetFences(1, utils.toPointerType(&self.ready_fence));
+    try vc.device.queueSubmit2(vc.queue, 1, toPointerType(&submit_info), self.ready_fence);
+    _ = try vc.device.waitForFences(1, toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});
 
     return self.buffer.data[0].toClickedObject();

@@ -1,13 +1,14 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const VulkanContext = @import("./VulkanContext.zig");
+const engine = @import("../engine.zig");
+const toPointerType = engine.core.vk_helpers.toPointerType;
+const VulkanContext =  engine.core.VulkanContext;
+
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");
 const Commands = @import("./Commands.zig");
 const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
-
-const utils = @import("./utils.zig");
 
 // 2 images -- first is display image, second is accumulation image
 // accumulation is sum of all samples
@@ -41,7 +42,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_image,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = toPointerType(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
                 .image_view = images.data.items(.view)[0],
                 .image_layout = .general,
@@ -55,7 +56,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_image,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = toPointerType(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
                 .image_view = images.data.items(.view)[1],
                 .image_layout = .general,

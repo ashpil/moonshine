@@ -3,13 +3,13 @@ const vk = @import("vulkan");
 
 const engine = @import("engine");
 
-const VulkanContext = engine.rendersystem.VulkanContext;
+const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.rendersystem.Commands;
 const VkAllocator = engine.rendersystem.Allocator;
 const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
 const Scene = engine.rendersystem.Scene;
 
-const utils = engine.rendersystem.utils;
+const vk_helpers = engine.core.vk_helpers;
 const exr = engine.fileformats.exr;
 
 const vector = engine.vector;
@@ -240,7 +240,7 @@ pub fn main() !void {
         };
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = utils.toPointerType(&barrier),
+            .p_image_memory_barriers = vk_helpers.toPointerType(&barrier),
         });
 
         // copy output image to host-visible staging buffer
@@ -265,7 +265,7 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, utils.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, vk_helpers.toPointerType(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

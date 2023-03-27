@@ -8,7 +8,11 @@ const vk = @import("vulkan");
 const Gltf = @import("zgltf");
 const zigimg = @import("zigimg");
 
-const VulkanContext = @import("./VulkanContext.zig");
+const engine = @import("../engine.zig");
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
+const vk_helpers = core.vk_helpers;
+
 const MeshData = @import("../Object.zig");
 const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
@@ -19,9 +23,8 @@ const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
 
 const MeshManager = @import("./MeshManager.zig");
 const Accel = @import("./Accel.zig");
-const utils = @import("./utils.zig");
 
-const vector = @import("../vector.zig");
+const vector = engine.vector;
 const Mat3x4 = vector.Mat3x4(f32);
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
@@ -242,7 +245,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .p_texel_buffer_view = undefined,
             .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                 .acceleration_structure_count = 1,
-                .p_acceleration_structures = utils.toPointerType(&self.accel.tlas_handle),
+                .p_acceleration_structures = vk_helpers.toPointerType(&self.accel.tlas_handle),
             },
         },
         vk.WriteDescriptorSet {
@@ -252,7 +255,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.accel.instances_device.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -266,7 +269,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.accel.world_to_instance.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -280,7 +283,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.accel.alias_table.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -294,7 +297,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.mesh_manager.addresses_buffer.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -308,7 +311,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.accel.geometries.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -321,7 +324,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = vk_helpers.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = self.sampler,
                 .image_view = .null_handle,
                 .image_layout = undefined,
@@ -346,7 +349,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = self.material_manager.materials.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -355,7 +358,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         },
     });
 
-    try utils.setDebugName(vc, descriptor_set, "World");
+    try vk_helpers.setDebugName(vc, descriptor_set, "World");
 
     return descriptor_set;
 }

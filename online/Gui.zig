@@ -3,12 +3,13 @@ const vk = @import("vulkan");
 const std = @import("std");
 
 const engine = @import("engine");
-const VulkanContext = engine.rendersystem.VulkanContext;
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
 const ImageManager = engine.rendersystem.ImageManager;
 const VkAllocator = engine.rendersystem.Allocator;
 const Commands = engine.rendersystem.Commands;
 const DescriptorLayout = engine.rendersystem.descriptor.DescriptorLayout;
-const utils = engine.rendersystem.utils;
 
 const Swapchain = engine.displaysystem.Swapchain;
 const Display = engine.displaysystem.Display;
@@ -60,9 +61,9 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const pipeline_layout = try vc.device.createPipelineLayout(&.{
         .set_layout_count = 1,
-        .p_set_layouts = utils.toPointerType(&descriptor_set_layout.handle),
+        .p_set_layouts = vk_helpers.toPointerType(&descriptor_set_layout.handle),
         .push_constant_range_count = 1,
-        .p_push_constant_ranges = utils.toPointerType(&vk.PushConstantRange {
+        .p_push_constant_ranges = vk_helpers.toPointerType(&vk.PushConstantRange {
             .stage_flags = .{ .vertex_bit = true },
             .offset = 0,
             .size = @sizeOf(f32) * 4,
@@ -115,12 +116,12 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         };
         const dynamic_states = [_]vk.DynamicState { .viewport, .scissor };
         var pipeline: vk.Pipeline = undefined;
-        _ = try vc.device.createGraphicsPipelines(.null_handle, 1, utils.toPointerType(&vk.GraphicsPipelineCreateInfo {
+        _ = try vc.device.createGraphicsPipelines(.null_handle, 1, vk_helpers.toPointerType(&vk.GraphicsPipelineCreateInfo {
             .stage_count = shader_stage_create_info.len,
             .p_stages = &shader_stage_create_info,
             .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo {
                 .vertex_binding_description_count = 1,
-                .p_vertex_binding_descriptions = utils.toPointerType(&vk.VertexInputBindingDescription {
+                .p_vertex_binding_descriptions = vk_helpers.toPointerType(&vk.VertexInputBindingDescription {
                     .binding = 0,
                     .stride = @sizeOf(imgui.DrawVert),
                     .input_rate = .vertex,
@@ -151,7 +152,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .logic_op_enable = vk.FALSE,
                 .logic_op = .clear,
                 .attachment_count = 1,
-                .p_attachments = utils.toPointerType(&vk.PipelineColorBlendAttachmentState {
+                .p_attachments = vk_helpers.toPointerType(&vk.PipelineColorBlendAttachmentState {
                     .blend_enable = vk.TRUE,
                     .src_color_blend_factor = .src_alpha,
                     .dst_color_blend_factor = .one_minus_src_alpha,
@@ -174,7 +175,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .p_next = &vk.PipelineRenderingCreateInfo {
                 .view_mask = 0,
                 .color_attachment_count = 1,
-                .p_color_attachment_formats = utils.toPointerType(&swapchain.image_format),
+                .p_color_attachment_formats = vk_helpers.toPointerType(&swapchain.image_format),
                 .depth_attachment_format = .undefined,
                 .stencil_attachment_format = .undefined,
             },
@@ -223,7 +224,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .combined_image_sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = vk_helpers.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = font_sampler,
                 .image_view = font_image.data.items(.view)[0],
                 .image_layout = .read_only_optimal,
@@ -367,7 +368,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         .layer_count = 1,
         .view_mask = 0,
         .color_attachment_count = 1,
-        .p_color_attachments = utils.toPointerType(&vk.RenderingAttachmentInfo {
+        .p_color_attachments = vk_helpers.toPointerType(&vk.RenderingAttachmentInfo {
             .image_view = self.views.slice()[swapchain_image_index],
             .image_layout = .color_attachment_optimal,
             .resolve_mode = .{},
@@ -378,9 +379,9 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         }),
     });
     vc.device.cmdBindPipeline(command_buffer, .graphics, self.pipeline);
-    vc.device.cmdBindVertexBuffers(command_buffer, 0, 1, utils.toPointerType(&vertex_buffer.handle), utils.toPointerType(&@as(vk.DeviceSize, 0)));
+    vc.device.cmdBindVertexBuffers(command_buffer, 0, 1, vk_helpers.toPointerType(&vertex_buffer.handle), vk_helpers.toPointerType(&@as(vk.DeviceSize, 0)));
     vc.device.cmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, .uint16);
-    vc.device.cmdSetViewport(command_buffer, 0, 1, utils.toPointerType(&vk.Viewport {
+    vc.device.cmdSetViewport(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Viewport {
         .x = 0,
         .y = 0,
         .width = @intToFloat(f32, self.extent.width),
@@ -399,14 +400,14 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         };
         vc.device.cmdPushConstants(command_buffer, self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(f32) * 4, &std.mem.toBytes(.{ scale, translate }));
     }
-    vc.device.cmdBindDescriptorSets(command_buffer, .graphics, self.pipeline_layout, 0, 1, utils.toPointerType(&self.font_image_set), 0, undefined);
+    vc.device.cmdBindDescriptorSets(command_buffer, .graphics, self.pipeline_layout, 0, 1, vk_helpers.toPointerType(&self.font_image_set), 0, undefined);
 
     var global_idx_offset: u32 = 0;
     var global_vtx_offset: u32 = 0;
     for (draw_data.CmdLists[0..@intCast(usize, draw_data.CmdListsCount)]) |cmd_list| {
         for (cmd_list.*.CmdBuffer.Data[0..@intCast(usize, cmd_list.*.CmdBuffer.Size)]) |cmd| {
             if (cmd.UserCallback) |_| @panic("todo");
-            vc.device.cmdSetScissor(command_buffer, 0, 1, utils.toPointerType(&vk.Rect2D {
+            vc.device.cmdSetScissor(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Rect2D {
                 .offset = vk.Offset2D {
                     .x = @floatToInt(i32, cmd.ClipRect.x),
                     .y = @floatToInt(i32, cmd.ClipRect.y),

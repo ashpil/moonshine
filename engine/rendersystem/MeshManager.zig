@@ -1,7 +1,10 @@
 const vk = @import("vulkan");
 const std = @import("std");
+
+const core = @import("../engine.zig").core;
+const VulkanContext = core.VulkanContext;
+
 const Commands = @import("./Commands.zig");
-const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const Object = @import("../Object.zig");
 

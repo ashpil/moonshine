@@ -4,7 +4,7 @@
 
 const vk = @import("vulkan");
 const std = @import("std");
-const VulkanContext = @import("./VulkanContext.zig");
+const VulkanContext = @import("../engine.zig").core.VulkanContext;
 
 const Self = @This();
 

@@ -1,10 +1,11 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const rendersystem = @import("./engine.zig").rendersystem;
-const VulkanContext = rendersystem.VulkanContext;
-const ImageManager = rendersystem.ImageManager;
-const DeviceBuffer = rendersystem.Allocator.DeviceBuffer;
+const engine = @import("./engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+
+const ImageManager = engine.rendersystem.ImageManager;
+const DeviceBuffer = engine.rendersystem.Allocator.DeviceBuffer;
 
 // TODO: how to make this use some sort of duck typing and take in any 
 // type with a `destroy` function

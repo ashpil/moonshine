@@ -2,7 +2,10 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Gltf = @import("zgltf");
 
-const VulkanContext = @import("./VulkanContext.zig");
+const engine = @import("../engine.zig");
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
+
 const Film = @import("./Film.zig");
 const VkAllocator = @import("./Allocator.zig");
 const ImageManager = @import("./ImageManager.zig");

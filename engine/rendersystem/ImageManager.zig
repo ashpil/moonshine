@@ -1,12 +1,12 @@
 const vk = @import("vulkan");
 const std = @import("std");
 
-const utils = @import("./utils.zig");
-
-const VulkanContext = @import("./VulkanContext.zig");
+const engine = @import("../engine.zig");
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
 const VkAllocator = @import("./Allocator.zig");
 const Commands = @import("./Commands.zig");
-const dds = @import("../fileformats/dds.zig");
+const dds = engine.fileformats.dds;
 
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);

@@ -1,15 +1,16 @@
-const VulkanContext = @import("./VulkanContext.zig");
-const Commands = @import("./Commands.zig");
-const VkAllocator = @import("./Allocator.zig");
-const utils = @import("./utils.zig");
-const Camera = @import("./Camera.zig");
-
 const shaders = @import("shaders");
 const vk = @import("vulkan");
 const std = @import("std");
 const build_options = @import("build_options");
 
-const vector = @import("../vector.zig");
+const engine = @import("../engine.zig");
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
+const Commands = @import("./Commands.zig");
+const VkAllocator = @import("./Allocator.zig");
+const Camera = @import("./Camera.zig");
+
+const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 

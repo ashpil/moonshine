@@ -1,12 +1,16 @@
 const std = @import("std");
 
 const engine = @import("engine");
+
+const core = engine.core;
+const VulkanContext = core.VulkanContext;
+const vk_helpers = core.vk_helpers;
+
 const rendersystem = engine.rendersystem;
 const Camera = rendersystem.Camera;
 const Accel = rendersystem.Accel;
 const MaterialManager = rendersystem.MaterialManager;
 const Scene = rendersystem.Scene;
-const VulkanContext = rendersystem.VulkanContext;
 const VkAllocator = rendersystem.Allocator;
 const Pipeline = rendersystem.pipeline.StandardPipeline;
 const Commands = rendersystem.Commands;
@@ -16,7 +20,6 @@ const Display = displaysystem.Display;
 
 const ObjectPicker = engine.ObjectPicker;
 const DestructionQueue = engine.DestructionQueue;
-const utils = engine.rendersystem.utils;
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");
@@ -282,7 +285,7 @@ pub fn main() !void {
             // transition display image to one we can write to in shader
             context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
                 .image_memory_barrier_count = 1,
-                .p_image_memory_barriers = utils.toPointerType(&vk.ImageMemoryBarrier2{
+                .p_image_memory_barriers = vk_helpers.toPointerType(&vk.ImageMemoryBarrier2{
                     .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true, },
                     .dst_access_mask = .{ .shader_storage_write_bit = true, },
                     .old_layout = .@"undefined",
@@ -342,7 +345,7 @@ pub fn main() !void {
         // transition swap image to one we can blit to
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = utils.toPointerType(&vk.ImageMemoryBarrier2 {
+            .p_image_memory_barriers = vk_helpers.toPointerType(&vk.ImageMemoryBarrier2 {
                 .dst_stage_mask = .{ .blit_bit = true, },
                 .dst_access_mask = .{ .transfer_write_bit = true, },
                 .old_layout = .@"undefined",
@@ -395,7 +398,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, utils.toPointerType(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, vk_helpers.toPointerType(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {

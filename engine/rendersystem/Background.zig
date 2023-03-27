@@ -1,15 +1,17 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
+const engine = @import("../engine.zig");
+const VulkanContext = engine.core.VulkanContext;
+const vk_helpers = engine.core.vk_helpers;
+
 const ImageManager = @import("./ImageManager.zig");
-const VulkanContext = @import("./VulkanContext.zig");
 const VkAllocator = @import("./Allocator.zig");
 const BackgroundDescriptorLayout = @import("./descriptor.zig").BackgroundDescriptorLayout;
 const Commands = @import("./Commands.zig");
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
-const utils = @import("./utils.zig");
-const exr = @import("../fileformats/exr.zig");
+const exr = engine.fileformats.exr;
 
 images: ImageManager,
 marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
@@ -95,7 +97,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .combined_image_sampler,
-            .p_image_info = utils.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = vk_helpers.toPointerType(&vk.DescriptorImageInfo {
                 .sampler = sampler,
                 .image_view = images.data.items(.view)[0],
                 .image_layout = .shader_read_only_optimal,
@@ -110,7 +112,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = marginal.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
@@ -124,7 +126,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
-            .p_buffer_info = utils.toPointerType(&vk.DescriptorBufferInfo {
+            .p_buffer_info = vk_helpers.toPointerType(&vk.DescriptorBufferInfo {
                 .buffer = conditional.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
