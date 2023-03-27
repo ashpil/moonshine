@@ -444,16 +444,13 @@ fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path:
         try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.h", .{out_name}),
     });
 
-    const source_cmd = b.addSystemCommand(&[_][]const u8 {
+    try step.evalChildProcess(&[_][]const u8 {
         "wayland-scanner", "private-code", xml_path, out_source,
     });
 
-    const header_cmd = b.addSystemCommand(&[_][]const u8 {
+    try step.evalChildProcess(&[_][]const u8 {
         "wayland-scanner", "client-header", xml_path, out_header,
     });
-
-    step.dependOn(&source_cmd.step);
-    step.dependOn(&header_cmd.step);
 }
 
 fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
@@ -511,10 +508,9 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
                 header_path,
                 "wayland-client-protocol-code.h",
             });
-            const source_cmd = b.addSystemCommand(&[_][]const u8 {
+            try step.evalChildProcess(&[_][]const u8 {
                 "wayland-scanner", "private-code", wayland_xml_path, out_source,
             });
-            step.dependOn(&source_cmd.step);
         }
        
         {
@@ -523,11 +519,9 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
                 "wayland-client-protocol.h",
             });
 
-            const header_cmd = b.addSystemCommand(&[_][]const u8 {
+            try step.evalChildProcess(&[_][]const u8 {
                 "wayland-scanner", "client-header", wayland_xml_path, out_header,
             });
-
-            step.dependOn(&header_cmd.step);
         }
     }
 }
