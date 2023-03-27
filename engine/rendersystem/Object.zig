@@ -2,7 +2,7 @@
 // TODO: make this obsolete, load immediately from disk to GPU memory
 
 const std = @import("std");
-const vector = @import("./vector.zig");
+const vector = @import("../vector.zig");
 
 const U32x3 = vector.Vec3(u32);
 const F32x3 = vector.Vec3(f32);

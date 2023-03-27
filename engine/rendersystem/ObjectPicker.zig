@@ -2,11 +2,12 @@ const std = @import("std");
 const vk = @import("vulkan");
 const shaders = @import("shaders");
 
-const engine = @import("./engine.zig");
+const engine = @import("../engine.zig");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
+const toPointerType = core.vk_helpers.toPointerType;
 
 const rendersystem = engine.rendersystem;
 const Pipeline = rendersystem.pipeline.ObjectPickPipeline;
@@ -14,8 +15,8 @@ const descriptor = rendersystem.descriptor;
 const InputDescriptorLayout = descriptor.InputDescriptorLayout;
 const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
 const Camera = rendersystem.Camera;
-const F32x2 = @import("./vector.zig").Vec2(f32);
-const toPointerType = engine.core.vk_helpers.toPointerType;
+
+const F32x2 = @import("../vector.zig").Vec2(f32);
 
 const Self = @This();
 

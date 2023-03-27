@@ -8,7 +8,7 @@ const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
 const MeshManager = @import("./MeshManager.zig");
-const Vertex = @import("../Object.zig").Vertex;
+const Vertex = @import("./Object.zig").Vertex;
 const AliasTable = @import("./alias_table.zig").AliasTable;
 
 const vector = @import("../vector.zig");

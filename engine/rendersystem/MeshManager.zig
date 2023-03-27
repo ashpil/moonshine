@@ -6,7 +6,7 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 
-const Object = @import("../Object.zig");
+const Object = @import("./Object.zig");
 
 const vector = @import("../vector.zig");
 const U32x3 = vector.Vec3(u32);

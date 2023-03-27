@@ -15,11 +15,10 @@ const Accel = rendersystem.Accel;
 const MaterialManager = rendersystem.MaterialManager;
 const Scene = rendersystem.Scene;
 const Pipeline = rendersystem.pipeline.StandardPipeline;
+const ObjectPicker = rendersystem.ObjectPicker;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
-
-const ObjectPicker = engine.ObjectPicker;
 
 const Window = @import("./Window.zig");
 const Gui = @import("./Gui.zig");

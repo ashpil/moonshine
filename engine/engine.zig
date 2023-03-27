@@ -1,7 +1,3 @@
-// structs
-pub const Object = @import("./Object.zig");
-pub const ObjectPicker = @import("./ObjectPicker.zig");
-
 // systems
 pub const rendersystem = @import("./rendersystem/rendersystem.zig");
 pub const fileformats = @import("./fileformats/fileformats.zig");

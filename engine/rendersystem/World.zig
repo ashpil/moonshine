@@ -15,7 +15,7 @@ const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 
-const MeshData = @import("../Object.zig");
+const MeshData = @import("./Object.zig");
 const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
 const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
