@@ -15,18 +15,18 @@ from mathutils import *
 import struct
 from collections import defaultdict
 
-def write(context, filepath):
-    def write_u32(file, u32):
+def write(context, filepath: str):
+    def write_u32(file, u32: int):
         file.write(u32.to_bytes(length=4, byteorder='little'))
 
-    def write_u64(file, u64):
+    def write_u64(file, u64: int):
         file.write(u64.to_bytes(length=8, byteorder='little'))
 
-    def write_bool(file, bool):
-        file.write(bytearray(struct.pack("<?", bool)))
+    def write_bool(file, bool: bool):
+        file.write(struct.pack("<?", bool))
 
-    def write_f32(file, f32):
-        file.write(bytearray(struct.pack("<f", f32)))
+    def write_f32(file, f32: float):
+        file.write(struct.pack("<f", f32))
         
     def write_mesh(file, mesh):
         write_u32(file, len(mesh.loop_triangles)) # mesh index count
@@ -90,7 +90,7 @@ def write(context, filepath):
         write_f32(file, camera.data.dof.focus_distance)
         
     def find_materials(scene):
-        blender_materials = set([ obj.active_material for obj in context.scene.objects if obj.type == 'MESH' ])
+        blender_materials = set([ obj.active_material for obj in scene.objects if obj.type == 'MESH' ])
         material_map = dict()
         materials = []
         textures1 = defaultdict(None)
