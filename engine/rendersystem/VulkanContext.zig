@@ -303,7 +303,6 @@ pub fn destroy(self: Self) void {
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     queue_family_index: u32,
-    raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR, // TODO: should this live somewhere else?
 
     fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, comptime queueFamilyAcceptable: QueueFamilyAcceptable) !u32 {
         const families = utils.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
@@ -327,22 +326,9 @@ const PhysicalDevice = struct {
         return for (devices) |device| {
             if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator, extensions)) {
                 if (pickQueueFamily(instance, device, queueFamilyAcceptable)) |index| {
-
-                    var raytracing_properties: vk.PhysicalDeviceRayTracingPipelinePropertiesKHR = undefined;
-                    raytracing_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
-                    raytracing_properties.p_next = null;
-
-                    var properties2 = vk.PhysicalDeviceProperties2 {
-                        .properties = undefined,
-                        .p_next = &raytracing_properties,
-                    };
-
-                    instance.getPhysicalDeviceProperties2(device, &properties2);
-
                     break PhysicalDevice {
                         .handle = device,
                         .queue_family_index = index,
-                        .raytracing_properties = raytracing_properties,
                     };
                 } else |err| return err;
             }
