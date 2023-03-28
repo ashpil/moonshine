@@ -90,54 +90,58 @@ def write(context, filepath: str):
         write_f32(file, camera.data.dof.focus_distance)
         
     def find_materials(scene):
-        blender_materials = set([ obj.active_material for obj in scene.objects if obj.type == 'MESH' ])
         material_map = dict()
         materials = []
         textures1 = defaultdict(None)
         textures2 = defaultdict(None)
         textures3 = defaultdict(None)
-        for blender_material in blender_materials:
-            penultimate = blender_material.node_tree.get_output_node('CYCLES').inputs[0].links[0].from_node
-            assert penultimate.name == "Principled BSDF", "TODO others"
+        
+        def parse_input3(material, input, name):
+            assert not input.is_linked
+            i3 = tuple(input.default_value[0:3])
+            if i3 not in textures3:
+                textures3[i3] = len(textures3)
+            material[name] = textures3[i3]
+        
+        def parse_input1(material, input, name):
+            assert not input.is_linked
+            value = input.default_value
+            if value not in textures1:
+                textures1[value] = len(textures1)
+            material[name] = textures1[value]
+        
+        def parse_value(material, input, name):
+            assert not input.is_linked
+            material[name] = input.default_value
+            
+        for blender_material in set([ obj.active_material for obj in scene.objects if obj.type == 'MESH' ]):
             material = {}
-            material["type"] = "Standard PBR"
-            for input in penultimate.inputs:
-                match input.name:
-                    case "Base Color":
-                        assert not input.is_linked
-                        color = tuple(input.default_value[0:3])
-                        if color not in textures3:
-                            textures3[color] = len(textures3)
-                        material["color"] = textures3[color]
-                    case "Metallic":
-                        assert not input.is_linked
-                        value = input.default_value
-                        if value not in textures1:
-                            textures1[value] = len(textures1)
-                        material["metalness"] = textures1[value]
-                    case "Roughness":
-                        assert not input.is_linked
-                        value = input.default_value
-                        if value not in textures1:
-                            textures1[value] = len(textures1)
-                        material["roughness"] = textures1[value]
-                    case "IOR":
-                        assert not input.is_linked
-                        material["ior"] = input.default_value
-                    case "Emission":
-                        assert not input.is_linked
-                        color = tuple(input.default_value[0:3])
-                        if color not in textures3:
-                            textures3[color] = len(textures3)
-                        material["emissive"] = textures3[color]
-                    case "Normal":
-                        assert not input.is_linked
-                        n = (0.5, 0.5)
-                        if n not in textures2:
-                            textures2[n] = len(textures2)
-                        material["normal"] = textures2[n]
-                    case _:
-                        pass # ignored
+            penultimate = blender_material.node_tree.get_output_node('CYCLES').inputs[0].links[0].from_node
+            if type(penultimate) == bpy.types.ShaderNodeBsdfPrincipled:
+                material["type"] = "Standard PBR"
+                parse_input3(material, penultimate.inputs["Base Color"], "color")
+                parse_input1(material, penultimate.inputs["Metallic"], "metalness")
+                parse_input1(material, penultimate.inputs["Roughness"], "roughness")
+                parse_value(material, penultimate.inputs["IOR"], "ior")
+                
+                # special cases for emissive and normal
+                emission = penultimate.inputs["Emission"]
+                emission_strength = penultimate.inputs["Emission Strength"]
+                assert not emission.is_linked and not emission_strength.is_linked
+                i3 = tuple(e * emission_strength.default_value for e in emission.default_value[0:3])
+                if i3 not in textures3:
+                    textures3[i3] = len(textures3)
+                material["emissive"] = textures3[i3]
+                
+                assert not penultimate.inputs["Normal"].is_linked
+                n = (0.5, 0.5)
+                if n not in textures2:
+                    textures2[n] = len(textures2)
+                material["normal"] = textures2[n]
+                
+            else:
+                assert false, "Unknown material type!"
+    
             material_map[blender_material] = len(materials)
             materials.append(material)
         return materials, material_map, list(textures1), list(textures2), list(textures3)
