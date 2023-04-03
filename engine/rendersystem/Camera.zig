@@ -8,6 +8,8 @@ const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
+const MsneReader = engine.fileformats.msne.MsneReader;
+
 const Film = @import("./Film.zig");
 const ImageManager = @import("./ImageManager.zig");
 const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
@@ -54,8 +56,8 @@ pub const CreateInfo = extern struct {
         };
     }
 
-    pub fn fromMsne(reader: anytype) !CreateInfo {
-        return try reader.readStruct(CreateInfo);
+    pub fn fromMsne(msne_reader: MsneReader) !CreateInfo {
+        return try msne_reader.readStruct(CreateInfo);
     }
 };
 

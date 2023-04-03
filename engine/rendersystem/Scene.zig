@@ -2,7 +2,9 @@ const std = @import("std");
 const vk = @import("vulkan");
 const Gltf = @import("zgltf");
 
-const core = @import("../engine.zig").core;
+const engine = @import("../engine.zig");
+
+const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
@@ -15,6 +17,8 @@ const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
 const Background = @import("./Background.zig");
 const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
+
+const MsneReader = engine.fileformats.msne.MsneReader;
 
 const Self = @This();
 
@@ -61,7 +65,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_filepath);
     errdefer background.destroy(vc, allocator);
 
-    return Self{
+    return Self {
         .world_descriptor_layout = world_descriptor_layout,
         .background_descriptor_layout = background_descriptor_layout,
         .film_descriptor_layout = film_descriptor_layout,
@@ -82,16 +86,13 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     var film_descriptor_layout = try FilmDescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
-    const file = try std.fs.cwd().openFile(msne_filepath, .{});
-    defer file.close();
+    const msne = try MsneReader.fromFilepath(msne_filepath);
+    defer msne.destroy();
 
-    const reader = file.reader();
-    std.debug.assert(std.mem.eql(u8, &try reader.readBytesNoEof(4), "MSNE"));
-
-    var world = try World.fromMsne(vc, vk_allocator, allocator, commands, &world_descriptor_layout, reader, inspection);
+    var world = try World.fromMsne(vc, vk_allocator, allocator, commands, &world_descriptor_layout, msne, inspection);
     errdefer world.destroy(vc, allocator);
 
-    var camera_create_info = try Camera.CreateInfo.fromMsne(reader);
+    var camera_create_info = try Camera.CreateInfo.fromMsne(msne);
     var camera = try Camera.create(vc, vk_allocator, allocator, &film_descriptor_layout, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
     try commands.transitionImageLayout(vc, allocator, camera.film.images.data.items(.handle)[1..], .undefined, .general);
@@ -99,7 +100,7 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_filepath);
     errdefer background.destroy(vc, allocator);
 
-    return Self{
+    return Self {
         .world_descriptor_layout = world_descriptor_layout,
         .background_descriptor_layout = background_descriptor_layout,
         .film_descriptor_layout = film_descriptor_layout,

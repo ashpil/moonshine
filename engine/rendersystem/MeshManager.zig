@@ -1,10 +1,14 @@
 const vk = @import("vulkan");
 const std = @import("std");
 
-const core = @import("../engine.zig").core;
+const engine = @import("../engine.zig");
+
+const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
+
+const MsneReader = engine.fileformats.msne.MsneReader;
 
 const Object = @import("./Object.zig");
 
@@ -146,8 +150,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, reader: anytype) !Self {
-    const mesh_count = try reader.readIntLittle(u32);
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader) !Self {
+    const mesh_count = try msne_reader.readSize();
     var meshes = Meshes {};
     try meshes.ensureTotalCapacity(allocator, mesh_count);
     errdefer meshes.deinit(allocator);
@@ -162,11 +166,11 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
     try commands.startRecording(vc);
 
     for (addresses_buffer_host.data) |*addresses_buffer| {
-        const index_count = try reader.readIntLittle(u32);
+        const index_count = try msne_reader.readSize();
         const index_staging_buffer = try vk_allocator.createHostBuffer(vc, U32x3, index_count, .{ .transfer_src_bit = true });
         const index_buffer = blk: {
             try staging_buffers.append(index_staging_buffer.toBytes());
-            try reader.readNoEof(std.mem.sliceAsBytes(index_staging_buffer.data));
+            try msne_reader.readSlice(U32x3, index_staging_buffer.data);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, U32x3, index_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
             commands.recordUploadBuffer(U32x3, vc, gpu_buffer, index_staging_buffer);
 
@@ -174,12 +178,12 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         };
         errdefer index_buffer.destroy(vc);
 
-        const vertex_count = try reader.readIntLittle(u32);
+        const vertex_count = try msne_reader.readSize();
 
         const position_staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, vertex_count, .{ .transfer_src_bit = true });
         const position_buffer = blk: {
             try staging_buffers.append(position_staging_buffer.toBytes());
-            try reader.readNoEof(std.mem.sliceAsBytes(position_staging_buffer.data));
+            try msne_reader.readSlice(F32x3, position_staging_buffer.data);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
             commands.recordUploadBuffer(F32x3, vc, gpu_buffer, position_staging_buffer);
 
@@ -187,20 +191,20 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         };
         errdefer position_buffer.destroy(vc);
 
-        const normal_buffer = if (try reader.readByte() != 0) blk: {
+        const normal_buffer = if (try msne_reader.readBool()) blk: {
             const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, vertex_count, .{ .transfer_src_bit = true });
             try staging_buffers.append(staging_buffer.toBytes());
-            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
+            try msne_reader.readSlice(F32x3, staging_buffer.data);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x3, vc, gpu_buffer, staging_buffer);
             break :blk gpu_buffer;
         } else null;
         errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
 
-        const texcoord_buffer = if (try reader.readByte() != 0) blk: {
+        const texcoord_buffer = if (try msne_reader.readBool()) blk: {
             const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, vertex_count, .{ .transfer_src_bit = true });
             try staging_buffers.append(staging_buffer.toBytes());
-            try reader.readNoEof(std.mem.sliceAsBytes(staging_buffer.data));
+            try msne_reader.readSlice(F32x2, staging_buffer.data);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
             break :blk gpu_buffer;

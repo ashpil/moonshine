@@ -15,6 +15,8 @@ const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 
+const MsneReader = engine.fileformats.msne.MsneReader;
+
 const MeshData = @import("./Object.zig");
 const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
@@ -509,14 +511,14 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return world;
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, reader: anytype, inspection: bool) !Self {
-    var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, reader, inspection);
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, msne_reader: MsneReader, inspection: bool) !Self {
+    var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader, inspection);
     errdefer material_manager.destroy(vc, allocator);
 
-    var mesh_manager = try MeshManager.fromMsne(vc, vk_allocator, allocator, commands, reader);
+    var mesh_manager = try MeshManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader);
     errdefer mesh_manager.destroy(vc, allocator);
 
-    var accel = try Accel.fromMsne(vc, vk_allocator, allocator, commands, mesh_manager, reader, inspection);
+    var accel = try Accel.fromMsne(vc, vk_allocator, allocator, commands, mesh_manager, msne_reader, inspection);
     errdefer accel.destroy(vc, allocator);
 
     var world = Self {

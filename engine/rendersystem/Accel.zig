@@ -7,8 +7,9 @@ const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
+const MsneReader = engine.fileformats.msne.MsneReader;
+
 const MeshManager = @import("./MeshManager.zig");
-const Vertex = @import("./Object.zig").Vertex;
 const AliasTable = @import("./alias_table.zig").AliasTable;
 
 const vector = @import("../vector.zig");
@@ -456,18 +457,18 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, reader: anytype, inspection: bool) !Self {
-    const instance_count = try reader.readIntLittle(u32);
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, msne_reader: MsneReader, inspection: bool) !Self {
+    const instance_count = try msne_reader.readSize();
     const instances = try allocator.alloc(Instance, instance_count);
     defer allocator.free(instances);
     for (instances) |*instance| {
-        const transform = try reader.readStruct(Mat3x4);
-        const visible = try reader.readByte() == 1;
-        const geometry_count = try reader.readIntLittle(u32);
+        const transform = try msne_reader.readStruct(Mat3x4);
+        const visible = try msne_reader.readBool();
+        const geometry_count = try msne_reader.readSize();
 
         const geometries = try allocator.alloc(Geometry, geometry_count);
         errdefer allocator.free(geometries);
-        try reader.readNoEof(std.mem.sliceAsBytes(geometries));
+        try msne_reader.readSlice(Geometry, geometries);
 
         instance.* = .{
             .transform = transform,

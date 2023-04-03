@@ -1,11 +1,15 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const core = @import("../engine.zig").core;
+const engine = @import("../engine.zig");
+
+const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
+
+const MsneReader = engine.fileformats.msne.MsneReader;
 
 const ImageManager = @import("./ImageManager.zig");
 
@@ -219,35 +223,35 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
     });
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, reader: anytype, inspection: bool) !Self {
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
     const textures = blk: {
-        const total_texture_count = try reader.readIntLittle(u32);
+        const total_texture_count = try msne_reader.readSize();
 
         var sources = try allocator.alloc(ImageManager.TextureSource, total_texture_count);
         defer allocator.free(sources);
 
         if (total_texture_count != 0) {
-            const texture_count_1x1 = try reader.readIntLittle(u32);
+            const texture_count_1x1 = try msne_reader.readSize();
             for (0..texture_count_1x1) |i| {
                 sources[i] = .{
-                    .f32x1 = @bitCast(f32, try reader.readBytesNoEof(4)),
+                    .f32x1 = try msne_reader.readFloat(),
                 };
             }
 
-            const texture_count_2x2 = try reader.readIntLittle(u32);
+            const texture_count_2x2 = try msne_reader.readSize();
             for (0..texture_count_2x2) |i| {
                 sources[texture_count_1x1 + i] = .{
-                    .f32x2 = @bitCast(F32x2, try reader.readBytesNoEof(8)),
+                    .f32x2 = try msne_reader.readStruct(F32x2),
                 };
             }
 
-            const texture_count_3x3 = try reader.readIntLittle(u32);
+            const texture_count_3x3 = try msne_reader.readSize();
             for (0..texture_count_3x3) |i| {
                 sources[texture_count_1x1 + texture_count_2x2 + i] = .{
-                    .f32x3 = @bitCast(F32x3, try reader.readBytesNoEof(12)),
+                    .f32x3 = try msne_reader.readStruct(F32x3),
                 };
             }
-            const texture_count_dds = try reader.readIntLittle(u32);
+            const texture_count_dds = try msne_reader.readSize();
             std.debug.assert(texture_count_dds == 0); // TODO
         }
 
@@ -258,12 +262,12 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
     var addrs: Addrs = undefined;
     inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
-            const variant_instance_count = try reader.readIntLittle(u32);
+            const variant_instance_count = try msne_reader.readSize();
             if (variant_instance_count != 0) {
                 const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, variant_instance_count, .{ .transfer_src_bit = true });
                 defer host_buffer.destroy(vc);
 
-                try reader.readNoEof(std.mem.sliceAsBytes(host_buffer.data));
+                try msne_reader.readSlice(field.type, host_buffer.data);
 
                 var buffer_flags = vk.BufferUsageFlags{ .shader_device_address_bit = true, .transfer_dst_bit = true };
                 if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
@@ -285,11 +289,11 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         }
     }
 
-    const material_count = try reader.readIntLittle(u32);
+    const material_count = try msne_reader.readSize();
     const materials_gpu = blk: {
         var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
         defer materials_host.destroy(vc);
-        try reader.readNoEof(std.mem.sliceAsBytes(materials_host.data));
+        try msne_reader.readSlice(Material, materials_host.data);
         for (materials_host.data) |*material| {
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
                 if (@intToEnum(MaterialType, enum_field.value) == material.type) {
@@ -310,7 +314,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         break :blk materials_gpu;
     };
 
-    return Self{
+    return Self {
         .textures = textures,
         .material_count = material_count,
         .materials = materials_gpu,
