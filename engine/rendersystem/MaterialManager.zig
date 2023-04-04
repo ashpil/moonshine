@@ -225,49 +225,25 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
 
 pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
     const textures = blk: {
-        const total_texture_count = try msne_reader.readSize();
-
-        var sources = try allocator.alloc(ImageManager.TextureSource, total_texture_count);
+        const texture_count = try msne_reader.readSize();
+        var sources = try allocator.alloc(ImageManager.TextureSource, texture_count);
         defer allocator.free(sources);
 
-        if (total_texture_count != 0) {
-            const texture_count_1x1 = try msne_reader.readSize();
-            for (0..texture_count_1x1) |i| {
-                sources[i] = .{
-                    .f32x1 = try msne_reader.readFloat(),
-                };
-            }
-
-            const texture_count_2x2 = try msne_reader.readSize();
-            for (0..texture_count_2x2) |i| {
-                sources[texture_count_1x1 + i] = .{
-                    .f32x2 = try msne_reader.readStruct(F32x2),
-                };
-            }
-
-            const texture_count_3x3 = try msne_reader.readSize();
-            for (0..texture_count_3x3) |i| {
-                sources[texture_count_1x1 + texture_count_2x2 + i] = .{
-                    .f32x3 = try msne_reader.readStruct(F32x3),
-                };
-            }
-            const texture_count_other = try msne_reader.readSize();
-            for (0..texture_count_other) |i| {
-                const format = try msne_reader.reader.readEnum(vk.Format, .Little);
-                const extent = try msne_reader.readStruct(vk.Extent2D);
-                const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
-                const bytes = try allocator.alloc(u8, size_in_bytes);
-                try msne_reader.readSlice(u8, bytes);
-                sources[texture_count_1x1 + texture_count_2x2 + texture_count_3x3 + i] = .{
-                    .raw = .{
-                        .format = format,
-                        .extent = extent,
-                        .layout = .shader_read_only_optimal,
-                        .usage = .{ .sampled_bit = true },
-                        .bytes = bytes,
-                    },
-                };
-            }
+        for (0..texture_count) |i| {
+            const format = try msne_reader.reader.readEnum(vk.Format, .Little);
+            const extent = try msne_reader.readStruct(vk.Extent2D);
+            const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
+            const bytes = try allocator.alloc(u8, size_in_bytes);
+            try msne_reader.readSlice(u8, bytes);
+            sources[i] = .{
+                .raw = .{
+                    .format = format,
+                    .extent = extent,
+                    .layout = .shader_read_only_optimal,
+                    .usage = .{ .sampled_bit = true },
+                    .bytes = bytes,
+                },
+            };
         }
         defer for (sources) |source| if (source == .raw) allocator.free(source.raw.bytes);
 

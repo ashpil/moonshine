@@ -5,24 +5,12 @@ Moonshine scenes are stored in the MSNE fileformat. This is a little-endian bina
 Each MSNE file consists of:
 * a u32 magic number, equal to 0x4D534E45 (`MSNE`).
 * a material list
-    * a list of textures
-        * a u32 total texture count
-        * if total texture count is not zero:
-            * a u32 1x1 texture count
-            * for each 1x1 texture
-                * 1 f32 value
-            * a u32 2x2 texture count
-            * for each 2x2 texture
-                * 2 f32 values
-            * a u32 3x3 texture count
-            * for each 3x3 texture
-                * 3 f32 values
-            * a u32 other texture count
-            * for each other texture
-                * an i32 VkFormat
-                * a u32 width
-                * a u32 height
-                * the texture data, size derived from width, height, and format
+    * a u32 texture count
+    * for each texture
+        * an i32 VkFormat
+        * a u32 width
+        * a u32 height
+        * the texture data, size derived from width, height, and format
     * for each material variant, in variant name alphabetical order
         * if the variant is not zero size
             * a u32 variant instance count

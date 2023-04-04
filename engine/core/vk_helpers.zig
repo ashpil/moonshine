@@ -28,8 +28,10 @@ pub fn toPointerType(in: anytype) [*]const @typeInfo(@TypeOf(in)).Pointer.child 
 
 pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
     return switch (format) {
-        .r32_sfloat => @sizeOf(f32) * extent.width * extent.height,
+        .r32_sfloat => 1 * @sizeOf(f32) * extent.width * extent.height,
+        .r32g32_sfloat => 2 * @sizeOf(f32) * extent.width * extent.height,
         .r32g32b32_sfloat => 3 * @sizeOf(f32) * extent.width * extent.height,
+        .r32g32b32a32_sfloat => 4 * @sizeOf(f32) * extent.width * extent.height,
         else => unreachable, // TODO
     };
 }

@@ -93,23 +93,24 @@ def write(context, filepath: str):
         material_map = dict()
         variants = defaultdict(lambda: [])
         materials = []
-        textures1 = defaultdict(None)
-        textures2 = defaultdict(None)
-        textures3 = defaultdict(None)
-        
-        def parse_input3(material, input, name):
+        textures = defaultdict(None)
+
+        def parse_texture(material, input, name):
             assert not input.is_linked
-            i3 = tuple(input.default_value[0:3])
-            if i3 not in textures3:
-                textures3[i3] = len(textures3)
-            material[name] = textures3[i3]
-        
-        def parse_input1(material, input, name):
-            assert not input.is_linked
-            value = input.default_value
-            if value not in textures1:
-                textures1[value] = len(textures1)
-            material[name] = textures1[value]
+            try:
+                value = tuple(input.default_value)
+            except:
+                value = (input.default_value,)
+            if len(value) == 1:
+                format = 100
+            elif len(value) == 4:
+                format = 109
+            else:
+                assert False, "Unknown len"
+            key = (format, 1, 1, value)
+            if key not in textures:
+                textures[key] = len(textures)
+            material[name] = textures[key]
         
         def parse_value(material, input, name):
             assert not input.is_linked
@@ -118,9 +119,10 @@ def write(context, filepath: str):
         def parse_normal(material, input):
             assert not input.is_linked
             n = (0.5, 0.5)
-            if n not in textures2:
-                textures2[n] = len(textures2)
-            material["normal"] = textures2[n]
+            key = (103, 1, 1, n)
+            if key not in textures:
+                textures[key] = len(textures)
+            material["normal"] = textures[key]
         
         for blender_material in set([ obj.active_material for obj in scene.objects if obj.type == 'MESH' ]):
             material = {}
@@ -128,9 +130,9 @@ def write(context, filepath: str):
             penultimate_type = type(penultimate)
             if penultimate_type == bpy.types.ShaderNodeBsdfPrincipled:
                 material["type"] = 3
-                parse_input3(material, penultimate.inputs["Base Color"], "color")
-                parse_input1(material, penultimate.inputs["Metallic"], "metalness")
-                parse_input1(material, penultimate.inputs["Roughness"], "roughness")
+                parse_texture(material, penultimate.inputs["Base Color"], "color")
+                parse_texture(material, penultimate.inputs["Metallic"], "metalness")
+                parse_texture(material, penultimate.inputs["Roughness"], "roughness")
                 parse_value(material, penultimate.inputs["IOR"], "ior")
                 parse_normal(material, penultimate.inputs["Normal"])
                 
@@ -138,10 +140,10 @@ def write(context, filepath: str):
                 emission = penultimate.inputs["Emission"]
                 emission_strength = penultimate.inputs["Emission Strength"]
                 assert not emission.is_linked and not emission_strength.is_linked
-                i3 = tuple(e * emission_strength.default_value for e in emission.default_value[0:3])
-                if i3 not in textures3:
-                    textures3[i3] = len(textures3)
-                material["emissive"] = textures3[i3]
+                i3 = tuple(e * emission_strength.default_value for e in emission.default_value[0:4])
+                if (109, 1, 1, i3) not in textures:
+                    textures[(109, 1, 1, i3)] = len(textures)
+                material["emissive"] = textures[(109, 1, 1, i3)]
                 
                 material["idx"] = len(variants["Standard PBR"])
                 variants["Standard PBR"].append(material)
@@ -153,22 +155,22 @@ def write(context, filepath: str):
                 assert not roughness.is_linked
                 assert roughness.default_value == 0, "TODO: non-perfect mirror"
                 
-                i3 = (0, 0, 0)
-                if i3 not in textures3:
-                    textures3[i3] = len(textures3)
-                material["emissive"] = textures3[i3]
+                i3 = (0, 0, 0, 0)
+                if (109, 1, 1, i3) not in textures:
+                    textures[(109, 1, 1, i3)] = len(textures)
+                material["emissive"] = textures[(109, 1, 1, i3)]
                 
                 material["idx"] = len(variants["Perfect Mirror"])
                 variants["Perfect Mirror"].append(material)
             elif penultimate_type == bpy.types.ShaderNodeBsdfDiffuse:
                 material["type"] = 1
                 parse_normal(material, penultimate.inputs["Normal"])
-                parse_input3(material, penultimate.inputs["Color"], "color")
+                parse_texture(material, penultimate.inputs["Color"], "color")
                 
-                i3 = (0, 0, 0)
-                if i3 not in textures3:
-                    textures3[i3] = len(textures3)
-                material["emissive"] = textures3[i3]
+                i3 = (0, 0, 0, 0)
+                if (109, 1, 1, i3) not in textures:
+                    textures[(109, 1, 1, i3)] = len(textures)
+                material["emissive"] = textures[(109, 1, 1, i3)]
                 
                 material["idx"] = len(variants["Lambert"])
                 variants["Lambert"].append(material)
@@ -182,10 +184,10 @@ def write(context, filepath: str):
                 
                 parse_value(material, penultimate.inputs["IOR"], "ior")
                 
-                i3 = (0, 0, 0)
-                if i3 not in textures3:
-                    textures3[i3] = len(textures3)
-                material["emissive"] = textures3[i3]
+                i3 = (0, 0, 0, 0)
+                if (109, 1, 1, i3) not in textures:
+                    textures[(109, 1, 1, i3)] = len(textures)
+                material["emissive"] = textures[(109, 1, 1, i3)]
                 
                 material["idx"] = len(variants["Glass"])
                 variants["Glass"].append(material)
@@ -194,49 +196,41 @@ def write(context, filepath: str):
     
             material_map[blender_material] = len(materials)
             materials.append(material)
-        return materials, material_map, variants, list(textures1), list(textures2), list(textures3)
+        return materials, material_map, variants, list(textures)
 
         
     with open(filepath, 'wb') as file:
         file.write(b"MSNE")
         # MATERIALS
-        materials, materials_map, variants, textures1, textures2, textures3 = find_materials(context.scene)
+        materials, materials_map, variants, textures = find_materials(context.scene)
         print(materials)
         # textures
-        total_texture_count = len(textures1) + len(textures2) + len(textures3)
-        write_u32(file, total_texture_count) # total texture count
-        write_u32(file, len(textures1)) # 1xf32 texture count
-        for texture in textures1:
-            write_f32(file, texture)
-        write_u32(file, len(textures2)) # 2xf32 texture count
-        for texture in textures2:
-            write_f32(file, texture[0])
-            write_f32(file, texture[1])
-        write_u32(file, len(textures3)) # 3xf32 texture count
-        for texture in textures3:
-            write_f32(file, texture[0])
-            write_f32(file, texture[1])
-            write_f32(file, texture[2])
-        write_u32(file, 0) # dds texture count
+        write_u32(file, len(textures)) # texture count
+        for texture in textures:
+            write_u32(file, texture[0]) # format
+            write_u32(file, texture[1]) # width
+            write_u32(file, texture[2]) # height
+            for value in texture[3]:
+                write_f32(file, value)
         # material variants
         write_u32(file, len(variants["Glass"])) # glass count
         for glass in variants["Glass"]:
             write_f32(file, glass["ior"])
         write_u32(file, len(variants["Lambert"])) # lambert count
         for lambert in variants["Lambert"]:
-            write_u32(file, len(textures1) + len(textures2) + lambert["color"])
+            write_u32(file, lambert["color"])
         # perfect mirror count, zero size
         write_u32(file, len(variants["Standard PBR"])) # standard pbr count
         for material in variants["Standard PBR"]:
-            write_u32(file, len(textures1) + len(textures2) + material["color"])
+            write_u32(file, material["color"])
             write_u32(file, material["metalness"])
             write_u32(file, material["roughness"])
             write_f32(file, material["ior"])
         # materials
         write_u32(file, len(materials)) # material count
         for material in materials:
-            write_u32(file, len(textures1) + material["normal"]) # normal texture index
-            write_u32(file, len(textures1) + len(textures2) + material["emissive"]) # emissive texture index
+            write_u32(file, material["normal"]) # normal texture index
+            write_u32(file, material["emissive"]) # emissive texture index
             write_u64(file, material["type"]) # material variant type
             write_u64(file, material["idx"]) # material variant index
 
