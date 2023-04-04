@@ -17,9 +17,12 @@ Each MSNE file consists of:
             * a u32 3x3 texture count
             * for each 3x3 texture
                 * 3 f32 values
-            * a u32 DDS texture count
-            * for each DDS texture
-                * an embedded DDS file
+            * a u32 other texture count
+            * for each other texture
+                * an i32 VkFormat
+                * a u32 width
+                * a u32 height
+                * the texture data, size derived from width, height, and format
     * for each material variant, in variant name alphabetical order
         * if the variant is not zero size
             * a u32 variant instance count

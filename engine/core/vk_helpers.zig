@@ -26,6 +26,14 @@ pub fn toPointerType(in: anytype) [*]const @typeInfo(@TypeOf(in)).Pointer.child 
     return @ptrCast([*]const @typeInfo(@TypeOf(in)).Pointer.child, in);
 }
 
+pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
+    return switch (format) {
+        .r32_sfloat => @sizeOf(f32) * extent.width * extent.height,
+        .r32g32b32_sfloat => 3 * @sizeOf(f32) * extent.width * extent.height,
+        else => unreachable, // TODO
+    };
+}
+
 fn GetVkSliceInternal(comptime func: anytype) type {
     const params = @typeInfo(@TypeOf(func)).Fn.params;
     const OptionalType = params[params.len - 1].type.?;

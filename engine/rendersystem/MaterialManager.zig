@@ -147,7 +147,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 try commands.startRecording(vc);
                 commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
                 try commands.submitAndIdleUntilDone(vc);
-                
+
                 @field(variant_buffers, field.name) = device_buffer;
                 @field(addrs, field.name) = device_buffer.getAddress(vc);
             } else {
@@ -176,7 +176,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
         const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
         errdefer materials_gpu.destroy(vc);
-        
+
         try commands.startRecording(vc);
         commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
         try commands.submitAndIdleUntilDone(vc);
@@ -251,9 +251,25 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
                     .f32x3 = try msne_reader.readStruct(F32x3),
                 };
             }
-            const texture_count_dds = try msne_reader.readSize();
-            std.debug.assert(texture_count_dds == 0); // TODO
+            const texture_count_other = try msne_reader.readSize();
+            for (0..texture_count_other) |i| {
+                const format = try msne_reader.reader.readEnum(vk.Format, .Little);
+                const extent = try msne_reader.readStruct(vk.Extent2D);
+                const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
+                const bytes = try allocator.alloc(u8, size_in_bytes);
+                try msne_reader.readSlice(u8, bytes);
+                sources[texture_count_1x1 + texture_count_2x2 + texture_count_3x3 + i] = .{
+                    .raw = .{
+                        .format = format,
+                        .extent = extent,
+                        .layout = .shader_read_only_optimal,
+                        .usage = .{ .sampled_bit = true },
+                        .bytes = bytes,
+                    },
+                };
+            }
         }
+        defer for (sources) |source| if (source == .raw) allocator.free(source.raw.bytes);
 
         break :blk try ImageManager.createTexture(vc, vk_allocator, allocator, sources, commands);
     };
