@@ -160,8 +160,37 @@ def write(context, filepath: str):
                 
                 material["idx"] = len(variants["Perfect Mirror"])
                 variants["Perfect Mirror"].append(material)
+            elif penultimate_type == bpy.types.ShaderNodeBsdfDiffuse:
+                material["type"] = 1
+                parse_normal(material, penultimate.inputs["Normal"])
+                parse_input3(material, penultimate.inputs["Color"], "color")
+                
+                i3 = (0, 0, 0)
+                if i3 not in textures3:
+                    textures3[i3] = len(textures3)
+                material["emissive"] = textures3[i3]
+                
+                material["idx"] = len(variants["Lambert"])
+                variants["Lambert"].append(material)
+            elif penultimate_type == bpy.types.ShaderNodeBsdfGlass:
+                material["type"] = 0
+                parse_normal(material, penultimate.inputs["Normal"])
+                
+                roughness = penultimate.inputs["Roughness"]
+                assert not roughness.is_linked
+                assert roughness.default_value == 0, "TODO: non-perfect glass"
+                
+                parse_value(material, penultimate.inputs["IOR"], "ior")
+                
+                i3 = (0, 0, 0)
+                if i3 not in textures3:
+                    textures3[i3] = len(textures3)
+                material["emissive"] = textures3[i3]
+                
+                material["idx"] = len(variants["Glass"])
+                variants["Glass"].append(material)
             else:
-                assert false, "Unknown material type!"
+                assert False, f"Unknown material type {penultimate.name}!"
     
             material_map[blender_material] = len(materials)
             materials.append(material)
