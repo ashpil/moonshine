@@ -14,7 +14,7 @@ const Camera = @import("./Camera.zig");
 
 const WorldDescriptorLayout = @import("./World.zig").DescriptorLayout;
 const BackgroundDescriptorLayout = @import("./Background.zig").DescriptorLayout;
-const FilmDescriptorLayout = @import("./Film.zig").DescriptorLayout;
+const FilmDescriptorLayout = core.Film.DescriptorLayout;
 const InputDescriptorLayout = @import("./ObjectPicker.zig").DescriptorLayout;
 
 const vector = engine.vector;

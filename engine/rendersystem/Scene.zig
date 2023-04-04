@@ -12,7 +12,6 @@ const Commands = core.Commands;
 const Background = @import("./Background.zig");
 const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
-const Film = @import("./Film.zig");
 
 const MsneReader = engine.fileformats.msne.MsneReader;
 
@@ -20,7 +19,7 @@ const Self = @This();
 
 world_descriptor_layout: World.DescriptorLayout,
 background_descriptor_layout: Background.DescriptorLayout,
-film_descriptor_layout: Film.DescriptorLayout,
+film_descriptor_layout: core.Film.DescriptorLayout,
 
 world: World,
 background: Background,
@@ -47,7 +46,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     errdefer world_descriptor_layout.destroy(vc);
     var background_descriptor_layout = try Background.DescriptorLayout.create(vc, 1, .{});
     errdefer background_descriptor_layout.destroy(vc);
-    var film_descriptor_layout = try Film.DescriptorLayout.create(vc, 1, .{});
+    var film_descriptor_layout = try core.Film.DescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
     var camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
@@ -79,7 +78,7 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     errdefer world_descriptor_layout.destroy(vc);
     var background_descriptor_layout = try Background.DescriptorLayout.create(vc, 1, .{});
     errdefer background_descriptor_layout.destroy(vc);
-    var film_descriptor_layout = try Film.DescriptorLayout.create(vc, 1, .{});
+    var film_descriptor_layout = try core.Film.DescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
     const msne = try MsneReader.fromFilepath(msne_filepath);

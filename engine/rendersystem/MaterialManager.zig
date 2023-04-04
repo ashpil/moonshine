@@ -8,10 +8,9 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
+const ImageManager = core.ImageManager;
 
 const MsneReader = engine.fileformats.msne.MsneReader;
-
-const ImageManager = @import("./ImageManager.zig");
 
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);

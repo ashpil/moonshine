@@ -8,8 +8,8 @@ const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
-const ImageManager = engine.rendersystem.ImageManager;
-const DescriptorLayout = engine.rendersystem.descriptor.DescriptorLayout;
+const ImageManager = engine.core.ImageManager;
+const DescriptorLayout = engine.core.descriptor.DescriptorLayout;
 
 const Swapchain = engine.displaysystem.Swapchain;
 const Display = engine.displaysystem.Display;

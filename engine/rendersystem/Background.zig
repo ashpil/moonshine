@@ -6,12 +6,12 @@ const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
+const ImageManager = engine.core.ImageManager;
 
-const ImageManager = @import("./ImageManager.zig");
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
 // must be kept in sync with shader
-pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
+pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
     .{ // image
         .binding = 0,
         .descriptor_type = .combined_image_sampler,

@@ -1,12 +1,9 @@
 pub const Accel = @import("Accel.zig");
 pub const Background = @import("Background.zig");
 pub const Camera = @import("Camera.zig");
-pub const descriptor = @import("descriptor.zig");
-pub const ImageManager = @import("ImageManager.zig");
 pub const MeshManager = @import("MeshManager.zig");
 pub const MaterialManager = @import("MaterialManager.zig");
 pub const ObjectPicker = @import("ObjectPicker.zig");
-pub const Film = @import("Film.zig");
 pub const pipeline = @import("pipeline.zig");
 pub const World = @import("World.zig");
 pub const Scene = @import("Scene.zig");

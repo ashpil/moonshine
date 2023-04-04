@@ -14,11 +14,11 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
+const ImageManager = core.ImageManager;
 
 const MsneReader = engine.fileformats.msne.MsneReader;
 
 const MeshData = @import("./Object.zig");
-const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
 
 const MeshManager = @import("./MeshManager.zig");
@@ -38,7 +38,7 @@ pub const Geometry = Accel.Geometry;
 
 // must be kept in sync with shader
 const max_textures = 20 * 5; // TODO: think about this more, really really should
-pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
+pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
     .{ // TLAS
         .binding = 0,
         .descriptor_type = .acceleration_structure_khr,

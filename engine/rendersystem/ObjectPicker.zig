@@ -11,7 +11,7 @@ const toPointerType = core.vk_helpers.toPointerType;
 
 const rendersystem = engine.rendersystem;
 const Pipeline = rendersystem.pipeline.ObjectPickPipeline;
-const descriptor = rendersystem.descriptor;
+const descriptor = core.descriptor;
 const WorldDescriptorLayout = rendersystem.World.DescriptorLayout;
 const Camera = rendersystem.Camera;
 
