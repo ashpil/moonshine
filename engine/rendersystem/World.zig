@@ -20,7 +20,6 @@ const MsneReader = engine.fileformats.msne.MsneReader;
 const MeshData = @import("./Object.zig");
 const ImageManager = @import("./ImageManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
-const WorldDescriptorLayout = @import("./descriptor.zig").WorldDescriptorLayout;
 
 const MeshManager = @import("./MeshManager.zig");
 const Accel = @import("./Accel.zig");
@@ -36,6 +35,74 @@ pub const Material = MaterialManager.Material;
 pub const AnyMaterial = MaterialManager.AnyMaterial;
 pub const Instance = Accel.Instance;
 pub const Geometry = Accel.Geometry;
+
+// must be kept in sync with shader
+const max_textures = 20 * 5; // TODO: think about this more, really really should
+pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
+    .{ // TLAS
+        .binding = 0,
+        .descriptor_type = .acceleration_structure_khr,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // instances
+        .binding = 1,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // worldToInstance
+        .binding = 2,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // emitterAliasTable
+        .binding = 3,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // meshes
+        .binding = 4,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // geometries
+        .binding = 5,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // textureSampler
+        .binding = 6,
+        .descriptor_type = .sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // materialTextures
+        .binding = 7,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = max_textures,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // materialValues
+        .binding = 8,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+}, .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{ .partially_bound_bit = true }, .{}, }, "World");
 
 material_manager: MaterialManager,
 
@@ -221,7 +288,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     }
 }
 
-fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const WorldDescriptorLayout) !vk.DescriptorSet {
+fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout) !vk.DescriptorSet {
     const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
     defer allocator.free(image_infos);
 
@@ -367,7 +434,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, gltf: Gltf, inspection: bool) !Self {
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, gltf: Gltf, inspection: bool) !Self {
     const sampler = try ImageManager.createSampler(vc);
 
     // materials
@@ -511,7 +578,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     return world;
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const WorldDescriptorLayout, msne_reader: MsneReader, inspection: bool) !Self {
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, msne_reader: MsneReader, inspection: bool) !Self {
     var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader, inspection);
     errdefer material_manager.destroy(vc, allocator);
 

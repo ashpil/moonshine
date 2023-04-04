@@ -11,8 +11,8 @@ const Commands = core.Commands;
 const MsneReader = engine.fileformats.msne.MsneReader;
 
 const Film = @import("./Film.zig");
+const DescriptorLayout = Film.DescriptorLayout;
 const ImageManager = @import("./ImageManager.zig");
-const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
 
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);

@@ -9,22 +9,18 @@ const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
-const descriptor = @import("./descriptor.zig");
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
-
 const Background = @import("./Background.zig");
 const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
+const Film = @import("./Film.zig");
 
 const MsneReader = engine.fileformats.msne.MsneReader;
 
 const Self = @This();
 
-world_descriptor_layout: WorldDescriptorLayout,
-background_descriptor_layout: BackgroundDescriptorLayout,
-film_descriptor_layout: FilmDescriptorLayout,
+world_descriptor_layout: World.DescriptorLayout,
+background_descriptor_layout: Background.DescriptorLayout,
+film_descriptor_layout: Film.DescriptorLayout,
 
 world: World,
 background: Background,
@@ -47,11 +43,11 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     defer allocator.free(buffer);
     try gltf.parse(buffer);
 
-    var world_descriptor_layout = try WorldDescriptorLayout.create(vc, 1, .{});
+    var world_descriptor_layout = try World.DescriptorLayout.create(vc, 1, .{});
     errdefer world_descriptor_layout.destroy(vc);
-    var background_descriptor_layout = try BackgroundDescriptorLayout.create(vc, 1, .{});
+    var background_descriptor_layout = try Background.DescriptorLayout.create(vc, 1, .{});
     errdefer background_descriptor_layout.destroy(vc);
-    var film_descriptor_layout = try FilmDescriptorLayout.create(vc, 1, .{});
+    var film_descriptor_layout = try Film.DescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
     var camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
@@ -79,11 +75,11 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
 }
 
 pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, inspection: bool) !Self {
-    var world_descriptor_layout = try WorldDescriptorLayout.create(vc, 1, .{});
+    var world_descriptor_layout = try World.DescriptorLayout.create(vc, 1, .{});
     errdefer world_descriptor_layout.destroy(vc);
-    var background_descriptor_layout = try BackgroundDescriptorLayout.create(vc, 1, .{});
+    var background_descriptor_layout = try Background.DescriptorLayout.create(vc, 1, .{});
     errdefer background_descriptor_layout.destroy(vc);
-    var film_descriptor_layout = try FilmDescriptorLayout.create(vc, 1, .{});
+    var film_descriptor_layout = try Film.DescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
     const msne = try MsneReader.fromFilepath(msne_filepath);

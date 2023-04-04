@@ -12,11 +12,10 @@ const DestructionQueue = core.DestructionQueue;
 
 const Camera = @import("./Camera.zig");
 
-const descriptor = @import("./descriptor.zig");
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
-const BackgroundDescriptorLayout = descriptor.BackgroundDescriptorLayout;
-const FilmDescriptorLayout = descriptor.FilmDescriptorLayout;
-const InputDescriptorLayout = descriptor.InputDescriptorLayout;
+const WorldDescriptorLayout = @import("./World.zig").DescriptorLayout;
+const BackgroundDescriptorLayout = @import("./Background.zig").DescriptorLayout;
+const FilmDescriptorLayout = @import("./Film.zig").DescriptorLayout;
+const InputDescriptorLayout = @import("./ObjectPicker.zig").DescriptorLayout;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);

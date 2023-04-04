@@ -8,7 +8,24 @@ const VkAllocator =  engine.core.Allocator;
 const Commands =  engine.core.Commands;
 
 const ImageManager = @import("./ImageManager.zig");
-const DescriptorLayout = @import("./descriptor.zig").FilmDescriptorLayout;
+
+// must be kept in sync with shader
+pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
+    .{
+        .binding = 0,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{
+        .binding = 1,
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+}, null, "Film");
 
 // 2 images -- first is display image, second is accumulation image
 // accumulation is sum of all samples

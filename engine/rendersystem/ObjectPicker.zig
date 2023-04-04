@@ -12,9 +12,19 @@ const toPointerType = core.vk_helpers.toPointerType;
 const rendersystem = engine.rendersystem;
 const Pipeline = rendersystem.pipeline.ObjectPickPipeline;
 const descriptor = rendersystem.descriptor;
-const InputDescriptorLayout = descriptor.InputDescriptorLayout;
-const WorldDescriptorLayout = descriptor.WorldDescriptorLayout;
+const WorldDescriptorLayout = rendersystem.World.DescriptorLayout;
 const Camera = rendersystem.Camera;
+
+// must be kept in sync with shader
+pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
+    .{
+        .binding = 0,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+}, null, "Input");
 
 const F32x2 = @import("../vector.zig").Vec2(f32);
 
@@ -50,7 +60,7 @@ pub const ClickedObject = struct {
 buffer: VkAllocator.HostBuffer(ClickDataShader),
 pipeline: Pipeline,
 
-descriptor_layout: InputDescriptorLayout,
+descriptor_layout: DescriptorLayout,
 descriptor_set: vk.DescriptorSet,
 
 command_pool: vk.CommandPool,
@@ -60,7 +70,7 @@ ready_fence: vk.Fence,
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
 
-    const descriptor_layout = try InputDescriptorLayout.create(vc, 1, .{});
+    const descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
 
     const descriptor_set = try descriptor_layout.allocate_set(vc, [1]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {

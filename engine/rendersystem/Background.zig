@@ -8,8 +8,32 @@ const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
 const ImageManager = @import("./ImageManager.zig");
-const BackgroundDescriptorLayout = @import("./descriptor.zig").BackgroundDescriptorLayout;
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
+
+// must be kept in sync with shader
+pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
+    .{ // image
+        .binding = 0,
+        .descriptor_type = .combined_image_sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // marginal
+        .binding = 1,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+    .{ // conditional
+        .binding = 2,
+        .descriptor_type = .storage_buffer,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+        .p_immutable_samplers = null,
+    },
+}, null, "Background");
 
 const exr = engine.fileformats.exr;
 
@@ -21,7 +45,7 @@ descriptor_set: vk.DescriptorSet,
 const Self = @This();
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const BackgroundDescriptorLayout, sampler: vk.Sampler, color_texture_path: []const u8) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, sampler: vk.Sampler, color_texture_path: []const u8) !Self {
     const color = blk: {
         const pathZ = try allocator.dupeZ(u8, color_texture_path);
         defer allocator.free(pathZ);
