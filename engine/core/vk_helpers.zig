@@ -1,6 +1,7 @@
 const vk = @import("vulkan");
 const std = @import("std");
 const VulkanContext = @import("./VulkanContext.zig");
+const build_options = @import("build_options");
 
 fn typeToObjectType(comptime in: type) vk.ObjectType {
     return switch(in) {
@@ -13,7 +14,7 @@ fn typeToObjectType(comptime in: type) vk.ObjectType {
 }
 
 pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const u8) !void {
-   if (comptime @import("build_options").vk_validation) {
+   if (comptime build_options.vk_validation) {
        try vc.device.setDebugUtilsObjectNameEXT(&.{
            .object_type = comptime typeToObjectType(@TypeOf(object)),
            .object_handle = @enumToInt(object),
@@ -34,6 +35,48 @@ pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
         .r32g32b32a32_sfloat => 4 * @sizeOf(f32) * extent.width * extent.height,
         else => unreachable, // TODO
     };
+}
+
+// creates shader modules, respecting build option to statically embed or dynamically load shader code
+pub fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []const []const u8, allocator: std.mem.Allocator) ![shader_names.len]vk.ShaderModule {
+    const shaders = @import("shaders");
+
+    var modules: [shader_names.len]vk.ShaderModule = undefined;
+    inline for (shader_names, &modules) |shader_name, *module| {
+        var to_free: []const u8 = undefined;
+        defer if (build_options.shader_source == .load) allocator.free(to_free);
+        const shader_code = if (build_options.shader_source == .embed) @field(shaders, shader_name) else blk: {
+            var compile_process = std.ChildProcess.init(build_options.shader_compile_cmd ++ &[_][]const u8 { "shaders/" ++ shader_name }, allocator);
+            compile_process.stdout_behavior = .Pipe;
+            try compile_process.spawn();
+            const stdout = blk_inner: {
+                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
+                defer poller.deinit();
+
+                while (try poller.poll()) {}
+
+                var fifo = poller.fifo(.stdout);
+                if (fifo.head > 0) {
+                    std.mem.copy(u8, fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
+                }
+
+                to_free = fifo.buf;
+                const stdout = fifo.buf[0..fifo.count];
+                fifo.* = std.io.PollFifo.init(allocator);
+
+                break :blk_inner stdout;
+            };
+
+            const term = try compile_process.wait();
+            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
+            break :blk stdout;
+        };
+        module.* = try vc.device.createShaderModule(&.{
+            .code_size = shader_code.len,
+            .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), if (build_options.shader_source == .embed) &shader_code else shader_code.ptr)),
+        }, null);
+    }
+    return modules;
 }
 
 fn GetVkSliceInternal(comptime func: anytype) type {

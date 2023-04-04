@@ -26,45 +26,6 @@ const PushConstant = struct {
     stage_flags: vk.ShaderStageFlags,
 };
 
-fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []const []const u8, allocator: std.mem.Allocator) ![shader_names.len]vk.ShaderModule {
-    var modules: [shader_names.len]vk.ShaderModule = undefined;
-    inline for (shader_names, &modules) |shader_name, *module| {
-        var to_free: []const u8 = undefined;
-        defer if (build_options.shader_source == .load) allocator.free(to_free);
-        const shader_code = if (build_options.shader_source == .embed) @field(shaders, shader_name) else blk: {
-            var compile_process = std.ChildProcess.init(build_options.shader_compile_cmd ++ &[_][]const u8{ "shaders/" ++ shader_name }, allocator);
-            compile_process.stdout_behavior = .Pipe;
-            try compile_process.spawn();
-            const stdout = blk_inner: {
-                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
-                defer poller.deinit();
-
-                while (try poller.poll()) {}
-
-                var fifo = poller.fifo(.stdout);
-                if (fifo.head > 0) {
-                    std.mem.copy(u8, fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
-                }
-
-                to_free = fifo.buf;
-                const stdout = fifo.buf[0..fifo.count];
-                fifo.* = std.io.PollFifo.init(allocator);
-
-                break :blk_inner stdout;
-            };
-
-            const term = try compile_process.wait();
-            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
-            break :blk stdout;
-        };
-        module.* = try vc.device.createShaderModule(&.{
-            .code_size = shader_code.len,
-            .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), if (build_options.shader_source == .embed) &shader_code else shader_code.ptr)),
-        }, null);
-    }
-    return modules;
-}
-
 pub fn Pipeline(
         comptime shader_names: []const []const u8,
         comptime module_to_stage: []const comptime_int,
@@ -101,7 +62,7 @@ pub fn Pipeline(
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            const modules = try createShaderModules(vc, shader_names, allocator);
+            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator);
             defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
@@ -157,7 +118,7 @@ pub fn Pipeline(
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
-            const modules = try createShaderModules(vc, shader_names, allocator);
+            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator);
             defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
