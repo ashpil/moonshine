@@ -5,6 +5,9 @@ const vk = @import("vulkan");
 const c = @import("../c.zig");
 const Window = @import("../Window.zig");
 
+const vector = @import("../vector.zig");
+const F32x2 = vector.Vec2(f32);
+
 pub const DrawVert = c.ImDrawVert;
 pub const DrawIdx = c.ImDrawIdx;
 pub const Context = c.ImGuiContext;
@@ -127,6 +130,16 @@ pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T,
         else => unreachable, // TODO
     };
     return c.igInputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
+}
+
+pub fn getMouseDragDelta(mouse_button: MouseButton, lock_threshold: f32) F32x2 {
+    var out: Vec2 = undefined;
+    c.igGetMouseDragDelta(&out, @enumToInt(mouse_button), lock_threshold);
+    return @bitCast(F32x2, out);
+}
+
+pub fn resetMouseDragDelta(mouse_button: MouseButton) void {
+    c.igResetMouseDragDelta(@enumToInt(mouse_button));
 }
 
 pub fn isMouseClicked(mouse_button: MouseButton) bool {
