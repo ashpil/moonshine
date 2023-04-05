@@ -253,7 +253,7 @@ const Self = @This();
 const QueueFamilyAcceptable = fn(vk.Instance, vk.PhysicalDevice, u32) bool;
 fn returnsTrue(_: vk.Instance, _: vk.PhysicalDevice, _: u32) bool { return true; }
 
-pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, instance_extensions: []const [*:0]const u8, device_extensions: []const [*:0]const u8, features: *const anyopaque, comptime queueFamilyAcceptable: ?QueueFamilyAcceptable) !Self {
+pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, instance_extensions: []const [*:0]const u8, device_extensions: []const [*:0]const u8, features: ?*const anyopaque, comptime queueFamilyAcceptable: ?QueueFamilyAcceptable) !Self {
     var base = try Base.new();
     errdefer base.destroy();
 
@@ -342,7 +342,7 @@ const PhysicalDevice = struct {
         return true;
     }
 
-    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8, features: *const anyopaque) !Device {
+    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8, features: ?*const anyopaque) !Device {
         const priority = [_]f32{1.0};
         const queue_create_info = [_]vk.DeviceQueueCreateInfo{
             .{
