@@ -47,8 +47,10 @@ pub fn build(b: *std.build.Builder) void {
     //     b.step("tests", "Run engine tests").dependOn(&run.step);
     // }
 
+    var exes = std.ArrayList(*std.Build.CompileStep).init(b.allocator);
+
     // online exe
-    {
+    exes.append(blk: {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source = .load; // for hot shader reload
@@ -59,44 +61,47 @@ pub fn build(b: *std.build.Builder) void {
             .target = target,
             .optimize = optimize,
         });
-        exe.install();
-
         exe.addModule("vulkan", vk);
         exe.addModule("engine", engine);
         glfw.add(exe);
         tinyexr.add(exe);
         cimgui.add(exe);
 
-        const run = exe.run();
-        run.step.dependOn(b.getInstallStep());
-        if (b.args) |args| {
-            run.addArgs(args);
-        }
-
-        b.step("run-online", "Run online").dependOn(&run.step);
-    }
+        break :blk exe;
+    }) catch unreachable;
 
     // offline exe
-    {
+    exes.append(blk: {
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
             .target = target,
             .optimize = optimize,
         });
-        exe.install();
-
         exe.addModule("vulkan", vk);
         exe.addModule("engine", default_engine);
         tinyexr.add(exe);
 
-        const run = exe.run();
-        run.step.dependOn(b.getInstallStep());
+        break :blk exe;
+    }) catch unreachable;
+    
+    // create run step for all exes
+    for (exes.items) |exe| {
+        const install = b.addInstallArtifact(exe);
+        const run = b.addRunArtifact(exe);
+        run.step.dependOn(&install.step);
         if (b.args) |args| {
             run.addArgs(args);
         }
 
-        b.step("run-offline", "Run offline").dependOn(&run.step);
+        b.step(std.fmt.allocPrint(b.allocator, "run-{s}", .{ exe.name }) catch unreachable, std.fmt.allocPrint(b.allocator, "Run {s}", .{ exe.name }) catch unreachable).dependOn(&run.step);
+    }
+
+    // create check step that type-checks all exes
+    // probably does a bit more atm but what can you do
+    const check_step = b.step("check", "check all");
+    for (exes.items) |exe| {
+        check_step.dependOn(&exe.step);
     }
 }
 
