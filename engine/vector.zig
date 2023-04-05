@@ -30,6 +30,42 @@ pub fn Vec2(comptime T: type) type {
         pub fn new(x: T, y: T) Self {
             return Self { .x = x, .y = y };
         }
+
+        pub fn mul_scalar(self: Self, scalar: T) Self {
+            return Self.new(self.x * scalar, self.y * scalar);
+        }
+
+        pub fn mul(self: Self, other: Self) Self {
+            return Self.new(self.x * other.x, self.y * other.y);
+        }
+
+        pub fn div_scalar(self: Self, scalar: T) Self {
+            return Self.new(self.x / scalar, self.y / scalar);
+        }
+
+        pub fn div(self: Self, other: Self) Self {
+            return Self.new(self.x / other.x, self.y / other.y);
+        }
+
+        pub fn dot(self: Self, other: Self) T {
+            return self.x * other.x + self.y * other.y;
+        }
+
+        pub fn sub(self: Self, other: Self) Self {
+            return Self.new(self.x - other.x, self.y - other.y);
+        }
+
+        pub fn add(self: Self, other: Self) Self {
+            return Self.new(self.x + other.x, self.y + other.y);
+        }
+
+        pub fn unit(self: Self) Self {
+            return self.div_scalar(self.length());
+        }
+
+        pub fn length(self: Self) T {
+            return math.sqrt(self.dot(self));
+        }
     };
 
 }
