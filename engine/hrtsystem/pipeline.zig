@@ -62,7 +62,7 @@ pub fn Pipeline(
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator);
+            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator, .rt);
             defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
@@ -118,7 +118,7 @@ pub fn Pipeline(
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
-            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator);
+            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator, .rt);
             defer for (modules) |module| vc.device.destroyShaderModule(module, null);
 
             var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;

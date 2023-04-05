@@ -105,9 +105,8 @@ pub fn build(b: *std.build.Builder) void {
     }
 }
 
-const shader_compile_cmd = [_][]const u8 {
+const base_shader_compile_cmd = [_][]const u8 {
     "dxc",
-    "-T", "lib_6_7",
     "-HV", "2021",
     "-spirv",
     "-fspv-target-env=vulkan1.3",
@@ -115,6 +114,9 @@ const shader_compile_cmd = [_][]const u8 {
     "-Ges", // strict mode
     "-WX", // treat warnings as errors
 };
+
+const rt_shader_compile_cmd = base_shader_compile_cmd ++ [_][]const u8 { "-T", "lib_6_7" };
+const compute_shader_compile_cmd = base_shader_compile_cmd ++ [_][]const u8 { "-T", "cs_6_7" };
 
 const ShaderSource = enum {
     embed, // embed SPIRV shaders into binary at compile time
@@ -125,7 +127,8 @@ pub const EngineOptions = struct {
     vk_validation: bool = false,
     vk_metrics: bool = false,
     shader_source: ShaderSource = .embed,
-    shader_compile_cmd: []const []const u8 = &(shader_compile_cmd ++ [_][]const u8{ "-Fo", "/dev/stdout" }), // TODO: windows
+    rt_shader_compile_cmd: []const []const u8 = &(rt_shader_compile_cmd ++ [_][]const u8{ "-Fo", "/dev/stdout" }), // TODO: windows
+    compute_shader_compile_cmd: []const []const u8 = &(compute_shader_compile_cmd ++ [_][]const u8{ "-Fo", "/dev/stdout" }), // TODO: windows
 
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
@@ -146,10 +149,10 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
         .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
     });
 
-    // hlsl
-    const shader_comp = vkgen.ShaderCompileStep.create(b, &shader_compile_cmd, "-Fo");
-    shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
-    shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
+    // shaders
+    const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
+    rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
+    rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
         .watched_files = &.{
             "shaders/hrtsystem/bindings.hlsl",
             "shaders/hrtsystem/camera.hlsl",
@@ -164,12 +167,15 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
         }
     });
 
+    const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
+
     // actual engine
     const build_options = b.addOptions();
     build_options.addOption(bool, "vk_validation", options.vk_validation);
     build_options.addOption(bool, "vk_metrics", options.vk_metrics);
     build_options.addOption(ShaderSource, "shader_source", options.shader_source);
-    build_options.addOption([]const []const u8, "shader_compile_cmd", options.shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
+    build_options.addOption([]const []const u8, "rt_shader_compile_cmd", options.rt_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
+    build_options.addOption([]const []const u8, "compute_shader_compile_cmd", options.compute_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
 
     return b.createModule(.{
         .source_file = .{ .path = "engine/engine.zig" },
@@ -191,8 +197,12 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
                 .module = build_options.createModule(),
             },
             .{
-                .name = "shaders",
-                .module = shader_comp.getModule(),
+                .name = "rt_shaders",
+                .module = rt_shader_comp.getModule(),
+            },
+            .{
+                .name = "compute_shaders",
+                .module = compute_shader_comp.getModule(),
             },
         },
     });
