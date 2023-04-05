@@ -66,6 +66,14 @@ pub fn Vec2(comptime T: type) type {
         pub fn length(self: Self) T {
             return math.sqrt(self.dot(self));
         }
+
+        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            try writer.writeAll("{ ");
+            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(", ");
+            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
+            try writer.writeAll(" }");
+        }
     };
 
 }
