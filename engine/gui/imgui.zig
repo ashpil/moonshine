@@ -2,8 +2,8 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const c = @import("./c.zig");
-const Window = @import("./Window.zig");
+const c = @import("../c.zig");
+const Window = @import("../Window.zig");
 
 pub const DrawVert = c.ImDrawVert;
 pub const DrawIdx = c.ImDrawIdx;
@@ -53,17 +53,17 @@ pub fn showDemoWindow() void {
 }
 
 pub fn setNextWindowSize(width: f32, height: f32) void {
-    _ = c.igSetNextWindowSize(c.ImVec2 {
+    _ = c.igSetNextWindowSize(c.ImVec2{
         .x = width,
         .y = height,
     }, c.ImGuiCond_FirstUseEver);
 }
 
 pub fn setNextWindowPos(x: f32, y: f32) void {
-    _ = c.igSetNextWindowPos(c.ImVec2 {
+    _ = c.igSetNextWindowPos(c.ImVec2{
         .x = x,
         .y = y,
-    }, c.ImGuiCond_FirstUseEver, c.ImVec2 {
+    }, c.ImGuiCond_FirstUseEver, c.ImVec2{
         .x = 0.0,
         .y = 0.0,
     });
@@ -185,7 +185,7 @@ pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.E
     var out_pixels: [*c]u8 = undefined;
     c.ImFontAtlas_GetTexDataAsAlpha8(self, &out_pixels, &width, &height, null);
 
-    return .{ out_pixels, vk.Extent2D { .width = @intCast(u32, width), .height = @intCast(u32, height) } };
+    return .{ out_pixels, vk.Extent2D{ .width = @intCast(u32, width), .height = @intCast(u32, height) } };
 }
 
 pub fn implGlfwInit(window: Window) void {

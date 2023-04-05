@@ -24,7 +24,6 @@ pub fn build(b: *std.build.Builder) void {
     const cimgui = makeCImguiLibrary(b, target, glfw);
     const tinyexr = makeTinyExrLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
-    const default_engine = makeEngineModule(b, vk, default_engine_options) catch unreachable;
 
     // TODO: revive once figure out #12201 workaround
     // {
@@ -72,6 +71,10 @@ pub fn build(b: *std.build.Builder) void {
 
     // offline exe
     exes.append(blk: {
+        var engine_options = default_engine_options;
+        engine_options.window = false;
+        engine_options.gui = false;
+        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
@@ -79,7 +82,7 @@ pub fn build(b: *std.build.Builder) void {
             .optimize = optimize,
         });
         exe.addModule("vulkan", vk);
-        exe.addModule("engine", default_engine);
+        exe.addModule("engine", engine);
         tinyexr.add(exe);
 
         break :blk exe;
@@ -130,6 +133,11 @@ pub const EngineOptions = struct {
     rt_shader_compile_cmd: []const []const u8 = &(rt_shader_compile_cmd ++ [_][]const u8{ "-Fo", "/dev/stdout" }), // TODO: windows
     compute_shader_compile_cmd: []const []const u8 = &(compute_shader_compile_cmd ++ [_][]const u8{ "-Fo", "/dev/stdout" }), // TODO: windows
 
+    // modules
+    hrtsystem: bool = true,
+    window: bool = true,
+    gui: bool = true,
+
     fn fromCli(b: *std.build.Builder) EngineOptions {
         var options = EngineOptions {};
 
@@ -176,6 +184,9 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
     build_options.addOption(ShaderSource, "shader_source", options.shader_source);
     build_options.addOption([]const []const u8, "rt_shader_compile_cmd", options.rt_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
     build_options.addOption([]const []const u8, "compute_shader_compile_cmd", options.compute_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
+    build_options.addOption(bool, "window", options.window);
+    build_options.addOption(bool, "gui", options.gui);
+    build_options.addOption(bool, "hrtsystem", options.hrtsystem);
 
     return b.createModule(.{
         .source_file = .{ .path = "engine/engine.zig" },

@@ -2,7 +2,7 @@
 const vk = @import("vulkan");
 const std = @import("std");
 
-const engine = @import("engine");
+const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
@@ -18,9 +18,9 @@ const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
 
 const imgui = @import("./imgui.zig");
-const Window = @import("./Window.zig");
+const Window = @import("../Window.zig");
 
-pub const required_device_functions = vk.DeviceCommandFlags {
+pub const required_device_functions = vk.DeviceCommandFlags{
     .createGraphicsPipelines = true,
     .cmdBindVertexBuffers = true,
     .cmdBindIndexBuffer = true,
@@ -55,7 +55,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
     imgui.createContext();
     imgui.implGlfwInit(window);
     imgui.getIO().IniFilename = null;
-    
+
     // load required vulkan state
     const descriptor_set_layout = try GuiDescriptorLayout.create(vc, 1, .{});
 
@@ -63,7 +63,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         .set_layout_count = 1,
         .p_set_layouts = vk_helpers.toPointerType(&descriptor_set_layout.handle),
         .push_constant_range_count = 1,
-        .p_push_constant_ranges = vk_helpers.toPointerType(&vk.PushConstantRange {
+        .p_push_constant_ranges = vk_helpers.toPointerType(&vk.PushConstantRange{
             .stage_flags = .{ .vertex_bit = true },
             .offset = 0,
             .size = @sizeOf(f32) * 4,
@@ -82,7 +82,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         }, null);
         defer vc.device.destroyShaderModule(frag_module, null);
 
-        const shader_stage_create_info = [_]vk.PipelineShaderStageCreateInfo {
+        const shader_stage_create_info = [_]vk.PipelineShaderStageCreateInfo{
             .{
                 .module = vert_module,
                 .stage = .{ .vertex_bit = true },
@@ -94,7 +94,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .p_name = "main",
             },
         };
-        const vertex_attribute_descriptions = [_]vk.VertexInputAttributeDescription {
+        const vertex_attribute_descriptions = [_]vk.VertexInputAttributeDescription{
             .{
                 .location = 0,
                 .binding = 0,
@@ -114,14 +114,14 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .offset = @offsetOf(imgui.DrawVert, "col"),
             },
         };
-        const dynamic_states = [_]vk.DynamicState { .viewport, .scissor };
+        const dynamic_states = [_]vk.DynamicState{ .viewport, .scissor };
         var pipeline: vk.Pipeline = undefined;
-        _ = try vc.device.createGraphicsPipelines(.null_handle, 1, vk_helpers.toPointerType(&vk.GraphicsPipelineCreateInfo {
+        _ = try vc.device.createGraphicsPipelines(.null_handle, 1, vk_helpers.toPointerType(&vk.GraphicsPipelineCreateInfo{
             .stage_count = shader_stage_create_info.len,
             .p_stages = &shader_stage_create_info,
-            .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo {
+            .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo{
                 .vertex_binding_description_count = 1,
-                .p_vertex_binding_descriptions = vk_helpers.toPointerType(&vk.VertexInputBindingDescription {
+                .p_vertex_binding_descriptions = vk_helpers.toPointerType(&vk.VertexInputBindingDescription{
                     .binding = 0,
                     .stride = @sizeOf(imgui.DrawVert),
                     .input_rate = .vertex,
@@ -129,15 +129,15 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .vertex_attribute_description_count = vertex_attribute_descriptions.len,
                 .p_vertex_attribute_descriptions = &vertex_attribute_descriptions,
             },
-            .p_input_assembly_state = &vk.PipelineInputAssemblyStateCreateInfo {
+            .p_input_assembly_state = &vk.PipelineInputAssemblyStateCreateInfo{
                 .topology = .triangle_list,
                 .primitive_restart_enable = vk.FALSE,
             },
-            .p_viewport_state = &vk.PipelineViewportStateCreateInfo {
+            .p_viewport_state = &vk.PipelineViewportStateCreateInfo{
                 .viewport_count = 1,
                 .scissor_count = 1,
             },
-            .p_rasterization_state = &vk.PipelineRasterizationStateCreateInfo {
+            .p_rasterization_state = &vk.PipelineRasterizationStateCreateInfo{
                 .depth_clamp_enable = vk.FALSE,
                 .rasterizer_discard_enable = vk.FALSE,
                 .polygon_mode = .fill,
@@ -148,11 +148,11 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .depth_bias_slope_factor = 0.0,
                 .line_width = 1.0,
             },
-            .p_color_blend_state = &vk.PipelineColorBlendStateCreateInfo {
+            .p_color_blend_state = &vk.PipelineColorBlendStateCreateInfo{
                 .logic_op_enable = vk.FALSE,
                 .logic_op = .clear,
                 .attachment_count = 1,
-                .p_attachments = vk_helpers.toPointerType(&vk.PipelineColorBlendAttachmentState {
+                .p_attachments = vk_helpers.toPointerType(&vk.PipelineColorBlendAttachmentState{
                     .blend_enable = vk.TRUE,
                     .src_color_blend_factor = .src_alpha,
                     .dst_color_blend_factor = .one_minus_src_alpha,
@@ -164,7 +164,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 }),
                 .blend_constants = .{ 0.0, 0.0, 0.0, 0.0 },
             },
-            .p_dynamic_state = &vk.PipelineDynamicStateCreateInfo {
+            .p_dynamic_state = &vk.PipelineDynamicStateCreateInfo{
                 .dynamic_state_count = dynamic_states.len,
                 .p_dynamic_states = &dynamic_states,
             },
@@ -172,7 +172,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .render_pass = .null_handle,
             .subpass = 0,
             .base_pipeline_index = 0,
-            .p_next = &vk.PipelineRenderingCreateInfo {
+            .p_next = &vk.PipelineRenderingCreateInfo{
                 .view_mask = 0,
                 .color_attachment_count = 1,
                 .p_color_attachment_formats = vk_helpers.toPointerType(&swapchain.image_format),
@@ -203,28 +203,26 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        break: blk try ImageManager.createTexture(vc, vk_allocator, allocator, &.{
-            .{
-                .raw = ImageManager.RawSource {
-                    .bytes = tex_data[0][0..tex_data[1].width * tex_data[1].height * @sizeOf(u8)],
-                    .extent = tex_data[1],
-                    .format = .r8_unorm,
-                    .layout = .read_only_optimal,
-                    .usage = .{ .sampled_bit = true },
-                },
-            }
-        }, commands);
+        break :blk try ImageManager.createTexture(vc, vk_allocator, allocator, &.{.{
+            .raw = ImageManager.RawSource{
+                .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],
+                .extent = tex_data[1],
+                .format = .r8_unorm,
+                .layout = .read_only_optimal,
+                .usage = .{ .sampled_bit = true },
+            },
+        }}, commands);
         //     io.Fonts->SetTexID((ImTextureID)bd->FontDescriptorSet); TODO required?
     };
 
-    const font_image_set = try descriptor_set_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
+    const font_image_set = try descriptor_set_layout.allocate_set(vc, [_]vk.WriteDescriptorSet{
         .{
             .dst_set = undefined,
             .dst_binding = 0,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .combined_image_sampler,
-            .p_image_info = vk_helpers.toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = vk_helpers.toPointerType(&vk.DescriptorImageInfo{
                 .sampler = font_sampler,
                 .image_view = font_image.data.items(.view)[0],
                 .image_layout = .read_only_optimal,
@@ -246,16 +244,16 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         buffer.* = try vk_allocator.createHostBuffer(vc, imgui.DrawIdx, std.math.maxInt(imgui.DrawIdx), .{ .index_buffer_bit = true });
     }
 
-    var views = std.BoundedArray(vk.ImageView, Swapchain.max_image_count) {
+    var views = std.BoundedArray(vk.ImageView, Swapchain.max_image_count){
         .buffer = undefined,
         .len = swapchain.images.len,
     };
     for (views.slice(), 0..) |*view, i| {
-        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
+        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo{
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
             .format = .b8g8r8a8_srgb,
-            .components = vk.ComponentMapping {
+            .components = vk.ComponentMapping{
                 .r = .identity,
                 .g = .identity,
                 .b = .identity,
@@ -271,7 +269,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         }, null);
     }
 
-    return Self {
+    return Self{
         .extent = extent,
 
         .descriptor_set_layout = descriptor_set_layout,
@@ -293,11 +291,11 @@ pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void
     for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
 
     for (self.views.slice(), 0..) |*view, i| {
-        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
+        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo{
             .image = swapchain.images.slice()[i],
             .view_type = .@"2d",
             .format = .b8g8r8a8_srgb,
-            .components = vk.ComponentMapping {
+            .components = vk.ComponentMapping{
                 .r = .identity,
                 .g = .identity,
                 .b = .identity,
@@ -360,15 +358,18 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         }
     } else return;
 
-    vc.device.cmdBeginRendering(command_buffer, &vk.RenderingInfo {
-        .render_area = vk.Rect2D {
-            .offset = vk.Offset2D { .x = 0.0, .y = 0.0, },
+    vc.device.cmdBeginRendering(command_buffer, &vk.RenderingInfo{
+        .render_area = vk.Rect2D{
+            .offset = vk.Offset2D{
+                .x = 0.0,
+                .y = 0.0,
+            },
             .extent = self.extent,
         },
         .layer_count = 1,
         .view_mask = 0,
         .color_attachment_count = 1,
-        .p_color_attachments = vk_helpers.toPointerType(&vk.RenderingAttachmentInfo {
+        .p_color_attachments = vk_helpers.toPointerType(&vk.RenderingAttachmentInfo{
             .image_view = self.views.slice()[swapchain_image_index],
             .image_layout = .color_attachment_optimal,
             .resolve_mode = .{},
@@ -381,7 +382,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
     vc.device.cmdBindPipeline(command_buffer, .graphics, self.pipeline);
     vc.device.cmdBindVertexBuffers(command_buffer, 0, 1, vk_helpers.toPointerType(&vertex_buffer.handle), vk_helpers.toPointerType(&@as(vk.DeviceSize, 0)));
     vc.device.cmdBindIndexBuffer(command_buffer, index_buffer.handle, 0, .uint16);
-    vc.device.cmdSetViewport(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Viewport {
+    vc.device.cmdSetViewport(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Viewport{
         .x = 0,
         .y = 0,
         .width = @intToFloat(f32, self.extent.width),
@@ -407,12 +408,12 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
     for (draw_data.CmdLists[0..@intCast(usize, draw_data.CmdListsCount)]) |cmd_list| {
         for (cmd_list.*.CmdBuffer.Data[0..@intCast(usize, cmd_list.*.CmdBuffer.Size)]) |cmd| {
             if (cmd.UserCallback) |_| @panic("todo");
-            vc.device.cmdSetScissor(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Rect2D {
-                .offset = vk.Offset2D {
+            vc.device.cmdSetScissor(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Rect2D{
+                .offset = vk.Offset2D{
                     .x = @floatToInt(i32, cmd.ClipRect.x),
                     .y = @floatToInt(i32, cmd.ClipRect.y),
                 },
-                .extent = vk.Extent2D {
+                .extent = vk.Extent2D{
                     .width = @floatToInt(u32, cmd.ClipRect.z) - @floatToInt(u32, cmd.ClipRect.x),
                     .height = @floatToInt(u32, cmd.ClipRect.w) - @floatToInt(u32, cmd.ClipRect.y),
                 },
@@ -442,58 +443,16 @@ pub const GuiDescriptorLayout = DescriptorLayout(&.{
 // layout(location = 1) in vec2 aUV;
 // layout(location = 2) in vec4 aColor;
 // layout(push_constant) uniform uPushConstant { vec2 uScale; vec2 uTranslate; } pc;
-// 
+//
 // out gl_PerVertex { vec4 gl_Position; };
 // layout(location = 0) out struct { vec4 Color; vec2 UV; } Out;
-// 
+//
 // void main() {
 //     Out.Color = aColor;
 //     Out.UV = aUV;
 //     gl_Position = vec4(aPos * pc.uScale + pc.uTranslate, 0, 1);
 // }
-const vert_spv = [_]u32 {
-    0x07230203,0x00010000,0x00080001,0x0000002e,0x00000000,0x00020011,0x00000001,0x0006000b,
-    0x00000001,0x4c534c47,0x6474732e,0x3035342e,0x00000000,0x0003000e,0x00000000,0x00000001,
-    0x000a000f,0x00000000,0x00000004,0x6e69616d,0x00000000,0x0000000b,0x0000000f,0x00000015,
-    0x0000001b,0x0000001c,0x00030003,0x00000002,0x000001c2,0x00040005,0x00000004,0x6e69616d,
-    0x00000000,0x00030005,0x00000009,0x00000000,0x00050006,0x00000009,0x00000000,0x6f6c6f43,
-    0x00000072,0x00040006,0x00000009,0x00000001,0x00005655,0x00030005,0x0000000b,0x0074754f,
-    0x00040005,0x0000000f,0x6c6f4361,0x0000726f,0x00030005,0x00000015,0x00565561,0x00060005,
-    0x00000019,0x505f6c67,0x65567265,0x78657472,0x00000000,0x00060006,0x00000019,0x00000000,
-    0x505f6c67,0x7469736f,0x006e6f69,0x00030005,0x0000001b,0x00000000,0x00040005,0x0000001c,
-    0x736f5061,0x00000000,0x00060005,0x0000001e,0x73755075,0x6e6f4368,0x6e617473,0x00000074,
-    0x00050006,0x0000001e,0x00000000,0x61635375,0x0000656c,0x00060006,0x0000001e,0x00000001,
-    0x61725475,0x616c736e,0x00006574,0x00030005,0x00000020,0x00006370,0x00040047,0x0000000b,
-    0x0000001e,0x00000000,0x00040047,0x0000000f,0x0000001e,0x00000002,0x00040047,0x00000015,
-    0x0000001e,0x00000001,0x00050048,0x00000019,0x00000000,0x0000000b,0x00000000,0x00030047,
-    0x00000019,0x00000002,0x00040047,0x0000001c,0x0000001e,0x00000000,0x00050048,0x0000001e,
-    0x00000000,0x00000023,0x00000000,0x00050048,0x0000001e,0x00000001,0x00000023,0x00000008,
-    0x00030047,0x0000001e,0x00000002,0x00020013,0x00000002,0x00030021,0x00000003,0x00000002,
-    0x00030016,0x00000006,0x00000020,0x00040017,0x00000007,0x00000006,0x00000004,0x00040017,
-    0x00000008,0x00000006,0x00000002,0x0004001e,0x00000009,0x00000007,0x00000008,0x00040020,
-    0x0000000a,0x00000003,0x00000009,0x0004003b,0x0000000a,0x0000000b,0x00000003,0x00040015,
-    0x0000000c,0x00000020,0x00000001,0x0004002b,0x0000000c,0x0000000d,0x00000000,0x00040020,
-    0x0000000e,0x00000001,0x00000007,0x0004003b,0x0000000e,0x0000000f,0x00000001,0x00040020,
-    0x00000011,0x00000003,0x00000007,0x0004002b,0x0000000c,0x00000013,0x00000001,0x00040020,
-    0x00000014,0x00000001,0x00000008,0x0004003b,0x00000014,0x00000015,0x00000001,0x00040020,
-    0x00000017,0x00000003,0x00000008,0x0003001e,0x00000019,0x00000007,0x00040020,0x0000001a,
-    0x00000003,0x00000019,0x0004003b,0x0000001a,0x0000001b,0x00000003,0x0004003b,0x00000014,
-    0x0000001c,0x00000001,0x0004001e,0x0000001e,0x00000008,0x00000008,0x00040020,0x0000001f,
-    0x00000009,0x0000001e,0x0004003b,0x0000001f,0x00000020,0x00000009,0x00040020,0x00000021,
-    0x00000009,0x00000008,0x0004002b,0x00000006,0x00000028,0x00000000,0x0004002b,0x00000006,
-    0x00000029,0x3f800000,0x00050036,0x00000002,0x00000004,0x00000000,0x00000003,0x000200f8,
-    0x00000005,0x0004003d,0x00000007,0x00000010,0x0000000f,0x00050041,0x00000011,0x00000012,
-    0x0000000b,0x0000000d,0x0003003e,0x00000012,0x00000010,0x0004003d,0x00000008,0x00000016,
-    0x00000015,0x00050041,0x00000017,0x00000018,0x0000000b,0x00000013,0x0003003e,0x00000018,
-    0x00000016,0x0004003d,0x00000008,0x0000001d,0x0000001c,0x00050041,0x00000021,0x00000022,
-    0x00000020,0x0000000d,0x0004003d,0x00000008,0x00000023,0x00000022,0x00050085,0x00000008,
-    0x00000024,0x0000001d,0x00000023,0x00050041,0x00000021,0x00000025,0x00000020,0x00000013,
-    0x0004003d,0x00000008,0x00000026,0x00000025,0x00050081,0x00000008,0x00000027,0x00000024,
-    0x00000026,0x00050051,0x00000006,0x0000002a,0x00000027,0x00000000,0x00050051,0x00000006,
-    0x0000002b,0x00000027,0x00000001,0x00070050,0x00000007,0x0000002c,0x0000002a,0x0000002b,
-    0x00000028,0x00000029,0x00050041,0x00000011,0x0000002d,0x0000001b,0x0000000d,0x0003003e,
-    0x0000002d,0x0000002c,0x000100fd,0x00010038
-};
+const vert_spv = [_]u32{ 0x07230203, 0x00010000, 0x00080001, 0x0000002e, 0x00000000, 0x00020011, 0x00000001, 0x0006000b, 0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001, 0x000a000f, 0x00000000, 0x00000004, 0x6e69616d, 0x00000000, 0x0000000b, 0x0000000f, 0x00000015, 0x0000001b, 0x0000001c, 0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d, 0x00000000, 0x00030005, 0x00000009, 0x00000000, 0x00050006, 0x00000009, 0x00000000, 0x6f6c6f43, 0x00000072, 0x00040006, 0x00000009, 0x00000001, 0x00005655, 0x00030005, 0x0000000b, 0x0074754f, 0x00040005, 0x0000000f, 0x6c6f4361, 0x0000726f, 0x00030005, 0x00000015, 0x00565561, 0x00060005, 0x00000019, 0x505f6c67, 0x65567265, 0x78657472, 0x00000000, 0x00060006, 0x00000019, 0x00000000, 0x505f6c67, 0x7469736f, 0x006e6f69, 0x00030005, 0x0000001b, 0x00000000, 0x00040005, 0x0000001c, 0x736f5061, 0x00000000, 0x00060005, 0x0000001e, 0x73755075, 0x6e6f4368, 0x6e617473, 0x00000074, 0x00050006, 0x0000001e, 0x00000000, 0x61635375, 0x0000656c, 0x00060006, 0x0000001e, 0x00000001, 0x61725475, 0x616c736e, 0x00006574, 0x00030005, 0x00000020, 0x00006370, 0x00040047, 0x0000000b, 0x0000001e, 0x00000000, 0x00040047, 0x0000000f, 0x0000001e, 0x00000002, 0x00040047, 0x00000015, 0x0000001e, 0x00000001, 0x00050048, 0x00000019, 0x00000000, 0x0000000b, 0x00000000, 0x00030047, 0x00000019, 0x00000002, 0x00040047, 0x0000001c, 0x0000001e, 0x00000000, 0x00050048, 0x0000001e, 0x00000000, 0x00000023, 0x00000000, 0x00050048, 0x0000001e, 0x00000001, 0x00000023, 0x00000008, 0x00030047, 0x0000001e, 0x00000002, 0x00020013, 0x00000002, 0x00030021, 0x00000003, 0x00000002, 0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007, 0x00000006, 0x00000004, 0x00040017, 0x00000008, 0x00000006, 0x00000002, 0x0004001e, 0x00000009, 0x00000007, 0x00000008, 0x00040020, 0x0000000a, 0x00000003, 0x00000009, 0x0004003b, 0x0000000a, 0x0000000b, 0x00000003, 0x00040015, 0x0000000c, 0x00000020, 0x00000001, 0x0004002b, 0x0000000c, 0x0000000d, 0x00000000, 0x00040020, 0x0000000e, 0x00000001, 0x00000007, 0x0004003b, 0x0000000e, 0x0000000f, 0x00000001, 0x00040020, 0x00000011, 0x00000003, 0x00000007, 0x0004002b, 0x0000000c, 0x00000013, 0x00000001, 0x00040020, 0x00000014, 0x00000001, 0x00000008, 0x0004003b, 0x00000014, 0x00000015, 0x00000001, 0x00040020, 0x00000017, 0x00000003, 0x00000008, 0x0003001e, 0x00000019, 0x00000007, 0x00040020, 0x0000001a, 0x00000003, 0x00000019, 0x0004003b, 0x0000001a, 0x0000001b, 0x00000003, 0x0004003b, 0x00000014, 0x0000001c, 0x00000001, 0x0004001e, 0x0000001e, 0x00000008, 0x00000008, 0x00040020, 0x0000001f, 0x00000009, 0x0000001e, 0x0004003b, 0x0000001f, 0x00000020, 0x00000009, 0x00040020, 0x00000021, 0x00000009, 0x00000008, 0x0004002b, 0x00000006, 0x00000028, 0x00000000, 0x0004002b, 0x00000006, 0x00000029, 0x3f800000, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003, 0x000200f8, 0x00000005, 0x0004003d, 0x00000007, 0x00000010, 0x0000000f, 0x00050041, 0x00000011, 0x00000012, 0x0000000b, 0x0000000d, 0x0003003e, 0x00000012, 0x00000010, 0x0004003d, 0x00000008, 0x00000016, 0x00000015, 0x00050041, 0x00000017, 0x00000018, 0x0000000b, 0x00000013, 0x0003003e, 0x00000018, 0x00000016, 0x0004003d, 0x00000008, 0x0000001d, 0x0000001c, 0x00050041, 0x00000021, 0x00000022, 0x00000020, 0x0000000d, 0x0004003d, 0x00000008, 0x00000023, 0x00000022, 0x00050085, 0x00000008, 0x00000024, 0x0000001d, 0x00000023, 0x00050041, 0x00000021, 0x00000025, 0x00000020, 0x00000013, 0x0004003d, 0x00000008, 0x00000026, 0x00000025, 0x00050081, 0x00000008, 0x00000027, 0x00000024, 0x00000026, 0x00050051, 0x00000006, 0x0000002a, 0x00000027, 0x00000000, 0x00050051, 0x00000006, 0x0000002b, 0x00000027, 0x00000001, 0x00070050, 0x00000007, 0x0000002c, 0x0000002a, 0x0000002b, 0x00000028, 0x00000029, 0x00050041, 0x00000011, 0x0000002d, 0x0000001b, 0x0000000d, 0x0003003e, 0x0000002d, 0x0000002c, 0x000100fd, 0x00010038 };
 
 // glsl_shader.frag, compiled with:
 // # glslangValidator -V -x -o glsl_shader.frag.u32 glsl_shader.frag
@@ -505,31 +464,4 @@ const vert_spv = [_]u32 {
 // void main() {
 //     fColor = In.Color * texture(sTexture, In.UV.st).rrrr;
 // }
-const frag_spv = [_]u32 {
-	0x07230203,0x00010000,0x0008000b,0x0000001f,0x00000000,0x00020011,0x00000001,0x0006000b,
-	0x00000001,0x4c534c47,0x6474732e,0x3035342e,0x00000000,0x0003000e,0x00000000,0x00000001,
-	0x0007000f,0x00000004,0x00000004,0x6e69616d,0x00000000,0x00000009,0x0000000d,0x00030010,
-	0x00000004,0x00000007,0x00030003,0x00000002,0x000001c2,0x00040005,0x00000004,0x6e69616d,
-	0x00000000,0x00040005,0x00000009,0x6c6f4366,0x0000726f,0x00030005,0x0000000b,0x00000000,
-	0x00050006,0x0000000b,0x00000000,0x6f6c6f43,0x00000072,0x00040006,0x0000000b,0x00000001,
-	0x00005655,0x00030005,0x0000000d,0x00006e49,0x00050005,0x00000016,0x78655473,0x65727574,
-	0x00000000,0x00040047,0x00000009,0x0000001e,0x00000000,0x00040047,0x0000000d,0x0000001e,
-	0x00000000,0x00040047,0x00000016,0x00000022,0x00000000,0x00040047,0x00000016,0x00000021,
-	0x00000000,0x00020013,0x00000002,0x00030021,0x00000003,0x00000002,0x00030016,0x00000006,
-	0x00000020,0x00040017,0x00000007,0x00000006,0x00000004,0x00040020,0x00000008,0x00000003,
-	0x00000007,0x0004003b,0x00000008,0x00000009,0x00000003,0x00040017,0x0000000a,0x00000006,
-	0x00000002,0x0004001e,0x0000000b,0x00000007,0x0000000a,0x00040020,0x0000000c,0x00000001,
-	0x0000000b,0x0004003b,0x0000000c,0x0000000d,0x00000001,0x00040015,0x0000000e,0x00000020,
-	0x00000001,0x0004002b,0x0000000e,0x0000000f,0x00000000,0x00040020,0x00000010,0x00000001,
-	0x00000007,0x00090019,0x00000013,0x00000006,0x00000001,0x00000000,0x00000000,0x00000000,
-	0x00000001,0x00000000,0x0003001b,0x00000014,0x00000013,0x00040020,0x00000015,0x00000000,
-	0x00000014,0x0004003b,0x00000015,0x00000016,0x00000000,0x0004002b,0x0000000e,0x00000018,
-	0x00000001,0x00040020,0x00000019,0x00000001,0x0000000a,0x00050036,0x00000002,0x00000004,
-	0x00000000,0x00000003,0x000200f8,0x00000005,0x00050041,0x00000010,0x00000011,0x0000000d,
-	0x0000000f,0x0004003d,0x00000007,0x00000012,0x00000011,0x0004003d,0x00000014,0x00000017,
-	0x00000016,0x00050041,0x00000019,0x0000001a,0x0000000d,0x00000018,0x0004003d,0x0000000a,
-	0x0000001b,0x0000001a,0x00050057,0x00000007,0x0000001c,0x00000017,0x0000001b,0x0009004f,
-	0x00000007,0x0000001d,0x0000001c,0x0000001c,0x00000000,0x00000000,0x00000000,0x00000000,
-	0x00050085,0x00000007,0x0000001e,0x00000012,0x0000001d,0x0003003e,0x00000009,0x0000001e,
-	0x000100fd,0x00010038
-};
+const frag_spv = [_]u32{ 0x07230203, 0x00010000, 0x0008000b, 0x0000001f, 0x00000000, 0x00020011, 0x00000001, 0x0006000b, 0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001, 0x0007000f, 0x00000004, 0x00000004, 0x6e69616d, 0x00000000, 0x00000009, 0x0000000d, 0x00030010, 0x00000004, 0x00000007, 0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d, 0x00000000, 0x00040005, 0x00000009, 0x6c6f4366, 0x0000726f, 0x00030005, 0x0000000b, 0x00000000, 0x00050006, 0x0000000b, 0x00000000, 0x6f6c6f43, 0x00000072, 0x00040006, 0x0000000b, 0x00000001, 0x00005655, 0x00030005, 0x0000000d, 0x00006e49, 0x00050005, 0x00000016, 0x78655473, 0x65727574, 0x00000000, 0x00040047, 0x00000009, 0x0000001e, 0x00000000, 0x00040047, 0x0000000d, 0x0000001e, 0x00000000, 0x00040047, 0x00000016, 0x00000022, 0x00000000, 0x00040047, 0x00000016, 0x00000021, 0x00000000, 0x00020013, 0x00000002, 0x00030021, 0x00000003, 0x00000002, 0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007, 0x00000006, 0x00000004, 0x00040020, 0x00000008, 0x00000003, 0x00000007, 0x0004003b, 0x00000008, 0x00000009, 0x00000003, 0x00040017, 0x0000000a, 0x00000006, 0x00000002, 0x0004001e, 0x0000000b, 0x00000007, 0x0000000a, 0x00040020, 0x0000000c, 0x00000001, 0x0000000b, 0x0004003b, 0x0000000c, 0x0000000d, 0x00000001, 0x00040015, 0x0000000e, 0x00000020, 0x00000001, 0x0004002b, 0x0000000e, 0x0000000f, 0x00000000, 0x00040020, 0x00000010, 0x00000001, 0x00000007, 0x00090019, 0x00000013, 0x00000006, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x0003001b, 0x00000014, 0x00000013, 0x00040020, 0x00000015, 0x00000000, 0x00000014, 0x0004003b, 0x00000015, 0x00000016, 0x00000000, 0x0004002b, 0x0000000e, 0x00000018, 0x00000001, 0x00040020, 0x00000019, 0x00000001, 0x0000000a, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003, 0x000200f8, 0x00000005, 0x00050041, 0x00000010, 0x00000011, 0x0000000d, 0x0000000f, 0x0004003d, 0x00000007, 0x00000012, 0x00000011, 0x0004003d, 0x00000014, 0x00000017, 0x00000016, 0x00050041, 0x00000019, 0x0000001a, 0x0000000d, 0x00000018, 0x0004003d, 0x0000000a, 0x0000001b, 0x0000001a, 0x00050057, 0x00000007, 0x0000001c, 0x00000017, 0x0000001b, 0x0009004f, 0x00000007, 0x0000001d, 0x0000001c, 0x0000001c, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00050085, 0x00000007, 0x0000001e, 0x00000012, 0x0000001d, 0x0003003e, 0x00000009, 0x0000001e, 0x000100fd, 0x00010038 };
