@@ -188,7 +188,7 @@ pub fn Pipeline(
 }
 
 pub const ObjectPickPipeline = Pipeline(
-    &.{ "misc/input.hlsl" },
+    &.{ "hrtsystem/input.hlsl" },
     &.{ 0, 0, 0 },
     struct {
         InputDescriptorLayout,
@@ -217,7 +217,7 @@ pub const ObjectPickPipeline = Pipeline(
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub const StandardPipeline = Pipeline(
-    &.{ "primary/main.hlsl" },
+    &.{ "hrtsystem/main.hlsl" },
     &.{ 0, 0, 0, 0 },
     struct {
         WorldDescriptorLayout,

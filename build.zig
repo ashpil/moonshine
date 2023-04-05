@@ -148,19 +148,19 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
 
     // hlsl
     const shader_comp = vkgen.ShaderCompileStep.create(b, &shader_compile_cmd, "-Fo");
-    shader_comp.add("@\"misc/input.hlsl\"", "shaders/misc/input.hlsl", .{});
-    shader_comp.add("@\"primary/main.hlsl\"", "shaders/primary/main.hlsl", .{
+    shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
+    shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
         .watched_files = &.{
-            "shaders/primary/bindings.hlsl",
-            "shaders/primary/camera.hlsl",
-            "shaders/primary/geometry.hlsl",
-            "shaders/primary/integrator.hlsl",
-            "shaders/primary/intersection.hlsl",
-            "shaders/primary/light.hlsl",
-            "shaders/primary/material.hlsl",
-            "shaders/primary/math.hlsl",
-            "shaders/primary/random.hlsl",
-            "shaders/primary/reflection_frame.hlsl",
+            "shaders/hrtsystem/bindings.hlsl",
+            "shaders/hrtsystem/camera.hlsl",
+            "shaders/hrtsystem/geometry.hlsl",
+            "shaders/hrtsystem/integrator.hlsl",
+            "shaders/hrtsystem/intersection.hlsl",
+            "shaders/hrtsystem/light.hlsl",
+            "shaders/hrtsystem/material.hlsl",
+            "shaders/hrtsystem/math.hlsl",
+            "shaders/hrtsystem/random.hlsl",
+            "shaders/hrtsystem/reflection_frame.hlsl",
         }
     });
 
