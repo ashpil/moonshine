@@ -6,8 +6,8 @@ const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
-const Scene = engine.rendersystem.Scene;
+const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
+const Scene = engine.hrtsystem.Scene;
 
 const vk_helpers = engine.core.vk_helpers;
 const exr = engine.fileformats.exr;
@@ -74,7 +74,7 @@ const IntervalLogger = struct {
     }
 };
 
-pub const vulkan_context_device_functions = engine.rendersystem.required_device_functions;
+pub const vulkan_context_device_functions = engine.hrtsystem.required_device_functions;
 
 pub fn main() !void {
     var logger = try IntervalLogger.start();
@@ -86,7 +86,7 @@ pub fn main() !void {
     const config = try Config.fromCli(allocator);
     defer config.destroy(allocator);
 
-    const context = try VulkanContext.create(allocator, "offline", &.{}, &engine.rendersystem.required_device_extensions, &engine.rendersystem.required_device_features, null);
+    const context = try VulkanContext.create(allocator, "offline", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
     defer context.destroy();
 
     var vk_allocator = try VkAllocator.create(&context, allocator);

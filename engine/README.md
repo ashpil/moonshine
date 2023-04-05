@@ -6,5 +6,5 @@ Systems require certain instance/device functions to be enabled in order to use 
 
 #### Current systems
 * `core` - basic things like context, allocation, commonly used utilities, etc
-* `rendersystem` - general hardware-RT ray traced rendering tasks and scene representation
+* `hrtsystem` - general hardware-RT ray traced rendering tasks and scene representation
 * `displaysystem` - platform-agnostic abstraction for rendering images and managing e.g., swapchain, double-buffering, presentation, etc

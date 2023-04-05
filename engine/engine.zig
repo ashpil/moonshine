@@ -1,5 +1,5 @@
 // systems
-pub const rendersystem = @import("./rendersystem/rendersystem.zig");
+pub const hrtsystem = @import("./hrtsystem/hrtsystem.zig");
 pub const fileformats = @import("./fileformats/fileformats.zig");
 pub const displaysystem = @import("./displaysystem/displaysystem.zig");
 pub const core = @import("./core/core.zig");

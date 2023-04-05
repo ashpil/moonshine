@@ -9,13 +9,13 @@ const VkAllocator = core.Allocator;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
 
-const rendersystem = engine.rendersystem;
-const Camera = rendersystem.Camera;
-const Accel = rendersystem.Accel;
-const MaterialManager = rendersystem.MaterialManager;
-const Scene = rendersystem.Scene;
-const Pipeline = rendersystem.pipeline.StandardPipeline;
-const ObjectPicker = rendersystem.ObjectPicker;
+const hrtsystem = engine.hrtsystem;
+const Camera = hrtsystem.Camera;
+const Accel = hrtsystem.Accel;
+const MaterialManager = hrtsystem.MaterialManager;
+const Scene = hrtsystem.Scene;
+const Pipeline = hrtsystem.pipeline.StandardPipeline;
+const ObjectPicker = hrtsystem.ObjectPicker;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
@@ -77,7 +77,7 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 }
 
 pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
-pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions).merge(rendersystem.required_device_functions);
+pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions).merge(hrtsystem.required_device_functions);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
@@ -90,7 +90,7 @@ pub fn main() !void {
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
 
-    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ rendersystem.required_device_extensions), &rendersystem.required_device_features, queueFamilyAcceptable);
+    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ hrtsystem.required_device_extensions), &hrtsystem.required_device_features, queueFamilyAcceptable);
     defer context.destroy();
     
     var vk_allocator = try VkAllocator.create(&context, allocator);

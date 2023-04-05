@@ -3,15 +3,15 @@ const vk = @import("vulkan");
 
 const engine = @import("engine");
 
-const VulkanContext = engine.rendersystem.VulkanContext;
-const Commands = engine.rendersystem.Commands;
-const VkAllocator = engine.rendersystem.Allocator;
-const Pipeline = engine.rendersystem.pipeline.StandardPipeline;
-const Scene = engine.rendersystem.Scene;
+const VulkanContext = engine.hrtsystem.VulkanContext;
+const Commands = engine.hrtsystem.Commands;
+const VkAllocator = engine.hrtsystem.Allocator;
+const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
+const Scene = engine.hrtsystem.Scene;
 
-const utils = engine.rendersystem.utils;
+const utils = engine.hrtsystem.utils;
 
-pub const vulkan_context_device_functions = engine.rendersystem.required_device_functions;
+pub const vulkan_context_device_functions = engine.hrtsystem.required_device_functions;
 
 const TestingContext = struct {
     vc: VulkanContext,
@@ -21,7 +21,7 @@ const TestingContext = struct {
     output_buffer: VkAllocator.HostBuffer(f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D, in_filepath: []const u8, skybox_filepath: []const u8) !TestingContext {
-        const vc = try VulkanContext.create(allocator, "offline", &.{}, &engine.rendersystem.required_device_extensions, &engine.rendersystem.required_device_features, null);
+        const vc = try VulkanContext.create(allocator, "offline", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
         errdefer vc.destroy();
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);

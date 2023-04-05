@@ -9,11 +9,11 @@ const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 const toPointerType = core.vk_helpers.toPointerType;
 
-const rendersystem = engine.rendersystem;
-const Pipeline = rendersystem.pipeline.ObjectPickPipeline;
+const hrtsystem = engine.hrtsystem;
+const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
 const descriptor = core.descriptor;
-const WorldDescriptorLayout = rendersystem.World.DescriptorLayout;
-const Camera = rendersystem.Camera;
+const WorldDescriptorLayout = hrtsystem.World.DescriptorLayout;
+const Camera = hrtsystem.Camera;
 
 // must be kept in sync with shader
 pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
