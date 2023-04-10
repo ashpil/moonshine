@@ -132,6 +132,19 @@ pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T,
     return c.igInputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
 }
 
+const Col = enum(c_int) {
+    text,
+    _,
+};
+
+pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
+    c.igPushStyleColor_Vec4(@enumToInt(idx), @bitCast(c.ImVec4, color));
+}
+
+pub fn popStyleColor() void {
+    c.igPopStyleColor(1);
+}
+
 pub fn getMouseDragDelta(mouse_button: MouseButton, lock_threshold: f32) F32x2 {
     var out: Vec2 = undefined;
     c.igGetMouseDragDelta(&out, @enumToInt(mouse_button), lock_threshold);

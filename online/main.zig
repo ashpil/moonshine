@@ -143,6 +143,7 @@ pub fn main() !void {
     var max_sample_count: u32 = 0; // unlimited
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
+    var rebuild_error = false;
     var current_samples_per_run = pipeline_opts.samples_per_run;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
 
@@ -193,20 +194,26 @@ pub fn main() !void {
         if (imgui.collapsingHeader("Pipeline")) {
             imgui.pushItemWidth(imgui.getFontSize() * -14.2);
             _ = imgui.dragScalar(u32, "Samples per frame", &pipeline_opts.samples_per_run, 1.0, 1, std.math.maxInt(u32));
+            imgui.popStyleColor();
             _ = imgui.dragScalar(u32, "Max light bounces", &pipeline_opts.max_bounces, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+            const last_rebuild_failed = rebuild_error;
+            if (last_rebuild_failed) imgui.pushStyleColor(.text, vector.Vec4(f32).new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
                 if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{pipeline_opts}, &destruction_queue)) {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
+                    rebuild_error = false;
                     current_samples_per_run = pipeline_opts.samples_per_run;
                     scene.camera.film.clear();
                 } else |err| if (err == error.ShaderCompileFail) {
+                    rebuild_error = true;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
                 } else return err;
             }
+            if (last_rebuild_failed) imgui.popStyleColor();
             imgui.popItemWidth();
         }
         imgui.end();
