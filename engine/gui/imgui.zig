@@ -7,6 +7,7 @@ const Window = @import("../Window.zig");
 
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
+const F32x3 = vector.Vec3(f32);
 
 pub const DrawVert = c.ImDrawVert;
 pub const DrawIdx = c.ImDrawIdx;
@@ -143,6 +144,47 @@ pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
 
 pub fn popStyleColor() void {
     c.igPopStyleColor(1);
+}
+
+const ColorEditFlags = packed struct(c_int) {
+    none: bool = false,
+    no_alpha: bool = true,
+    no_picker: bool = false,
+    no_options: bool = false,
+    no_small_preview: bool = false,
+    no_inputs: bool = false,
+    no_tooltip: bool = false,
+    no_label: bool = false,
+    no_side_preview: bool = false,
+    no_drag_drop: bool = false,
+    no_border: bool = false,
+
+    _unused: u5 = 0,
+
+    alpha_bar: bool = false,
+    alpha_preview: bool = false,
+    alpha_preview_half: bool = false,
+
+    hdr: bool = true,
+
+    display_rgb: bool = false,
+    display_hsv: bool = false,
+    display_hex: bool = false,
+
+    uint8: bool = false,
+    float: bool = true,
+
+    picker_hue_bar: bool = false,
+    picker_hue_wheel: bool = false,
+
+    input_rgb: bool = false,
+    input_hsv: bool = false,
+
+    _unused2: u3 = 0,
+};
+
+pub fn colorEdit(label: [*:0]const u8, color: *F32x3, flags: ColorEditFlags) bool {
+    return c.igColorEdit4(label, @ptrCast(*f32, color), @bitCast(c_int, flags));
 }
 
 pub fn getMouseDragDelta(mouse_button: MouseButton, lock_threshold: f32) F32x2 {

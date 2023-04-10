@@ -48,7 +48,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, max_bytes: u
     };
 }
 
-pub fn copy(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, buffer: VkAllocator.DeviceBuffer(BufferInner), idx: vk.DeviceSize) !BufferInner {
+pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, buffer: VkAllocator.DeviceBuffer(BufferInner), idx: vk.DeviceSize) !BufferInner {
     std.debug.assert(@sizeOf(BufferInner) <= self.buffer.data.len);
 
     try vc.device.beginCommandBuffer(self.command_buffer, &.{});
@@ -71,6 +71,43 @@ pub fn copy(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, b
     try vc.device.resetCommandPool(self.command_pool, .{});
 
     return @ptrCast(*BufferInner, @alignCast(@alignOf(BufferInner), self.buffer.data.ptr)).*;
+}
+
+pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType: type, src_image: vk.Image, src_layout: vk.ImageLayout, offset: vk.Offset3D) !PixelType {
+    std.debug.assert(@sizeOf(PixelType) <= self.buffer.data.len);
+
+    try vc.device.beginCommandBuffer(self.command_buffer, &.{});
+    vc.device.cmdCopyImageToBuffer(self.command_buffer, src_image, src_layout, self.buffer.handle, 1, vk_helpers.toPointerType(&vk.BufferImageCopy {
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_subresource = vk.ImageSubresourceLayers {
+            .aspect_mask = .{ .color_bit = true },
+            .mip_level = 0,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        .image_offset = offset,
+        .image_extent = vk.Extent3D {
+            .width = 1,
+            .height = 1,
+            .depth = 1,
+        }
+    }));
+    try vc.device.endCommandBuffer(self.command_buffer);
+
+    try vc.device.queueSubmit2(vc.queue, 1, vk_helpers.toPointerType(&vk.SubmitInfo2 {
+        .command_buffer_info_count = 1,
+        .p_command_buffer_infos = vk_helpers.toPointerType(&vk.CommandBufferSubmitInfo{
+            .command_buffer = self.command_buffer,
+            .device_mask = 0,
+        }),
+    }), self.ready_fence);
+    _ = try vc.device.waitForFences(1, vk_helpers.toPointerType(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, vk_helpers.toPointerType(&self.ready_fence));
+    try vc.device.resetCommandPool(self.command_pool, .{});
+
+    return @ptrCast(*PixelType, @alignCast(@alignOf(PixelType), self.buffer.data.ptr)).*;
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {

@@ -26,11 +26,11 @@ const imgui = engine.gui.imgui;
 const SyncCopier = @import("./SyncCopier.zig");
 
 const vector = engine.vector;
+const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const Mat4 = vector.Mat4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
-const Vec3 = vector.Vec3(f32);
 
 const vk = @import("vulkan");
 
@@ -145,7 +145,9 @@ pub fn main() !void {
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var rebuild_error = false;
     var current_samples_per_run = pipeline_opts.samples_per_run;
+    var has_clicked = false;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
+    var current_clicked_color = F32x3.new(0.0, 0.0, 0.0);
 
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -158,6 +160,7 @@ pub fn main() !void {
         };
 
         gui.startFrame();
+        imgui.showDemoWindow();
         imgui.setNextWindowPos(50, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Settings");
@@ -199,7 +202,7 @@ pub fn main() !void {
             _ = imgui.dragScalar(u32, "Env map samples per bounce", &pipeline_opts.env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
             _ = imgui.dragScalar(u32, "Mesh samples per bounce", &pipeline_opts.mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
             const last_rebuild_failed = rebuild_error;
-            if (last_rebuild_failed) imgui.pushStyleColor(.text, vector.Vec4(f32).new(1.0, 0.0, 0.0, 1));
+            if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
                 if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{pipeline_opts}, &destruction_queue)) {
@@ -219,62 +222,66 @@ pub fn main() !void {
         imgui.end();
         imgui.setNextWindowPos(@intToFloat(f32, display.swapchain.extent.width - 50) - 250, 50);
         imgui.setNextWindowSize(250, 350);
-        imgui.begin("Object");
-        if (current_clicked_object) |object| {
+        imgui.begin("Click");
+        if (has_clicked) {
+            imgui.separatorText("pixel");
+            _ = imgui.colorEdit("Pixel color", &current_clicked_color, .{ .no_inputs = true, .no_options = true, .no_picker = true });
             imgui.pushItemWidth(imgui.getFontSize() * -12);
-            imgui.separatorText("data");
-            try imgui.textFmt("Instance index: {d}", .{object.instance_index});
-            try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
-            // TODO: all of the copying below should be done once, on object pick
-            const instance = try sync_copier.copy(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device, object.instance_index);
-            const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
-            var geometry = try sync_copier.copy(&context, Accel.Geometry, scene.world.accel.geometries, accel_geometry_index);
-            const material = try sync_copier.copy(&context, MaterialManager.Material, scene.world.material_manager.materials, geometry.material);
-            try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
-            if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.material_manager.material_count) {
-                scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
-                scene.camera.film.clear();
-            }
-            try imgui.textFmt("Sampled: {}", .{geometry.sampled});
-            imgui.separatorText("mesh");
-            const mesh = scene.world.mesh_manager.meshes.get(geometry.mesh);
-            try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
-            try imgui.textFmt("Index count: {d}", .{mesh.index_count});
-            try imgui.textFmt("Has texcoords: {}", .{mesh.texcoord_buffer != null});
-            try imgui.textFmt("Has normals: {}", .{mesh.normal_buffer != null});
-            imgui.separatorText("material");
-            try imgui.textFmt("normal: {}", .{material.normal});
-            try imgui.textFmt("emissive: {}", .{material.emissive});
-            try imgui.textFmt("type: {s}", .{@tagName(material.type)});
-            inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
-                const VariantType = union_field.type;
-                if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
-                    const material_idx = @intCast(u32, (material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
-                    var material_variant = try sync_copier.copy(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name), material_idx);
-                    inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
-                        switch (struct_field.type) {
-                            f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
-                                scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
-                                scene.camera.film.clear();
-                            },
-                            u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
-                            else => unreachable,
+            if (current_clicked_object) |object| {
+                imgui.separatorText("data");
+                try imgui.textFmt("Instance index: {d}", .{object.instance_index});
+                try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
+                // TODO: all of the copying below should be done once, on object pick
+                const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device, object.instance_index);
+                const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
+                var geometry = try sync_copier.copyBufferItem(&context, Accel.Geometry, scene.world.accel.geometries, accel_geometry_index);
+                const material = try sync_copier.copyBufferItem(&context, MaterialManager.Material, scene.world.material_manager.materials, geometry.material);
+                try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
+                if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.material_manager.material_count) {
+                    scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
+                    scene.camera.film.clear();
+                }
+                try imgui.textFmt("Sampled: {}", .{geometry.sampled});
+                imgui.separatorText("mesh");
+                const mesh = scene.world.mesh_manager.meshes.get(geometry.mesh);
+                try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
+                try imgui.textFmt("Index count: {d}", .{mesh.index_count});
+                try imgui.textFmt("Has texcoords: {}", .{mesh.texcoord_buffer != null});
+                try imgui.textFmt("Has normals: {}", .{mesh.normal_buffer != null});
+                imgui.separatorText("material");
+                try imgui.textFmt("normal: {}", .{material.normal});
+                try imgui.textFmt("emissive: {}", .{material.emissive});
+                try imgui.textFmt("type: {s}", .{@tagName(material.type)});
+                inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
+                    const VariantType = union_field.type;
+                    if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
+                        const material_idx = @intCast(u32, (material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
+                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name), material_idx);
+                        inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
+                            switch (struct_field.type) {
+                                f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
+                                    scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
+                                    scene.camera.film.clear();
+                                },
+                                u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
+                                else => unreachable,
+                            }
                         }
                     }
                 }
-            }
-            imgui.separatorText("transform");
-            const old_transform = @bitCast(Mat3x4, instance.transform);
-            var translation = old_transform.extract_translation();
-            imgui.pushItemWidth(imgui.getFontSize() * -6);
-            if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
-                scene.world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
-                try scene.world.accel.recordRebuild(&context, command_buffer);
-                scene.camera.film.clear();
+                imgui.separatorText("transform");
+                const old_transform = @bitCast(Mat3x4, instance.transform);
+                var translation = old_transform.extract_translation();
+                imgui.pushItemWidth(imgui.getFontSize() * -6);
+                if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
+                    scene.world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
+                    try scene.world.accel.recordRebuild(&context, command_buffer);
+                    scene.camera.film.clear();
+                }
             }
             imgui.popItemWidth();
         } else {
-            imgui.text("No object selected!");
+            imgui.text("Go click something!");
         }
         imgui.end();
         if (imgui.isMouseClicked(.left) and !imgui.getIO().WantCaptureMouse) {
@@ -282,6 +289,9 @@ pub fn main() !void {
             const x = @floatCast(f32, pos.x) / @intToFloat(f32, display.swapchain.extent.width);
             const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @floatToInt(i32, pos.x), .y = @floatToInt(i32, pos.y), .z = 0 });
+            current_clicked_color = clicked_pixel.truncate();
+            has_clicked = true;
         }
 
         if (max_sample_count != 0 and scene.camera.film.sample_count > max_sample_count) scene.camera.film.clear();
