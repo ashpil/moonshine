@@ -104,3 +104,7 @@ float3 squareToUniformHemisphere(float2 square) {
     float phi = 2 * PI * square.y;
     return float3(r * cos(phi), r * sin(phi), z);
 }
+
+float2 uniformIntervalToUniformDirection(float val) {
+    return float2(cos(val * 2 * PI), sin(val * 2 * PI));
+}
