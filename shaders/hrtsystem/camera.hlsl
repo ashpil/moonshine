@@ -1,6 +1,6 @@
 #pragma once
 
-#include "random.hlsl"
+#include "../utils/random.hlsl"
 
 struct Camera {
     float3 origin;

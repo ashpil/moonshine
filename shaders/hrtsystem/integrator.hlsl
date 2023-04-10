@@ -1,6 +1,6 @@
-#include "math.hlsl"
+#include "../utils/math.hlsl"
+#include "../utils/random.hlsl"
 #include "reflection_frame.hlsl"
-#include "random.hlsl"
 #include "material.hlsl"
 #include "geometry.hlsl"
 #include "light.hlsl"

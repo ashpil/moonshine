@@ -1,6 +1,6 @@
 #pragma once
 
-#include "math.hlsl"
+#include "../utils/math.hlsl"
 
 struct [raypayload] Intersection {
     uint instanceIndex : read(caller) : write(closesthit, miss);  // MAX_UINT for no hit

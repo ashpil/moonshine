@@ -169,9 +169,9 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
             "shaders/hrtsystem/intersection.hlsl",
             "shaders/hrtsystem/light.hlsl",
             "shaders/hrtsystem/material.hlsl",
-            "shaders/hrtsystem/math.hlsl",
-            "shaders/hrtsystem/random.hlsl",
             "shaders/hrtsystem/reflection_frame.hlsl",
+            "shaders/utils/random.hlsl",
+            "shaders/utils/math.hlsl",
         }
     });
 
