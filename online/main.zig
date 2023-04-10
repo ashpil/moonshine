@@ -8,6 +8,7 @@ const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
+const SyncCopier = core.SyncCopier;
 
 const hrtsystem = engine.hrtsystem;
 const Camera = hrtsystem.Camera;
@@ -22,8 +23,6 @@ const Display = displaysystem.Display;
 const Window = engine.Window;
 const Gui = engine.gui.Gui;
 const imgui = engine.gui.imgui;
-
-const SyncCopier = @import("./SyncCopier.zig");
 
 const vector = engine.vector;
 const F32x4 = vector.Vec4(f32);
@@ -160,7 +159,6 @@ pub fn main() !void {
         };
 
         gui.startFrame();
-        imgui.showDemoWindow();
         imgui.setNextWindowPos(50, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Settings");

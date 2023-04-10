@@ -1,13 +1,13 @@
-// really stupid and inefficient way to get stuff from device-local buffers back to CPU
+// really stupid and inefficient way to get stuff from device-local buffers/images back to CPU
 // should not be used for "real" transfers that benefit from require efficiency
 //
 // more-so designed for ease-of-use for debugging and inspecting stuff that doesn't usually need to be inspected
 
-const engine = @import("engine");
-const VulkanContext = engine.core.VulkanContext;
-const VkAllocator = engine.core.Allocator;
-const Commands = engine.core.Commands;
-const vk_helpers = engine.core.vk_helpers;
+const core = @import("core.zig");
+const VulkanContext = core.VulkanContext;
+const VkAllocator = core.Allocator;
+const Commands = core.Commands;
+const vk_helpers = core.vk_helpers;
 
 const std = @import("std");
 const vk = @import("vulkan");
