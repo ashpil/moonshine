@@ -37,6 +37,10 @@ float3 faceForward(float3 n, float3 d) {
     return dot(n, d) > 0 ? n : -n;
 }
 
+float2 faceForward(float2 n, float2 d) {
+    return dot(n, d) > 0 ? n : -n;
+}
+
 // https://research.nvidia.com/publication/2019-03_fast-and-robust-method-avoiding-self-intersection
 float3 offsetAlongNormal(float3 p, float3 n) {
     float origin = 1.0f / 32.0f;
@@ -46,6 +50,18 @@ float3 offsetAlongNormal(float3 p, float3 n) {
     int3 of_i = n * int_scale;
 
     float3 p_i = asfloat(asint(p) + select(p < 0.f, -of_i, of_i));
+
+    return select(abs(p) < origin, p + n * float_scale, p_i);
+}
+
+float2 offsetAlongNormal(float2 p, float2 n) {
+    float origin = 1.0f / 32.0f;
+    float float_scale = 1.0f / 65536.0f;
+    float int_scale = 256.0f;
+
+    int2 of_i = n * int_scale;
+
+    float2 p_i = asfloat(asint(p) + select(p < 0.f, -of_i, of_i));
 
     return select(abs(p) < origin, p + n * float_scale, p_i);
 }
