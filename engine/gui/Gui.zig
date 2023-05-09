@@ -168,6 +168,13 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .dynamic_state_count = dynamic_states.len,
                 .p_dynamic_states = &dynamic_states,
             },
+            .p_multisample_state = &vk.PipelineMultisampleStateCreateInfo {
+                .rasterization_samples = .{ .@"1_bit" = true },
+                .min_sample_shading = 1.0,
+                .sample_shading_enable = vk.FALSE,
+                .alpha_to_coverage_enable = vk.FALSE,
+                .alpha_to_one_enable = vk.FALSE,
+            },
             .layout = pipeline_layout,
             .render_pass = .null_handle,
             .subpass = 0,
