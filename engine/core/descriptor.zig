@@ -56,7 +56,7 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
                 .descriptor_pool = self.pool,
                 .descriptor_set_count = 1,
                 .p_set_layouts = vk_helpers.toPointerType(&self.handle),
-            }, @ptrCast([*]vk.DescriptorSet, &descriptor_set));
+            }, @ptrCast(&descriptor_set));
 
             var descriptor_writes = writes;
             inline for (&descriptor_writes) |*descriptor_write| {

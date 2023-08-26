@@ -28,7 +28,7 @@ pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
 
     c.glfwWindowHint(c.GLFW_CLIENT_API, c.GLFW_NO_API);
 
-    const handle = c.glfwCreateWindow(@intCast(c_int, width), @intCast(c_int, height), app_name, null, null) orelse {
+    const handle = c.glfwCreateWindow(@intCast(width), @intCast(height), app_name, null, null) orelse {
         c.glfwTerminate();
         return Error.WindowCreateFail;
     };
@@ -54,7 +54,7 @@ pub fn getRequiredInstanceExtensions(self: *const Self) [2][*:0]const u8 {
     const extensions = c.glfwGetRequiredInstanceExtensions(&glfw_extension_count);
     std.debug.assert(glfw_extension_count == 2);
 
-    return @ptrCast([*]const [*:0]const u8, extensions)[0..2].*;
+    return @as([*]const [*:0]const u8, @ptrCast(extensions))[0..2].*;
 }
 
 pub fn shouldClose(self: *const Self) bool {
@@ -70,15 +70,15 @@ pub fn getUserPointer(self: *const Self) ?*anyopaque {
 }
 
 pub fn setAspectRatio(self: *const Self, numer: u32, denom: u32) void {
-    c.glfwSetWindowAspectRatio(self.handle, @intCast(c_int, numer), @intCast(c_int, denom));
+    c.glfwSetWindowAspectRatio(self.handle, @intCast(numer), @intCast(denom));
 }
 
 pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D) void) void {
     const Callback = struct {
         fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
             const extent = vk.Extent2D {
-                .width = @intCast(u32, width),
-                .height = @intCast(u32, height),
+                .width = @intCast(width),
+                .height = @intCast(height),
             };
             const window = Self {
                 .handle = handle.?,
@@ -142,7 +142,7 @@ pub fn setMouseButtonCallback(self: *const Self, comptime callback: fn (*const S
             const window = Self {
                 .handle = handle.?,
             };
-            callback(&window, @intToEnum(MouseButton, button), @intToEnum(Action, action), @bitCast(ModifierKeys, mods));
+            callback(&window, @enumFromInt(button), @enumFromInt(action), @bitCast(mods));
         }
     };
     _ = c.glfwSetMouseButtonCallback(self.handle, Callback.mouseButtonCallback);
@@ -156,7 +156,7 @@ pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32
             const window = Self {
                 .handle = handle.?,
             };
-            callback(&window, @intCast(u32, key), @intToEnum(Action, action), @bitCast(ModifierKeys, mods));
+            callback(&window, @intCast(key), @enumFromInt(action), @bitCast(mods));
         }
     };
     _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);
@@ -178,8 +178,8 @@ pub fn getExtent(self: *const Self) vk.Extent2D {
     var height: c_int = undefined;
     c.glfwGetFramebufferSize(self.handle, &width, &height);
     return vk.Extent2D {
-        .width = @intCast(u32, width),
-        .height = @intCast(u32, height),
+        .width = @intCast(width),
+        .height = @intCast(height),
     };
 }
 

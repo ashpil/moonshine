@@ -17,14 +17,14 @@ pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const 
    if (comptime build_options.vk_validation) {
        try vc.device.setDebugUtilsObjectNameEXT(&.{
            .object_type = comptime typeToObjectType(@TypeOf(object)),
-           .object_handle = @enumToInt(object),
+           .object_handle = @intFromEnum(object),
            .p_object_name = name,
        });
    }
 }
 
 pub fn toPointerType(in: anytype) [*]const @typeInfo(@TypeOf(in)).Pointer.child {
-    return @ptrCast([*]const @typeInfo(@TypeOf(in)).Pointer.child, in);
+    return @ptrCast(in);
 }
 
 pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
@@ -86,7 +86,7 @@ pub fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []co
         };
         module.* = try vc.device.createShaderModule(&.{
             .code_size = shader_code.len,
-            .p_code = @ptrCast([*]const u32, @alignCast(@alignOf(u32), if (build_options.shader_source == .embed) &shader_code else shader_code.ptr)),
+            .p_code = @as([*]const u32, @ptrCast(@alignCast(if (build_options.shader_source == .embed) &shader_code else shader_code.ptr))),
         }, null);
     }
     return modules;
@@ -138,7 +138,7 @@ pub fn getVkSliceBounded(comptime max_size: comptime_int, func: anytype, partial
 
     return std.BoundedArray(T, max_size) {
         .buffer = buffer,
-        .len = len,
+        .len = @intCast(len),
     };
 }
 

@@ -70,7 +70,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const buffer = try allocator.alloc(f32, color.extent.height * color.extent.width);
         for (color.asSlice(), 0..) |rgba, i| {
             const row_idx = i / color.extent.width;
-            const sin_theta = std.math.sin(std.math.pi * (@intToFloat(f32, row_idx) + 0.5) / @intToFloat(f32, color.extent.height));
+            const sin_theta = std.math.sin(std.math.pi * (@as(f32, @floatFromInt(row_idx)) + 0.5) / @as(f32, @floatFromInt(color.extent.height)));
             buffer[i] = (rgba[0] * 0.2126 + rgba[1] * 0.7152 + rgba[2] * 0.0722) * sin_theta;
         }
         break :blk buffer;

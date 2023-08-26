@@ -25,7 +25,7 @@
 
 ### Dependencies
 #### Build
-* zig `0.11.0-dev.2168+322ace70f`
+* zig `0.12.0-dev.168+a31748b29`
 * DirectXShaderCompiler
 * For the online (real-time) renderer:
   * For Linux (Ubuntu, similar on others):

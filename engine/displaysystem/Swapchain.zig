@@ -39,7 +39,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
         .image_array_layers = 1,
         .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
-        .queue_family_index_count = @intCast(u32, queue_family_indices.len),
+        .queue_family_index_count = @as(u32, @intCast(queue_family_indices.len)),
         .p_queue_family_indices = &queue_family_indices,
         .pre_transform = settings.pre_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
@@ -113,7 +113,7 @@ const SwapSettings = struct {
         return SwapSettings {
             .format = try findFormat(vc, surface),
             .present_mode = try findPresentMode(vc, surface),
-            .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else std.math.min(caps.min_image_count + 1, caps.max_image_count),
+            .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else @min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = .exclusive,
             .pre_transform = caps.current_transform,
             .extent = try calculateExtent(extent, caps),

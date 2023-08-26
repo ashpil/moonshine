@@ -82,7 +82,7 @@ const Base = struct {
                 .p_application_info = &app_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
-                .enabled_extension_count = @intCast(u32, required_extensions.len),
+                .enabled_extension_count = @as(u32, @intCast(required_extensions.len)),
                 .pp_enabled_extension_names = required_extensions.ptr,
                 .p_next = if (validate) &debug_messenger_create_info else null,
             },
@@ -96,7 +96,7 @@ const Base = struct {
 
         for (validation_layers) |layer_name| {
             const layer_found = for (available_layers) |layer_properties| {
-                if (std.cstr.cmp(layer_name, @ptrCast([*:0]const u8, &layer_properties.layer_name)) == 0) {
+                if (std.mem.orderZ(u8, layer_name, @ptrCast(&layer_properties.layer_name)) == .eq) {
                     break true;
                 }
             } else false;
@@ -112,7 +112,7 @@ const Base = struct {
 
         for (extensions) |extension_name| {
             const layer_found = for (available_extensions) |extension_properties| {
-                if (std.cstr.cmp(extension_name, @ptrCast([*:0]const u8, &extension_properties.extension_name)) == 0) {
+                if (std.mem.orderZ(u8, extension_name, @ptrCast(&extension_properties.extension_name)) == .eq) {
                     break true;
                 }
             } else false;
@@ -297,7 +297,7 @@ const PhysicalDevice = struct {
 
         var picked_family: ?u32 = null;
         for (families, 0..) |family, i| {
-            const index = @intCast(u32, i);
+            const index: u32 = @intCast(i);
             if (family.queue_flags.compute_bit and
                 family.queue_flags.graphics_bit and
                 queueFamilyAcceptable(instance.handle, device, index)) picked_family = index;
@@ -329,7 +329,7 @@ const PhysicalDevice = struct {
 
         for (extensions) |extension_name| {
             const extension_found = for (available_extensions) |extension| {
-                if (std.cstr.cmp(extension_name, @ptrCast([*:0]const u8, &extension.extension_name)) == 0) {
+                if (std.mem.orderZ(u8, extension_name, @ptrCast(&extension.extension_name)) == .eq) {
                     break true;
                 }
             } else false;
@@ -377,7 +377,7 @@ const PhysicalDevice = struct {
                 .p_queue_create_infos = &queue_create_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
-                .enabled_extension_count = @intCast(u32, extensions.len),
+                .enabled_extension_count = @as(u32, @intCast(extensions.len)),
                 .pp_enabled_extension_names = extensions.ptr,
                 .p_enabled_features = &.{
                     .shader_int_64 = vk.TRUE,

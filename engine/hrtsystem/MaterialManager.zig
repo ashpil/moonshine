@@ -134,12 +134,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         if (@sizeOf(field.type) != 0) {
             if (@field(materials.variants, field.name).items.len != 0) {
                 const data = @field(materials.variants, field.name).items;
-                const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, @intCast(u32, data.len), .{ .transfer_src_bit = true });
+                const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, @intCast(data.len), .{ .transfer_src_bit = true });
                 defer host_buffer.destroy(vc);
 
                 var buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true };
                 if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(u32, data.len), buffer_flags);
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(data.len), buffer_flags);
                 errdefer device_buffer.destroy(vc);
 
                 std.mem.copy(field.type, host_buffer.data, data);
@@ -158,14 +158,14 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         }
     }
 
-    const material_count = @intCast(u32, materials.materials.items.len);
+    const material_count: u32 = @intCast(materials.materials.items.len);
     const materials_gpu = blk: {
         var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
         defer materials_host.destroy(vc);
         for (materials.materials.items, materials_host.data) |material, *data| {
             data.* = material;
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
-                if (@intToEnum(MaterialType, enum_field.value) == material.type) {
+                if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
                     data.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
                 }
             }
@@ -287,7 +287,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         try msne_reader.readSlice(Material, materials_host.data);
         for (materials_host.data) |*material| {
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
-                if (@intToEnum(MaterialType, enum_field.value) == material.type) {
+                if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
                     material.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
                 }
             }
@@ -363,8 +363,8 @@ pub const MaterialList = struct {
     pub fn append(self: *MaterialList, allocator: std.mem.Allocator, material: Material, any_material: AnyMaterial) !void {
         var mat_local = material;
         inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
-            if (@intToEnum(MaterialType, enum_field.value) == any_material) {
-                mat_local.type = @intToEnum(MaterialType, enum_field.value);
+            if (@as(MaterialType, @enumFromInt(enum_field.value)) == any_material) {
+                mat_local.type = @enumFromInt(enum_field.value);
                 if (union_field.type != void) {
                     mat_local.addr = @field(self.variants, enum_field.name).items.len;
                     try @field(self.variants, enum_field.name).append(allocator, @field(any_material, enum_field.name));

@@ -35,7 +35,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, max_bytes: u
         .level = vk.CommandBufferLevel.primary,
         .command_pool = command_pool,
         .command_buffer_count = 1,
-    }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
+    }, @ptrCast(&command_buffer));
 
     const ready_fence = try vc.device.createFence(&.{}, null);
 
@@ -70,7 +70,7 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     try vc.device.resetFences(1, vk_helpers.toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});
 
-    return @ptrCast(*BufferInner, @alignCast(@alignOf(BufferInner), self.buffer.data.ptr)).*;
+    return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.data.ptr))).*;
 }
 
 pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType: type, src_image: vk.Image, src_layout: vk.ImageLayout, offset: vk.Offset3D) !PixelType {
@@ -107,7 +107,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     try vc.device.resetFences(1, vk_helpers.toPointerType(&self.ready_fence));
     try vc.device.resetCommandPool(self.command_pool, .{});
 
-    return @ptrCast(*PixelType, @alignCast(@alignOf(PixelType), self.buffer.data.ptr)).*;
+    return @as(*PixelType, @ptrCast(@alignCast(self.buffer.data.ptr))).*;
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {

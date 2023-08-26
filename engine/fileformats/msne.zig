@@ -31,7 +31,7 @@ pub const MsneReader = struct {
     }
 
     pub fn readFloat(self: Self) !f32 {
-        return @bitCast(f32, try self.reader.readBytesNoEof(4));
+        return @bitCast(try self.reader.readBytesNoEof(4));
     }
 
     pub fn readStruct(self: Self, comptime T: type) !T {

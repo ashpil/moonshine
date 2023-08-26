@@ -155,7 +155,7 @@ pub fn main() !void {
         };
 
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = @intCast(u32, barriers.len),
+            .image_memory_barrier_count = @intCast(barriers.len),
             .p_image_memory_barriers = &barriers,
         });
 
@@ -165,7 +165,7 @@ pub fn main() !void {
         
         for (0..config.spp) |i| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.properties, @intCast(u32, i) });
+            const bytes = std.mem.asBytes(&.{ scene.camera.properties, @as(u32, @intCast(i)) });
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff
@@ -213,7 +213,7 @@ pub fn main() !void {
                 };
 
                 context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
-                    .image_memory_barrier_count = @intCast(u32, rt_barriers.len),
+                    .image_memory_barrier_count = @intCast(rt_barriers.len),
                     .p_image_memory_barriers = &rt_barriers,
                 });
             }

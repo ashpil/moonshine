@@ -102,7 +102,7 @@ pub fn Pipeline(
                 .base_pipeline_index = -1,
             };
             var handle: vk.Pipeline = undefined;
-            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &create_info), null, @ptrCast([*]vk.Pipeline, &handle));
+            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast(&create_info), null, @ptrCast(&handle));
             errdefer vc.device.destroyPipeline(handle, null);
 
             const shader_info = ShaderInfo.find(stages);
@@ -158,7 +158,7 @@ pub fn Pipeline(
                 .base_pipeline_index = -1,
             };
             var handle: vk.Pipeline = undefined;
-            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast([*]const vk.RayTracingPipelineCreateInfoKHR, &create_info), null, @ptrCast([*]vk.Pipeline, &handle));
+            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast(&create_info), null, @ptrCast(&handle));
             errdefer vc.device.destroyPipeline(handle, null);
             try destruction_queue.add(allocator, self.handle);
 
@@ -309,21 +309,23 @@ const ShaderBindingTable = struct {
             rt_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
             rt_properties.p_next = null;
 
-            vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &vk.PhysicalDeviceProperties2 {
+            var properties2 = vk.PhysicalDeviceProperties2 {
                 .properties = undefined,
                 .p_next = &rt_properties,
-            });
+            };
+
+            vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &properties2);
 
             break :blk rt_properties;
         };
 
-        const handle_size_aligned = std.mem.alignForwardGeneric(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
+        const handle_size_aligned = std.mem.alignForward(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count + callable_entry_count;
         
         const raygen_index = 0;
-        const miss_index = std.mem.alignForwardGeneric(u32, raygen_index + raygen_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
-        const hit_index = std.mem.alignForwardGeneric(u32, miss_index + miss_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
-        const callable_index = std.mem.alignForwardGeneric(u32, hit_index + hit_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const miss_index = std.mem.alignForward(u32, raygen_index + raygen_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const hit_index = std.mem.alignForward(u32, miss_index + miss_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const callable_index = std.mem.alignForward(u32, hit_index + hit_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
         const sbt_size = callable_index + callable_entry_count * handle_size_aligned;
 
         // query sbt from pipeline
@@ -379,10 +381,12 @@ const ShaderBindingTable = struct {
             rt_properties.s_type = .physical_device_ray_tracing_pipeline_properties_khr;
             rt_properties.p_next = null;
 
-            vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &vk.PhysicalDeviceProperties2 {
+            var properties2 = vk.PhysicalDeviceProperties2 {
                 .properties = undefined,
                 .p_next = &rt_properties,
-            });
+            };
+
+            vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &properties2);
 
             break :blk rt_properties;
         };
@@ -391,9 +395,9 @@ const ShaderBindingTable = struct {
         const group_count = self.raygen_count + self.miss_count + self.hit_count + self.callable_count;
         
         const raygen_index = 0;
-        const miss_index = std.mem.alignForwardGeneric(u32, raygen_index + self.raygen_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
-        const hit_index = std.mem.alignForwardGeneric(u32, miss_index + self.miss_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
-        const callable_index = std.mem.alignForwardGeneric(u32, hit_index + self.hit_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const miss_index = std.mem.alignForward(u32, raygen_index + self.raygen_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const hit_index = std.mem.alignForward(u32, miss_index + self.miss_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
+        const callable_index = std.mem.alignForward(u32, hit_index + self.hit_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
         const sbt_size = callable_index + self.callable_count * handle_size_aligned;
 
         // query sbt from pipeline

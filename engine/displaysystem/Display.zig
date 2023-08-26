@@ -48,7 +48,7 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
         frame.* = try Frame.create(vc);
         try vk_helpers.setDebugName(vc, frame.command_buffer, std.fmt.comptimePrint("frame {}", .{i}));
     }
-    try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frames[0].fence));
+    try vc.device.resetFences(1, @ptrCast(&frames[0].fence));
 
     const timestamp_period = if (metrics) blk: {
         var properties = vk.PhysicalDeviceProperties2 {
@@ -85,7 +85,7 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !vk.CommandBuffer {
     if (metrics) {
         var timestamps: [2]u64 = undefined;
         const result = try vc.device.getQueryPoolResults(frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
-        self.last_frame_time_ns = if (result == .success) @intToFloat(f64, timestamps[1] - timestamps[0]) * self.timestamp_period else std.math.nan(f64);
+        self.last_frame_time_ns = if (result == .success) @as(f64, @floatFromInt(timestamps[1] - timestamps[0])) * self.timestamp_period else std.math.nan(f64);
         vc.device.resetQueryPool(frame.query_pool, 0, 2);
     }
 
@@ -142,14 +142,14 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
 
         const new_frame = self.frames[self.frame_index];
 
-        _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &new_frame.fence), vk.TRUE, std.math.maxInt(u64));
-        try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &new_frame.fence));
+        _ = try vc.device.waitForFences(1, @ptrCast(&new_frame.fence), vk.TRUE, std.math.maxInt(u64));
+        try vc.device.resetFences(1, @ptrCast(&new_frame.fence));
 
         return ok;
     } else |err| {
         // if not ok, presentation failure and we should wait for this frame
-        _ = try vc.device.waitForFences(1, @ptrCast([*]const vk.Fence, &frame.fence), vk.TRUE, std.math.maxInt(u64));
-        try vc.device.resetFences(1, @ptrCast([*]const vk.Fence, &frame.fence));
+        _ = try vc.device.waitForFences(1, @ptrCast(&frame.fence), vk.TRUE, std.math.maxInt(u64));
+        try vc.device.resetFences(1, @ptrCast(&frame.fence));
         return err;
     }
 }
@@ -186,7 +186,7 @@ const Frame = struct {
             .level = vk.CommandBufferLevel.primary,
             .command_pool = command_pool,
             .command_buffer_count = 1,
-        }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
+        }, @ptrCast(&command_buffer));
 
         const query_pool = if (metrics) try vc.device.createQueryPool(&.{
             .query_type = .timestamp,

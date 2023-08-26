@@ -139,7 +139,7 @@ const Col = enum(c_int) {
 };
 
 pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
-    c.igPushStyleColor_Vec4(@enumToInt(idx), @bitCast(c.ImVec4, color));
+    c.igPushStyleColor_Vec4(@intFromEnum(idx), @bitCast(color));
 }
 
 pub fn popStyleColor() void {
@@ -184,21 +184,21 @@ const ColorEditFlags = packed struct(c_int) {
 };
 
 pub fn colorEdit(label: [*:0]const u8, color: *F32x3, flags: ColorEditFlags) bool {
-    return c.igColorEdit4(label, @ptrCast(*f32, color), @bitCast(c_int, flags));
+    return c.igColorEdit4(label, @ptrCast(color), @bitCast(flags));
 }
 
 pub fn getMouseDragDelta(mouse_button: MouseButton, lock_threshold: f32) F32x2 {
     var out: Vec2 = undefined;
-    c.igGetMouseDragDelta(&out, @enumToInt(mouse_button), lock_threshold);
-    return @bitCast(F32x2, out);
+    c.igGetMouseDragDelta(&out, @intFromEnum(mouse_button), lock_threshold);
+    return @bitCast(out);
 }
 
 pub fn resetMouseDragDelta(mouse_button: MouseButton) void {
-    c.igResetMouseDragDelta(@enumToInt(mouse_button));
+    c.igResetMouseDragDelta(@intFromEnum(mouse_button));
 }
 
 pub fn isMouseClicked(mouse_button: MouseButton) bool {
-    return c.igIsMouseClicked_Bool(@enumToInt(mouse_button), false);
+    return c.igIsMouseClicked_Bool(@intFromEnum(mouse_button), false);
 }
 
 pub fn getFontSize() f32 {
@@ -253,7 +253,7 @@ pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.E
     var out_pixels: [*c]u8 = undefined;
     c.ImFontAtlas_GetTexDataAsAlpha8(self, &out_pixels, &width, &height, null);
 
-    return .{ out_pixels, vk.Extent2D{ .width = @intCast(u32, width), .height = @intCast(u32, height) } };
+    return .{ out_pixels, vk.Extent2D{ .width = @intCast(width), .height = @intCast(height) } };
 }
 
 pub fn implGlfwInit(window: Window) void {

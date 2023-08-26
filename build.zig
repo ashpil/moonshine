@@ -90,7 +90,7 @@ pub fn build(b: *std.build.Builder) void {
     
     // create run step for all exes
     for (exes.items) |exe| {
-        const install = b.addInstallArtifact(exe);
+        const install = b.addInstallArtifact(exe, .{});
         const run = b.addRunArtifact(exe);
         run.step.dependOn(&install.step);
         if (b.args) |args| {
@@ -225,7 +225,7 @@ const CLibrary = struct {
 
     fn add(self: CLibrary, exe: *std.Build.CompileStep) void {
         exe.linkLibrary(self.library);
-        exe.addIncludePath(self.include_path);
+        exe.addIncludePath(.{ .path = self.include_path });
     }
 };
 
@@ -250,8 +250,8 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: C
         "-DGLFW_INCLUDE_NONE",
         "-DIMGUI_IMPL_API=extern \"C\"",
     });
-    lib.addIncludePath(path ++ "imgui/");
-    lib.addIncludePath(glfw.include_path);
+    lib.addIncludePath(.{ .path = path ++ "imgui/" });
+    lib.addIncludePath(.{ .path = glfw.include_path });
 
     return CLibrary {
         .include_path = path,
@@ -269,7 +269,7 @@ fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibra
         .optimize = .ReleaseFast,
     });
     lib.linkLibCpp();
-    lib.addIncludePath(miniz_path);
+    lib.addIncludePath(.{ .path = miniz_path });
     lib.addCSourceFiles(&.{
         tinyexr_path ++ "tinyexr.cc",
         miniz_path ++ "miniz.c",
@@ -295,7 +295,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     if (maybe_lws) |str_lws| {
         if (std.mem.eql(u8, str_lws, "Wayland")) {
             try genWaylandHeaders(b, &lib.step);
-            lib.addIncludePath("./zig-cache/wayland-gen-headers/");
+            lib.addIncludePath(.{ .path = "./zig-cache/wayland-gen-headers/" });
             lws = .wayland;
         } else if (std.mem.eql(u8, str_lws, "X11")) {
             lws = .x11;
@@ -304,7 +304,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
         }
     } else if (target.isLinux()) {
         try genWaylandHeaders(b, &lib.step);
-        lib.addIncludePath("./zig-cache/wayland-gen-headers/");
+        lib.addIncludePath(.{ .path = "./zig-cache/wayland-gen-headers/" });
     }
 
     // collect source files

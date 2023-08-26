@@ -92,7 +92,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             for (key) |geo| {
                 wy.update(std.mem.asBytes(&geo.mesh));
             }
-            return @truncate(u32, wy.final());
+            return @truncate(wy.final());
         }
         pub fn eql(self: Context, key1: []const Geometry, key2: []const Geometry, b_index: usize) bool {
             _ = self;
@@ -145,7 +145,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .type = .bottom_level_khr,
                 .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_compaction_bit_khr = true },
                 .mode = .build_khr,
-                .geometry_count = @intCast(u32, geometries.len),
+                .geometry_count = @intCast(geometries.len),
                 .p_geometries = geometries.ptr,
                 .scratch_data = undefined,
             };
@@ -168,7 +168,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                                 .device_address = mesh.position_buffer.getAddress(vc),
                             },
                             .vertex_stride = @sizeOf(F32x3),
-                            .max_vertex = @intCast(u32, mesh.vertex_count - 1),
+                            .max_vertex = @intCast(mesh.vertex_count - 1),
                             .index_type = .uint32,
                             .index_data = .{
                                 .device_address = mesh.index_buffer.getAddress(vc),
@@ -181,7 +181,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 };
 
                 build_info.*[j] =  vk.AccelerationStructureBuildRangeInfoKHR {
-                    .primitive_count = @intCast(u32, mesh.index_count),
+                    .primitive_count = @intCast(mesh.index_count),
                     .primitive_offset = 0,
                     .transform_offset = 0,
                     .first_vertex = 0,
@@ -252,7 +252,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const geometries = blk: {
         var geometry_count: u24 = 0;
         for (instances) |instance| {
-            geometry_count += @intCast(u24, instance.geometries.len);
+            geometry_count += @intCast(instance.geometries.len);
         }
         const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
         defer geometries_host.destroy(vc);
@@ -280,7 +280,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     errdefer geometries.destroy(vc);
 
     // create instance info, tlas, and tlas state
-    const instance_count = @intCast(u32, instances.len);
+    const instance_count: u32 = @intCast(instances.len);
     var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
     if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
     const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
@@ -294,7 +294,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     for (instances_host.data, instances) |*instance_host, instance| {
         instance_host.* = .{
             .transform = vk.TransformMatrixKHR {
-                .matrix = @bitCast([3][4]f32, instance.transform),
+                .matrix = @bitCast(instance.transform),
             },
             .instance_custom_index_and_mask = .{
                 .instance_custom_index = custom_index,
@@ -308,7 +308,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .acceleration_structure = blases.items(.handle)[unique_mesh_lists_hash.get(instance.geometries).?],
             }),
         };
-        custom_index += @intCast(u24, instance.geometries.len);
+        custom_index += @intCast(instance.geometries.len);
     }
 
     try commands.startRecording(vc);
@@ -398,9 +398,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                     const area = p1.sub(p0).cross(p2.sub(p0)).length() / 2.0;
                     try weights.append(area);
                     try table_data.append(.{
-                        .instance = @intCast(u32, i),
-                        .geometry = @intCast(u32, j),
-                        .primitive = @intCast(u32, k),
+                        .instance = @intCast(i),
+                        .geometry = @intCast(j),
+                        .primitive = @intCast(k),
                     });
                 }
             }
@@ -415,7 +415,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const staging_buffer = try vk_allocator.createHostBuffer(vc, AliasTableT.TableEntry, table.entries.len + 1, .{ .transfer_src_bit = true });
         defer staging_buffer.destroy(vc);
 
-        staging_buffer.data[0].alias = @intCast(u32, table.entries.len);
+        staging_buffer.data[0].alias = @intCast(table.entries.len);
         staging_buffer.data[0].select = table.sum;
         std.mem.copy(AliasTableT.TableEntry, staging_buffer.data[1..], table.entries);
 

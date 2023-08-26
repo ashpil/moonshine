@@ -27,7 +27,7 @@ pub fn create(vc: *const VulkanContext) !Self {
         .level = vk.CommandBufferLevel.primary,
         .command_pool = pool,
         .command_buffer_count = 1,
-    }, @ptrCast([*]vk.CommandBuffer, &buffer));
+    }, @ptrCast(&buffer));
 
     return Self {
         .pool = pool,
@@ -88,7 +88,7 @@ pub fn copyAccelStructs(self: *Self, vc: *const VulkanContext, infos: []const vk
 
 pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const [*]const vk.AccelerationStructureBuildRangeInfoKHR) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
-    const size = @intCast(u32, geometry_infos.len);
+    const size: u32 = @intCast(geometry_infos.len);
     try self.startRecording(vc);
     vc.device.cmdBuildAccelerationStructuresKHR(self.buffer, size, geometry_infos.ptr, build_infos.ptr);
     try self.submitAndIdleUntilDone(vc);
@@ -97,7 +97,7 @@ pub fn createAccelStructs(self: *Self, vc: *const VulkanContext, geometry_infos:
 pub fn createAccelStructsAndGetCompactedSizes(self: *Self, vc: *const VulkanContext, geometry_infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_infos: []const [*]const vk.AccelerationStructureBuildRangeInfoKHR, handles: []const vk.AccelerationStructureKHR, compactedSizes: []vk.DeviceSize) !void {
     std.debug.assert(geometry_infos.len == build_infos.len);
     std.debug.assert(build_infos.len == handles.len);
-    const size = @intCast(u32, geometry_infos.len);
+    const size: u32 = @intCast(geometry_infos.len);
 
     const query_pool = try vc.device.createQueryPool(&.{
         .query_type = .acceleration_structure_compacted_size_khr,
@@ -183,7 +183,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
     }
 
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .image_memory_barrier_count = @intCast(u32, barriers.len),
+        .image_memory_barrier_count = @intCast(barriers.len),
         .p_image_memory_barriers = barriers.ptr,
     });
 
@@ -199,7 +199,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
 
     try self.startRecording(vc);
 
-    const len = @intCast(u32, dst_images.len);
+    const len: u32 = @intCast(dst_images.len);
 
     const first_barriers = try allocator.alloc(vk.ImageMemoryBarrier2, len);
     defer allocator.free(first_barriers);
@@ -249,7 +249,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
             },
         };
 
-        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(u32, size), .{ .transfer_src_bit = true });
+        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(size), .{ .transfer_src_bit = true });
         std.mem.copy(u8, staging_buffer.data, src_data);
     }
 
@@ -293,7 +293,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
 
 // buffers must have appropriate flags
 pub fn recordCopyBuffer(self: *Self, vc: *const VulkanContext, dst: vk.Buffer, src: vk.Buffer, regions: []const vk.BufferCopy) void {
-    vc.device.cmdCopyBuffer(self.buffer, src, dst, @intCast(u32, regions.len), regions.ptr);
+    vc.device.cmdCopyBuffer(self.buffer, src, dst, @intCast(regions.len), regions.ptr);
 }
 
 // buffers must have appropriate flags

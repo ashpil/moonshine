@@ -36,18 +36,18 @@ pub fn AliasTable(comptime Data: type) type {
             var less_head: u32 = std.math.maxInt(u32);
             var more_head: u32 = std.math.maxInt(u32);
 
-            const n = @intCast(u32, raw_weights.len);
+            const n: u32 = @intCast(raw_weights.len);
             for (raw_weights, entries, datas, 0..) |weight, *entry, data, i| {
                 entry.data = data;
 
-                const adjusted_weight = (weight * @intToFloat(f32, n)) / weight_sum;
+                const adjusted_weight = (weight * @as(f32, @floatFromInt(n))) / weight_sum;
                 entry.select = adjusted_weight;
                 if (adjusted_weight < 1.0) {
                     entry.alias = less_head;
-                    less_head = @intCast(u32, i);
+                    less_head = @intCast(i);
                 } else {
                     entry.alias = more_head;
-                    more_head = @intCast(u32, i);
+                    more_head = @intCast(i);
                 }
             }
 
@@ -115,18 +115,18 @@ pub const NormalizedAliasTable = struct {
         var less_head: u32 = std.math.maxInt(u32);
         var more_head: u32 = std.math.maxInt(u32);
 
-        const n = @intCast(u32, raw_weights.len);
+        const n: u32 = @intCast(raw_weights.len);
         for (raw_weights, 0..) |weight, i| {
             entries[i].data = weight / weight_sum;
 
-            const adjusted_weight = (weight / weight_sum) * @intToFloat(f32, n);
+            const adjusted_weight = (weight / weight_sum) * @as(f32, @floatFromInt(n));
             entries[i].select = adjusted_weight;
             if (adjusted_weight < 1.0) {
                 entries[i].alias = less_head;
-                less_head = @intCast(u32, i);
+                less_head = @intCast(i);
             } else {
                 entries[i].alias = more_head;
-                more_head = @intCast(u32, i);
+                more_head = @intCast(i);
             }
         }
 

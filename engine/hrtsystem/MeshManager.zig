@@ -54,7 +54,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     try meshes.ensureTotalCapacity(allocator, objects.len);
     errdefer meshes.deinit(allocator);
     
-    var addresses_buffer_host = try vk_allocator.createHostBuffer(vc, MeshAddresses, @intCast(u32, objects.len), .{ .transfer_src_bit = true });
+    var addresses_buffer_host = try vk_allocator.createHostBuffer(vc, MeshAddresses, @intCast(objects.len), .{ .transfer_src_bit = true });
     defer addresses_buffer_host.destroy(vc);
 
     var staging_buffers = std.ArrayList(VkAllocator.HostBuffer(u8)).init(allocator);
@@ -128,10 +128,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .texcoord_buffer = texcoord_buffer,
             .normal_buffer = normal_buffer,
 
-            .vertex_count = @intCast(u32, object.positions.len),
+            .vertex_count = @intCast(object.positions.len),
 
             .index_buffer = index_buffer,
-            .index_count = @intCast(u32, object.indices.len),
+            .index_count = @intCast(object.indices.len),
 
             .positions = try allocator.dupe(F32x3, object.positions),
             .indices = try allocator.dupe(U32x3, object.indices),

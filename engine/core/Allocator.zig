@@ -40,8 +40,8 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
 
 pub fn findMemoryType(self: *const Self, type_filter: u32, properties: vk.MemoryPropertyFlags) !u5 {
     return for (0..self.memory_type_properties.len) |i| {
-        if (type_filter & (@as(u32, 1) << @intCast(u5, i)) != 0 and self.memory_type_properties[i].contains(properties)) {
-            break @intCast(u5, i);
+        if (type_filter & (@as(u32, 1) << @intCast(i)) != 0 and self.memory_type_properties[i].contains(properties)) {
+            break @intCast(i);
         }
     } else error.UnavailbleMemoryType;
 }
@@ -160,7 +160,7 @@ pub fn HostBuffer(comptime T: type) type {
             return HostBuffer(u8) {
                 .handle = self.handle,
                 .memory = self.memory,
-                .data = @ptrCast([*]u8, self.data)[0..self.data.len * @sizeOf(T)],
+                .data = @as([*]u8, @ptrCast(self.data))[0..self.data.len * @sizeOf(T)],
             };
         }
     };
@@ -173,7 +173,7 @@ pub fn createHostBuffer(self: *Self, vc: *const VulkanContext, comptime T: type,
     const size = @sizeOf(T) * count;
     try self.createRawBuffer(vc, size, usage, .{ .host_visible_bit = true, .host_coherent_bit = true }, &buffer, &memory);
 
-    const data = @ptrCast([*]T, @alignCast(@alignOf([*]T), (try vc.device.mapMemory(memory, 0, size, .{})).?))[0..count];
+    const data = @as([*]T, @ptrCast(@alignCast((try vc.device.mapMemory(memory, 0, size, .{})).?)))[0..count];
 
     return HostBuffer(T) {
         .handle = buffer,

@@ -118,7 +118,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     // stuff that is in every material
     const material = blk: {
         var material: Material = undefined;
-        material.normal = @intCast(u32, textures.items.len);
+        material.normal = @intCast(textures.items.len);
         material.type = .standard_pbr;
         if (gltf_material.normal_texture) |texture| {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
@@ -138,8 +138,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .raw = .{
                     .bytes = rg,
                     .extent = vk.Extent2D {
-                        .width = @intCast(u32, img.width),
-                        .height = @intCast(u32, img.height),
+                        .width = @intCast(img.width),
+                        .height = @intCast(img.height),
                     },
                     .format = .r8g8_unorm,
                     .layout = .shader_read_only_optimal,
@@ -152,7 +152,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             });
         }
 
-        material.emissive = @intCast(u32, textures.items.len);
+        material.emissive = @intCast(textures.items.len);
         if (gltf_material.emissive_texture) |texture| {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
             std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -169,8 +169,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .raw = .{
                     .bytes = rgba.asBytes(),
                     .extent = vk.Extent2D {
-                        .width = @intCast(u32, img.width),
-                        .height = @intCast(u32, img.height),
+                        .width = @intCast(img.width),
+                        .height = @intCast(img.height),
                     },
                     .format = .r8g8b8a8_srgb,
                     .layout = .shader_read_only_optimal,
@@ -193,7 +193,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         return .{ material, .{ .glass = .{ .ior = standard_pbr.ior } } };
     }
 
-    standard_pbr.color = @intCast(u32, textures.items.len);
+    standard_pbr.color = @intCast(textures.items.len);
     if (gltf_material.metallic_roughness.base_color_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -210,8 +210,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             .raw = .{
                 .bytes = rgba.asBytes(),
                 .extent = vk.Extent2D {
-                    .width = @intCast(u32, img.width),
-                    .height = @intCast(u32, img.height),
+                    .width = @intCast(img.width),
+                    .height = @intCast(img.height),
                 },
                 .format = .r8g8b8a8_srgb,
                 .layout = .shader_read_only_optimal,
@@ -224,8 +224,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         });
     }
 
-    standard_pbr.metalness = @intCast(u32, textures.items.len);
-    standard_pbr.roughness = @intCast(u32, textures.items.len + 1);
+    standard_pbr.metalness = @intCast(textures.items.len);
+    standard_pbr.roughness = @intCast(textures.items.len + 1);
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -245,8 +245,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             .raw = .{
                 .bytes = rs,
                 .extent = vk.Extent2D {
-                    .width = @intCast(u32, img.width),
-                    .height = @intCast(u32, img.height),
+                    .width = @intCast(img.width),
+                    .height = @intCast(img.height),
                 },
                 .format = .r8_unorm,
                 .layout = .shader_read_only_optimal,
@@ -257,8 +257,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             .raw = .{
                 .bytes = gs,
                 .extent = vk.Extent2D {
-                    .width = @intCast(u32, img.width),
-                    .height = @intCast(u32, img.height),
+                    .width = @intCast(img.width),
+                    .height = @intCast(img.height),
                 },
                 .format = .r8_unorm,
                 .layout = .shader_read_only_optimal,
@@ -404,7 +404,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
             .dst_set = undefined,
             .dst_binding = 7,
             .dst_array_element = 0,
-            .descriptor_count = @intCast(u32, image_infos.len),
+            .descriptor_count = @intCast(image_infos.len),
             .descriptor_type = .sampled_image,
             .p_image_info = image_infos.ptr,
             .p_buffer_info = undefined,
@@ -474,8 +474,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
             const geometries = try allocator.alloc(Geometry, mesh.primitives.items.len);
             for (mesh.primitives.items, geometries) |primitive, *geometry| {
                 geometry.* = Geometry {
-                    .mesh = @intCast(u32, objects.items.len),
-                    .material = @intCast(u32, primitive.material.?),
+                    .mesh = @intCast(objects.items.len),
+                    .material = @intCast(primitive.material.?),
                     .sampled = std.mem.startsWith(u8, gltf.data.materials.items[primitive.material.?].name, "Emitter"),
                 };
                 // get indices
@@ -527,9 +527,9 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
                     // TODO: remove ptrcast workaround below once ptrcast works on slices
                     break :blk2 .{
-                        .positions = @ptrCast([*]F32x3, positions_slice.ptr)[0..positions_slice.len / 3],
-                        .texcoords = @ptrCast([*]F32x2, texcoords_slice.ptr)[0..texcoords_slice.len / 2],
-                        .normals = @ptrCast([*]F32x3, normals_slice.ptr)[0..normals_slice.len / 3],
+                        .positions = @as([*]F32x3, @ptrCast(positions_slice.ptr))[0..positions_slice.len / 3],
+                        .texcoords = @as([*]F32x2, @ptrCast(texcoords_slice.ptr))[0..texcoords_slice.len / 2],
+                        .normals = @as([*]F32x3, @ptrCast(normals_slice.ptr))[0..normals_slice.len / 3],
                     };
                 };
                 errdefer allocator.free(vertices.positions);

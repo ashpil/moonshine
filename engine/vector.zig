@@ -11,8 +11,8 @@ fn checkValidVecT(comptime T: type) void {
 }
 
 fn intToT(comptime T: type, comptime int: comptime_int) T {
-    if (@typeInfo(T) == .Float) return @intToFloat(T, int);
-    return @intCast(T, int);
+    if (@typeInfo(T) == .Float) return @floatFromInt(int);
+    return @intCast(int);
 }
 
 pub fn Vec2(comptime T: type) type {

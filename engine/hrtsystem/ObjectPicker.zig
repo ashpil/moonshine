@@ -41,7 +41,7 @@ const ClickDataShader = extern struct {
             return null;
         } else {
             return ClickedObject {
-                .instance_index = @intCast(u32, self.instance_index),
+                .instance_index = @intCast(self.instance_index),
                 .geometry_index = self.geometry_index,
                 .primitive_index = self.primitive_index,
                 .barycentrics = self.barycentrics,
@@ -102,7 +102,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .level = vk.CommandBufferLevel.primary,
         .command_pool = command_pool,
         .command_buffer_count = 1,
-    }, @ptrCast([*]vk.CommandBuffer, &command_buffer));
+    }, @ptrCast(&command_buffer));
 
     const ready_fence = try vc.device.createFence(&.{
         .flags = .{},

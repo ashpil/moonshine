@@ -218,7 +218,7 @@ pub fn main() !void {
             imgui.popItemWidth();
         }
         imgui.end();
-        imgui.setNextWindowPos(@intToFloat(f32, display.swapchain.extent.width - 50) - 250, 50);
+        imgui.setNextWindowPos(@as(f32, @floatFromInt(display.swapchain.extent.width - 50)) - 250, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Click");
         if (has_clicked) {
@@ -252,12 +252,12 @@ pub fn main() !void {
                 try imgui.textFmt("type: {s}", .{@tagName(material.type)});
                 inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
                     const VariantType = union_field.type;
-                    if (VariantType != void and enum_field.value == @enumToInt(material.type)) {
-                        const material_idx = @intCast(u32, (material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
+                    if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
+                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
                         var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name), material_idx);
                         inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                             switch (struct_field.type) {
-                                f32 => if (imgui.dragScalar(f32, struct_field.name[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
+                                f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
                                     scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
                                     scene.camera.film.clear();
                                 },
@@ -268,7 +268,7 @@ pub fn main() !void {
                     }
                 }
                 imgui.separatorText("transform");
-                const old_transform = @bitCast(Mat3x4, instance.transform);
+                const old_transform: Mat3x4 = @bitCast(instance.transform);
                 var translation = old_transform.extract_translation();
                 imgui.pushItemWidth(imgui.getFontSize() * -6);
                 if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
@@ -284,10 +284,10 @@ pub fn main() !void {
         imgui.end();
         if (imgui.isMouseClicked(.left) and !imgui.getIO().WantCaptureMouse) {
             const pos = window.getCursorPos();
-            const x = @floatCast(f32, pos.x) / @intToFloat(f32, display.swapchain.extent.width);
-            const y = @floatCast(f32, pos.y) / @intToFloat(f32, display.swapchain.extent.height);
+            const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
+            const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @floatToInt(i32, pos.x), .y = @floatToInt(i32, pos.y), .z = 0 });
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
@@ -404,8 +404,8 @@ pub fn main() !void {
                 .y = 0,
                 .z = 0,
             }, .{
-                .x = @intCast(i32, scene.camera.film.extent.width),
-                .y = @intCast(i32, scene.camera.film.extent.height),
+                .x = @as(i32, @intCast(scene.camera.film.extent.width)),
+                .y = @as(i32, @intCast(scene.camera.film.extent.height)),
                 .z = 1,
             } },
             .dst_subresource = subresource,
@@ -416,8 +416,8 @@ pub fn main() !void {
                     .z = 0,
                 },
                 .{
-                    .x = @intCast(i32, display.swapchain.extent.width),
-                    .y = @intCast(i32, display.swapchain.extent.height),
+                    .x = @as(i32, @intCast(display.swapchain.extent.width)),
+                    .y = @as(i32, @intCast(display.swapchain.extent.height)),
                     .z = 1,
                 },
             },
@@ -485,7 +485,7 @@ pub fn main() !void {
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
             scene.camera.film.sample_count += current_samples_per_run;
-            if (max_sample_count != 0) scene.camera.film.sample_count = std.math.min(scene.camera.film.sample_count, max_sample_count);
+            if (max_sample_count != 0) scene.camera.film.sample_count = @min(scene.camera.film.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
@@ -511,7 +511,7 @@ const WindowData = struct {
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Window.ModifierKeys) void {
     const ptr = window.getUserPointer().?;
-    const window_data = @ptrCast(*WindowData, @alignCast(@alignOf(WindowData), ptr));
+    const window_data: *WindowData = @ptrCast(@alignCast(ptr));
 
     if (action == .repeat or action == .press) {
         var camera_info = window_data.camera_info;

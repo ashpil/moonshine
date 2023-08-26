@@ -126,13 +126,13 @@ pub const helpers = struct {
 
         const image_channels_slice = image_channels.slice();
         image.num_channels = channel_count;
-        image.images = &[3][*c]u8 {
+        image.images = @constCast(&[3][*c]u8 {
             image_channels_slice.ptrs[2],
             image_channels_slice.ptrs[1],
             image_channels_slice.ptrs[0],
-        };
-        image.width = @intCast(c_int, size.width);
-        image.height = @intCast(c_int, size.height);
+        });
+        image.width = @intCast(size.width);
+        image.height = @intCast(size.height);
 
         var header_channels = try allocator.alloc(ChannelInfo, channel_count);
         defer allocator.free(header_channels);
@@ -156,8 +156,8 @@ pub const helpers = struct {
         header.requested_pixel_types = requested_pixel_types.ptr;
 
         inline for (0..channel_count) |i| {
-            header.pixel_types[i] = @enumToInt(PixelType.float);
-            header.requested_pixel_types[i] = @enumToInt(PixelType.float);
+            header.pixel_types[i] = @intFromEnum(PixelType.float);
+            header.requested_pixel_types[i] = @intFromEnum(PixelType.float);
         }
 
         try saveExrImageToFile(&image, &header, out_filename);
@@ -188,10 +188,10 @@ pub const helpers = struct {
         var height: c_int = undefined;
         try loadEXR(&out_rgba, &width, &height, filename);
         const malloc_slice = Rgba2D {
-            .ptr = @ptrCast([*][4]f32, out_rgba),
+            .ptr = @ptrCast(out_rgba),
             .extent = vk.Extent2D {
-                .width = @intCast(u32, width),
-                .height = @intCast(u32, height),
+                .width = @intCast(width),
+                .height = @intCast(height),
             },
         };
         const out = Rgba2D {

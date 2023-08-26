@@ -186,7 +186,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .depth_attachment_format = .undefined,
                 .stencil_attachment_format = .undefined,
             },
-        }), null, @ptrCast([*]vk.Pipeline, &pipeline));
+        }), null, @ptrCast(&pipeline));
         break :blk pipeline;
     };
 
@@ -355,9 +355,9 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
     if (draw_data.CmdListsCount > 0) {
         var vertex_offset: usize = 0;
         var index_offset: usize = 0;
-        for (draw_data.CmdLists[0..@intCast(usize, draw_data.CmdListsCount)]) |cmd_list| {
-            const vertex_count = @intCast(usize, cmd_list.*.VtxBuffer.Size);
-            const index_count = @intCast(usize, cmd_list.*.IdxBuffer.Size);
+        for (draw_data.CmdLists[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
+            const vertex_count: usize = @intCast(cmd_list.*.VtxBuffer.Size);
+            const index_count: usize = @intCast(cmd_list.*.IdxBuffer.Size);
             std.mem.copy(imgui.DrawVert, vertex_buffer.data[vertex_offset..], cmd_list.*.VtxBuffer.Data[0..vertex_count]);
             std.mem.copy(imgui.DrawIdx, index_buffer.data[index_offset..], cmd_list.*.IdxBuffer.Data[0..index_count]);
             vertex_offset += vertex_count;
@@ -392,8 +392,8 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
     vc.device.cmdSetViewport(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Viewport{
         .x = 0,
         .y = 0,
-        .width = @intToFloat(f32, self.extent.width),
-        .height = @intToFloat(f32, self.extent.height),
+        .width = @floatFromInt(self.extent.width),
+        .height = @floatFromInt(self.extent.height),
         .min_depth = 0.0,
         .max_depth = 1.0,
     }));
@@ -412,23 +412,23 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
 
     var global_idx_offset: u32 = 0;
     var global_vtx_offset: u32 = 0;
-    for (draw_data.CmdLists[0..@intCast(usize, draw_data.CmdListsCount)]) |cmd_list| {
-        for (cmd_list.*.CmdBuffer.Data[0..@intCast(usize, cmd_list.*.CmdBuffer.Size)]) |cmd| {
+    for (draw_data.CmdLists[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
+        for (cmd_list.*.CmdBuffer.Data[0..@intCast(cmd_list.*.CmdBuffer.Size)]) |cmd| {
             if (cmd.UserCallback) |_| @panic("todo");
             vc.device.cmdSetScissor(command_buffer, 0, 1, vk_helpers.toPointerType(&vk.Rect2D{
-                .offset = vk.Offset2D{
-                    .x = @floatToInt(i32, cmd.ClipRect.x),
-                    .y = @floatToInt(i32, cmd.ClipRect.y),
+                .offset = vk.Offset2D {
+                    .x = @intFromFloat(cmd.ClipRect.x),
+                    .y = @intFromFloat(cmd.ClipRect.y),
                 },
-                .extent = vk.Extent2D{
-                    .width = @floatToInt(u32, cmd.ClipRect.z) - @floatToInt(u32, cmd.ClipRect.x),
-                    .height = @floatToInt(u32, cmd.ClipRect.w) - @floatToInt(u32, cmd.ClipRect.y),
+                .extent = vk.Extent2D {
+                    .width = @as(u32, @intFromFloat(cmd.ClipRect.z)) - @as(u32, @intFromFloat(cmd.ClipRect.x)),
+                    .height = @as(u32, @intFromFloat(cmd.ClipRect.w)) - @as(u32, @intFromFloat(cmd.ClipRect.y)),
                 },
             }));
-            vc.device.cmdDrawIndexed(command_buffer, cmd.ElemCount, 1, global_idx_offset + cmd.IdxOffset, @intCast(i32, global_vtx_offset + cmd.VtxOffset), 0);
+            vc.device.cmdDrawIndexed(command_buffer, cmd.ElemCount, 1, global_idx_offset + cmd.IdxOffset, @intCast(global_vtx_offset + cmd.VtxOffset), 0);
         }
-        global_idx_offset += @intCast(u32, cmd_list.*.IdxBuffer.Size);
-        global_vtx_offset += @intCast(u32, cmd_list.*.VtxBuffer.Size);
+        global_idx_offset += @intCast(cmd_list.*.IdxBuffer.Size);
+        global_vtx_offset += @intCast(cmd_list.*.VtxBuffer.Size);
     }
     vc.device.cmdEndRendering(command_buffer);
 }
