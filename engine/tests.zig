@@ -3,15 +3,13 @@ const vk = @import("vulkan");
 
 const engine = @import("engine");
 
-const VulkanContext = engine.hrtsystem.VulkanContext;
-const Commands = engine.hrtsystem.Commands;
-const VkAllocator = engine.hrtsystem.Allocator;
+const VulkanContext = engine.core.VulkanContext;
+const Commands = engine.core.Commands;
+const VkAllocator = engine.core.Allocator;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 
-const utils = engine.hrtsystem.utils;
-
-pub const vulkan_context_device_functions = engine.hrtsystem.required_device_functions;
+const utils = engine.core.vk_helpers;
 
 const TestingContext = struct {
     vc: VulkanContext,
@@ -85,7 +83,7 @@ const TestingContext = struct {
         };
 
         self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = @intCast(u32, barriers.len),
+            .image_memory_barrier_count = @intCast(barriers.len),
             .p_image_memory_barriers = &barriers,
         });
 

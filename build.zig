@@ -25,28 +25,28 @@ pub fn build(b: *std.build.Builder) void {
     const tinyexr = makeTinyExrLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
 
-    // TODO: revive once figure out #12201 workaround
-    // {
-    //     const tests = b.addTest(.{
-    //         .name = "tests",
-    //         .root_source_file = .{ .path = "engine/tests.zig" },
-    //         .target = target,
-    //         .optimize = optimize,
-    //     });
-    //     tests.install();
-    //     tests.addModule("vulkan", vk);
-    //     tests.addModule("engine", default_engine);
-
-    //     tests.linkLibC();
-    //     tinyexr.add(tests);
-
-    //     const run = tests.run();
-    //     run.step.dependOn(b.getInstallStep());
-
-    //     b.step("tests", "Run engine tests").dependOn(&run.step);
-    // }
-
     var exes = std.ArrayList(*std.Build.CompileStep).init(b.allocator);
+
+    // TODO: make custom test runner parallel + share some state across tests
+    exes.append(blk: {
+        var engine_options = default_engine_options;
+        engine_options.window = false;
+        engine_options.gui = false;
+        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
+
+        const tests = b.addTest(.{
+            .name = "tests",
+            .root_source_file = .{ .path = "engine/tests.zig" },
+            .test_runner = "engine/test_runner.zig",
+            .target = target,
+            .optimize = optimize,
+        });
+        tests.addModule("vulkan", vk);
+        tests.addModule("engine", engine);
+        tinyexr.add(tests);
+
+        break :blk tests;
+    }) catch unreachable;
 
     // online exe
     exes.append(blk: {
