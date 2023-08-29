@@ -1,2 +1,2 @@
-pub const Gui = @import("./Gui.zig");
+pub const Platform = @import("./Platform.zig");
 pub const imgui = @import("./imgui.zig");

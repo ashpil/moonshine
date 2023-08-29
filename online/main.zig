@@ -21,7 +21,7 @@ const ObjectPicker = hrtsystem.ObjectPicker;
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
 const Window = engine.Window;
-const Gui = engine.gui.Gui;
+const Platform = engine.gui.Platform;
 const imgui = engine.gui.imgui;
 
 const vector = engine.vector;
@@ -74,7 +74,7 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 }
 
 pub const vulkan_context_instance_functions = displaysystem.required_instance_functions;
-pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Gui.required_device_functions).merge(hrtsystem.required_device_functions);
+pub const vulkan_context_device_functions = displaysystem.required_device_functions.merge(Platform.required_device_functions).merge(hrtsystem.required_device_functions);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -100,7 +100,7 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var gui = try Gui.create(&context, display.swapchain, window, window_extent, &vk_allocator, allocator, &commands);
+    var gui = try Platform.create(&context, display.swapchain, window, window_extent, &vk_allocator, allocator, &commands);
     defer gui.destroy(&context, allocator);
 
     var destruction_queue = DestructionQueue.create(); // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles

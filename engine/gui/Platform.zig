@@ -1,4 +1,5 @@
-// more high level gui interface
+// imgui platform implementation
+
 const vk = @import("vulkan");
 const std = @import("std");
 
