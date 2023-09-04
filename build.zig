@@ -295,129 +295,111 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
 
     if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
     
+    var wayland_include_path: ?[]const u8 = null;
+
     if (build_wayland) {
-        try genWaylandHeaders(b, &lib.step);
+        wayland_include_path = try genWaylandHeaders(b, &lib.step);
         lib.addIncludePath(.{ .path = "./zig-cache/wayland-gen-headers/" });
     }
 
     // collect source files
-    var sources = std.ArrayList([]const u8).init(b.allocator);
-    {
+    const sources = blk: {
+        var sources = std.ArrayList([]const u8).init(b.allocator);
+
         const source_path = path ++ "src/";
 
         const general_sources = [_][]const u8 {
-            "context.c",
-            "init.c",
-            "input.c",
-            "monitor.c",
-            "vulkan.c",
-            "window.c",
-            "egl_context.c",
-            "osmesa_context.c",
-            "platform.c",
-            "null_init.c",
-            "null_window.c",
-            "null_joystick.c",
-            "null_monitor.c",
-            "null_monitor.c",
+            source_path ++ "context.c",
+            source_path ++ "init.c",
+            source_path ++ "input.c",
+            source_path ++ "monitor.c",
+            source_path ++ "vulkan.c",
+            source_path ++ "window.c",
+            source_path ++ "egl_context.c",
+            source_path ++ "osmesa_context.c",
+            source_path ++ "platform.c",
+            source_path ++ "null_init.c",
+            source_path ++ "null_window.c",
+            source_path ++ "null_joystick.c",
+            source_path ++ "null_monitor.c",
+            source_path ++ "null_monitor.c",
         };
 
         const linux_sources = [_][]const u8 {
-            "posix_time.c",
-            "posix_thread.c",
-            "posix_module.c",
-            "posix_poll.c",
-            "xkb_unicode.c",
-            "linux_joystick.c",
+            source_path ++ "posix_time.c",
+            source_path ++ "posix_thread.c",
+            source_path ++ "posix_module.c",
+            source_path ++ "posix_poll.c",
+            source_path ++ "xkb_unicode.c",
+            source_path ++ "linux_joystick.c",
         };
 
         const x11_sources = [_][]const u8 {
-            "x11_init.c",
-            "x11_monitor.c",
-            "x11_window.c",
-            "glx_context.c",
+            source_path ++ "x11_init.c",
+            source_path ++ "x11_monitor.c",
+            source_path ++ "x11_window.c",
+            source_path ++ "glx_context.c",
         };
 
         const wayland_sources = [_][]const u8 {
-            "wl_init.c",
-            "wl_monitor.c",
-            "wl_window.c",
+            source_path ++ "wl_init.c",
+            source_path ++ "wl_monitor.c",
+            source_path ++ "wl_window.c",
         };
 
         const windows_sources = [_][]const u8 {
-            "win32_thread.c",
-            "wgl_context.c",
-            "win32_init.c",
-            "win32_monitor.c",
-            "win32_time.c",
-            "win32_joystick.c",
-            "win32_window.c",
-            "win32_module.c",
+            source_path ++ "win32_thread.c",
+            source_path ++ "wgl_context.c",
+            source_path ++ "win32_init.c",
+            source_path ++ "win32_monitor.c",
+            source_path ++ "win32_time.c",
+            source_path ++ "win32_joystick.c",
+            source_path ++ "win32_window.c",
+            source_path ++ "win32_module.c",
         };
-
-        inline for (general_sources) |source| {
-            try sources.append(source_path ++ source);
-        }
+        
+        try sources.appendSlice(&general_sources);
 
         if (target.isLinux()) {
-            inline for (linux_sources) |source| {
-                try sources.append(source_path ++ source);
-            }
-            if (build_wayland) {
-                inline for (wayland_sources) |source| {
-                    try sources.append(source_path ++ source);
-                }
+            try sources.appendSlice(&linux_sources);
+            if (build_wayland) try sources.appendSlice(&wayland_sources);
+            if (build_x11) try sources.appendSlice(&x11_sources);
+        } else if (target.isWindows()) try sources.appendSlice(&windows_sources);
 
-            }
-            if (build_x11) {
-                inline for (x11_sources) |source| {
-                    try sources.append(source_path ++ source);
-                }
-            }
-        } else if (target.isWindows()) {
-            inline for (windows_sources) |source| {
-                try sources.append(source_path ++ source);
-            }
-        }
-    }
-
-    var flags = std.ArrayList([]const u8).init(b.allocator);
-
-    const general_flags = [_][]const u8 {
-        "-std=c99",
-        "-D_DEFAULT_SOURCE",
-        "-pedantic",
-        "-Wdeclaration-after-statement",
-        "-Wall",
+        break :blk sources.items;
     };
 
-    inline for (general_flags) |flag| {
-        try flags.append(flag);
-    }
+    const flags = blk: {
+        var flags = std.ArrayList([]const u8).init(b.allocator);
 
-    if (target.isLinux()) {
-        if (build_wayland) {
-            try flags.append("-D_GLFW_WAYLAND");
-            try flags.append("-I./zig-cache/wayland-gen-headers/");
-        }
-        if (build_x11) {
-            try flags.append("-D_GLFW_X11");
-        }
-    } else {
-        try flags.append("-D_GLFW_WIN32");
-    }
+        const general_flags = [_][]const u8 {
+            "-std=c99",
+            "-D_DEFAULT_SOURCE",
+            "-pedantic",
+            "-Wdeclaration-after-statement",
+            "-Wall",
+        };
 
-    lib.addCSourceFiles(sources.items, flags.items);
+        try flags.appendSlice(&general_flags);
 
-    // link necessary deps
+        if (target.isLinux()) {
+            if (build_wayland) try flags.append("-D_GLFW_WAYLAND");
+            if (build_x11) try flags.append("-D_GLFW_X11");
+        } else if (target.isWindows()) try flags.append("-D_GLFW_WIN32");
+
+        break :blk flags.items;
+    };
+
+    lib.addCSourceFiles(sources, flags);
+
+    // link and include necessary deps
     lib.linkLibC();
+    if (target.isLinux() and build_wayland) lib.addIncludePath(.{ .path = wayland_include_path.? });
 
     if (target.isLinux()) {
         if (build_wayland) lib.linkSystemLibrary("wayland-client");
         if (build_x11) lib.linkSystemLibrary("X11");
-    } else if (target.isWindows()) {
-        lib.linkSystemLibrary("gdi32"); 
-    }
+    } else if (target.isWindows()) lib.linkSystemLibrary("gdi32");
 
     return CLibrary {
         .include_path = path ++ "include",
@@ -426,20 +408,10 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
 }
 
 fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
-    const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-        protocol_path,
-        xml,
-    });
+    const xml_path = b.pathJoin(&.{ protocol_path, xml });
 
-    const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
-        header_path,
-        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol-code.h", .{out_name}),
-    });
-
-    const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
-        header_path,
-        try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.h", .{out_name}),
-    });
+    const out_source = b.pathJoin(&.{ header_path, try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol-code.h", .{ out_name }) });
+    const out_header = b.pathJoin(&.{ header_path, try std.fmt.allocPrint(b.allocator, "wayland-{s}-client-protocol.h", .{ out_name }) });
 
     try step.evalChildProcess(&[_][]const u8 {
         "wayland-scanner", "private-code", xml_path, out_source,
@@ -450,30 +422,16 @@ fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path:
     });
 }
 
-fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
-    const pkg_config_protocols_result = try std.ChildProcess.exec(.{
-        .allocator = b.allocator,
-        .argv =  &[_][]const u8 {
-            "pkg-config", "wayland-protocols", "--variable=pkgdatadir"
-        },
-    });
+fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) ![]const u8 {
+    const protocol_path = blk: {
+        var out_code: u8 = undefined;
+        const pc_output = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" }, &out_code, .Inherit) catch return error.WaylandProtocolsNotFound;
+        break :blk std.mem.trim(u8, pc_output, &std.ascii.whitespace);
+    };
 
-    if (pkg_config_protocols_result.term == .Exited and pkg_config_protocols_result.term.Exited != 0) {
-        return error.WaylandProtocolsNotFound;
-    }
+    const header_path = try b.cache_root.join(b.allocator, &.{"wayland-gen-headers"});
 
-    const protocol_path = std.mem.trimRight(u8, pkg_config_protocols_result.stdout, " \n");
-
-    const header_path = try b.cache_root.join(
-        b.allocator,
-        &.{"wayland-gen-headers"},
-    );
-
-    if (std.fs.makeDirAbsolute(header_path)) |_| {
-    } else |err| switch (err) {
-        error.PathAlreadyExists => {},
-        else => |e| return e,
-    }
+    std.fs.makeDirAbsolute(header_path) catch |err| if (err != error.PathAlreadyExists) return err;
 
     try genWaylandHeader(b, step, protocol_path, header_path, "stable/xdg-shell/xdg-shell.xml", "xdg-shell");
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "xdg-decoration");
@@ -483,42 +441,28 @@ fn genWaylandHeaders(b: *std.build.Builder, step: *std.build.Step) !void {
     try genWaylandHeader(b, step, protocol_path, header_path, "unstable/idle-inhibit/idle-inhibit-unstable-v1.xml", "idle-inhibit-unstable-v1");
 
     {
-        const pkg_config_wayland_result = try std.ChildProcess.exec(.{
-            .allocator = b.allocator,
-            .argv =  &[_][]const u8 {
-                "pkg-config", "wayland-client", "--variable=pkgdatadir"
-            },
-        });
+        const client_path = blk: {
+            var out_code: u8 = undefined;
+            const pc_output = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-client" }, &out_code, .Inherit) catch return error.WaylandClientNotFound;
+            break :blk std.mem.trim(u8, pc_output, &std.ascii.whitespace);
+        };
 
-        if (pkg_config_wayland_result.term == .Exited and pkg_config_wayland_result.term.Exited != 0) {
-            return error.WaylandClientNotFound;
-        }
-
-        const wayland_path = std.mem.trimRight(u8, pkg_config_wayland_result.stdout, " \n");
-        const wayland_xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
-            wayland_path,
-            "wayland.xml",
-        });
+        const wayland_xml_path = b.pathJoin(&.{ client_path, "wayland.xml" });
 
         {
-            const out_source = try std.fs.path.join(b.allocator, &[_][]const u8{
-                header_path,
-                "wayland-client-protocol-code.h",
-            });
+            const out_source = b.pathJoin(&.{ header_path, "wayland-client-protocol-code.h" });
             try step.evalChildProcess(&[_][]const u8 {
                 "wayland-scanner", "private-code", wayland_xml_path, out_source,
             });
         }
        
         {
-            const out_header = try std.fs.path.join(b.allocator, &[_][]const u8{
-                header_path,
-                "wayland-client-protocol.h",
-            });
-
+            const out_header = b.pathJoin(&.{ header_path, "wayland-client-protocol.h" });
             try step.evalChildProcess(&[_][]const u8 {
                 "wayland-scanner", "client-header", wayland_xml_path, out_header,
             });
         }
     }
+
+    return header_path;
 }
