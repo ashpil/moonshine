@@ -290,19 +290,12 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
         .optimize = .ReleaseFast,
     });
 
-    const maybe_lws = b.option([]const u8, "target-lws", "Target linux window system to use, omit to build all.\n                               Ignored for Windows builds. (options: X11, Wayland)");
-    var lws: Lws = .all;
-    if (maybe_lws) |str_lws| {
-        if (std.mem.eql(u8, str_lws, "Wayland")) {
-            try genWaylandHeaders(b, &lib.step);
-            lib.addIncludePath(.{ .path = "./zig-cache/wayland-gen-headers/" });
-            lws = .wayland;
-        } else if (std.mem.eql(u8, str_lws, "X11")) {
-            lws = .x11;
-        } else {
-            return error.UnsupportedLinuxWindowSystem;
-        }
-    } else if (target.isLinux()) {
+    const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
+    const build_x11 = b.option(bool, "x11", "Support X11 on Linux. (default: true)") orelse true;
+
+    if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
+    
+    if (build_wayland) {
         try genWaylandHeaders(b, &lib.step);
         lib.addIncludePath(.{ .path = "./zig-cache/wayland-gen-headers/" });
     }
@@ -370,21 +363,15 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
             inline for (linux_sources) |source| {
                 try sources.append(source_path ++ source);
             }
-            switch (lws) {
-                .all => {
-                    inline for (x11_sources ++ wayland_sources) |source| {
-                        try sources.append(source_path ++ source);
-                    }
-                },
-                .x11 => {
-                    inline for (x11_sources) |source| {
-                        try sources.append(source_path ++ source);
-                    }
-                },
-                .wayland => {
-                    inline for (wayland_sources) |source| {
-                        try sources.append(source_path ++ source);
-                    }
+            if (build_wayland) {
+                inline for (wayland_sources) |source| {
+                    try sources.append(source_path ++ source);
+                }
+
+            }
+            if (build_x11) {
+                inline for (x11_sources) |source| {
+                    try sources.append(source_path ++ source);
                 }
             }
         } else if (target.isWindows()) {
@@ -409,17 +396,12 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     }
 
     if (target.isLinux()) {
-        switch (lws) {
-            .all => {
-                try flags.append("-D_GLFW_X11");
-                try flags.append("-D_GLFW_WAYLAND");
-                try flags.append("-I./zig-cache/wayland-gen-headers/");
-            },
-            .x11 => try flags.append("-D_GLFW_X11"),
-            .wayland => { 
-                try flags.append("-D_GLFW_WAYLAND");
-                try flags.append("-I./zig-cache/wayland-gen-headers/");
-            }
+        if (build_wayland) {
+            try flags.append("-D_GLFW_WAYLAND");
+            try flags.append("-I./zig-cache/wayland-gen-headers/");
+        }
+        if (build_x11) {
+            try flags.append("-D_GLFW_X11");
         }
     } else {
         try flags.append("-D_GLFW_WIN32");
@@ -431,14 +413,8 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     lib.linkLibC();
 
     if (target.isLinux()) {
-        switch (lws) {
-            .all => {
-                lib.linkSystemLibrary("X11");
-                lib.linkSystemLibrary("wayland-client");
-            },
-            .x11 => lib.linkSystemLibrary("X11"),
-            .wayland => lib.linkSystemLibrary("wayland-client"),
-        }
+        if (build_wayland) lib.linkSystemLibrary("wayland-client");
+        if (build_x11) lib.linkSystemLibrary("X11");
     } else if (target.isWindows()) {
         lib.linkSystemLibrary("gdi32"); 
     }
@@ -448,12 +424,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
         .library = lib,
     };
 }
-
-const Lws = enum {
-    wayland,
-    x11,
-    all,
-};
 
 fn genWaylandHeader(b: *std.build.Builder, step: *std.build.Step, protocol_path: []const u8, header_path: []const u8, xml: []const u8, out_name: []const u8) !void {
     const xml_path = try std.fs.path.join(b.allocator, &[_][]const u8{
