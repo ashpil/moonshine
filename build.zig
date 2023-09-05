@@ -1,6 +1,8 @@
 const std = @import("std");
 const vkgen = @import("./deps/vulkan-zig/generator/index.zig");
 
+// TODO: useful error messages on missing system deps
+
 pub fn build(b: *std.Build) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
@@ -85,6 +87,93 @@ pub fn build(b: *std.Build) !void {
         break :blk exe;
     });
 
+    // hydra shared lib
+    if (target.result.os.tag == .linux) {
+        const lib = b.addSharedLibrary(.{
+            .name = "hdMoonshine",
+            .root_source_file = .{ .path = "hydra/rendererPlugin.cpp" },
+            .target = target,
+            .optimize = optimize,
+        });
+        lib.addCSourceFiles(.{
+           .files = &.{ "hydra/renderDelegate.cpp" },
+        });
+
+        // options
+        const usd_built_dir = b.option([]const u8, "usd-install-path", "Where your USD SDK is installed.") orelse "../USD";
+        const usd_compiler: enum { gcc, clang } = .gcc; // assumes stdlib matches compiler
+
+        // link against usd produced libraries
+        lib.addLibraryPath(.{ .path = b.pathJoin(&.{ usd_built_dir, "lib/" }) });
+        lib.linkSystemLibrary("usd_hd");
+        
+        // include headers necessary for usd
+        lib.addIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });
+
+        // might need python headers if USD built with python support
+        {
+            var out_code: u8 = undefined;
+            var iter = std.mem.splitScalar(u8, b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "", ' ');
+            while (iter.next()) |include_dir| lib.addIncludePath(.{ .path = include_dir[2..] });
+        }
+
+        // deal with the fact that USD may not have been compiled with clang 
+        // make nicer once https://github.com/ziglang/zig/issues/3936
+        switch (usd_compiler) {
+            .gcc => {
+                // configure necessary gnu macros
+                lib.defineCMacro("ARCH_HAS_GNU_STL_EXTENSIONS", null);
+
+                // link against stdlibc++
+                lib.addObjectFile(.{ .path = std.mem.trim(u8, b.run(&.{ "zig", "c++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
+
+                // need stdlibc++ include directories
+                var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "clang", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
+                while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
+                    if (std.mem.startsWith(u8, include_dir[1..], "/usr/lib/clang")) continue;
+                    lib.addIncludePath(.{ .path = include_dir[1..] });
+                };
+            },
+            .clang => {
+                // untested
+                lib.linkLibCpp();
+            }
+        }
+
+        const step = b.step("hydra", "Build hydra delegate");
+
+        const install = b.addInstallArtifact(lib, .{ .dest_sub_path = "hdMoonshine.so" });
+        step.dependOn(&install.step);
+
+        const write_pluginfo_json = b.addWriteFiles();
+        const pluginfo_file = write_pluginfo_json.add("plugInfo.json",
+            \\{
+            \\    "Plugins": [
+            \\        {
+            \\            "Info": {
+            \\                "Types": {
+            \\                    "HdMoonshinePlugin": {
+            \\                        "bases": [
+            \\                            "HdRendererPlugin"
+            \\                        ],
+            \\                        "displayName": "Moonshine",
+            \\                        "priority": 1
+            \\                    }
+            \\                }
+            \\            },
+            \\            "LibraryPath": "hdMoonshine.so",
+            \\            "Name": "HdMoonshine",
+            \\            "ResourcePath": ".",
+            \\            "Root": ".",
+            \\            "Type": "library"
+            \\        }
+            \\    ]
+            \\}
+        );
+        const install_pluginfo_json = b.addInstallLibFile(pluginfo_file, "plugInfo.json");
+        step.dependOn(&install_pluginfo_json.step);
+    }
+    
     // create run step for all exes
     for (exes.items) |exe| {
         const run = b.addRunArtifact(exe);
@@ -111,6 +200,33 @@ pub fn build(b: *std.Build) !void {
     const check_step = b.step("check", "Type check all");
     for (exes.items) |exe| {
         check_step.dependOn(&exe.step);
+    }
+}
+
+pub fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
+    const max_output_size = 400 * 1024;
+    var child = std.ChildProcess.init(argv, self.allocator);
+    child.stdin_behavior = .Ignore;
+    child.stdout_behavior = .Ignore;
+    child.stderr_behavior = .Pipe;
+    child.env_map = self.env_map;
+
+    try child.spawn();
+
+    const stderr = child.stderr.?.reader().readAllAlloc(self.allocator, max_output_size) catch {
+        return error.ReadFailure;
+    };
+    errdefer self.allocator.free(stderr);
+
+    const term = try child.wait();
+    switch (term) {
+        .Exited => |code| {
+            if (code != 0) return error.ExitCodeFailure;
+            return stderr;
+        },
+        .Signal, .Stopped, .Unknown => {
+            return error.ProcessTerminated;
+        },
     }
 }
 
