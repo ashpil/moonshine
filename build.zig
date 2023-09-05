@@ -1,8 +1,7 @@
 const std = @import("std");
 const vkgen = @import("./deps/vulkan-zig/generator/index.zig");
 
-pub fn build(b: *std.build.Builder) void {
-
+pub fn build(b: *std.build.Builder) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -14,13 +13,8 @@ pub fn build(b: *std.build.Builder) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // packages/libraries we'll need below
-    const vk = blk: {
-        const vk_xml_path = b.build_root.join(b.allocator, &[_][]const u8{
-            "deps/vk.xml",
-        }) catch unreachable;
-        break :blk vkgen.VkGenerateStep.create(b, vk_xml_path).getModule();
-    };
-    const glfw = makeGlfwLibrary(b, target) catch unreachable;
+    const vk = vkgen.VkGenerateStep.create(b, try b.build_root.join(b.allocator, &.{ "deps/vk.xml" })).getModule();
+    const glfw = try makeGlfwLibrary(b, target);
     const cimgui = makeCImguiLibrary(b, target, glfw);
     const tinyexr = makeTinyExrLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
@@ -28,7 +22,7 @@ pub fn build(b: *std.build.Builder) void {
     var exes = std.ArrayList(*std.Build.CompileStep).init(b.allocator);
 
     // TODO: make custom test runner parallel + share some state across tests
-    exes.append(blk: {
+    try exes.append(blk: {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
@@ -46,10 +40,10 @@ pub fn build(b: *std.build.Builder) void {
         tinyexr.add(tests);
 
         break :blk tests;
-    }) catch unreachable;
+    });
 
     // online exe
-    exes.append(blk: {
+    try exes.append(blk: {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source = .load; // for hot shader reload
@@ -67,10 +61,10 @@ pub fn build(b: *std.build.Builder) void {
         cimgui.add(exe);
 
         break :blk exe;
-    }) catch unreachable;
+    });
 
     // offline exe
-    exes.append(blk: {
+    try exes.append(blk: {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
@@ -86,15 +80,15 @@ pub fn build(b: *std.build.Builder) void {
         tinyexr.add(exe);
 
         break :blk exe;
-    }) catch unreachable;
+    });
     
     // create run step for all exes
     for (exes.items) |exe| {
         const run = b.addRunArtifact(exe);
         if (b.args) |args| run.addArgs(args);
 
-        const step_name = std.fmt.allocPrint(b.allocator, "run-{s}", .{ exe.name }) catch @panic("OOM");
-        const step_description = std.fmt.allocPrint(b.allocator, "Run {s}", .{ exe.name }) catch @panic("OOM");
+        const step_name = try std.fmt.allocPrint(b.allocator, "run-{s}", .{ exe.name });
+        const step_description = try std.fmt.allocPrint(b.allocator, "Run {s}", .{ exe.name });
         const step = b.step(step_name, step_description);
         step.dependOn(&run.step);
     }
@@ -103,8 +97,8 @@ pub fn build(b: *std.build.Builder) void {
     for (exes.items) |exe| {
         const install = b.addInstallArtifact(exe, .{});
 
-        const step_name = std.fmt.allocPrint(b.allocator, "install-{s}", .{ exe.name }) catch @panic("OOM");
-        const step_description = std.fmt.allocPrint(b.allocator, "Install {s}", .{ exe.name }) catch @panic("OOM");
+        const step_name = try std.fmt.allocPrint(b.allocator, "install-{s}", .{ exe.name });
+        const step_description = try std.fmt.allocPrint(b.allocator, "Install {s}", .{ exe.name });
         const step = b.step(step_name, step_description);
         step.dependOn(&install.step);
     }
