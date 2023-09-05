@@ -281,7 +281,6 @@ fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibra
     };
 }
 
-// adapted from mach glfw
 fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary {
     const path = "./deps/glfw/";
     const lib = b.addStaticLibrary(.{
@@ -296,7 +295,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
     
     if (target.isLinux() and build_wayland) {
-        const wayland_include_path = try generateWaylandHeaders(b);
+        const wayland_include_path = generateWaylandHeaders(b);
         lib.addIncludePath(wayland_include_path);
     }
 
@@ -404,19 +403,23 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     };
 }
 
-fn generateWaylandHeaders(b: *std.build.Builder) !std.Build.LazyPath {
+fn generateWaylandHeaders(b: *std.build.Builder) std.Build.LazyPath {
+    // ignore pkg-config errors -- this'll make wayland-scanner error down the road, 
+    // but it'll mean that when glfw isn't actually being used we won't error on 
+    // missing wayland
     const protocol_path = blk: {
         var out_code: u8 = undefined;
-        const protocol_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" }, &out_code, .Inherit) catch return error.WaylandProtocolsNotFound;
+        const protocol_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" }, &out_code, .Inherit) catch "";
         break :blk std.mem.trim(u8, protocol_path_untrimmed, &std.ascii.whitespace);
     };
     const client_path = blk: {
         var out_code: u8 = undefined;
-        const client_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-client" }, &out_code, .Inherit) catch return error.WaylandClientNotFound;
+        const client_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-client" }, &out_code, .Inherit) catch "";
         break :blk std.mem.trim(u8, client_path_untrimmed, &std.ascii.whitespace);
     };
 
     const write_file_step = b.addWriteFiles();
+    write_file_step.step.name = "Write Wayland headers";
 
     generateWaylandHeader(b, write_file_step, protocol_path, "stable/xdg-shell/xdg-shell.xml", "-xdg-shell");
     generateWaylandHeader(b, write_file_step, protocol_path, "unstable/xdg-decoration/xdg-decoration-unstable-v1.xml", "-xdg-decoration");
