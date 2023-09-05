@@ -44,16 +44,13 @@ const ShaderType = enum {
 
 // creates shader modules, respecting build option to statically embed or dynamically load shader code
 pub fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []const []const u8, allocator: std.mem.Allocator, comptime shader_type: ShaderType) ![shader_names.len]vk.ShaderModule {
-    const rt_shaders = @import("rt_shaders");
-    const compute_shaders = @import("compute_shaders");
-
     var modules: [shader_names.len]vk.ShaderModule = undefined;
     inline for (shader_names, &modules) |shader_name, *module| {
         var to_free: []const u8 = undefined;
         defer if (build_options.shader_source == .load) allocator.free(to_free);
         const shader_code = if (build_options.shader_source == .embed) switch (shader_type) {
-                .rt => @field(rt_shaders, shader_name),
-                .compute => @field(compute_shaders, shader_name),
+                .rt => @field(@import("rt_shaders"), shader_name),
+                .compute => @field(@import("compute_shaders"), shader_name),
             } else blk: {
             const compile_cmd = switch (shader_type) {
                 .rt => build_options.rt_shader_compile_cmd,

@@ -32,7 +32,7 @@ pub fn build(b: *std.build.Builder) void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
+        const engine = makeEngineModule(b, vk, engine_options);
 
         const tests = b.addTest(.{
             .name = "tests",
@@ -53,7 +53,7 @@ pub fn build(b: *std.build.Builder) void {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source = .load; // for hot shader reload
-        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
+        const engine = makeEngineModule(b, vk, engine_options);
         const exe = b.addExecutable(.{
             .name = "online",
             .root_source_file = .{ .path = "online/main.zig" },
@@ -74,7 +74,7 @@ pub fn build(b: *std.build.Builder) void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vk, engine_options) catch unreachable;
+        const engine = makeEngineModule(b, vk, engine_options);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
@@ -90,19 +90,28 @@ pub fn build(b: *std.build.Builder) void {
     
     // create run step for all exes
     for (exes.items) |exe| {
-        const install = b.addInstallArtifact(exe, .{});
         const run = b.addRunArtifact(exe);
-        run.step.dependOn(&install.step);
-        if (b.args) |args| {
-            run.addArgs(args);
-        }
+        if (b.args) |args| run.addArgs(args);
 
-        b.step(std.fmt.allocPrint(b.allocator, "run-{s}", .{ exe.name }) catch unreachable, std.fmt.allocPrint(b.allocator, "Run {s}", .{ exe.name }) catch unreachable).dependOn(&run.step);
+        const step_name = std.fmt.allocPrint(b.allocator, "run-{s}", .{ exe.name }) catch @panic("OOM");
+        const step_description = std.fmt.allocPrint(b.allocator, "Run {s}", .{ exe.name }) catch @panic("OOM");
+        const step = b.step(step_name, step_description);
+        step.dependOn(&run.step);
+    }
+
+    // create install step for all exes
+    for (exes.items) |exe| {
+        const install = b.addInstallArtifact(exe, .{});
+
+        const step_name = std.fmt.allocPrint(b.allocator, "install-{s}", .{ exe.name }) catch @panic("OOM");
+        const step_description = std.fmt.allocPrint(b.allocator, "Install {s}", .{ exe.name }) catch @panic("OOM");
+        const step = b.step(step_name, step_description);
+        step.dependOn(&install.step);
     }
 
     // create check step that type-checks all exes
     // probably does a bit more atm but what can you do
-    const check_step = b.step("check", "check all");
+    const check_step = b.step("check", "Type check all");
     for (exes.items) |exe| {
         check_step.dependOn(&exe.step);
     }
@@ -149,33 +158,9 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: EngineOptions) !*std.build.Module {
-    const zgltf = b.createModule(.{
-        .source_file = .{ .path = "deps/zgltf/src/main.zig" },
-    });
-    const zigimg = b.createModule(.{
-        .source_file = .{ .path = "deps/zigimg/zigimg.zig" },
-    });
-
-    // shaders
-    const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
-    rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
-    rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
-        .watched_files = &.{
-            "shaders/hrtsystem/bindings.hlsl",
-            "shaders/hrtsystem/camera.hlsl",
-            "shaders/hrtsystem/geometry.hlsl",
-            "shaders/hrtsystem/integrator.hlsl",
-            "shaders/hrtsystem/intersection.hlsl",
-            "shaders/hrtsystem/light.hlsl",
-            "shaders/hrtsystem/material.hlsl",
-            "shaders/hrtsystem/reflection_frame.hlsl",
-            "shaders/utils/random.hlsl",
-            "shaders/utils/math.hlsl",
-        }
-    });
-
-    const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
+fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: EngineOptions) *std.build.Module {
+    const zgltf = b.createModule(.{ .source_file = .{ .path = "deps/zgltf/src/main.zig" } });
+    const zigimg = b.createModule(.{ .source_file = .{ .path = "deps/zigimg/zigimg.zig" } });
 
     // actual engine
     const build_options = b.addOptions();
@@ -188,25 +173,51 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
     build_options.addOption(bool, "gui", options.gui);
     build_options.addOption(bool, "hrtsystem", options.hrtsystem);
 
-    return b.createModule(.{
-        .source_file = .{ .path = "engine/engine.zig" },
-        .dependencies = &[_]std.Build.ModuleDependency {
-            .{
-                .name = "vulkan",
-                .module = vk,
-            },
-            .{
-                .name = "zgltf",
-                .module = zgltf,
-            },
-            .{
-                .name = "zigimg",
-                .module = zigimg,
-            },
-            .{
-                .name = "build_options",
-                .module = build_options.createModule(),
-            },
+    var dependencies = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
+
+    dependencies.appendSlice(&.{
+        .{
+            .name = "vulkan",
+            .module = vk,
+        },
+        .{
+            .name = "zgltf",
+            .module = zgltf,
+        },
+        .{
+            .name = "zigimg",
+            .module = zigimg,
+        },
+        .{
+            .name = "build_options",
+            .module = build_options.createModule(),
+        },
+    }) catch @panic("OOM");
+
+    // embed shaders if requested
+    if (options.shader_source == .embed) {
+        const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
+        rt_shader_comp.step.name = "Compile ray tracing shaders";
+        rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
+        rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
+            .watched_files = &.{
+                "shaders/hrtsystem/bindings.hlsl",
+                "shaders/hrtsystem/camera.hlsl",
+                "shaders/hrtsystem/geometry.hlsl",
+                "shaders/hrtsystem/integrator.hlsl",
+                "shaders/hrtsystem/intersection.hlsl",
+                "shaders/hrtsystem/light.hlsl",
+                "shaders/hrtsystem/material.hlsl",
+                "shaders/hrtsystem/reflection_frame.hlsl",
+                "shaders/utils/random.hlsl",
+                "shaders/utils/math.hlsl",
+            }
+        });
+
+        const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
+        compute_shader_comp.step.name = "Compile compute shaders";
+
+        dependencies.appendSlice(&.{
             .{
                 .name = "rt_shaders",
                 .module = rt_shader_comp.getModule(),
@@ -215,7 +226,12 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
                 .name = "compute_shaders",
                 .module = compute_shader_comp.getModule(),
             },
-        },
+        }) catch @panic("OOM");
+    }
+
+    return b.createModule(.{
+        .source_file = .{ .path = "engine/engine.zig" },
+        .dependencies = dependencies.items,
     });
 }
 
