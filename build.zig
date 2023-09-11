@@ -89,6 +89,24 @@ pub fn build(b: *std.Build) !void {
 
     // hydra shared lib
     if (target.result.os.tag == .linux) {
+        var engine_options = default_engine_options;
+        engine_options.window = false;
+        engine_options.gui = false;
+        const engine = makeEngineModule(b, vk, engine_options);
+
+        // once https://github.com/ziglang/zig/issues/9698 lands
+        // wont need to make own header
+        const zig_lib = b.addSharedLibrary(.{
+            .name = "moonshine",
+            .root_source_file = .{ .path = "hydra/hydra.zig" },
+            .target = target,
+            .optimize = optimize,
+            .pic = true,
+        });
+        zig_lib.root_module.addImport("vulkan", vk);
+        zig_lib.root_module.addImport("engine", engine);
+        zig_lib.linkLibC();
+
         const lib = b.addSharedLibrary(.{
             .name = "hdMoonshine",
             .root_source_file = .{ .path = "hydra/rendererPlugin.cpp" },
@@ -96,8 +114,12 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         lib.addCSourceFiles(.{
-           .files = &.{ "hydra/renderDelegate.cpp" },
+           .files = &.{
+                "hydra/renderDelegate.cpp",
+                "hydra/mesh.cpp",
+            },
         });
+        lib.linkLibrary(zig_lib);
 
         // options
         const usd_built_dir = b.option([]const u8, "usd-install-path", "Where your USD SDK is installed.") orelse "../USD";
@@ -108,13 +130,14 @@ pub fn build(b: *std.Build) !void {
         lib.linkSystemLibrary("usd_hd");
         
         // include headers necessary for usd
-        lib.addIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });
+        lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });
+        lib.defineCMacro("TBB_USE_DEBUG", "0"); // not sure why we need this
 
         // might need python headers if USD built with python support
         {
             var out_code: u8 = undefined;
             var iter = std.mem.splitScalar(u8, b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "", ' ');
-            while (iter.next()) |include_dir| lib.addIncludePath(.{ .path = include_dir[2..] });
+            while (iter.next()) |include_dir| lib.addSystemIncludePath(.{ .path = include_dir[2..] });
         }
 
         // deal with the fact that USD may not have been compiled with clang 
@@ -125,13 +148,20 @@ pub fn build(b: *std.Build) !void {
                 lib.defineCMacro("ARCH_HAS_GNU_STL_EXTENSIONS", null);
 
                 // link against stdlibc++
-                lib.addObjectFile(.{ .path = std.mem.trim(u8, b.run(&.{ "zig", "c++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
+                lib.addObjectFile(.{ .path = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
 
                 // need stdlibc++ include directories
-                var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "clang", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
+                // i've had to do some arcane magic to figure out what to do here,
+                // and i'm not even convinced it'll work on any system other than mine
+                var first = true;
+                var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
                 while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
-                    if (std.mem.startsWith(u8, include_dir[1..], "/usr/lib/clang")) continue;
-                    lib.addIncludePath(.{ .path = include_dir[1..] });
+                    if (first) {
+                        lib.addIncludePath(.{ .path = include_dir[1..] });
+                    } else {
+                        lib.addSystemIncludePath(.{ .path = include_dir[1..] });
+                    }
+                    first = false;
                 };
             },
             .clang => {

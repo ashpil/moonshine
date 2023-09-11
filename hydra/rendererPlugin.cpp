@@ -28,6 +28,6 @@ void HdMoonshinePlugin::DeleteRenderDelegate(PXR_NS::HdRenderDelegate *renderDel
 }
 
 bool HdMoonshinePlugin::IsSupported(bool gpuEnabled) const {
-    std::cout << "IsSupported " << gpuEnabled << std::endl;
+    std::cout << "IsSupported gpuEnabled=" << gpuEnabled << std::endl;
     return gpuEnabled;
 }

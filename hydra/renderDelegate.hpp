@@ -5,6 +5,8 @@
 #include "pxr/imaging/hd/resourceRegistry.h"
 #include "pxr/base/tf/staticTokens.h"
 
+#include "moonshine.h"
+
 class HdMoonshineRenderDelegate final : public PXR_NS::HdRenderDelegate 
 {
 public:
@@ -46,6 +48,7 @@ private:
     void _Initialize();
 
     PXR_NS::HdResourceRegistrySharedPtr _resourceRegistry;
+    HdMoonshine* _moonshine;
 
     HdMoonshineRenderDelegate(const HdMoonshineRenderDelegate &) = delete;
     HdMoonshineRenderDelegate &operator =(const HdMoonshineRenderDelegate &) = delete;
