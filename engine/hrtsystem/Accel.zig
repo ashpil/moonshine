@@ -567,7 +567,6 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
         .dst_acceleration_structure = self.tlas_handle,
         .geometry_count = 1,
         .p_geometries = @ptrCast(&geometry),
-        .pp_geometries = null,
         .scratch_data = .{
             .device_address = self.tlas_update_scratch_address,
         },

@@ -89,7 +89,6 @@ pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, sem
         .swapchain_count = 1,
         .p_swapchains = @ptrCast(&self.handle),
         .p_image_indices = @ptrCast(&self.image_index),
-        .p_results = null,
     });
 }
 

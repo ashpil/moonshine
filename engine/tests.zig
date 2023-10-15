@@ -51,7 +51,7 @@ const TestingContext = struct {
             .{
                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
                 .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .@"undefined",
+                .old_layout = .undefined,
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -67,7 +67,7 @@ const TestingContext = struct {
             .{
                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
                 .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .@"undefined",
+                .old_layout = .undefined,
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,

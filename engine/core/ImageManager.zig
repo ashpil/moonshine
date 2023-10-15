@@ -195,7 +195,7 @@ const Image = struct {
             .sharing_mode = .exclusive,
             .queue_family_index_count = 0,
             .p_queue_family_indices = undefined,
-            .initial_layout = .@"undefined",
+            .initial_layout = .undefined,
         };
 
         const handle = try vc.device.createImage(&image_create_info, null);

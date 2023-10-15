@@ -53,7 +53,6 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
     const timestamp_period = if (metrics) blk: {
         var properties = vk.PhysicalDeviceProperties2 {
             .properties = undefined,
-            .p_next = null,
         };
 
         vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &properties);

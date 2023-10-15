@@ -15,14 +15,12 @@ pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
         .descriptor_type = .storage_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
     .{
         .binding = 1,
         .descriptor_type = .storage_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
 }, null, "Film");
 

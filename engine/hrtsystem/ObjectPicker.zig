@@ -21,7 +21,6 @@ pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
 }, null, "Input");
 
@@ -122,10 +121,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
 pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet) !?ClickedObject {
     // begin
-    try vc.device.beginCommandBuffer(self.command_buffer, &.{
-        .flags = .{},
-        .p_inheritance_info = null,
-    });
+    try vc.device.beginCommandBuffer(self.command_buffer, &.{ .flags = .{} });
 
     // bind pipeline + sets
     vc.device.cmdBindPipeline(self.command_buffer, .ray_tracing_khr, self.pipeline.handle);

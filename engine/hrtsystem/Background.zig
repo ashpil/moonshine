@@ -17,21 +17,18 @@ pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
         .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
     .{ // marginal
         .binding = 1,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
     .{ // conditional
         .binding = 2,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-        .p_immutable_samplers = null,
     },
 }, null, "Background");
 
