@@ -24,7 +24,9 @@ public:
         return _buffer.data();
     }
 
-    void Unmap() override {}
+    void Unmap() override {
+        std::cout << "Unmap buffer" << std::endl;
+    }
 
     bool IsMapped() const override {
         return false;

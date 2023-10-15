@@ -14,9 +14,4 @@ HdMoonshineRenderPass::~HdMoonshineRenderPass() {
 
 void HdMoonshineRenderPass::_Execute(PXR_NS::HdRenderPassStateSharedPtr const& renderPassState, PXR_NS::TfTokenVector const& renderTags) {
     std::cout << "=> Execute RenderPass" << std::endl;
-    const PXR_NS::HdRenderPassAovBindingVector &aovBindings = renderPassState->GetAovBindings();
-
-    for (const auto& binding : aovBindings) {
-        std::cout << binding.aovName << std::endl;
-    }
 }

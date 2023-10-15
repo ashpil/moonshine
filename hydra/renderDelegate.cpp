@@ -40,17 +40,14 @@ HdMoonshineRenderDelegate::~HdMoonshineRenderDelegate() {
 }
 
 PXR_NS::TfTokenVector const& HdMoonshineRenderDelegate::GetSupportedRprimTypes() const {
-    std::cout << "Queried rprim types" << std::endl;
     return SUPPORTED_RPRIM_TYPES;
 }
 
 PXR_NS::TfTokenVector const& HdMoonshineRenderDelegate::GetSupportedSprimTypes() const {
-    std::cout << "Queried sprim types" << std::endl;
     return SUPPORTED_SPRIM_TYPES;
 }
 
 PXR_NS::TfTokenVector const& HdMoonshineRenderDelegate::GetSupportedBprimTypes() const {
-    std::cout << "Queried bprim types" << std::endl;
     return SUPPORTED_BPRIM_TYPES;
 }
 
@@ -154,26 +151,8 @@ PXR_NS::HdAovDescriptor HdMoonshineRenderDelegate::GetDefaultAovDescriptor(PXR_N
 {
     std::cout << "Get default aov descriptor name=" << name.GetText() << std::endl;
     if (name == PXR_NS::HdAovTokens->color) {
-        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatUNorm8Vec4, true,
-                               PXR_NS::VtValue(PXR_NS::GfVec4f(0.0f)));
-    } else if (name == PXR_NS::HdAovTokens->normal || name == PXR_NS::HdAovTokens->Neye) {
-        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32Vec3, false,
-                               PXR_NS::VtValue(PXR_NS::GfVec3f(-1.0f)));
-    } else if (name == PXR_NS::HdAovTokens->depth) {
-        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32, false, PXR_NS::VtValue(1.0f));
-    } else if (name == PXR_NS::HdAovTokens->cameraDepth) {
-        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32, false, PXR_NS::VtValue(0.0f));
-    } else if (name == PXR_NS::HdAovTokens->primId ||
-               name == PXR_NS::HdAovTokens->instanceId ||
-               name == PXR_NS::HdAovTokens->elementId) {
-        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatInt32, false, PXR_NS::VtValue(-1));
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32Vec3, false, PXR_NS::VtValue(PXR_NS::GfVec4f(0.0f)));
     } else {
-        PXR_NS::HdParsedAovToken aovId(name);
-        if (aovId.isPrimvar) {
-            return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32Vec3, false,
-                                   PXR_NS::VtValue(PXR_NS::GfVec3f(0.0f)));
-        }
+        return PXR_NS::HdAovDescriptor();
     }
-
-    // return PXR_NS::HdAovDescriptor();
 }
