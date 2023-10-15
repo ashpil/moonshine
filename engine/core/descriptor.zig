@@ -52,10 +52,10 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
         pub fn allocate_set(self: *const Self, vc: *const VulkanContext, writes: [bindings.len]vk.WriteDescriptorSet) !vk.DescriptorSet {
             var descriptor_set: vk.DescriptorSet = undefined;
 
-            try vc.device.allocateDescriptorSets(&.{
+            try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
                 .descriptor_pool = self.pool,
                 .descriptor_set_count = 1,
-                .p_set_layouts = vk_helpers.toPointerType(&self.handle),
+                .p_set_layouts = @ptrCast(&self.handle),
             }, @ptrCast(&descriptor_set));
 
             var descriptor_writes = writes;

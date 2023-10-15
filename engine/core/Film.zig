@@ -2,7 +2,6 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
-const toPointerType = engine.core.vk_helpers.toPointerType;
 const VulkanContext =  engine.core.VulkanContext;
 const VkAllocator =  engine.core.Allocator;
 const Commands =  engine.core.Commands;
@@ -59,7 +58,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_image,
-            .p_image_info = toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
                 .image_view = images.data.items(.view)[0],
                 .image_layout = .general,
@@ -73,7 +72,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_image,
-            .p_image_info = toPointerType(&vk.DescriptorImageInfo {
+            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
                 .image_view = images.data.items(.view)[1],
                 .image_layout = .general,

@@ -297,7 +297,7 @@ pub fn main() !void {
             // transition display image to one we can write to in shader
             context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
                 .image_memory_barrier_count = 1,
-                .p_image_memory_barriers = vk_helpers.toPointerType(&vk.ImageMemoryBarrier2{
+                .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
                     .dst_stage_mask = .{
                         .ray_tracing_shader_bit_khr = true,
                     },
@@ -367,7 +367,7 @@ pub fn main() !void {
         // transition swap image to one we can blit to
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = vk_helpers.toPointerType(&vk.ImageMemoryBarrier2{
+            .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
                 .dst_stage_mask = .{
                     .blit_bit = true,
                 },
@@ -423,7 +423,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, vk_helpers.toPointerType(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{

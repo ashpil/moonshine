@@ -116,19 +116,19 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     try vc.device.queueSubmit2(vc.queue, 1, &[_]vk.SubmitInfo2 { .{
         .flags = .{},
         .wait_semaphore_info_count = 1,
-        .p_wait_semaphore_infos = vk_helpers.toPointerType(&vk.SemaphoreSubmitInfoKHR{
+        .p_wait_semaphore_infos = @ptrCast(&vk.SemaphoreSubmitInfoKHR{
             .semaphore = frame.image_acquired,
             .value = 0,
             .stage_mask = .{ .color_attachment_output_bit = true },
             .device_index = 0,
         }),
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = vk_helpers.toPointerType(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = @ptrCast(&vk.CommandBufferSubmitInfo {
             .command_buffer = frame.command_buffer,
             .device_mask = 0,
         }),
         .signal_semaphore_info_count = 1,
-        .p_signal_semaphore_infos = vk_helpers.toPointerType(&vk.SemaphoreSubmitInfoKHR {
+        .p_signal_semaphore_infos = @ptrCast(&vk.SemaphoreSubmitInfoKHR {
             .semaphore = frame.command_completed,
             .value = 0,
             .stage_mask =  .{ .color_attachment_output_bit = true },

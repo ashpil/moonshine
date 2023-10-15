@@ -23,10 +23,6 @@ pub fn setDebugName(vc: *const VulkanContext, object: anytype, name: [*:0]const 
    }
 }
 
-pub fn toPointerType(in: anytype) [*]const @typeInfo(@TypeOf(in)).Pointer.child {
-    return @ptrCast(in);
-}
-
 pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
     return switch (format) {
         .r32_sfloat => 1 * @sizeOf(f32) * extent.width * extent.height,

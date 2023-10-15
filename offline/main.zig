@@ -240,7 +240,7 @@ pub fn main() !void {
         };
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = vk_helpers.toPointerType(&barrier),
+            .p_image_memory_barriers = @ptrCast(&barrier),
         });
 
         // copy output image to host-visible staging buffer
@@ -265,7 +265,7 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, vk_helpers.toPointerType(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

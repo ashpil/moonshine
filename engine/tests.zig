@@ -119,7 +119,7 @@ const TestingContext = struct {
         };
         self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = utils.toPointerType(&barrier),
+            .p_image_memory_barriers = @ptrCast(&barrier),
         });
 
         // copy output image to host-visible staging buffer
@@ -144,7 +144,7 @@ const TestingContext = struct {
                 .depth = 1,
             },  
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, utils.toPointerType(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }

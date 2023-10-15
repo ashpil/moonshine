@@ -83,12 +83,12 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
 }
 
 pub fn present(self: *const Self, vc: *const VulkanContext, queue: vk.Queue, semaphore: vk.Semaphore) !vk.Result {
-    return try vc.device.queuePresentKHR(queue, &.{
+    return try vc.device.queuePresentKHR(queue, &vk.PresentInfoKHR {
         .wait_semaphore_count = 1,
-        .p_wait_semaphores = vk_helpers.toPointerType(&semaphore),
+        .p_wait_semaphores = @ptrCast(&semaphore),
         .swapchain_count = 1,
-        .p_swapchains = vk_helpers.toPointerType(&self.handle),
-        .p_image_indices = vk_helpers.toPointerType(&self.image_index),
+        .p_swapchains = @ptrCast(&self.handle),
+        .p_image_indices = @ptrCast(&self.image_index),
         .p_results = null,
     });
 }
