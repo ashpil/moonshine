@@ -116,6 +116,8 @@ pub fn build(b: *std.Build) !void {
         lib.addCSourceFiles(.{
            .files = &.{
                 "hydra/renderDelegate.cpp",
+                "hydra/renderPass.cpp",
+                "hydra/renderBuffer.cpp",
                 "hydra/mesh.cpp",
             },
         });

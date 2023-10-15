@@ -40,6 +40,7 @@ public:
 
     PXR_NS::HdRenderParam *GetRenderParam() const override;
 
+    PXR_NS::HdAovDescriptor GetDefaultAovDescriptor(PXR_NS::TfToken const& name) const override;
 private:
     static const PXR_NS::TfTokenVector SUPPORTED_RPRIM_TYPES;
     static const PXR_NS::TfTokenVector SUPPORTED_SPRIM_TYPES;

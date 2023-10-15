@@ -1,5 +1,9 @@
 #include "renderDelegate.hpp"
+#include "renderPass.hpp"
+#include "renderBuffer.hpp"
 #include "mesh.hpp"
+
+#include "pxr/imaging/hd/camera.h"
 
 #include <iostream>
 
@@ -8,9 +12,11 @@ const PXR_NS::TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_RPRIM_TYPES = {
 };
 
 const PXR_NS::TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_SPRIM_TYPES = {
+    PXR_NS::HdPrimTypeTokens->camera,
 };
 
 const PXR_NS::TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_BPRIM_TYPES = {
+    PXR_NS::HdPrimTypeTokens->renderBuffer,
 };
 
 HdMoonshineRenderDelegate::HdMoonshineRenderDelegate() : PXR_NS::HdRenderDelegate() {
@@ -60,7 +66,7 @@ void HdMoonshineRenderDelegate::CommitResources(PXR_NS::HdChangeTracker *tracker
 PXR_NS::HdRenderPassSharedPtr HdMoonshineRenderDelegate::CreateRenderPass(PXR_NS::HdRenderIndex *index, PXR_NS::HdRprimCollection const& collection) {
     std::cout << "Create RenderPass with Collection=" << collection.GetName() << std::endl; 
 
-    return PXR_NS::HdRenderPassSharedPtr(nullptr);
+    return PXR_NS::HdRenderPassSharedPtr(new HdMoonshineRenderPass(index, collection));  
 }
 
 PXR_NS::HdRprim* HdMoonshineRenderDelegate::CreateRprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& rprimId) {
@@ -79,13 +85,25 @@ void HdMoonshineRenderDelegate::DestroyRprim(PXR_NS::HdRprim *rPrim) {
 }
 
 PXR_NS::HdSprim* HdMoonshineRenderDelegate::CreateSprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& sprimId) {
-    std::cout << "Create Moonshine Sprim" << std::endl;
-    return nullptr;
+    std::cout << "Create Moonshine Sprim type=" << typeId.GetText() << " id=" << sprimId << std::endl;
+
+    if (typeId == PXR_NS::HdPrimTypeTokens->camera) {
+        return new PXR_NS::HdCamera(sprimId);
+    } else {
+        std::cerr << "Unknown Sprim type=" << typeId.GetText() << " id=" << sprimId.GetText() << std::endl;
+        return nullptr;
+    }
 }
 
 PXR_NS::HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(PXR_NS::TfToken const& typeId) {
-    std::cout << "Create Moonshine Fallback Sprim" << std::endl;
-    return nullptr;
+    std::cout << "Create Moonshine Fallback Sprim type=" << typeId.GetText() << std::endl;
+
+    if (typeId == PXR_NS::HdPrimTypeTokens->camera) {
+        return new PXR_NS::HdCamera(PXR_NS::SdfPath::EmptyPath());
+    } else {
+        std::cerr << "Unknown Sprim type=" << typeId.GetText() << std::endl;
+        return nullptr;
+    }
 }
 
 void HdMoonshineRenderDelegate::DestroySprim(PXR_NS::HdSprim *sPrim) {
@@ -93,13 +111,25 @@ void HdMoonshineRenderDelegate::DestroySprim(PXR_NS::HdSprim *sPrim) {
 }
 
 PXR_NS::HdBprim* HdMoonshineRenderDelegate::CreateBprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& bprimId) {
-    std::cout << "Create Moonshine Bprim" << std::endl;
-    return nullptr;
+    std::cout << "Create Moonshine Bprim type=" << typeId.GetText() << " id=" << bprimId << std::endl;
+
+    if (typeId == PXR_NS::HdPrimTypeTokens->renderBuffer) {
+        return new HdMoonshineRenderBuffer(bprimId);
+    } else {
+        std::cerr << "Unknown Bprim type=" << typeId.GetText() << std::endl;
+        return nullptr;
+    }
 }
 
 PXR_NS::HdBprim* HdMoonshineRenderDelegate::CreateFallbackBprim(PXR_NS::TfToken const& typeId) {
-    std::cout << "Create Moonshine Fallback Bprim" << std::endl;
-    return nullptr;
+    std::cout << "Create Moonshine Fallback Bprim type=" << typeId.GetText() << std::endl;
+
+    if (typeId == PXR_NS::HdPrimTypeTokens->renderBuffer) {
+        return new HdMoonshineRenderBuffer(PXR_NS::SdfPath::EmptyPath());
+    } else {
+        std::cerr << "Unknown Bprim type=" << typeId.GetText() << std::endl;
+        return nullptr;
+    }
 }
 
 void HdMoonshineRenderDelegate::DestroyBprim(PXR_NS::HdBprim *bPrim) {
@@ -118,4 +148,32 @@ void HdMoonshineRenderDelegate::DestroyInstancer(PXR_NS::HdInstancer *instancer)
 PXR_NS::HdRenderParam* HdMoonshineRenderDelegate::GetRenderParam() const {
     std::cout << "Get render param" << std::endl;
     return nullptr;
+}
+
+PXR_NS::HdAovDescriptor HdMoonshineRenderDelegate::GetDefaultAovDescriptor(PXR_NS::TfToken const& name) const
+{
+    std::cout << "Get default aov descriptor name=" << name.GetText() << std::endl;
+    if (name == PXR_NS::HdAovTokens->color) {
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatUNorm8Vec4, true,
+                               PXR_NS::VtValue(PXR_NS::GfVec4f(0.0f)));
+    } else if (name == PXR_NS::HdAovTokens->normal || name == PXR_NS::HdAovTokens->Neye) {
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32Vec3, false,
+                               PXR_NS::VtValue(PXR_NS::GfVec3f(-1.0f)));
+    } else if (name == PXR_NS::HdAovTokens->depth) {
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32, false, PXR_NS::VtValue(1.0f));
+    } else if (name == PXR_NS::HdAovTokens->cameraDepth) {
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32, false, PXR_NS::VtValue(0.0f));
+    } else if (name == PXR_NS::HdAovTokens->primId ||
+               name == PXR_NS::HdAovTokens->instanceId ||
+               name == PXR_NS::HdAovTokens->elementId) {
+        return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatInt32, false, PXR_NS::VtValue(-1));
+    } else {
+        PXR_NS::HdParsedAovToken aovId(name);
+        if (aovId.isPrimvar) {
+            return PXR_NS::HdAovDescriptor(PXR_NS::HdFormatFloat32Vec3, false,
+                                   PXR_NS::VtValue(PXR_NS::GfVec3f(0.0f)));
+        }
+    }
+
+    // return PXR_NS::HdAovDescriptor();
 }
