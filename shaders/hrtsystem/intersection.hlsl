@@ -6,7 +6,7 @@ struct [raypayload] Intersection {
     uint instanceIndex : read(caller) : write(closesthit, miss);  // MAX_UINT for no hit
     uint geometryIndex : read(caller) : write(closesthit);
     uint primitiveIndex : read(caller) : write(closesthit);
-    float2 attribs : read(caller) : write(closesthit);
+    float2 barycentrics : read(caller) : write(closesthit);
 
     static Intersection createMiss() {
         Intersection its;

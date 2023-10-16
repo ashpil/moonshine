@@ -39,12 +39,17 @@ void raygen() {
     storeColor(color);
 }
 
+struct Attributes
+{
+    float2 barycentrics;
+};
+
 [shader("closesthit")]
-void closesthit(inout Intersection its, in float2 attribs) {
+void closesthit(inout Intersection its, in Attributes attribs) {
     its.instanceIndex = InstanceIndex();
     its.geometryIndex = GeometryIndex();
     its.primitiveIndex = PrimitiveIndex();
-    its.attribs = attribs;
+    its.barycentrics = attribs.barycentrics;
 }
 
 [shader("miss")]

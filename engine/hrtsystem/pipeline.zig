@@ -205,7 +205,7 @@ pub const ObjectPickPipeline = Pipeline(
     &[_]vk.PipelineShaderStageCreateInfo {
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen" },
         .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss" },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "chit" },
+        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "closesthit" },
     },
     &[_]vk.RayTracingShaderGroupCreateInfoKHR {
         .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },

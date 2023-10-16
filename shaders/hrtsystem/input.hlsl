@@ -54,10 +54,15 @@ void miss(inout Payload payload) {
     payload.click_data.instance_index = -1;
 }
 
+struct Attributes
+{
+    float2 barycentrics;
+};
+
 [shader("closesthit")]
-void chit(inout Payload payload, in float2 attribs) {
+void closesthit(inout Payload payload, in Attributes attribs) {
     payload.click_data.instance_index = InstanceIndex();
     payload.click_data.primitive_index = PrimitiveIndex();
     payload.click_data.geometry_index = GeometryIndex();
-    payload.click_data.barycentrics = attribs;
+    payload.click_data.barycentrics = attribs.barycentrics;
 }

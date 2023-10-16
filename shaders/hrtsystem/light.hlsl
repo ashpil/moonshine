@@ -156,7 +156,7 @@ struct MeshLights : Light {
         Geometry geometry = getGeometry(instanceID, its.geometryIndex);
 
         if (geometry.sampled) {
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
 
             float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
             float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);

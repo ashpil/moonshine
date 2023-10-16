@@ -118,7 +118,7 @@ struct PathTracingIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
             Frame textureFrame = getTextureFrame(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
             float3 emissiveLight = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
             AnyMaterialData materialData = dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))];
@@ -261,7 +261,7 @@ struct DirectLightIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             uint instanceID = dInstances[its.instanceIndex].instanceID();
             Geometry geometry = getGeometry(instanceID, its.geometryIndex);
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.attribs).inWorld(its.instanceIndex);
+            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
             Frame textureFrame = getTextureFrame(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
             StandardPBR material = StandardPBR::load(dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))].materialAddress, attrs.texcoord);
 
