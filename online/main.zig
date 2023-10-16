@@ -148,6 +148,9 @@ pub fn main() !void {
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
     var current_clicked_color = F32x3.new(0.0, 0.0, 0.0);
 
+    // need to know this so that we can do appropriate image layout transitions on first pass
+    var first_iter = true;
+
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
@@ -298,13 +301,9 @@ pub fn main() !void {
             context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
                 .image_memory_barrier_count = 1,
                 .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
-                    .dst_stage_mask = .{
-                        .ray_tracing_shader_bit_khr = true,
-                    },
-                    .dst_access_mask = .{
-                        .shader_storage_write_bit = true,
-                    },
-                    .old_layout = .undefined,
+                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                    .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                    .old_layout = if (first_iter) .undefined else .transfer_src_optimal,
                     .new_layout = .general,
                     .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                     .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -314,7 +313,7 @@ pub fn main() !void {
                         .base_mip_level = 0,
                         .level_count = 1,
                         .base_array_layer = 0,
-                        .layer_count = 1,
+                        .layer_count = vk.REMAINING_ARRAY_LAYERS,
                     },
                 }),
             });
@@ -333,18 +332,10 @@ pub fn main() !void {
 
             // transition display image to one we can blit from
             const image_memory_barriers = [_]vk.ImageMemoryBarrier2{.{
-                .src_stage_mask = .{
-                    .ray_tracing_shader_bit_khr = true,
-                },
-                .src_access_mask = .{
-                    .shader_storage_write_bit = true,
-                },
-                .dst_stage_mask = .{
-                    .blit_bit = true,
-                },
-                .dst_access_mask = .{
-                    .transfer_read_bit = true,
-                },
+                .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                .dst_stage_mask = .{ .blit_bit = true },
+                .dst_access_mask = .{ .transfer_read_bit = true },
                 .old_layout = .general,
                 .new_layout = .transfer_src_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -355,25 +346,22 @@ pub fn main() !void {
                     .base_mip_level = 0,
                     .level_count = 1,
                     .base_array_layer = 0,
-                    .layer_count = 1,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
             }};
             context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
                 .image_memory_barrier_count = image_memory_barriers.len,
                 .p_image_memory_barriers = &image_memory_barriers,
             });
+            first_iter = false;
         }
 
         // transition swap image to one we can blit to
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
-                .dst_stage_mask = .{
-                    .blit_bit = true,
-                },
-                .dst_access_mask = .{
-                    .transfer_write_bit = true,
-                },
+                .dst_stage_mask = .{ .blit_bit = true },
+                .dst_access_mask = .{ .transfer_write_bit = true },
                 .old_layout = .undefined,
                 .new_layout = .transfer_dst_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -384,7 +372,7 @@ pub fn main() !void {
                     .base_mip_level = 0,
                     .level_count = 1,
                     .base_array_layer = 0,
-                    .layer_count = 1,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
             }),
         });
@@ -427,18 +415,10 @@ pub fn main() !void {
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{
-                .src_stage_mask = .{
-                    .blit_bit = true,
-                },
-                .src_access_mask = .{
-                    .transfer_write_bit = true,
-                },
-                .dst_stage_mask = .{
-                    .color_attachment_output_bit = true,
-                },
-                .dst_access_mask = .{
-                    .color_attachment_write_bit = true,
-                },
+                .src_stage_mask = .{ .blit_bit = true },
+                .src_access_mask = .{ .transfer_write_bit = true },
+                .dst_stage_mask = .{ .color_attachment_output_bit = true },
+                .dst_access_mask = .{ .color_attachment_write_bit = true },
                 .old_layout = .transfer_dst_optimal,
                 .new_layout = .color_attachment_optimal,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -449,7 +429,7 @@ pub fn main() !void {
                     .base_mip_level = 0,
                     .level_count = 1,
                     .base_array_layer = 0,
-                    .layer_count = 1,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
             }},
         });
@@ -458,12 +438,8 @@ pub fn main() !void {
 
         // transition swapchain back to present mode
         const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2{.{
-            .src_stage_mask = .{
-                .color_attachment_output_bit = true,
-            },
-            .src_access_mask = .{
-                .color_attachment_write_bit = true,
-            },
+            .src_stage_mask = .{ .color_attachment_output_bit = true },
+            .src_access_mask = .{ .color_attachment_write_bit = true },
             .old_layout = .color_attachment_optimal,
             .new_layout = .present_src_khr,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -474,7 +450,7 @@ pub fn main() !void {
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
-                .layer_count = 1,
+                .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
         }};
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{

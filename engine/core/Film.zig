@@ -15,18 +15,10 @@ pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
         .descriptor_type = .storage_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
-    },
-    .{
-        .binding = 1,
-        .descriptor_type = .storage_image,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
+    }
 }, null, "Film");
 
-// 2 images -- first is display image, second is accumulation image
-// accumulation is sum of all samples
-// display is accumulation divided by sample_count
+// TODO: there should probably be one global ImageManager rather than this having its own
 images: ImageManager,
 descriptor_set: vk.DescriptorSet,
 extent: vk.Extent2D,
@@ -40,12 +32,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .extent = extent,
             .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
             .format = .r32g32b32a32_sfloat,
-        },
-        .{
-            .extent = extent,
-            .usage = .{ .storage_bit = true, },
-            .format = .r32g32b32a32_sfloat,
-        },
+        }
     });
     errdefer images.destroy(vc, allocator);
 
@@ -63,21 +50,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }),
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = images.data.items(.view)[1],
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
+        }
     });
 
     return Self {

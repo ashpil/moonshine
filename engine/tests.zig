@@ -63,23 +63,7 @@ const TestingContext = struct {
                     .base_array_layer = 0,
                     .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
-            },
-            .{
-                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .undefined,
-                .new_layout = .general,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = self.scene.camera.film.images.data.items(.handle)[1],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            },
+            }
         };
 
         self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {

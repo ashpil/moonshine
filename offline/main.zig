@@ -122,7 +122,7 @@ pub fn main() !void {
         const barriers = [_]vk.ImageMemoryBarrier2 {
             .{
                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .dst_access_mask = .{ .shader_write_bit = true },
+                .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                 .old_layout = .undefined,
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -135,23 +135,7 @@ pub fn main() !void {
                     .base_array_layer = 0,
                     .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
-            },
-            .{
-                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .undefined,
-                .new_layout = .general,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = scene.camera.film.images.data.items(.handle)[1],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            },
+            }
         };
 
         context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
@@ -191,25 +175,7 @@ pub fn main() !void {
                             .base_array_layer = 0,
                             .layer_count = vk.REMAINING_ARRAY_LAYERS,
                         },
-                    },
-                    .{
-                        .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                        .src_access_mask = .{ .shader_write_bit = true },
-                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                        .dst_access_mask = .{ .shader_write_bit = true },
-                        .old_layout = .general,
-                        .new_layout = .general,
-                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                        .image = scene.camera.film.images.data.items(.handle)[1],
-                        .subresource_range = .{
-                            .aspect_mask = .{ .color_bit = true },
-                            .base_mip_level = 0,
-                            .level_count = 1,
-                            .base_array_layer = 0,
-                            .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                        },
-                    },
+                    }
                 };
 
                 context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
@@ -222,7 +188,7 @@ pub fn main() !void {
         // transfer output image to transfer_src_optimal layout
         const barrier = vk.ImageMemoryBarrier2 {
             .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-            .src_access_mask = .{ .shader_write_bit = true },
+            .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_read_bit = true },
             .old_layout = .general,

@@ -87,7 +87,6 @@ struct AnyMaterialData {
 
 // OUTPUT
 [[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;
-[[vk::binding(1, 2)]] RWTexture2D<float4> dAccumulationImage;
 
 // PUSH CONSTANTS
 #include "camera.hlsl" // hmmmmmm
