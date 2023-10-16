@@ -46,30 +46,8 @@ const TestingContext = struct {
     fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline) !void {
         try self.commands.startRecording(&self.vc);
 
-        // transition images to general layout
-        const barriers = [_]vk.ImageMemoryBarrier2 {
-            .{
-                .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .undefined,
-                .new_layout = .general,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = self.scene.camera.film.images.data.items(.handle)[0],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            }
-        };
-
-        self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = @intCast(barriers.len),
-            .p_image_memory_barriers = &barriers,
-        });
+        // prepare our stuff
+        self.scene.camera.film.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
@@ -82,29 +60,8 @@ const TestingContext = struct {
         // trace our stuff
         pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.scene.camera.film.extent);
 
-        // transfer output image to transfer_src_optimal layout
-        const barrier = vk.ImageMemoryBarrier2 {
-            .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-            .src_access_mask = .{ .shader_write_bit = true },
-            .dst_stage_mask = .{ .copy_bit = true },
-            .dst_access_mask = .{ .transfer_read_bit = true },
-            .old_layout = .general,
-            .new_layout = .transfer_src_optimal,
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.scene.camera.film.images.data.items(.handle)[0],
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        };
-        self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
-            .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = @ptrCast(&barrier),
-        });
+        // copy our stuff
+        self.scene.camera.film.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         const copy = vk.BufferImageCopy {

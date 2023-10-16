@@ -148,9 +148,6 @@ pub fn main() !void {
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
     var current_clicked_color = F32x3.new(0.0, 0.0, 0.0);
 
-    // need to know this so that we can do appropriate image layout transitions on first pass
-    var first_iter = true;
-
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
@@ -297,31 +294,12 @@ pub fn main() !void {
 
         if (max_sample_count != 0 and scene.camera.film.sample_count > max_sample_count) scene.camera.film.clear();
         if (max_sample_count == 0 or scene.camera.film.sample_count < max_sample_count) {
-            // transition display image to one we can write to in shader
-            context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
-                .image_memory_barrier_count = 1,
-                .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
-                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                    .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                    .old_layout = if (first_iter) .undefined else .transfer_src_optimal,
-                    .new_layout = .general,
-                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                    .image = scene.camera.film.images.data.items(.handle)[0],
-                    .subresource_range = .{
-                        .aspect_mask = .{ .color_bit = true },
-                        .base_mip_level = 0,
-                        .level_count = 1,
-                        .base_array_layer = 0,
-                        .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                    },
-                }),
-            });
-
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ scene.world.descriptor_set, scene.background.descriptor_set, scene.camera.film.descriptor_set });
+            // prepare some stuff
+            scene.camera.film.recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ scene.world.descriptor_set, scene.background.descriptor_set, scene.camera.film.descriptor_set });
 
             // push some stuff
             const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.film.sample_count });
@@ -330,30 +308,8 @@ pub fn main() !void {
             // trace some stuff
             pipeline.recordTraceRays(&context, command_buffer, scene.camera.film.extent);
 
-            // transition display image to one we can blit from
-            const image_memory_barriers = [_]vk.ImageMemoryBarrier2{.{
-                .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                .dst_stage_mask = .{ .blit_bit = true },
-                .dst_access_mask = .{ .transfer_read_bit = true },
-                .old_layout = .general,
-                .new_layout = .transfer_src_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = scene.camera.film.images.data.items(.handle)[0],
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = 1,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            }};
-            context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
-                .image_memory_barrier_count = image_memory_barriers.len,
-                .p_image_memory_barriers = &image_memory_barriers,
-            });
-            first_iter = false;
+            // copy some stuff
+            scene.camera.film.recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to
