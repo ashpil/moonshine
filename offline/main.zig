@@ -126,40 +126,38 @@ pub fn main() !void {
         pipeline.recordBindPipeline(&context, commands.buffer);
         pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.descriptor_set, scene.camera.film.descriptor_set });
         
-        for (0..config.spp) |i| {
+        for (0..config.spp) |sample_count| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.properties, @as(u32, @intCast(i)) });
+            const bytes = std.mem.asBytes(&.{ scene.camera.properties, @as(u32, @intCast(sample_count)) });
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff
             pipeline.recordTraceRays(&context, commands.buffer, scene.camera.film.extent);
 
             // if not last invocation, need barrier cuz we write to images
-            if (i != config.spp) {
-                const rt_barriers = [_]vk.ImageMemoryBarrier2 {
-                    .{
-                        .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                        .src_access_mask = .{ .shader_write_bit = true },
-                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-                        .dst_access_mask = .{ .shader_write_bit = true },
-                        .old_layout = .general,
-                        .new_layout = .general,
-                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                        .image = scene.camera.film.images.data.items(.handle)[0],
-                        .subresource_range = .{
-                            .aspect_mask = .{ .color_bit = true },
-                            .base_mip_level = 0,
-                            .level_count = 1,
-                            .base_array_layer = 0,
-                            .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                        },
-                    }
-                };
-
+            if (sample_count != config.spp) {
                 context.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
-                    .image_memory_barrier_count = @intCast(rt_barriers.len),
-                    .p_image_memory_barriers = &rt_barriers,
+                    .image_memory_barrier_count = 1,
+                    .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
+                        .{
+                            .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                            .old_layout = .general,
+                            .new_layout = .general,
+                            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                            .image = scene.camera.film.images.data.items(.handle)[0],
+                            .subresource_range = .{
+                                .aspect_mask = .{ .color_bit = true },
+                                .base_mip_level = 0,
+                                .level_count = 1,
+                                .base_array_layer = 0,
+                                .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                            },
+                        }
+                    },
                 });
             }
         }
