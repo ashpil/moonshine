@@ -52,7 +52,6 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     var camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
     var camera = try Camera.create(vc, vk_allocator, allocator, &film_descriptor_layout, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
-    try commands.transitionImageLayout(vc, allocator, camera.film.images.data.items(.handle)[1..], .undefined, .general);
 
     var world = try World.fromGlb(vc, vk_allocator, allocator, commands, &world_descriptor_layout, gltf, inspection);
     errdefer world.destroy(vc, allocator);
