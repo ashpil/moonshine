@@ -14,6 +14,7 @@ const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
 
 const MsneReader = engine.fileformats.msne.MsneReader;
+const exr = engine.fileformats.exr;
 
 const Self = @This();
 
@@ -56,7 +57,9 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     var world = try World.fromGlb(vc, vk_allocator, allocator, commands, &world_descriptor_layout, gltf, inspection);
     errdefer world.destroy(vc, allocator);
 
-    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_filepath);
+    const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
+    defer allocator.free(skybox_image.asSlice());
+    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_image);
     errdefer background.destroy(vc, allocator);
 
     return Self {
@@ -89,9 +92,10 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     var camera_create_info = try Camera.CreateInfo.fromMsne(msne);
     var camera = try Camera.create(vc, vk_allocator, allocator, &film_descriptor_layout, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
-    try commands.transitionImageLayout(vc, allocator, camera.film.images.data.items(.handle)[1..], .undefined, .general);
 
-    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_filepath);
+    const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
+    defer allocator.free(skybox_image.asSlice());
+    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_image);
     errdefer background.destroy(vc, allocator);
 
     return Self {
