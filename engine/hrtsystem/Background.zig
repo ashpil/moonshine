@@ -43,12 +43,7 @@ const Self = @This();
 
 // a lot of unnecessary copying if this ever needs to be optimized
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, sampler: vk.Sampler, color_texture_path: []const u8) !Self {
-    const color = blk: {
-        const pathZ = try allocator.dupeZ(u8, color_texture_path);
-        defer allocator.free(pathZ);
-
-        break :blk try exr.helpers.load(allocator, pathZ);
-    };
+    const color = try exr.helpers.Rgba2D.load(allocator, color_texture_path);
     defer allocator.free(color.asSlice());
 
     const images = try ImageManager.createTexture(vc, vk_allocator, allocator, &[_]ImageManager.TextureSource {

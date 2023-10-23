@@ -18,7 +18,7 @@ const Mat3x4 = vector.Mat3x4(f32);
 
 const Config = struct {
     in_filepath: []const u8, // must be glb
-    out_filepath: [:0]const u8, // must be exr
+    out_filepath: []const u8, // must be exr
     skybox_filepath: []const u8, // must be exr
     spp: u32,
     extent: vk.Extent2D,
@@ -41,7 +41,7 @@ const Config = struct {
 
         return Config {
             .in_filepath = try allocator.dupe(u8, in_filepath),
-            .out_filepath = try allocator.dupeZ(u8, out_filepath), // ugh
+            .out_filepath = try allocator.dupe(u8, out_filepath),
             .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
             .spp = spp,
             .extent = vk.Extent2D { .width = 1280, .height = 720 }, // TODO: cli
@@ -112,7 +112,7 @@ pub fn main() !void {
 
     try logger.log("create pipeline");
     
-    const output_buffer = try vk_allocator.createHostBuffer(&context, f32, 4 * scene.camera.film.extent.width * scene.camera.film.extent.height, .{ .transfer_dst_bit = true });
+    const output_buffer = try vk_allocator.createHostBuffer(&context, [4]f32, scene.camera.film.extent.width * scene.camera.film.extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
 
     // record command buffer
@@ -195,7 +195,7 @@ pub fn main() !void {
     try logger.log("render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.save(allocator, output_buffer.data, 4, scene.camera.film.extent, config.out_filepath);
+    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.data.ptr, .extent = scene.camera.film.extent }, allocator, config.out_filepath);
 
     try logger.log("write exr");
 }

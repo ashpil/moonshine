@@ -52,19 +52,42 @@ fn intToStatus(err_code: c_int) TinyExrError!void {
     };
 }
 
-pub fn handleError(func: anytype, args: anytype) TinyExrError!void {
+pub fn RetType(comptime T: type) type {
+    return switch (@typeInfo(T).Fn.return_type.?) {
+        c_int => void,
+        usize => usize,
+        else => unreachable, // TODO
+    };
+}
+
+pub fn handleError(func: anytype, args: anytype) TinyExrError!RetType(@TypeOf(func)) {
     var err_message: [*c]u8 = undefined;
     const ref = &err_message;
     const new_args = args ++ .{ ref };
-    intToStatus(@call(.auto, func, new_args)) catch |err| {
-        std.log.err("tinyexr: {}: {s}", .{ err, err_message });
-        c.FreeEXRErrorMessage(err_message);
-        return err;
-    };
+    switch (@typeInfo(@TypeOf(func)).Fn.return_type.?) {
+        c_int => intToStatus(@call(.auto, func, new_args)) catch |err| {
+            std.log.err("tinyexr: {}: {s}", .{ err, err_message });
+            c.FreeEXRErrorMessage(err_message);
+            return err;
+        },
+        usize => {
+            const n = @call(.auto, func, new_args);
+            if (n == 0) {
+                std.log.err("tinyexr: {s}", .{ err_message });
+                c.FreeEXRErrorMessage(err_message);
+                return TinyExrError.InvalidData; // want to return some sort of error here but not sure what
+            } else return n;
+        },
+        else => comptime unreachable,
+    }
 }
 
 pub fn saveExrImageToFile(image: *const Image, header: *const Header, filename: [*:0]const u8) TinyExrError!void {
     return handleError(c.SaveEXRImageToFile, .{ image, header, filename });
+}
+
+pub fn saveEXRImageToMemory(image: *const Image, header: *const Header, memory: *[*c]u8) TinyExrError!usize {
+    return handleError(c.SaveEXRImageToMemory, .{ image, header, memory });
 }
 
 pub fn loadExrImageFromFile(image: *Image, header: *const Header, filename: [*:0]const u8) TinyExrError!void {
@@ -83,6 +106,10 @@ pub fn loadEXR(out_rgba: *[*c]f32, width: *c_int, height: *c_int, filename: [*:0
     return handleError(c.LoadEXR, .{ out_rgba, width, height, filename });
 }
 
+pub fn loadEXRFromMemory(out_rgba: *[*c]f32, width: *c_int, height: *c_int, memory: [*]const u8, size: usize) TinyExrError!void {
+    return handleError(c.LoadEXRFromMemory, .{ out_rgba, width, height, memory, size });
+}
+
 pub fn initExrHeader(header: *Header) void {
     c.InitEXRHeader(header);
 }
@@ -91,79 +118,12 @@ pub fn initExrImage(image: *Image) void {
     c.InitEXRImage(image);
 }
 
+// things that don't actually correspond to things in tinyexr but are convenient for this project
 pub const helpers = struct {
     const vk = @import("vulkan");
 
-    // TODO: make out_filename this not sentinel terminated
-    pub fn save(allocator: std.mem.Allocator, packed_channels: []const f32, packed_channel_count: u32, size: vk.Extent2D, out_filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!void {
-        const channel_count = 3;
-
-        var header: Header = undefined;
-        initExrHeader(&header);
-
-        var image: Image = undefined;
-        initExrImage(&image);
-
-        const pixel_count = size.width * size.height;
-
-        const ImageChannels = std.MultiArrayList(struct {
-            r: f32,
-            g: f32,
-            b: f32,
-        });
-        var image_channels = ImageChannels {};
-        defer image_channels.deinit(allocator);
-
-        try image_channels.ensureUnusedCapacity(allocator, pixel_count);
-
-        for (0..pixel_count) |i| {
-            image_channels.appendAssumeCapacity(.{
-                .r = packed_channels[packed_channel_count * i + 0],
-                .g = packed_channels[packed_channel_count * i + 1],
-                .b = packed_channels[packed_channel_count * i + 2],
-            });
-        }
-
-        const image_channels_slice = image_channels.slice();
-        image.num_channels = channel_count;
-        image.images = @constCast(&[3][*c]u8 {
-            image_channels_slice.ptrs[2],
-            image_channels_slice.ptrs[1],
-            image_channels_slice.ptrs[0],
-        });
-        image.width = @intCast(size.width);
-        image.height = @intCast(size.height);
-
-        var header_channels = try allocator.alloc(ChannelInfo, channel_count);
-        defer allocator.free(header_channels);
-
-        var pixel_types = try allocator.alloc(c_int, channel_count);
-        defer allocator.free(pixel_types);
-        var requested_pixel_types = try allocator.alloc(c_int, channel_count);
-        defer allocator.free(requested_pixel_types);
-
-        header.num_channels = channel_count;
-        header.channels = header_channels.ptr;
-
-        header.channels[0].name[0] = 'B';
-        header.channels[0].name[1] = 0;
-        header.channels[1].name[0] = 'G';
-        header.channels[1].name[1] = 0;
-        header.channels[2].name[0] = 'R';
-        header.channels[2].name[1] = 0;
-
-        header.pixel_types = pixel_types.ptr;
-        header.requested_pixel_types = requested_pixel_types.ptr;
-
-        inline for (0..channel_count) |i| {
-            header.pixel_types[i] = @intFromEnum(PixelType.float);
-            header.requested_pixel_types[i] = @intFromEnum(PixelType.float);
-        }
-
-        try saveExrImageToFile(&image, &header, out_filename);
-    }
-
-    const Rgba2D = struct {
+    // RGB image stored in memory as RGBA buffer
+    pub const Rgba2D = struct {
         ptr: [*][4]f32,
         extent: vk.Extent2D,
 
@@ -173,32 +133,99 @@ pub const helpers = struct {
             slice.len = self.extent.width * self.extent.height;
             return slice;
         }
+
+        pub fn save(self: Rgba2D, allocator: std.mem.Allocator, out_filename: []const u8) !void {
+            const channel_count = 3;
+
+            var header: Header = undefined;
+            initExrHeader(&header);
+
+            var image: Image = undefined;
+            initExrImage(&image);
+
+            const pixel_count = self.extent.width * self.extent.height;
+
+            const ImageChannels = std.MultiArrayList(struct {
+                r: f32,
+                g: f32,
+                b: f32,
+            });
+            var image_channels = ImageChannels {};
+            defer image_channels.deinit(allocator);
+
+            try image_channels.ensureUnusedCapacity(allocator, pixel_count);
+
+            for (0..pixel_count) |i| {
+                image_channels.appendAssumeCapacity(.{
+                    .r = self.asSlice()[i][0],
+                    .g = self.asSlice()[i][1],
+                    .b = self.asSlice()[i][2],
+                });
+            }
+
+            const image_channels_slice = image_channels.slice();
+            image.num_channels = channel_count;
+            image.images = @constCast(&[3][*c]u8 {
+                image_channels_slice.ptrs[2],
+                image_channels_slice.ptrs[1],
+                image_channels_slice.ptrs[0],
+            });
+            image.width = @intCast(self.extent.width);
+            image.height = @intCast(self.extent.height);
+
+            var header_channels = try allocator.alloc(ChannelInfo, channel_count);
+            defer allocator.free(header_channels);
+
+            var pixel_types = try allocator.alloc(c_int, channel_count);
+            defer allocator.free(pixel_types);
+            var requested_pixel_types = try allocator.alloc(c_int, channel_count);
+            defer allocator.free(requested_pixel_types);
+
+            header.num_channels = channel_count;
+            header.channels = header_channels.ptr;
+
+            header.channels[0].name[0] = 'B';
+            header.channels[0].name[1] = 0;
+            header.channels[1].name[0] = 'G';
+            header.channels[1].name[1] = 0;
+            header.channels[2].name[0] = 'R';
+            header.channels[2].name[1] = 0;
+
+            header.pixel_types = pixel_types.ptr;
+            header.requested_pixel_types = requested_pixel_types.ptr;
+
+            inline for (0..channel_count) |i| {
+                header.pixel_types[i] = @intFromEnum(PixelType.float);
+                header.requested_pixel_types[i] = @intFromEnum(PixelType.float);
+            }
+
+            var data: [*c]u8 = undefined;
+            const file_size = try saveEXRImageToMemory(&image, &header, &data);
+            try std.fs.cwd().writeFile(out_filename, data[0..file_size]);
+            std.heap.c_allocator.free(data[0..file_size]);
+        }
+
+        pub fn load(allocator: std.mem.Allocator, filename: []const u8) !Rgba2D {
+            const file_content = try std.fs.cwd().readFileAlloc(allocator, filename, std.math.maxInt(usize));
+            defer allocator.free(file_content);
+
+            var out_rgba: [*c]f32 = undefined;
+            var width: c_int = undefined;
+            var height: c_int = undefined;
+            try loadEXRFromMemory(&out_rgba, &width, &height, file_content.ptr, file_content.len);
+            const malloc_slice = Rgba2D {
+                .ptr = @ptrCast(out_rgba),
+                .extent = vk.Extent2D {
+                    .width = @intCast(width),
+                    .height = @intCast(height),
+                },
+            };
+            const out = Rgba2D {
+                .ptr = (try allocator.dupe([4]f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
+                .extent = malloc_slice.extent,
+            };
+            std.heap.c_allocator.free(malloc_slice.asSlice());
+            return out;
+        }
     };
-
-    // load RGB image into RGBA buffer
-    pub fn load(allocator: std.mem.Allocator, filename: [*:0]const u8) (TinyExrError || std.mem.Allocator.Error)!Rgba2D {
-        var version: Version = undefined;
-        try parseExrVersionFromFile(&version, filename);
-
-        var header: Header = undefined;
-        try parseExrHeaderFromFile(&header, &version, filename);
-
-        var out_rgba: [*c]f32 = undefined;
-        var width: c_int = undefined;
-        var height: c_int = undefined;
-        try loadEXR(&out_rgba, &width, &height, filename);
-        const malloc_slice = Rgba2D {
-            .ptr = @ptrCast(out_rgba),
-            .extent = vk.Extent2D {
-                .width = @intCast(width),
-                .height = @intCast(height),
-            },
-        };
-        const out = Rgba2D {
-            .ptr = (try allocator.dupe([4]f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
-            .extent = malloc_slice.extent,
-        };
-        std.heap.c_allocator.free(malloc_slice.asSlice());
-        return out;
-    }
 };
