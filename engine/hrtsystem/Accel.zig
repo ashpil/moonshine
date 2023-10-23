@@ -211,7 +211,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         const compactedSizes = try allocator.alloc(vk.DeviceSize, unique_mesh_lists.len);
         defer allocator.free(compactedSizes);
-        try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos, uncompacted_blases, compactedSizes);
+        if (compactedSizes.len != 0) try commands.createAccelStructsAndGetCompactedSizes(vc, build_geometry_infos, build_infos, uncompacted_blases, compactedSizes);
 
         var blases = BottomLevelAccels {};
         try blases.ensureTotalCapacity(allocator, unique_mesh_lists.len);
@@ -271,9 +271,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }
         }
 
-        try commands.startRecording(vc);
-        commands.recordUploadBuffer(Geometry, vc, geometries, geometries_host);
-        try commands.submitAndIdleUntilDone(vc);
+        if (geometry_count != 0) {
+            try commands.startRecording(vc);
+            commands.recordUploadBuffer(Geometry, vc, geometries, geometries_host);
+            try commands.submitAndIdleUntilDone(vc);
+        }
 
         break :blk geometries;
     };
@@ -311,9 +313,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         custom_index += @intCast(instance.geometries.len);
     }
 
-    try commands.startRecording(vc);
-    commands.recordUploadBuffer(vk.AccelerationStructureInstanceKHR, vc, instances_device, instances_host);
-    try commands.submitAndIdleUntilDone(vc);
+    if (instance_count != 0) {
+        try commands.startRecording(vc);
+        commands.recordUploadBuffer(vk.AccelerationStructureInstanceKHR, vc, instances_device, instances_host);
+        try commands.submitAndIdleUntilDone(vc);
+    }
 
     const instances_address = instances_device.getAddress(vc);
 
@@ -370,7 +374,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             inverse.* = instance.transform.inverse_affine();
         }
 
-        try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
+        if (instance_count != 0) try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
 
         break :blk buffer;
     };

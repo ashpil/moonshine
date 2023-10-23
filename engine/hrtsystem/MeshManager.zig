@@ -61,7 +61,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     defer staging_buffers.deinit();
     defer for (staging_buffers.items) |buffer| buffer.destroy(vc);
 
-    try commands.startRecording(vc);
+    if (objects.len != 0) try commands.startRecording(vc);
 
     for (objects, addresses_buffer_host.data) |object, *addresses_buffer| {
         const position_buffer = blk: {
@@ -140,9 +140,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const addresses_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, MeshAddresses, addresses_buffer_host.data.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true });
     errdefer addresses_buffer.destroy(vc);
-    commands.recordUploadBuffer(MeshAddresses, vc, addresses_buffer, addresses_buffer_host);
 
-    try commands.submitAndIdleUntilDone(vc);
+    if (objects.len != 0) {
+        commands.recordUploadBuffer(MeshAddresses, vc, addresses_buffer, addresses_buffer_host);
+        try commands.submitAndIdleUntilDone(vc);
+    }
     
     return Self {
         .meshes = meshes,

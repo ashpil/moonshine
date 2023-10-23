@@ -58,12 +58,24 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
                 .p_set_layouts = @ptrCast(&self.handle),
             }, @ptrCast(&descriptor_set));
 
-            var descriptor_writes = writes;
-            inline for (&descriptor_writes) |*descriptor_write| {
-                descriptor_write.dst_set = descriptor_set;
+            // avoid writing descriptors in certain invalid states:
+            // 1. descriptor count is zero
+            // 2. buffer is vk_null_handle
+            var valid_writes: [bindings.len]vk.WriteDescriptorSet = undefined;
+            var valid_write_count: u32 = 0;
+            for (writes) |write| {
+                if (write.descriptor_count == 0) continue;
+                switch (write.descriptor_type) {
+                    .storage_buffer => if (write.p_buffer_info[0].buffer == .null_handle) continue,
+                    else => {},
+                }
+
+                valid_writes[valid_write_count] = write;
+                valid_writes[valid_write_count].dst_set = descriptor_set;
+                valid_write_count += 1;
             }
 
-            vc.device.updateDescriptorSets(descriptor_writes.len, &descriptor_writes, 0, undefined);
+            vc.device.updateDescriptorSets(valid_write_count, &valid_writes, 0, undefined);
 
             return descriptor_set;
         }

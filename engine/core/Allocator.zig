@@ -85,7 +85,7 @@ pub fn DeviceBuffer(comptime T: type) type {
 
         // must've been created with shader device address bit enabled
         pub fn getAddress(self: BufferSelf, vc: *const VulkanContext) vk.DeviceAddress {
-            return vc.device.getBufferDeviceAddress(&.{
+            return if (self.handle == .null_handle) 0 else vc.device.getBufferDeviceAddress(&.{
                 .buffer = self.handle,
             });
         }
@@ -93,6 +93,12 @@ pub fn DeviceBuffer(comptime T: type) type {
 }
 
 pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, comptime T: type, count: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer(T) {
+    if (count == 0) {
+        return DeviceBuffer(T) {
+            .handle = .null_handle,
+        };
+    }
+
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;
     try self.createRawBuffer(vc, @sizeOf(T) * count, usage, .{ .device_local_bit = true }, &buffer, &memory);
@@ -168,6 +174,14 @@ pub fn HostBuffer(comptime T: type) type {
 
 // count not in bytes, but number of T
 pub fn createHostBuffer(self: *Self, vc: *const VulkanContext, comptime T: type, count: vk.DeviceSize, usage: vk.BufferUsageFlags) !HostBuffer(T) {
+    if (count == 0) {
+        return HostBuffer(T) {
+            .handle = .null_handle,
+            .memory = .null_handle,
+            .data = &.{},
+        };
+    }
+
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;
     const size = @sizeOf(T) * count;

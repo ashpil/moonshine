@@ -176,9 +176,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
         errdefer materials_gpu.destroy(vc);
 
-        try commands.startRecording(vc);
-        commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
-        try commands.submitAndIdleUntilDone(vc);
+        if (material_count != 0)
+        {
+            try commands.startRecording(vc);
+            commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
+            try commands.submitAndIdleUntilDone(vc);
+        }
 
         break :blk materials_gpu;
     };

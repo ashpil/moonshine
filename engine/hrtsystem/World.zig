@@ -93,7 +93,7 @@ pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
-}, .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{ .partially_bound_bit = true }, .{}, }, "World");
+}, .{ .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, }, "World");
 
 material_manager: MaterialManager,
 
