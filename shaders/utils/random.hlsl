@@ -44,7 +44,7 @@ bool coinFlipRemap(float p, inout float rand) {
 
 // samples from an alias table, remaps rand
 template <class Data, class Entry>
-Data sampleAlias(StructuredBuffer<Entry> entries, uint entryCount, uint offset, inout float rand, out uint idx) {
+Data sampleAlias(StructuredBuffer<Entry> entries, uint entryCount, uint offset, inout float rand, inout uint idx) {
     float scaled = rand * entryCount;
     idx = uint(scaled);
     rand = frac(scaled);
