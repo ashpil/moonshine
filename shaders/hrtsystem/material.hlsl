@@ -408,19 +408,19 @@ struct AnyMaterial : Material {
 
     float pdf(float3 w_i, float3 w_o) {
         switch (type) {
-            case MaterialType::STANDARD_PBR: {
+            case MaterialType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.pdf(w_i, w_o);
             }
-            case MaterialType::LAMBERT: {
+            case MaterialType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords);
                 return m.pdf(w_i, w_o);
             }
-            case MaterialType::PERFECT_MIRROR: {
+            case MaterialType::PerfectMirror: {
                 PerfectMirror m;
                 return m.pdf(w_i, w_o);
             }
-            case MaterialType::GLASS: {
+            case MaterialType::Glass: {
                 Glass m = Glass::load(addr);
                 return m.pdf(w_i, w_o);
             }
@@ -429,19 +429,19 @@ struct AnyMaterial : Material {
 
     float3 eval(float3 w_i, float3 w_o) {
         switch (type) {
-            case MaterialType::STANDARD_PBR: {
+            case MaterialType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.eval(w_i, w_o);
             }
-            case MaterialType::LAMBERT: {
+            case MaterialType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords);
                 return m.eval(w_i, w_o);
             }
-            case MaterialType::PERFECT_MIRROR: {
+            case MaterialType::PerfectMirror: {
                 PerfectMirror m;
                 return m.eval(w_i, w_o);
             }
-            case MaterialType::GLASS: {
+            case MaterialType::Glass: {
                 Glass m = Glass::load(addr);
                 return m.eval(w_i, w_o);
             }
@@ -450,19 +450,19 @@ struct AnyMaterial : Material {
 
     MaterialSample sample(float3 w_o, float2 square) {
         switch (type) {
-            case MaterialType::STANDARD_PBR: {
+            case MaterialType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords);
                 return m.sample(w_o, square);
             }
-            case MaterialType::LAMBERT: {
+            case MaterialType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords);
                 return m.sample(w_o, square);
             }
-            case MaterialType::PERFECT_MIRROR: {
+            case MaterialType::PerfectMirror: {
                 PerfectMirror m;
                 return m.sample(w_o, square);
             }
-            case MaterialType::GLASS: {
+            case MaterialType::Glass: {
                 Glass m = Glass::load(addr);
                 return m.sample(w_o, square);
             }
@@ -471,16 +471,16 @@ struct AnyMaterial : Material {
 
     bool isDelta() {
         switch (type) {
-            case MaterialType::STANDARD_PBR: {
+            case MaterialType::StandardPBR: {
                 return StandardPBR::isDelta();
             }
-            case MaterialType::LAMBERT: {
+            case MaterialType::Lambert: {
                 return Lambert::isDelta();
             }
-            case MaterialType::PERFECT_MIRROR: {
+            case MaterialType::PerfectMirror: {
                 return PerfectMirror::isDelta();
             }
-            case MaterialType::GLASS: {
+            case MaterialType::Glass: {
                 return Glass::isDelta();
             }
         }
