@@ -207,22 +207,11 @@ struct PathTracingIntegrator : Integrator {
             accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction);
         } else {
             // MIS env map if it is sampled at later bounces
-            float lightPdf;
-            {
-                float2 phiTheta = cartesianToSpherical(ray.Direction);
-                float2 uv = phiTheta / float2(2 * PI, PI);
+            LightEval l = EnvMap::create().evalNoTrace(ray.Direction);
 
-                uint2 size;
-                dBackgroundTexture.GetDimensions(size.x, size.y);
-                uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
-                float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * size.x * size.y;
-                float sinTheta = sin(phiTheta.y);
-                lightPdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
-            }
-
-            if (lightPdf > 0.0) {
-                float weight = powerHeuristic(1, lastMaterialPdf, env_samples_per_bounce, lightPdf);
-                accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction) * weight;
+            if (l.pdf > 0.0) {
+                float weight = powerHeuristic(1, lastMaterialPdf, env_samples_per_bounce, l.pdf);
+                accumulatedColor += throughput * l.radiance * weight;
             }
         }
 

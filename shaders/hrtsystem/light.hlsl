@@ -66,21 +66,24 @@ struct EnvMap : Light {
         return lightSample;
     }
 
-    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
+    LightEval evalNoTrace(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
 
-        // compute radiance
-        LightEval l;
-        l.radiance = dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
-
-        // compute pdf
         uint2 size;
         dBackgroundTexture.GetDimensions(size.x, size.y);
         uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
         float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * size.x * size.y;
         float sinTheta = sin(phiTheta.y);
+
+        LightEval l;
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
+        l.radiance = dBackgroundTexture.Load(uint3(coords, 0));
+        return l;
+    }
+
+    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
+        LightEval l = evalNoTrace(dirWs);
 
         if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, dirWs)), dirWs, INFINITY)) {
             l.pdf = 0.0;
