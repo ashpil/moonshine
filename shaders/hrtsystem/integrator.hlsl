@@ -151,18 +151,8 @@ struct PathTracingIntegrator : Integrator {
                 }
             } else if (geometry.sampled) {
                 // MIS emissive light if it is sampled at later bounces
-                float lightPdf;
-                {
-                    float3 samplePositionToEmitterPositionWs = attrs.position - ray.Origin;
-                    float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
-                    float sum = dEmitterAliasTable[0].select;
-                    float lightCos = dot(outgoingDirWs, attrs.triangleFrame.n);
-                    if (lightCos > 0.0) {
-                        lightPdf = r2 / (lightCos * sum);
-                    } else {
-                        lightPdf = 0.0;
-                    }
-                }
+                float sum = dEmitterAliasTable[0].select;
+                float lightPdf = areaMeasureToSolidAngleMeasure(attrs.position, ray.Origin, ray.Direction, attrs.triangleFrame.n) / sum;
 
                 if (lightPdf > 0.0) {
                     float weight = powerHeuristic(1, lastMaterialPdf, mesh_samples_per_bounce, lightPdf);

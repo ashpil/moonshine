@@ -95,6 +95,13 @@ struct EnvMap : Light {
     }
 };
 
+float areaMeasureToSolidAngleMeasure(float3 pos1, float3 pos2, float3 dir1, float3 dir2) {
+    float r2 = dot(pos1 - pos2, pos1 - pos2);
+    float lightCos = dot(-dir1, dir2);
+
+    return lightCos > 0.0f ? r2 / lightCos : 0.0f;
+}
+
 // all mesh lights in scene
 struct MeshLights : Light {
     static MeshLights create() {
@@ -117,18 +124,9 @@ struct MeshLights : Light {
         float2 barycentrics = squareToTriangle(rand);
         MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(data.instanceIndex, data.geometryIndex, data.primitiveIndex, barycentrics).inWorld(data.instanceIndex);
 
-        float3 emissive = getEmissive(materialIdx(instanceID, data.geometryIndex), attrs.texcoord);
-
-        float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
-        float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
-        float r = sqrt(r2);
-        lightSample.radiance = emissive;
-        lightSample.dirWs = samplePositionToEmitterPositionWs / r;
-
-        float lightCos = dot(-lightSample.dirWs, attrs.triangleFrame.n);
-        if (lightCos > 0) {
-            lightSample.pdf = r2 / (lightCos * sum);
-        }
+        lightSample.radiance = getEmissive(materialIdx(instanceID, data.geometryIndex), attrs.texcoord);
+        lightSample.dirWs = normalize(attrs.position - positionWs);
+        lightSample.pdf = areaMeasureToSolidAngleMeasure(attrs.position, positionWs, lightSample.dirWs, attrs.triangleFrame.n) / sum;
 
         // compute precise ray endpoints
         float3 offsetLightPositionWs = offsetAlongNormal(attrs.position, attrs.triangleFrame.n);
@@ -142,7 +140,6 @@ struct MeshLights : Light {
     }
 
     LightEval eval(float3 positionWs, float3 triangleNormalDirWs, float3 dirWs) {
-        LightEval l;
         // trace ray to determine if we hit an emissive mesh
         RayDesc ray;
         ray.Origin = offsetAlongNormal(positionWs, faceForward(triangleNormalDirWs, dirWs));
@@ -155,18 +152,11 @@ struct MeshLights : Light {
         uint instanceID = dInstances[its.instanceIndex].instanceID();
         Geometry geometry = getGeometry(instanceID, its.geometryIndex);
 
+        LightEval l;
         if (geometry.sampled) {
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
-
-            float3 samplePositionToEmitterPositionWs = attrs.position - positionWs;
-            float r2 = dot(samplePositionToEmitterPositionWs, samplePositionToEmitterPositionWs);
             float sum = dEmitterAliasTable[0].select;
-            float lightCos = dot(-dirWs, attrs.triangleFrame.n);
-            if (lightCos > 0) {
-                l.pdf = r2 / (lightCos * sum);
-            } else {
-                l.pdf = 0.0;
-            }
+            l.pdf = areaMeasureToSolidAngleMeasure(attrs.position, positionWs, dirWs, attrs.triangleFrame.n) / sum;
             l.radiance = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
         } else {
             // geometry not sampled, pdf is zero
