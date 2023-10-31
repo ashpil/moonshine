@@ -78,8 +78,6 @@ struct AnyMaterialData {
 
 // BACKGROUND
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;
-[[vk::binding(0, 1)]] SamplerState dBackgroundSampler;
-
 [[vk::binding(1, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
 [[vk::binding(2, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
 

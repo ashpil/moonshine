@@ -94,7 +94,7 @@ struct EnvMap : Light {
     float3 incomingRadiance(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
-        return dBackgroundTexture.SampleLevel(dBackgroundSampler, uv, 0);
+        return dBackgroundTexture.SampleLevel(dTextureSampler, uv, 0);
     }
 };
 

@@ -14,7 +14,7 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
     .{ // image
         .binding = 0,
-        .descriptor_type = .combined_image_sampler,
+        .descriptor_type = .sampled_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
@@ -42,7 +42,7 @@ descriptor_set: vk.DescriptorSet,
 const Self = @This();
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, sampler: vk.Sampler, color_image: Rgba2D) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, color_image: Rgba2D) !Self {
     const images = try ImageManager.createTexture(vc, vk_allocator, allocator, &[_]ImageManager.TextureSource {
         ImageManager.TextureSource {
             .raw = .{
@@ -109,9 +109,9 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .dst_binding = 0,
             .dst_array_element = 0,
             .descriptor_count = 1,
-            .descriptor_type = .combined_image_sampler,
+            .descriptor_type = .sampled_image,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = sampler,
+                .sampler = .null_handle,
                 .image_view = images.data.items(.view)[0],
                 .image_layout = .shader_read_only_optimal,
             }),

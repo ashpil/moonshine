@@ -59,7 +59,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
 
     const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
     defer allocator.free(skybox_image.asSlice());
-    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_image);
+    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, skybox_image);
     errdefer background.destroy(vc, allocator);
 
     return Self {
@@ -95,7 +95,7 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
 
     const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
     defer allocator.free(skybox_image.asSlice());
-    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, world.sampler, skybox_image);
+    var background = try Background.create(vc, vk_allocator, allocator, commands, &background_descriptor_layout, skybox_image);
     errdefer background.destroy(vc, allocator);
 
     return Self {
