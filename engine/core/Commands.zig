@@ -191,10 +191,9 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
 }
 
 // TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, sizes: []const vk.DeviceSize, extents: []const vk.Extent2D, is_cubemaps: []const bool, dst_layouts: []const vk.ImageLayout) !void {
+pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, extents: []const vk.Extent2D, is_cubemaps: []const bool, dst_layouts: []const vk.ImageLayout) !void {
     std.debug.assert(dst_images.len == src_datas.len);
-    std.debug.assert(src_datas.len == sizes.len);
-    std.debug.assert(sizes.len == extents.len);
+    std.debug.assert(src_datas.len == extents.len);
     std.debug.assert(extents.len == is_cubemaps.len);
 
     try self.startRecording(vc);
@@ -214,7 +213,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         staging_buffer.destroy(vc);
     };
 
-    for (dst_images, first_barriers, second_barriers, dst_layouts, staging_buffers, sizes, src_datas) |image, *first_barrier, *second_barrier, dst_layout, *staging_buffer, size, src_data| {
+    for (dst_images, first_barriers, second_barriers, dst_layouts, staging_buffers, src_datas) |image, *first_barrier, *second_barrier, dst_layout, *staging_buffer, src_data| {
         first_barrier.* = .{
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
@@ -249,7 +248,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
             },
         };
 
-        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(size), .{ .transfer_src_bit = true });
+        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(src_data.len), .{ .transfer_src_bit = true });
         std.mem.copy(u8, staging_buffer.data, src_data);
     }
 

@@ -9,6 +9,7 @@ const Commands = core.Commands;
 const dds = engine.fileformats.dds;
 
 const vector = @import("../vector.zig");
+const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 
@@ -32,6 +33,12 @@ pub const TextureSource = union(enum) {
     f32x2: F32x2,
     f32x1: f32,
 };
+
+comptime {
+    // so that we can do some hacky stuff below like
+    // reinterpret the f32x3 field as F32x4
+    std.debug.assert(@sizeOf(TextureSource) >= @sizeOf(F32x4));
+}
 
 const Data = std.MultiArrayList(Image);
 
@@ -72,10 +79,6 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     const dst_layouts = try allocator.alloc(vk.ImageLayout, sources.len);
     defer allocator.free(dst_layouts);
 
-    var free_bytes = std.ArrayList([]const u8).init(allocator);
-    defer free_bytes.deinit();
-    defer for (free_bytes.items) |free_byte| allocator.free(free_byte);
-
     for (sources, extents, bytes, is_cubemaps, dst_layouts) |*source, *extent, *byte, *is_cubemap, *dst_layout| {
         const image = switch (source.*) {
             .raw => |raw_info| blk: {
@@ -88,6 +91,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
             },
             .f32x3 => blk: {
                 byte.* = std.mem.asBytes(&source.f32x3);
+                byte.len = @sizeOf(F32x4);  // we store this as f32x4
                 extent.* = vk.Extent2D {
                     .width = 1,
                     .height = 1,
@@ -124,9 +128,7 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     }
 
     const images = data.items(.handle);
-    const sizes = data.items(.size_in_bytes);
-
-    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, sizes, extents, is_cubemaps, dst_layouts);
+    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, extents, is_cubemaps, dst_layouts);
 
     return Self {
         .data = data,
@@ -173,7 +175,6 @@ const Image = struct {
     handle: vk.Image,
     view: vk.ImageView,
     memory: vk.DeviceMemory,
-    size_in_bytes: vk.DeviceSize,
 
     fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, is_cubemap: bool) !Image {
         const extent = vk.Extent3D {
@@ -238,7 +239,6 @@ const Image = struct {
             .memory = memory,
             .handle = handle,
             .view = view,
-            .size_in_bytes = mem_requirements.size,
         };
     }
 };
