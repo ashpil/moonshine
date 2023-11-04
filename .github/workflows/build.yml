@@ -29,8 +29,8 @@ jobs:
     - name: Setup Zig
       uses: goto-bus-stop/setup-zig@v1.3.0
       with:
-        version: master
+        version: 0.12.0-dev.271+5cc1831ca
 
-    - name: Build with latest zig
-      run: zig build
+    - name: Type check
+      run: zig build check
 
