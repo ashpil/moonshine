@@ -212,12 +212,10 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
         break :blk try ImageManager.createTexture(vc, vk_allocator, allocator, &.{.{
-            .raw = ImageManager.RawSource{
+            .raw = .{
                 .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],
                 .extent = tex_data[1],
                 .format = .r8_unorm,
-                .layout = .read_only_optimal,
-                .usage = .{ .sampled_bit = true },
             },
         }}, commands);
         //     io.Fonts->SetTexID((ImTextureID)bd->FontDescriptorSet); TODO required?

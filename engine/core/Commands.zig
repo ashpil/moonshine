@@ -191,10 +191,9 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
 }
 
 // TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, extents: []const vk.Extent2D, is_cubemaps: []const bool, dst_layouts: []const vk.ImageLayout) !void {
+pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, extents: []const vk.Extent2D, dst_layouts: []const vk.ImageLayout) !void {
     std.debug.assert(dst_images.len == src_datas.len);
     std.debug.assert(src_datas.len == extents.len);
-    std.debug.assert(extents.len == is_cubemaps.len);
 
     try self.startRecording(vc);
 
@@ -257,7 +256,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
         .p_image_memory_barriers = first_barriers.ptr,
     });
 
-    for (dst_images, extents, staging_buffers, is_cubemaps) |image, extent, staging_buffer, is_cubemap| {
+    for (dst_images, extents, staging_buffers) |image, extent, staging_buffer| {
         const copy = vk.BufferImageCopy {
             .buffer_offset = 0,
             .buffer_row_length = 0,
@@ -266,7 +265,7 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .aspect_mask = .{ .color_bit = true },
                 .mip_level = 0,
                 .base_array_layer = 0,
-                .layer_count = if (is_cubemap) 6 else 1,
+                .layer_count = 1,
             },
             .image_offset = .{
                 .x = 0,

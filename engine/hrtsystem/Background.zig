@@ -49,8 +49,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
                 .extent = color_image.extent,
                 .format = .r32g32b32a32_sfloat,
-                .layout = .shader_read_only_optimal,
-                .usage = .{ .sampled_bit = true },
             },
         },
     }, commands);

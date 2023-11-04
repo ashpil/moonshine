@@ -239,11 +239,9 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
             try msne_reader.readSlice(u8, bytes);
             sources[i] = .{
                 .raw = .{
-                    .format = format,
-                    .extent = extent,
-                    .layout = .shader_read_only_optimal,
-                    .usage = .{ .sampled_bit = true },
                     .bytes = bytes,
+                    .extent = extent,
+                    .format = format,
                 },
             };
         }

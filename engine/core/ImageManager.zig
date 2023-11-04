@@ -19,16 +19,14 @@ pub const ImageCreateRawInfo = struct {
     format: vk.Format,
 };
 
-pub const RawSource = struct {
-    bytes: []const u8,
-    extent: vk.Extent2D,
-    format: vk.Format,
-    layout: vk.ImageLayout,
-    usage: vk.ImageUsageFlags,
-};
-
 pub const TextureSource = union(enum) {
-    raw: RawSource,
+    pub const Raw = struct {
+        bytes: []const u8,
+        extent: vk.Extent2D,
+        format: vk.Format,
+    };
+
+    raw: Raw,
     f32x3: F32x3,
     f32x2: F32x2,
     f32x1: f32,
@@ -52,7 +50,7 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
     errdefer data.deinit(allocator);
 
     for (infos) |info| {
-        const image = try Image.create(vc, vk_allocator, info.extent, info.usage, info.format, false);
+        const image = try Image.create(vc, vk_allocator, info.extent, info.usage, info.format);
 
         data.appendAssumeCapacity(image);
     }
@@ -73,33 +71,27 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
     const bytes = try allocator.alloc([]const u8, sources.len);
     defer allocator.free(bytes);
 
-    const is_cubemaps = try allocator.alloc(bool, sources.len);
-    defer allocator.free(is_cubemaps);
-
     const dst_layouts = try allocator.alloc(vk.ImageLayout, sources.len);
     defer allocator.free(dst_layouts);
 
-    for (sources, extents, bytes, is_cubemaps, dst_layouts) |*source, *extent, *byte, *is_cubemap, *dst_layout| {
-        const image = switch (source.*) {
+    for (sources, extents, bytes, dst_layouts) |*source, *extent, *byte, *dst_layout| {
+        dst_layout.* = .shader_read_only_optimal;
+        const format = switch (source.*) {
             .raw => |raw_info| blk: {
-                extent.* = raw_info.extent;
-                is_cubemap.* = false;
-                dst_layout.* = raw_info.layout;
                 byte.* = raw_info.bytes;
+                extent.* = raw_info.extent;
 
-                break :blk try Image.create(vc, vk_allocator, extent.*, raw_info.usage.merge(.{ .transfer_dst_bit = true }), raw_info.format, is_cubemap.*);
+                break :blk raw_info.format;
             },
             .f32x3 => blk: {
                 byte.* = std.mem.asBytes(&source.f32x3);
-                byte.len = @sizeOf(F32x4);  // we store this as f32x4
+                byte.len = @sizeOf(F32x4); // we store this as f32x4
                 extent.* = vk.Extent2D {
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemap.* = false;
-                dst_layout.* = .shader_read_only_optimal;
                 
-                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false);
+                break :blk .r32g32b32a32_sfloat;
             },
             .f32x2 => blk: {
                 byte.* = std.mem.asBytes(&source.f32x2);
@@ -107,10 +99,8 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemap.* = false;
-                dst_layout.* = .shader_read_only_optimal;
                 
-                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32_sfloat, false);
+                break :blk .r32g32_sfloat;
             },
             .f32x1 => blk: {
                 byte.* = std.mem.asBytes(&source.f32x1);
@@ -118,17 +108,15 @@ pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, alloc
                     .width = 1,
                     .height = 1,
                 };
-                is_cubemap.* = false;
-                dst_layout.* = .shader_read_only_optimal;
 
-                break :blk try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false);
+                break :blk .r32_sfloat;
             },
         };
-        data.appendAssumeCapacity(image);
+        data.appendAssumeCapacity(try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, format));
     }
 
     const images = data.items(.handle);
-    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, extents, is_cubemaps, dst_layouts);
+    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, extents, dst_layouts);
 
     return Self {
         .data = data,
@@ -176,7 +164,7 @@ const Image = struct {
     view: vk.ImageView,
     memory: vk.DeviceMemory,
 
-    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, is_cubemap: bool) !Image {
+    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format) !Image {
         const extent = vk.Extent3D {
             .width = size.width,
             .height = size.height,
@@ -184,12 +172,11 @@ const Image = struct {
         };
 
         const image_create_info = vk.ImageCreateInfo {
-            .flags = if (is_cubemap) .{ .cube_compatible_bit = true } else .{},
             .image_type = if (extent.height == 1 and extent.width != 1) .@"1d" else .@"2d",
             .format = format,
             .extent = extent,
             .mip_levels = 1,
-            .array_layers = if (is_cubemap) 6 else 1,
+            .array_layers = 1,
             .samples = .{ .@"1_bit" = true },
             .tiling = .optimal,
             .usage = usage,
@@ -215,7 +202,7 @@ const Image = struct {
         const view_create_info = vk.ImageViewCreateInfo {
             .flags = .{},
             .image = handle,
-            .view_type = if (is_cubemap) vk.ImageViewType.cube else if (extent.height == 1 and extent.width != 1) vk.ImageViewType.@"1d" else vk.ImageViewType.@"2d",
+            .view_type = if (extent.height == 1 and extent.width != 1) vk.ImageViewType.@"1d" else vk.ImageViewType.@"2d",
             .format = format, 
             .components = .{
                 .r = .identity,

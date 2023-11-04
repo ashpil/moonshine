@@ -133,8 +133,6 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                         .height = @intCast(img.height),
                     },
                     .format = .r8g8_unorm,
-                    .layout = .shader_read_only_optimal,
-                    .usage = .{ .sampled_bit = true },
                 },
             });
         } else {
@@ -164,8 +162,6 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                         .height = @intCast(img.height),
                     },
                     .format = .r8g8b8a8_srgb,
-                    .layout = .shader_read_only_optimal,
-                    .usage = .{ .sampled_bit = true },
                 },
             });
         } else {
@@ -205,8 +201,6 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                     .height = @intCast(img.height),
                 },
                 .format = .r8g8b8a8_srgb,
-                .layout = .shader_read_only_optimal,
-                .usage = .{ .sampled_bit = true },
             },
         });
     } else {
@@ -240,8 +234,6 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                     .height = @intCast(img.height),
                 },
                 .format = .r8_unorm,
-                .layout = .shader_read_only_optimal,
-                .usage = .{ .sampled_bit = true },
             },
         });
         try textures.append(ImageManager.TextureSource {
@@ -252,8 +244,6 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                     .height = @intCast(img.height),
                 },
                 .format = .r8_unorm,
-                .layout = .shader_read_only_optimal,
-                .usage = .{ .sampled_bit = true },
             },
         });
         return .{ material, .{ .standard_pbr = standard_pbr } };
