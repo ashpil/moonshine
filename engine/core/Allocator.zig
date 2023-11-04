@@ -75,7 +75,7 @@ pub fn DeviceBuffer(comptime T: type) type {
     const type_info = @typeInfo(T);
     if (type_info == .Struct and type_info.Struct.layout == .Auto) @compileError("If you have a DeviceBuffer of a struct, you probably want to specify the struct layout explicitly");
     return struct {
-        handle: vk.Buffer,
+        handle: vk.Buffer = .null_handle,
 
         const BufferSelf = @This();
 
@@ -89,15 +89,15 @@ pub fn DeviceBuffer(comptime T: type) type {
                 .buffer = self.handle,
             });
         }
+
+        pub fn is_null(self: BufferSelf) bool {
+            return self.handle == .null_handle;
+        }
     };
 }
 
 pub fn createDeviceBuffer(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, comptime T: type, count: vk.DeviceSize, usage: vk.BufferUsageFlags) !DeviceBuffer(T) {
-    if (count == 0) {
-        return DeviceBuffer(T) {
-            .handle = .null_handle,
-        };
-    }
+    if (count == 0) return DeviceBuffer(T) {};
 
     var buffer: vk.Buffer = undefined;
     var memory: vk.DeviceMemory = undefined;

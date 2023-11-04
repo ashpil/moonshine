@@ -21,8 +21,8 @@ const F32x2 = vector.Vec2(f32);
 // probably doesn't make sense to cache addresses?
 const Meshes = std.MultiArrayList(struct {
     position_buffer: VkAllocator.DeviceBuffer(F32x3),
-    texcoord_buffer: ?VkAllocator.DeviceBuffer(F32x2), // hmm is there any way to get this to take up same size as a non-nullable buffer?
-    normal_buffer: ?VkAllocator.DeviceBuffer(F32x3), // and this
+    texcoord_buffer: VkAllocator.DeviceBuffer(F32x2),
+    normal_buffer: VkAllocator.DeviceBuffer(F32x3),
 
     vertex_count: u32,
 
@@ -84,10 +84,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
                 break :blk gpu_buffer;
             } else {
-                break :blk null;
+                break :blk VkAllocator.DeviceBuffer(F32x2) {};
             }
         };
-        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
+        errdefer texcoord_buffer.destroy(vc);
 
         const normal_buffer = blk: {
             if (object.normals) |normals| {
@@ -99,10 +99,10 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 commands.recordUploadBuffer(F32x3, vc, gpu_buffer, staging_buffer);
                 break :blk gpu_buffer;
             } else {
-                break :blk null;
+                break :blk VkAllocator.DeviceBuffer(F32x3) {};
             }
         };
-        errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
+        errdefer normal_buffer.destroy(vc);
 
         const index_buffer = blk: {
             const staging_buffer = try vk_allocator.createHostBuffer(vc, U32x3, object.indices.len, .{ .transfer_src_bit = true });
@@ -117,8 +117,8 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         addresses_buffer.* = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
-            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
-            .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
+            .texcoord_address = texcoord_buffer.getAddress(vc),
+            .normal_address = normal_buffer.getAddress(vc) ,
 
             .index_address = index_buffer.getAddress(vc),
         };
@@ -200,8 +200,8 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x3, vc, gpu_buffer, staging_buffer);
             break :blk gpu_buffer;
-        } else null;
-        errdefer if (normal_buffer) |buffer| buffer.destroy(vc);
+        } else VkAllocator.DeviceBuffer(F32x3) {};
+        errdefer normal_buffer.destroy(vc);
 
         const texcoord_buffer = if (try msne_reader.readBool()) blk: {
             const staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, vertex_count, .{ .transfer_src_bit = true });
@@ -210,13 +210,13 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, vertex_count, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x2, vc, gpu_buffer, staging_buffer);
             break :blk gpu_buffer;
-        } else null;
-        errdefer if (texcoord_buffer) |buffer| buffer.destroy(vc);
+        } else VkAllocator.DeviceBuffer(F32x2) {};
+        errdefer texcoord_buffer.destroy(vc);
 
         addresses_buffer.* = MeshAddresses {
             .position_address = position_buffer.getAddress(vc),
-            .normal_address = if (normal_buffer) |buffer| buffer.getAddress(vc) else 0,
-            .texcoord_address = if (texcoord_buffer) |buffer| buffer.getAddress(vc) else 0,
+            .normal_address = normal_buffer.getAddress(vc),
+            .texcoord_address = texcoord_buffer.getAddress(vc),
 
             .index_address = index_buffer.getAddress(vc),
         };
@@ -259,8 +259,8 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
 
     for (position_buffers, texcoord_buffers, normal_buffers, index_buffers, positions, indices) |position_buffer, texcoord_buffer, normal_buffer, index_buffer, position, index| {
         position_buffer.destroy(vc);
-        if (texcoord_buffer) |buffer| buffer.destroy(vc);
-        if (normal_buffer) |buffer| buffer.destroy(vc);
+        texcoord_buffer.destroy(vc);
+        normal_buffer.destroy(vc);
         index_buffer.destroy(vc);
         allocator.free(position);
         allocator.free(index);

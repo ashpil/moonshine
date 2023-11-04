@@ -43,15 +43,14 @@ const Self = @This();
 
 // a lot of unnecessary copying if this ever needs to be optimized
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, color_image: Rgba2D) !Self {
-    const images = try ImageManager.createTexture(vc, vk_allocator, allocator, &[_]ImageManager.TextureSource {
-        ImageManager.TextureSource {
-            .raw = .{
-                .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
-                .extent = color_image.extent,
-                .format = .r32g32b32a32_sfloat,
-            },
+    var images = ImageManager {};
+    try images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+        .raw = .{
+            .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
+            .extent = color_image.extent,
+            .format = .r32g32b32a32_sfloat,
         },
-    }, commands);
+    }, "background");
 
     const luminance = blk: {
         const buffer = try allocator.alloc(f32, color_image.extent.height * color_image.extent.width);

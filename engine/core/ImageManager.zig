@@ -3,6 +3,7 @@ const std = @import("std");
 
 const engine = @import("../engine.zig");
 const core = engine.core;
+const vk_helpers = engine.core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
@@ -40,7 +41,7 @@ comptime {
 
 const Data = std.MultiArrayList(Image);
 
-data: Data,
+data: Data = .{},
 
 const Self = @This();
 
@@ -60,67 +61,48 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
     };
 }
 
-pub fn createTexture(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, sources: []const TextureSource, commands: *Commands) !Self {
-    var data = Data {};
-    try data.ensureTotalCapacity(allocator, sources.len);
-    errdefer data.deinit(allocator);
+pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: TextureSource, name: [:0]const u8) !void {
+    var extent: vk.Extent2D = undefined;
+    var bytes: []const u8 = undefined;
+    var format: vk.Format = undefined;
 
-    const extents = try allocator.alloc(vk.Extent2D, sources.len);
-    defer allocator.free(extents);
-
-    const bytes = try allocator.alloc([]const u8, sources.len);
-    defer allocator.free(bytes);
-
-    const dst_layouts = try allocator.alloc(vk.ImageLayout, sources.len);
-    defer allocator.free(dst_layouts);
-
-    for (sources, extents, bytes, dst_layouts) |*source, *extent, *byte, *dst_layout| {
-        dst_layout.* = .shader_read_only_optimal;
-        const format = switch (source.*) {
-            .raw => |raw_info| blk: {
-                byte.* = raw_info.bytes;
-                extent.* = raw_info.extent;
-
-                break :blk raw_info.format;
-            },
-            .f32x3 => blk: {
-                byte.* = std.mem.asBytes(&source.f32x3);
-                byte.len = @sizeOf(F32x4); // we store this as f32x4
-                extent.* = vk.Extent2D {
-                    .width = 1,
-                    .height = 1,
-                };
-                
-                break :blk .r32g32b32a32_sfloat;
-            },
-            .f32x2 => blk: {
-                byte.* = std.mem.asBytes(&source.f32x2);
-                extent.* = vk.Extent2D {
-                    .width = 1,
-                    .height = 1,
-                };
-                
-                break :blk .r32g32_sfloat;
-            },
-            .f32x1 => blk: {
-                byte.* = std.mem.asBytes(&source.f32x1);
-                extent.* = vk.Extent2D {
-                    .width = 1,
-                    .height = 1,
-                };
-
-                break :blk .r32_sfloat;
-            },
-        };
-        data.appendAssumeCapacity(try Image.create(vc, vk_allocator, extent.*, .{ .transfer_dst_bit = true, .sampled_bit = true }, format));
+    switch (source) {
+        .raw => |raw_info| {
+            bytes = raw_info.bytes;
+            extent = raw_info.extent;
+            format = raw_info.format;
+        },
+        .f32x3 => {
+            bytes = std.mem.asBytes(&source.f32x3);
+            bytes.len = @sizeOf(F32x4); // we store this as f32x4
+            extent = vk.Extent2D {
+                .width = 1,
+                .height = 1,
+            };
+            format = .r32g32b32a32_sfloat;
+        },
+        .f32x2 => {
+            bytes = std.mem.asBytes(&source.f32x2);
+            extent = vk.Extent2D {
+                .width = 1,
+                .height = 1,
+            };
+            format = .r32g32_sfloat;
+        },
+        .f32x1 => {
+            bytes = std.mem.asBytes(&source.f32x1);
+            extent = vk.Extent2D {
+                .width = 1,
+                .height = 1,
+            };
+            format = .r32_sfloat;
+        },
     }
+    const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format);
+    if (name.len != 0) try vk_helpers.setDebugName(vc, image.handle, name);
+    try self.data.append(allocator, image);
 
-    const images = data.items(.handle);
-    try commands.uploadDataToImages(vc, vk_allocator, allocator, images, bytes, extents, dst_layouts);
-
-    return Self {
-        .data = data,
-    };      
+    try commands.uploadDataToImage(vc, vk_allocator, image.handle, bytes, extent, .shader_read_only_optimal);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

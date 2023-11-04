@@ -190,37 +190,22 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
     try self.submitAndIdleUntilDone(vc);
 }
 
-// TODO: possible to ensure all params have same len at comptime?
-pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, dst_images: []const vk.Image, src_datas: []const []const u8, extents: []const vk.Extent2D, dst_layouts: []const vk.ImageLayout) !void {
-    std.debug.assert(dst_images.len == src_datas.len);
-    std.debug.assert(src_datas.len == extents.len);
+pub fn uploadDataToImage(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_image: vk.Image, src_data: []const u8, extent: vk.Extent2D, dst_layout: vk.ImageLayout) !void {
+    const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(src_data.len), .{ .transfer_src_bit = true });
+    defer staging_buffer.destroy(vc);
+    std.mem.copy(u8, staging_buffer.data, src_data);
 
     try self.startRecording(vc);
-
-    const len: u32 = @intCast(dst_images.len);
-
-    const first_barriers = try allocator.alloc(vk.ImageMemoryBarrier2, len);
-    defer allocator.free(first_barriers);
-
-    const second_barriers = try allocator.alloc(vk.ImageMemoryBarrier2, len);
-    defer allocator.free(second_barriers);
-
-    const staging_buffers = try allocator.alloc(VkAllocator.HostBuffer(u8), len);
-    defer allocator.free(staging_buffers);
-
-    defer for (staging_buffers) |staging_buffer| {
-        staging_buffer.destroy(vc);
-    };
-
-    for (dst_images, first_barriers, second_barriers, dst_layouts, staging_buffers, src_datas) |image, *first_barrier, *second_barrier, dst_layout, *staging_buffer, src_data| {
-        first_barrier.* = .{
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 1,
+        .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .undefined,
             .new_layout = .transfer_dst_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = image,
+            .image = dst_image,
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -228,16 +213,39 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        };
-
-        second_barrier.* = .{
+        }),
+    });
+    vc.device.cmdCopyBufferToImage(self.buffer, staging_buffer.handle, dst_image, .transfer_dst_optimal, 1, @ptrCast(&vk.BufferImageCopy {
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_subresource = .{
+            .aspect_mask = .{ .color_bit = true },
+            .mip_level = 0,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        .image_offset = .{
+            .x = 0,
+            .y = 0,
+            .z = 0,
+        },
+        .image_extent = .{
+            .width = extent.width,
+            .height = extent.height,
+            .depth = 1,
+        },  
+    }));
+    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 1,
+        .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .transfer_dst_optimal,
             .new_layout = dst_layout,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = image,
+            .image = dst_image,
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -245,47 +253,8 @@ pub fn uploadDataToImages(self: *Self, vc: *const VulkanContext, vk_allocator: *
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        };
-
-        staging_buffer.* = try vk_allocator.createHostBuffer(vc, u8, @intCast(src_data.len), .{ .transfer_src_bit = true });
-        std.mem.copy(u8, staging_buffer.data, src_data);
-    }
-
-    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .image_memory_barrier_count = len,
-        .p_image_memory_barriers = first_barriers.ptr,
+        }),
     });
-
-    for (dst_images, extents, staging_buffers) |image, extent, staging_buffer| {
-        const copy = vk.BufferImageCopy {
-            .buffer_offset = 0,
-            .buffer_row_length = 0,
-            .buffer_image_height = 0,
-            .image_subresource = .{
-                .aspect_mask = .{ .color_bit = true },
-                .mip_level = 0,
-                .base_array_layer = 0,
-                .layer_count = 1,
-            },
-            .image_offset = .{
-                .x = 0,
-                .y = 0,
-                .z = 0,
-            },
-            .image_extent = .{
-                .width = extent.width,
-                .height = extent.height,
-                .depth = 1,
-            },  
-        };
-        vc.device.cmdCopyBufferToImage(self.buffer, staging_buffer.handle, image, .transfer_dst_optimal, 1, @ptrCast(&copy));
-    }
-
-    vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
-        .image_memory_barrier_count = len,
-        .p_image_memory_barriers = second_barriers.ptr,
-    });
-
     try self.submitAndIdleUntilDone(vc);
 }
 

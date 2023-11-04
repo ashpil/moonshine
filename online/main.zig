@@ -244,8 +244,8 @@ pub fn main() !void {
                 const mesh = scene.world.mesh_manager.meshes.get(geometry.mesh);
                 try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
                 try imgui.textFmt("Index count: {d}", .{mesh.index_count});
-                try imgui.textFmt("Has texcoords: {}", .{mesh.texcoord_buffer != null});
-                try imgui.textFmt("Has normals: {}", .{mesh.normal_buffer != null});
+                try imgui.textFmt("Has texcoords: {}", .{!mesh.texcoord_buffer.is_null()});
+                try imgui.textFmt("Has normals: {}", .{!mesh.normal_buffer.is_null()});
                 imgui.separatorText("material");
                 try imgui.textFmt("normal: {}", .{material.normal});
                 try imgui.textFmt("emissive: {}", .{material.emissive});

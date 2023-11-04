@@ -186,8 +186,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         break :blk materials_gpu;
     };
 
-    var textures = try ImageManager.createTexture(vc, vk_allocator, allocator, texture_sources, commands);
+    var textures = ImageManager {};
     errdefer textures.destroy(vc, allocator);
+    for (texture_sources) |source| {
+        try textures.uploadTexture(vc, vk_allocator, allocator, commands, source, "");
+    }
 
     return Self {
         .textures = textures,
@@ -227,27 +230,26 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
 
 pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
     const textures = blk: {
+        var manager = ImageManager {};
+        errdefer manager.destroy(vc, allocator);
         const texture_count = try msne_reader.readSize();
-        var sources = try allocator.alloc(ImageManager.TextureSource, texture_count);
-        defer allocator.free(sources);
 
-        for (0..texture_count) |i| {
+        for (0..texture_count) |_| {
             const format = try msne_reader.reader.readEnum(vk.Format, .Little);
             const extent = try msne_reader.readStruct(vk.Extent2D);
             const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
             const bytes = try allocator.alloc(u8, size_in_bytes);
+            defer allocator.free(bytes);
             try msne_reader.readSlice(u8, bytes);
-            sources[i] = .{
+            try manager.uploadTexture(vc, vk_allocator, allocator, commands, .{
                 .raw = .{
                     .bytes = bytes,
                     .extent = extent,
                     .format = format,
                 },
-            };
+            }, "");
         }
-        defer for (sources) |source| if (source == .raw) allocator.free(source.raw.bytes);
-
-        break :blk try ImageManager.createTexture(vc, vk_allocator, allocator, sources, commands);
+        break :blk manager;
     };
 
     var variant_buffers: VariantBuffers = undefined;
