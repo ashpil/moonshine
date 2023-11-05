@@ -41,6 +41,10 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
+pub fn luminance(rgb: [3]f32) f32 {
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+}
+
 // a lot of unnecessary copying if this ever needs to be optimized
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, color_image: Rgba2D) !Self {
     var images = ImageManager {};
@@ -51,21 +55,24 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .format = .r32g32b32a32_sfloat,
         },
     }, "background");
-
-    const luminance = blk: {
+    
+    // compute grayscale luminance image to use as our sampling weights
+    const luminance_image = blk: {
         const buffer = try allocator.alloc(f32, color_image.extent.height * color_image.extent.width);
         for (color_image.asSlice(), 0..) |rgba, i| {
             const row_idx = i / color_image.extent.width;
             const sin_theta = std.math.sin(std.math.pi * (@as(f32, @floatFromInt(row_idx)) + 0.5) / @as(f32, @floatFromInt(color_image.extent.height)));
-            buffer[i] = (rgba[0] * 0.2126 + rgba[1] * 0.7152 + rgba[2] * 0.0722) * sin_theta;
+            buffer[i] = luminance(rgba[0..3].*) * sin_theta;
         }
         break :blk buffer;
     };
-    defer allocator.free(luminance);
-
+    defer allocator.free(luminance_image);
+    
+    // marginal weights to select a row
     const marginal_weights = try allocator.alloc(f32, color_image.extent.height);
     defer allocator.free(marginal_weights);
 
+    // conditional weights to select within the column
     const conditional = blk: {
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, color_image.extent.height * color_image.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
@@ -74,7 +81,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer allocator.free(flat_entries);
 
         for (0..color_image.extent.height) |row_idx| {
-            const row = luminance[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width];
+            const row = luminance_image[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width];
             const table = try AliasTable.create(allocator, row);
             defer allocator.free(table.entries);
             marginal_weights[row_idx] = table.sum;
