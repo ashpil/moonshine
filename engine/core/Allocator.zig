@@ -141,9 +141,9 @@ pub fn createOwnedDeviceBuffer(self: *Self, vc: *const VulkanContext, size: vk.D
 
 pub fn HostBuffer(comptime T: type) type {
     return struct {
-        handle: vk.Buffer,
-        memory: vk.DeviceMemory,
-        data: []T,
+        handle: vk.Buffer = .null_handle,
+        memory: vk.DeviceMemory = .null_handle,
+        data: []T = &.{},
 
         const BufferSelf = @This();
 

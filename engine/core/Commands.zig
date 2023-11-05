@@ -276,6 +276,11 @@ pub fn recordUploadBuffer(self: *Self, comptime T: type, vc: *const VulkanContex
     vc.device.cmdCopyBuffer(self.buffer, src.handle, dst.handle, 1, @ptrCast(&region));
 }
 
+pub fn recordUpdateBuffer(self: *Self, comptime T: type, vc: *const VulkanContext, dst: VkAllocator.DeviceBuffer(T), src: []const T, offset: vk.DeviceSize) void {
+    const bytes = std.mem.sliceAsBytes(src);
+    vc.device.cmdUpdateBuffer(self.buffer, dst.handle, offset * @sizeOf(T), bytes.len, src.ptr);
+}
+
 pub fn uploadData(self: *Self, comptime T: type, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst: VkAllocator.DeviceBuffer(T), src: []const T) !void {
     const staging_buffer = try vk_allocator.createHostBuffer(vc, T, src.len, .{ .transfer_src_bit = true });
     defer staging_buffer.destroy(vc);
