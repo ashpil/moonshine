@@ -51,6 +51,9 @@
     * Rough plastic
     * Mix
     * Layer
+  * Lights
+    * Experiment with sampling triangle via solid angle after selecting it via area
+    * Experiment with unifying sampling mesh lights and environment map
 * Code
   * Make sure we have all necessary `errdefer`s
   * Proper memory allocation interface
