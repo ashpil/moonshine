@@ -18,7 +18,6 @@ const ImageManager = core.ImageManager;
 
 const MsneReader = engine.fileformats.msne.MsneReader;
 
-const MeshData = @import("./Object.zig");
 const MaterialManager = @import("./MaterialManager.zig");
 
 const MeshManager = @import("./MeshManager.zig");
@@ -440,7 +439,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     };
     errdefer material_manager.destroy(vc, allocator);
 
-    var objects = std.ArrayList(MeshData).init(allocator);
+    var objects = std.ArrayList(MeshManager.Mesh).init(allocator);
     defer objects.deinit();
     defer for (objects.items) |*object| object.destroy(allocator);
 
@@ -517,7 +516,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                 errdefer allocator.free(vertices.texcoords);
 
                 // get vertices
-                try objects.append(MeshData {
+                try objects.append(MeshManager.Mesh {
                     .positions = vertices.positions,
                     .texcoords = if (vertices.texcoords.len != 0) vertices.texcoords else null,
                     .normals = if (vertices.normals.len != 0) vertices.normals else null,
