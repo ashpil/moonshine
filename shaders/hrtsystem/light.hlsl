@@ -31,14 +31,14 @@ struct EnvMap : Light {
         return map;
     }
 
-    float sample2D(float2 uv, out uint2 result) {
+    float sample2D(inout float2 uv, out uint2 result) {
         uint2 size;
         dBackgroundTexture.GetDimensions(size.x, size.y);
 
         float pdf_y = sampleAlias<float, AliasEntry<float> >(dBackgroundMarginalAlias, size.y, 0, uv.y, result.y);
         float pdf_x = sampleAlias<float, AliasEntry<float> >(dBackgroundConditionalAlias, size.x, result.y * size.x, uv.x, result.x);
 
-        return pdf_x * pdf_y * float(size.y) * float(size.x);
+        return pdf_x * pdf_y * float(size.x * size.y);
     }
 
     LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
@@ -47,7 +47,7 @@ struct EnvMap : Light {
 
         uint2 discreteuv;
         float pdf2d = sample2D(rand, discreteuv);
-        float2 uv = (float2(discreteuv) + float2(0.5, 0.5)) / size;
+        float2 uv = (float2(discreteuv) + rand) / size;
 
         float phi = uv.x * 2.0 * PI;
         float theta = uv.y * PI;
@@ -73,11 +73,11 @@ struct EnvMap : Light {
         uint2 size;
         dBackgroundTexture.GetDimensions(size.x, size.y);
         uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
-        float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * size.x * size.y;
+        float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * float(size.x * size.y);
         float sinTheta = sin(phiTheta.y);
 
         LightEval l;
-        l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sin(phiTheta.y)) : 0.0;
+        l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
         l.radiance = dBackgroundTexture.Load(uint3(coords, 0));
         return l;
     }
