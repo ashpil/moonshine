@@ -329,7 +329,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
             source_path ++ "null_window.c",
             source_path ++ "null_joystick.c",
             source_path ++ "null_monitor.c",
-            source_path ++ "null_monitor.c",
         };
 
         const linux_sources = [_][]const u8 {
@@ -378,16 +377,6 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
 
     const flags = blk: {
         var flags = std.ArrayList([]const u8).init(b.allocator);
-
-        const general_flags = [_][]const u8 {
-            "-std=c99",
-            "-D_DEFAULT_SOURCE",
-            "-pedantic",
-            "-Wdeclaration-after-statement",
-            "-Wall",
-        };
-
-        try flags.appendSlice(&general_flags);
 
         if (target.isLinux()) {
             if (build_wayland) try flags.append("-D_GLFW_WAYLAND");
