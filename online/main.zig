@@ -123,8 +123,9 @@ pub fn main() !void {
     var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world_descriptor_layout, &commands);
     defer object_picker.destroy(&context);
 
-    var pipeline_opts = (Pipeline.SpecConstants{}).@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background_descriptor_layout, scene.film_descriptor_layout }, .{pipeline_opts});
+    var pipeline_constants = Pipeline.SpecConstants{};
+    var pipeline_opts = &pipeline_constants.@"0";
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background_descriptor_layout, scene.film_descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -143,7 +144,6 @@ pub fn main() !void {
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var rebuild_error = false;
-    var current_samples_per_run = pipeline_opts.samples_per_run;
     var has_clicked = false;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
     var current_clicked_color = F32x3.new(0.0, 0.0, 0.0);
@@ -203,11 +203,10 @@ pub fn main() !void {
             if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
-                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, .{pipeline_opts}, &destruction_queue)) {
+                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, pipeline_constants, &destruction_queue)) {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
                     rebuild_error = false;
-                    current_samples_per_run = pipeline_opts.samples_per_run;
                     scene.camera.film.clear();
                 } else |err| if (err == error.ShaderCompileFail) {
                     rebuild_error = true;
@@ -416,7 +415,7 @@ pub fn main() !void {
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
-            scene.camera.film.sample_count += current_samples_per_run;
+            scene.camera.film.sample_count += pipeline_opts.samples_per_run;
             if (max_sample_count != 0) scene.camera.film.sample_count = @min(scene.camera.film.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);

@@ -248,17 +248,19 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: C
         .optimize = .ReleaseFast,
     });
     lib.linkLibCpp();
-    lib.addCSourceFiles(&.{
-        path ++ "cimgui.cpp",
-        path ++ "imgui/imgui.cpp",
-        path ++ "imgui/imgui_draw.cpp",
-        path ++ "imgui/imgui_demo.cpp",
-        path ++ "imgui/imgui_widgets.cpp",
-        path ++ "imgui/imgui_tables.cpp",
-        path ++ "imgui/backends/imgui_impl_glfw.cpp",
-    }, &.{
-        "-DGLFW_INCLUDE_NONE",
-        "-DIMGUI_IMPL_API=extern \"C\"",
+    lib.addCSourceFiles(.{
+        .files = &.{
+            path ++ "cimgui.cpp",
+            path ++ "imgui/imgui.cpp",
+            path ++ "imgui/imgui_draw.cpp",
+            path ++ "imgui/imgui_demo.cpp",
+            path ++ "imgui/imgui_widgets.cpp",
+            path ++ "imgui/imgui_tables.cpp",
+            path ++ "imgui/backends/imgui_impl_glfw.cpp",
+        }, .flags = &.{
+            "-DGLFW_INCLUDE_NONE",
+            "-DIMGUI_IMPL_API=extern \"C\"",
+        }
     });
     lib.addIncludePath(.{ .path = path ++ "imgui/" });
     lib.addIncludePath(.{ .path = glfw.include_path });
@@ -280,10 +282,12 @@ fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibra
     });
     lib.linkLibCpp();
     lib.addIncludePath(.{ .path = miniz_path });
-    lib.addCSourceFiles(&.{
-        tinyexr_path ++ "tinyexr.cc",
-        miniz_path ++ "miniz.c",
-    }, &.{});
+    lib.addCSourceFiles(.{
+        .files = &.{
+            tinyexr_path ++ "tinyexr.cc",
+            miniz_path ++ "miniz.c",
+        },
+    });
 
     return CLibrary {
         .include_path = tinyexr_path,
@@ -386,7 +390,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
         break :blk flags.items;
     };
 
-    lib.addCSourceFiles(sources, flags);
+    lib.addCSourceFiles(.{ .files = sources, .flags = flags });
 
     // link and include necessary deps
     lib.linkLibC();
@@ -408,12 +412,12 @@ fn generateWaylandHeaders(b: *std.build.Builder) std.Build.LazyPath {
     // missing wayland
     const protocol_path = blk: {
         var out_code: u8 = undefined;
-        const protocol_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" }, &out_code, .Inherit) catch "";
+        const protocol_path_untrimmed = b.runAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-protocols" }, &out_code, .Inherit) catch "";
         break :blk std.mem.trim(u8, protocol_path_untrimmed, &std.ascii.whitespace);
     };
     const client_path = blk: {
         var out_code: u8 = undefined;
-        const client_path_untrimmed = b.execAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-client" }, &out_code, .Inherit) catch "";
+        const client_path_untrimmed = b.runAllowFail(&.{ "pkg-config", "--variable=pkgdatadir", "wayland-client" }, &out_code, .Inherit) catch "";
         break :blk std.mem.trim(u8, client_path_untrimmed, &std.ascii.whitespace);
     };
 

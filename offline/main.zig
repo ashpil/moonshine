@@ -102,12 +102,14 @@ pub fn main() !void {
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background_descriptor_layout, scene.film_descriptor_layout }, .{ .{
-        .samples_per_run = 1,
-        .max_bounces = 1024,
-        .env_samples_per_bounce = 1,
-        .mesh_samples_per_bounce = 1,
-    }});
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background_descriptor_layout, scene.film_descriptor_layout }, .{
+        .@"0" = .{
+            .samples_per_run = 1,
+            .max_bounces = 1024,
+            .env_samples_per_bounce = 1,
+            .mesh_samples_per_bounce = 1,
+        }
+    });
     defer pipeline.destroy(&context);
 
     try logger.log("create pipeline");

@@ -27,7 +27,7 @@ pub const MsneReader = struct {
     }
 
     pub fn readSize(self: Self) !u32 {
-        return self.reader.readIntLittle(u32);
+        return self.reader.readInt(u32, .little);
     }
 
     pub fn readFloat(self: Self) !f32 {

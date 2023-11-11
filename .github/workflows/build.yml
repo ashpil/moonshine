@@ -27,9 +27,9 @@ jobs:
         echo "$(pwd)/dxc-artifacts/bin/" >> $GITHUB_PATH
 
     - name: Setup Zig
-      uses: goto-bus-stop/setup-zig@v1.3.0
+      uses: goto-bus-stop/setup-zig@v2
       with:
-        version: 0.12.0-dev.271+5cc1831ca
+        version: 0.12.0-dev.1571+03adafd80
 
     - name: Type check
       run: zig build check

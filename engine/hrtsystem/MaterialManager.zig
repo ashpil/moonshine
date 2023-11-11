@@ -235,7 +235,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         const texture_count = try msne_reader.readSize();
 
         for (0..texture_count) |_| {
-            const format = try msne_reader.reader.readEnum(vk.Format, .Little);
+            const format = try msne_reader.reader.readEnum(vk.Format, .little);
             const extent = try msne_reader.readStruct(vk.Extent2D);
             const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
             const bytes = try allocator.alloc(u8, size_in_bytes);
