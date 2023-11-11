@@ -34,27 +34,50 @@ pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
-images: ImageManager,
-marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
-conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
-descriptor_set: vk.DescriptorSet,
+images: ImageManager = .{},
+data: std.ArrayListUnmanaged(struct {
+    marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
+    conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
+    descriptor_set: vk.DescriptorSet,
+}) = .{},
+descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn luminance(rgb: [3]f32) f32 {
+pub fn create(vc: *const VulkanContext) !Self {
+    return Self {
+        .descriptor_layout = try DescriptorLayout.create(vc, 1, .{}), // todo: pass in max sets from somewhere
+    };
+}
+
+pub fn addDefaultBackground(self: Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !void {
+    const image = Rgba2D {
+        .ptr = .{
+            .{ 1.0, 1.0, 1.0, 1.0 },
+        },
+        .extent = .{
+            .width = 1,
+            .height = 1,
+        }
+    };
+    try self.addBackground(vc, vk_allocator, allocator, commands, image, "default");
+}
+
+fn luminance(rgb: [3]f32) f32 {
     return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
 }
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, color_image: Rgba2D) !Self {
-    var images = ImageManager {};
-    try images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
+    const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
+    defer allocator.free(texture_name);
+    try self.images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
         .raw = .{
             .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
             .extent = color_image.extent,
             .format = .r32g32b32a32_sfloat,
         },
-    }, "background");
+    }, texture_name);
     
     // compute grayscale luminance image to use as our sampling weights
     const luminance_image = blk: {
@@ -107,7 +130,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer marginal.destroy(vc);
 
-    const descriptor_set = try descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
+    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -116,7 +139,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .sampled_image,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = images.data.items(.view)[0],
+                .image_view = self.images.data.items(.view)[0],
                 .image_layout = .shader_read_only_optimal,
             }),
             .p_buffer_info = undefined,
@@ -151,17 +174,20 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .p_texel_buffer_view = undefined,
         },
     });
-    
-    return Self {
-        .images = images,
+
+    try self.data.append(allocator, .{
         .descriptor_set = descriptor_set,
         .marginal = marginal,
         .conditional = conditional,
-    };
+    });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.images.destroy(vc, allocator);
-    self.marginal.destroy(vc);
-    self.conditional.destroy(vc);
+    for (self.data.items) |data| {
+        data.marginal.destroy(vc);
+        data.conditional.destroy(vc);
+    }
+    self.data.deinit(allocator);
+    self.descriptor_layout.destroy(vc);
 }

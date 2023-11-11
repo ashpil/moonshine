@@ -51,7 +51,7 @@ const TestingContext = struct {
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.scene.world.descriptor_set, self.scene.background.descriptor_set, self.scene.camera.film.descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.scene.world.descriptor_set, self.scene.background.data.items[0].descriptor_set, self.scene.camera.film.descriptor_set });
         
         // push our stuff
         const bytes = std.mem.asBytes(&.{ self.scene.camera.properties, self.scene.camera.film.sample_count });
@@ -107,7 +107,7 @@ test "white on white background is white" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_external.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.film_descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 16,
             .max_bounces = 1024,
@@ -130,7 +130,7 @@ test "inside illuminating sphere is white" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.film_descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,
@@ -153,7 +153,7 @@ test "inside illuminating sphere is white with mesh sampling" {
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background_descriptor_layout, tc.scene.film_descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world_descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.film_descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,

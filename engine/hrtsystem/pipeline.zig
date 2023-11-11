@@ -13,7 +13,7 @@ const DestructionQueue = core.DestructionQueue;
 const Camera = @import("./Camera.zig");
 
 const WorldDescriptorLayout = @import("./World.zig").DescriptorLayout;
-const BackgroundDescriptorLayout = @import("./Background.zig").DescriptorLayout;
+const BackgroundDescriptorLayout = @import("./BackgroundManager.zig").DescriptorLayout;
 const FilmDescriptorLayout = core.Film.DescriptorLayout;
 const InputDescriptorLayout = @import("./ObjectPicker.zig").DescriptorLayout;
 
