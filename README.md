@@ -76,9 +76,13 @@
     * RAM to staging buffer
     * Staging buffer to GPU
   * Ideally this can be vastly minimized, depending on hardware
-    * At most should be doing filesystem to staging buffer
+    * At most should be doing filesystem to staging buffer to GPU
     * On some machines, can do filesystem to GPU directly
 * Destruction queue needs work
+* Resource binding
+  * Need to come up with some more ergonomic way to do this
+* Resource uploading
+  * Need some sort of way to efficently and ergonomically do resource transfers
 
 ### Some notes about conventions
 * `+z` is up
