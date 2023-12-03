@@ -64,7 +64,7 @@ pub fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []co
 
                 var fifo = poller.fifo(.stdout);
                 if (fifo.head > 0) {
-                    std.mem.copy(u8, fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
+                    @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
                 }
 
                 to_free = fifo.buf;

@@ -16,7 +16,7 @@ memory: MemoryStorage,
 pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     const properties = vc.instance.getPhysicalDeviceMemoryProperties(vc.physical_device.handle);
 
-    var memory_type_properties = try allocator.alloc(vk.MemoryPropertyFlags, properties.memory_type_count);
+    const memory_type_properties = try allocator.alloc(vk.MemoryPropertyFlags, properties.memory_type_count);
     errdefer allocator.free(memory_type_properties);
 
     for (properties.memory_types[0..properties.memory_type_count], memory_type_properties) |memory_type, *memory_type_property| {

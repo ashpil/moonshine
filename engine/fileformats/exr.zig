@@ -173,12 +173,12 @@ pub const helpers = struct {
             image.width = @intCast(self.extent.width);
             image.height = @intCast(self.extent.height);
 
-            var header_channels = try allocator.alloc(ChannelInfo, channel_count);
+            const header_channels = try allocator.alloc(ChannelInfo, channel_count);
             defer allocator.free(header_channels);
 
-            var pixel_types = try allocator.alloc(c_int, channel_count);
+            const pixel_types = try allocator.alloc(c_int, channel_count);
             defer allocator.free(pixel_types);
-            var requested_pixel_types = try allocator.alloc(c_int, channel_count);
+            const requested_pixel_types = try allocator.alloc(c_int, channel_count);
             defer allocator.free(requested_pixel_types);
 
             header.num_channels = channel_count;

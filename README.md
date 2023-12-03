@@ -25,7 +25,7 @@
 
 ### Dependencies
 #### Build
-* zig (see version in CI)
+* zig (see version [in CI](.github/workflows/build.yml))
 * DirectXShaderCompiler
 * For the online (real-time) renderer:
   * For Linux (Ubuntu, similar on others):

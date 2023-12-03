@@ -47,7 +47,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     var film_descriptor_layout = try core.Film.DescriptorLayout.create(vc, 1, .{});
     errdefer film_descriptor_layout.destroy(vc);
 
-    var camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
+    const camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
     var camera = try Camera.create(vc, vk_allocator, allocator, &film_descriptor_layout, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
 
@@ -86,7 +86,7 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     var world = try World.fromMsne(vc, vk_allocator, allocator, commands, &world_descriptor_layout, msne, inspection);
     errdefer world.destroy(vc, allocator);
 
-    var camera_create_info = try Camera.CreateInfo.fromMsne(msne);
+    const camera_create_info = try Camera.CreateInfo.fromMsne(msne);
     var camera = try Camera.create(vc, vk_allocator, allocator, &film_descriptor_layout, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
 

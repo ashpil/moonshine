@@ -108,7 +108,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             const table = try AliasTable.create(allocator, row);
             defer allocator.free(table.entries);
             marginal_weights[row_idx] = table.sum;
-            std.mem.copy(AliasTable.TableEntry, flat_entries[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width], table.entries);
+            @memcpy(flat_entries[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width], table.entries);
         }
 
         try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, flat_entries);

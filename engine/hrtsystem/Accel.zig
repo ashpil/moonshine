@@ -126,7 +126,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         defer allocator.free(uncompacted_blases);
         defer for (uncompacted_blases) |handle| vc.device.destroyAccelerationStructureKHR(handle, null);
 
-        var build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, unique_mesh_lists.len);
+        const build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, unique_mesh_lists.len);
         defer allocator.free(build_geometry_infos);
         defer for (build_geometry_infos) |build_geometry_info| allocator.free(build_geometry_info.p_geometries.?[0..build_geometry_info.geometry_count]);
 
@@ -421,7 +421,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
         staging_buffer.data[0].alias = @intCast(table.entries.len);
         staging_buffer.data[0].select = table.sum;
-        std.mem.copy(AliasTableT.TableEntry, staging_buffer.data[1..], table.entries);
+        @memcpy(staging_buffer.data[1..], table.entries);
 
         try commands.startRecording(vc);
         commands.recordUploadBuffer(AliasTableT.TableEntry, vc, buffer, staging_buffer);

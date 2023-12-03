@@ -142,7 +142,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(data.len), buffer_flags);
                 errdefer device_buffer.destroy(vc);
 
-                std.mem.copy(field.type, host_buffer.data, data);
+                @memcpy(host_buffer.data, data);
                 try commands.startRecording(vc);
                 commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
                 try commands.submitAndIdleUntilDone(vc);

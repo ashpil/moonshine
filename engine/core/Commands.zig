@@ -193,7 +193,7 @@ pub fn transitionImageLayout(self: *Self, vc: *const VulkanContext, allocator: s
 pub fn uploadDataToImage(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, dst_image: vk.Image, src_data: []const u8, extent: vk.Extent2D, dst_layout: vk.ImageLayout) !void {
     const staging_buffer = try vk_allocator.createHostBuffer(vc, u8, @intCast(src_data.len), .{ .transfer_src_bit = true });
     defer staging_buffer.destroy(vc);
-    std.mem.copy(u8, staging_buffer.data, src_data);
+    @memcpy(staging_buffer.data, src_data);
 
     try self.startRecording(vc);
     vc.device.cmdPipelineBarrier2(self.buffer, &vk.DependencyInfo {
@@ -285,7 +285,7 @@ pub fn uploadData(self: *Self, comptime T: type, vc: *const VulkanContext, vk_al
     const staging_buffer = try vk_allocator.createHostBuffer(vc, T, src.len, .{ .transfer_src_bit = true });
     defer staging_buffer.destroy(vc);
 
-    std.mem.copy(T, staging_buffer.data, src);
+    @memcpy(staging_buffer.data, src);
 
     try self.startRecording(vc);
     self.recordUploadBuffer(T, vc, dst, staging_buffer);

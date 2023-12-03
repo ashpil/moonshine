@@ -359,8 +359,8 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
         for (draw_data.CmdLists[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
             const vertex_count: usize = @intCast(cmd_list.*.VtxBuffer.Size);
             const index_count: usize = @intCast(cmd_list.*.IdxBuffer.Size);
-            std.mem.copy(imgui.DrawVert, vertex_buffer.data[vertex_offset..], cmd_list.*.VtxBuffer.Data[0..vertex_count]);
-            std.mem.copy(imgui.DrawIdx, index_buffer.data[index_offset..], cmd_list.*.IdxBuffer.Data[0..index_count]);
+            @memcpy(vertex_buffer.data[vertex_offset..].ptr, cmd_list.*.VtxBuffer.Data[0..vertex_count]);
+            @memcpy(index_buffer.data[index_offset..].ptr, cmd_list.*.IdxBuffer.Data[0..index_count]);
             vertex_offset += vertex_count;
             index_offset += index_count;
         }

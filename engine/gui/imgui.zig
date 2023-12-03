@@ -257,8 +257,7 @@ pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.E
 }
 
 pub fn implGlfwInit(window: Window) void {
-    var var_window = window;
-    std.debug.assert(c.ImGui_ImplGlfw_InitForVulkan(var_window.handle, true));
+    std.debug.assert(c.ImGui_ImplGlfw_InitForVulkan(window.handle, true));
 }
 
 pub fn implGlfwShutdown() void {

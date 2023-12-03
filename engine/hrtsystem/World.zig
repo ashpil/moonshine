@@ -219,8 +219,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         var img = try zigimg.Image.fromMemory(allocator, image.data.?);
         defer img.deinit();
 
-        var rs = try allocator.alloc(u8, img.pixels.len());
-        var gs = try allocator.alloc(u8, img.pixels.len());
+        const rs = try allocator.alloc(u8, img.pixels.len());
+        const gs = try allocator.alloc(u8, img.pixels.len());
         for (img.pixels.rgb24, rs, gs) |pixel, *r, *g| {
             r.* = pixel.r;
             g.* = pixel.g;
@@ -467,7 +467,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
                     gltf.getDataFromBufferView(u16, &indices, accessor, gltf.glb_binary.?);
 
                     // convert to U32x3
-                    var actual_indices = try allocator.alloc(U32x3, indices.items.len / 3);
+                    const actual_indices = try allocator.alloc(U32x3, indices.items.len / 3);
                     for (actual_indices, 0..) |*index, i| {
                         index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
                     }
