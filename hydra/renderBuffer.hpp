@@ -16,7 +16,7 @@ public:
     unsigned int GetWidth() const override { return _width; }
     unsigned int GetHeight() const override { return _height; }
     unsigned int GetDepth() const override { return 1; }
-    PXR_NS::HdFormat GetFormat() const override { return _format; }
+    PXR_NS::HdFormat GetFormat() const override { return PXR_NS::HdFormatFloat32Vec4; }
     bool IsMultiSampled() const override { return _multiSampled; }
 
     void* Map() override {

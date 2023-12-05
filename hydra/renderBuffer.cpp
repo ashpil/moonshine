@@ -17,12 +17,12 @@ void HdMoonshineRenderBuffer::_Deallocate() {
 
 bool HdMoonshineRenderBuffer::Allocate(PXR_NS::GfVec3i const& dimensions, PXR_NS::HdFormat format, bool multiSampled)
 {
-    std::cout << "Allocate buffer dimensions=" << dimensions << std::endl;
+    std::cout << "Allocate buffer dimensions=" << dimensions << " format=" << format << std::endl;
     _width = dimensions[0];
     _height = dimensions[1];
     _format = format;
     _multiSampled = multiSampled;
-    _buffer.resize(_width * _height, PXR_NS::HdDataSizeOfFormat(format));
+    _buffer.resize(_width * _height * PXR_NS::HdDataSizeOfFormat(format) / 3 * 4, 0);
     return true;
 }
 

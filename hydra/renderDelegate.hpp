@@ -41,6 +41,7 @@ public:
     PXR_NS::HdRenderParam *GetRenderParam() const override;
 
     PXR_NS::HdAovDescriptor GetDefaultAovDescriptor(PXR_NS::TfToken const& name) const override;
+    HdMoonshine* _moonshine;
 private:
     static const PXR_NS::TfTokenVector SUPPORTED_RPRIM_TYPES;
     static const PXR_NS::TfTokenVector SUPPORTED_SPRIM_TYPES;
@@ -49,7 +50,6 @@ private:
     void _Initialize();
 
     PXR_NS::HdResourceRegistrySharedPtr _resourceRegistry;
-    HdMoonshine* _moonshine;
 
     HdMoonshineRenderDelegate(const HdMoonshineRenderDelegate &) = delete;
     HdMoonshineRenderDelegate &operator =(const HdMoonshineRenderDelegate &) = delete;
