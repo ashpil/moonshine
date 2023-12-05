@@ -4,10 +4,14 @@
 #include "integrator.hlsl"
 
 // https://www.nu42.com/2015/03/how-you-average-numbers.html
-void storeColor(float3 color) {
+void storeColor(float3 sampledColor) {
     uint2 imageCoords = DispatchRaysIndex().xy;
-    float3 priorAverage = pushConsts.sampleCount == 0 ? float3(0, 0, 0) : dOutputImage[imageCoords].rgb;
-    dOutputImage[imageCoords] += float4((color - priorAverage) / (pushConsts.sampleCount + SAMPLES_PER_RUN), 1.0);
+    if (pushConsts.sampleCount == 0) {
+        dOutputImage[imageCoords] = float4(sampledColor / SAMPLES_PER_RUN, 1.0);
+    } else {
+        float3 priorSampleAverage = dOutputImage[imageCoords].rgb;
+        dOutputImage[imageCoords] += float4((sampledColor - priorSampleAverage) / (pushConsts.sampleCount + SAMPLES_PER_RUN), 1.0);
+    }
 }
 
 // returns uv of dispatch in [0..1]x[0..1], with slight variation based on rand
