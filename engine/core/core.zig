@@ -3,7 +3,7 @@ pub const Allocator = @import("./Allocator.zig");
 pub const Commands = @import("./Commands.zig");
 pub const DestructionQueue = @import("./DestructionQueue.zig");
 pub const ImageManager = @import("./ImageManager.zig");
-pub const Film = @import("./Film.zig");
+pub const Sensor = @import("./Sensor.zig");
 pub const SyncCopier = @import("./SyncCopier.zig");
 
 pub const descriptor = @import("./descriptor.zig");

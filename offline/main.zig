@@ -102,7 +102,7 @@ pub fn main() !void {
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background.descriptor_layout, scene.film_descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background.descriptor_layout, scene.sensor_descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 1,
             .max_bounces = 1024,
@@ -114,7 +114,7 @@ pub fn main() !void {
 
     try logger.log("create pipeline");
     
-    const output_buffer = try vk_allocator.createHostBuffer(&context, [4]f32, scene.camera.film.extent.width * scene.camera.film.extent.height, .{ .transfer_dst_bit = true });
+    const output_buffer = try vk_allocator.createHostBuffer(&context, [4]f32, scene.camera.sensor.extent.width * scene.camera.sensor.extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
 
     // record command buffer
@@ -122,11 +122,11 @@ pub fn main() !void {
         try commands.startRecording(&context);
 
         // prepare our stuff
-        scene.camera.film.recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensor.recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
-        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.film.descriptor_set });
+        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensor.descriptor_set });
         
         for (0..config.spp) |sample_count| {
             // push our stuff
@@ -134,7 +134,7 @@ pub fn main() !void {
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff
-            pipeline.recordTraceRays(&context, commands.buffer, scene.camera.film.extent);
+            pipeline.recordTraceRays(&context, commands.buffer, scene.camera.sensor.extent);
 
             // if not last invocation, need barrier cuz we write to images
             if (sample_count != config.spp) {
@@ -150,7 +150,7 @@ pub fn main() !void {
                             .new_layout = .general,
                             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = scene.camera.film.images.data.items(.handle)[0],
+                            .image = scene.camera.sensor.images.data.items(.handle)[0],
                             .subresource_range = .{
                                 .aspect_mask = .{ .color_bit = true },
                                 .base_mip_level = 0,
@@ -165,7 +165,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.film.recordPrepareForCopy(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensor.recordPrepareForCopy(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -184,12 +184,12 @@ pub fn main() !void {
                 .z = 0,
             },
             .image_extent = .{
-                .width = scene.camera.film.extent.width,
-                .height = scene.camera.film.extent.height,
+                .width = scene.camera.sensor.extent.width,
+                .height = scene.camera.sensor.extent.height,
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }
@@ -197,7 +197,7 @@ pub fn main() !void {
     try logger.log("render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.data.ptr, .extent = scene.camera.film.extent }, allocator, config.out_filepath);
+    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.data.ptr, .extent = scene.camera.sensor.extent }, allocator, config.out_filepath);
 
     try logger.log("write exr");
 }

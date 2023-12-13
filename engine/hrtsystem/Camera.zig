@@ -10,8 +10,8 @@ const Commands = core.Commands;
 
 const MsneReader = engine.fileformats.msne.MsneReader;
 
-const Film = core.Film;
-const DescriptorLayout = Film.DescriptorLayout;
+const Sensor = core.Sensor;
+const DescriptorLayout = Sensor.DescriptorLayout;
 const ImageManager = core.ImageManager;
 
 const vector = @import("../vector.zig");
@@ -95,17 +95,17 @@ pub const Properties = struct {
 };
 
 properties: Properties,
-film: Film,
+sensor: Sensor,
 
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D, create_info: CreateInfo) !Self {
     return Self {
         .properties = Properties.new(create_info),
-        .film = try Film.create(vc, vk_allocator, allocator, descriptor_layout, extent),
+        .sensor = try Sensor.create(vc, vk_allocator, allocator, descriptor_layout, extent),
     };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.film.destroy(vc, allocator);
+    self.sensor.destroy(vc, allocator);
 }

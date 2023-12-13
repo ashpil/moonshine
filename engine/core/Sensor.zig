@@ -17,7 +17,7 @@ pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     }
-}, null, "Film");
+}, null, "Sensor");
 
 // TODO: there should probably be one global ImageManager rather than this having its own
 images: ImageManager,

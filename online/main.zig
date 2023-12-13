@@ -125,7 +125,7 @@ pub fn main() !void {
 
     var pipeline_constants = Pipeline.SpecConstants{};
     var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background.descriptor_layout, scene.film_descriptor_layout }, pipeline_constants);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background.descriptor_layout, scene.sensor_descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -166,12 +166,12 @@ pub fn main() !void {
             try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
             try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
         }
-        if (imgui.collapsingHeader("Film")) {
+        if (imgui.collapsingHeader("Sensor")) {
             if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
-                scene.camera.film.clear();
+                scene.camera.sensor.clear();
             }
             imgui.sameLine();
-            try imgui.textFmt("Sample count: {}", .{scene.camera.film.sample_count});
+            try imgui.textFmt("Sample count: {}", .{scene.camera.sensor.sample_count});
             imgui.pushItemWidth(imgui.getFontSize() * -10);
             _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
             imgui.popItemWidth();
@@ -188,7 +188,7 @@ pub fn main() !void {
                 scene.camera_create_info.forward = scene.camera_create_info.forward.unit();
                 scene.camera_create_info.up = scene.camera_create_info.up.unit();
                 scene.camera.properties = Camera.Properties.new(scene.camera_create_info);
-                scene.camera.film.clear();
+                scene.camera.sensor.clear();
             }
             imgui.popItemWidth();
         }
@@ -207,7 +207,7 @@ pub fn main() !void {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
                     rebuild_error = false;
-                    scene.camera.film.clear();
+                    scene.camera.sensor.clear();
                 } else |err| if (err == error.ShaderCompileFail) {
                     rebuild_error = true;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
@@ -236,7 +236,7 @@ pub fn main() !void {
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                 if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.material_manager.material_count) {
                     scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
-                    scene.camera.film.clear();
+                    scene.camera.sensor.clear();
                 }
                 try imgui.textFmt("Sampled: {}", .{geometry.sampled});
                 imgui.separatorText("mesh");
@@ -258,7 +258,7 @@ pub fn main() !void {
                             switch (struct_field.type) {
                                 f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
                                     scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
-                                    scene.camera.film.clear();
+                                    scene.camera.sensor.clear();
                                 },
                                 u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
                                 else => unreachable,
@@ -273,7 +273,7 @@ pub fn main() !void {
                 if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
                     scene.world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
                     try scene.world.accel.recordRebuild(&context, command_buffer);
-                    scene.camera.film.clear();
+                    scene.camera.sensor.clear();
                 }
             }
             imgui.popItemWidth();
@@ -286,29 +286,29 @@ pub fn main() !void {
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
 
-        if (max_sample_count != 0 and scene.camera.film.sample_count > max_sample_count) scene.camera.film.clear();
-        if (max_sample_count == 0 or scene.camera.film.sample_count < max_sample_count) {
+        if (max_sample_count != 0 and scene.camera.sensor.sample_count > max_sample_count) scene.camera.sensor.clear();
+        if (max_sample_count == 0 or scene.camera.sensor.sample_count < max_sample_count) {
             // prepare some stuff
-            scene.camera.film.recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
+            scene.camera.sensor.recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.film.descriptor_set });
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensor.descriptor_set });
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.film.sample_count });
+            const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.sensor.sample_count });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff
-            pipeline.recordTraceRays(&context, command_buffer, scene.camera.film.extent);
+            pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensor.extent);
 
             // copy some stuff
-            scene.camera.film.recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensor.recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to
@@ -347,8 +347,8 @@ pub fn main() !void {
                 .y = 0,
                 .z = 0,
             }, .{
-                .x = @as(i32, @intCast(scene.camera.film.extent.width)),
-                .y = @as(i32, @intCast(scene.camera.film.extent.height)),
+                .x = @as(i32, @intCast(scene.camera.sensor.extent.width)),
+                .y = @as(i32, @intCast(scene.camera.sensor.extent.height)),
                 .z = 1,
             } },
             .dst_subresource = subresource,
@@ -366,7 +366,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{
@@ -415,8 +415,8 @@ pub fn main() !void {
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
-            scene.camera.film.sample_count += pipeline_opts.samples_per_run;
-            if (max_sample_count != 0) scene.camera.film.sample_count = @min(scene.camera.film.sample_count, max_sample_count);
+            scene.camera.sensor.sample_count += pipeline_opts.samples_per_run;
+            if (max_sample_count != 0) scene.camera.sensor.sample_count = @min(scene.camera.sensor.sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
@@ -480,6 +480,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
 
         window_data.camera_info = camera_info;
         window_data.camera.properties = Camera.Properties.new(camera_info.*);
-        window_data.camera.film.clear();
+        window_data.camera.sensor.clear();
     }
 }

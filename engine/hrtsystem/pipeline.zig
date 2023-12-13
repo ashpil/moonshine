@@ -14,7 +14,7 @@ const Camera = @import("./Camera.zig");
 
 const WorldDescriptorLayout = @import("./World.zig").DescriptorLayout;
 const BackgroundDescriptorLayout = @import("./BackgroundManager.zig").DescriptorLayout;
-const FilmDescriptorLayout = core.Film.DescriptorLayout;
+const SensorDescriptorLayout = core.Sensor.DescriptorLayout;
 const InputDescriptorLayout = @import("./ObjectPicker.zig").DescriptorLayout;
 
 const vector = engine.vector;
@@ -222,7 +222,7 @@ pub const StandardPipeline = Pipeline(
     struct {
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
-        FilmDescriptorLayout,
+        SensorDescriptorLayout,
     },
     struct {
         @"0": extern struct {
