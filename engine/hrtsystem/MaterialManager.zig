@@ -65,14 +65,14 @@ pub const Glass = extern struct {
 const VariantBuffers = blk: {
     const variants = @typeInfo(AnyMaterial).Union.fields;
     comptime var buffer_count = 0;
-    inline for (variants) |variant| {
+    for (variants) |variant| {
         if (variant.type != void) {
             buffer_count += 1;
         }
     }
     comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
     comptime var current_field = 0;
-    inline for (variants) |variant| {
+    for (variants) |variant| {
         if (variant.type != void) {
             fields[current_field] = .{
                 .name = variant.name,
@@ -97,7 +97,7 @@ const VariantBuffers = blk: {
 const Addrs = blk: {
     const variants = @typeInfo(AnyMaterial).Union.fields;
     comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
-    inline for (&fields, variants) |*field, variant| {
+    for (&fields, variants) |*field, variant| {
         field.* = .{
             .name = variant.name,
             .type = vk.DeviceAddress,
@@ -330,14 +330,14 @@ pub const MaterialList = struct {
     const VariantLists = blk: {
         const variants = @typeInfo(AnyMaterial).Union.fields;
         comptime var buffer_count = 0;
-        inline for (variants) |variant| {
+        for (variants) |variant| {
             if (variant.type != void) {
                 buffer_count += 1;
             }
         }
         comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
         comptime var current_field = 0;
-        inline for (variants) |variant| {
+        for (variants) |variant| {
             if (variant.type != void) {
                 fields[current_field] = .{
                     .name = variant.name,
