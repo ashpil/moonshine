@@ -102,6 +102,8 @@ accel: Accel,
 sampler: vk.Sampler,
 descriptor_set: vk.DescriptorSet,
 
+descriptor_layout: DescriptorLayout,
+
 const Self = @This();
 
 fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !std.meta.Tuple(&.{ Material, AnyMaterial }) {
@@ -268,7 +270,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     }
 }
 
-fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout) !vk.DescriptorSet {
+fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator) !vk.DescriptorSet {
     const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
     defer allocator.free(image_infos);
 
@@ -281,7 +283,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
         };
     }
 
-    const descriptor_set = try descriptor_layout.allocate_set(vc, [9]vk.WriteDescriptorSet {
+    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [9]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -414,7 +416,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, gltf: Gltf, inspection: bool) !Self {
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, inspection: bool) !Self {
     const sampler = try ImageManager.createSampler(vc);
 
     // materials
@@ -543,6 +545,9 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
+    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+    errdefer descriptor_layout.destroy(vc);
+
     var world = Self {
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
@@ -551,14 +556,15 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
         .sampler = sampler,
         .descriptor_set = undefined,
+        .descriptor_layout = descriptor_layout,
     };
 
-    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
+    world.descriptor_set = try world.createDescriptorSet(vc, allocator);
 
     return world;
 }
 
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, descriptor_layout: *const DescriptorLayout, msne_reader: MsneReader, inspection: bool) !Self {
+pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
     var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader, inspection);
     errdefer material_manager.destroy(vc, allocator);
 
@@ -568,6 +574,9 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
     var accel = try Accel.fromMsne(vc, vk_allocator, allocator, commands, mesh_manager, msne_reader, inspection);
     errdefer accel.destroy(vc, allocator);
 
+    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+    errdefer descriptor_layout.destroy(vc);
+
     var world = Self {
         .material_manager = material_manager,
         .mesh_manager = mesh_manager,
@@ -576,9 +585,10 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
 
         .sampler = try ImageManager.createSampler(vc),
         .descriptor_set = undefined,
+        .descriptor_layout = descriptor_layout,
     };
 
-    world.descriptor_set = try world.createDescriptorSet(vc, allocator, descriptor_layout);
+    world.descriptor_set = try world.createDescriptorSet(vc, allocator);
 
     return world;
 }
@@ -597,4 +607,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.material_manager.destroy(vc, allocator);
     self.mesh_manager.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
+
+    self.descriptor_layout.destroy(vc);
 }

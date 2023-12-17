@@ -18,9 +18,6 @@ const exr = engine.fileformats.exr;
 
 const Self = @This();
 
-world_descriptor_layout: World.DescriptorLayout,
-sensor_descriptor_layout: core.Sensor.DescriptorLayout,
-
 world: World,
 background: Background,
 camera: Camera,
@@ -42,16 +39,11 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     defer allocator.free(buffer);
     try gltf.parse(buffer);
 
-    var world_descriptor_layout = try World.DescriptorLayout.create(vc, 1, .{});
-    errdefer world_descriptor_layout.destroy(vc);
-    var sensor_descriptor_layout = try core.Sensor.DescriptorLayout.create(vc, 1, .{});
-    errdefer sensor_descriptor_layout.destroy(vc);
-
     const camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
-    var camera = try Camera.create(vc, vk_allocator, allocator, &sensor_descriptor_layout, extent, camera_create_info);
+    var camera = try Camera.create(vc, vk_allocator, allocator, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
 
-    var world = try World.fromGlb(vc, vk_allocator, allocator, commands, &world_descriptor_layout, gltf, inspection);
+    var world = try World.fromGlb(vc, vk_allocator, allocator, commands, gltf, inspection);
     errdefer world.destroy(vc, allocator);
 
     var background = try Background.create(vc);
@@ -63,9 +55,6 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     }
 
     return Self {
-        .world_descriptor_layout = world_descriptor_layout,
-        .sensor_descriptor_layout = sensor_descriptor_layout,
-
         .world = world,
         .background = background,
         .camera = camera,
@@ -75,19 +64,14 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
 }
 
 pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, inspection: bool) !Self {
-    var world_descriptor_layout = try World.DescriptorLayout.create(vc, 1, .{});
-    errdefer world_descriptor_layout.destroy(vc);
-    var sensor_descriptor_layout = try core.Sensor.DescriptorLayout.create(vc, 1, .{});
-    errdefer sensor_descriptor_layout.destroy(vc);
-
     const msne = try MsneReader.fromFilepath(msne_filepath);
     defer msne.destroy();
 
-    var world = try World.fromMsne(vc, vk_allocator, allocator, commands, &world_descriptor_layout, msne, inspection);
+    var world = try World.fromMsne(vc, vk_allocator, allocator, commands, msne, inspection);
     errdefer world.destroy(vc, allocator);
 
     const camera_create_info = try Camera.CreateInfo.fromMsne(msne);
-    var camera = try Camera.create(vc, vk_allocator, allocator, &sensor_descriptor_layout, extent, camera_create_info);
+    var camera = try Camera.create(vc, vk_allocator, allocator, extent, camera_create_info);
     errdefer camera.destroy(vc, allocator);
 
     var background = try Background.create(vc);
@@ -99,9 +83,6 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     }
 
     return Self {
-        .world_descriptor_layout = world_descriptor_layout,
-        .sensor_descriptor_layout = sensor_descriptor_layout,
-
         .world = world,
         .background = background,
         .camera = camera,
@@ -111,9 +92,6 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.world_descriptor_layout.destroy(vc);
-    self.sensor_descriptor_layout.destroy(vc);
-
     self.world.destroy(vc, allocator);
     self.background.destroy(vc, allocator);
     self.camera.destroy(vc, allocator);

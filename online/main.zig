@@ -120,12 +120,12 @@ pub fn main() !void {
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world_descriptor_layout, &commands);
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, &commands);
     defer object_picker.destroy(&context);
 
     var pipeline_constants = Pipeline.SpecConstants{};
     var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world_descriptor_layout, scene.background.descriptor_layout, scene.sensor_descriptor_layout }, pipeline_constants);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
