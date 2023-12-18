@@ -393,13 +393,13 @@ struct Glass : Material {
     }
 };
 
-struct AnyMaterial : Material {
+struct MaterialVariant : Material {
     MaterialType type;
     uint64_t addr;
     float2 texcoords;
 
-    static AnyMaterial load(MaterialType type, uint64_t addr, float2 texcoords) {
-        AnyMaterial material;
+    static MaterialVariant load(MaterialType type, uint64_t addr, float2 texcoords) {
+        MaterialVariant material;
         material.type = type;
         material.addr = addr;
         material.texcoords = texcoords;
@@ -505,7 +505,7 @@ Frame createTextureFrame(float3 normalWorldSpace, Frame tangentFrame) {
 }
 
 Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) {
-    AnyMaterialData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+    MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
     float2 rg = dMaterialTextures[NonUniformResourceIndex(data.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
     float3 normalTangentSpace = decodeNormal(rg);
     float3 normalWorldSpace = tangentNormalToWorld(normalTangentSpace, tangentFrame);
@@ -513,6 +513,6 @@ Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) 
 }
 
 float3 getEmissive(uint materialIndex, float2 texcoords) {
-    AnyMaterialData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+    MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
     return dMaterialTextures[NonUniformResourceIndex(data.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
 }

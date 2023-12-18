@@ -61,7 +61,9 @@ pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator
     };
 }
 
-pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: TextureSource, name: [:0]const u8) !void {
+pub const Handle = u32;
+
+pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: TextureSource, name: [:0]const u8) !Handle {
     var extent: vk.Extent2D = undefined;
     var bytes: []const u8 = undefined;
     var format: vk.Format = undefined;
@@ -103,6 +105,8 @@ pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     try self.data.append(allocator, image);
 
     try commands.uploadDataToImage(vc, vk_allocator, image.handle, bytes, extent, .shader_read_only_optimal);
+
+    return @intCast(self.data.len - 1);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

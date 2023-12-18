@@ -16,12 +16,27 @@ const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 
-pub const Material = extern struct {
+// on the host side, materials are represented as a regular tagged union
+// 
+// since GPUs do not support tagged unions, we solve this with a little indirection,
+// translating this into a GPU buffer for each variant, and have a base material struct
+// that simply has an enum and a device address, which points to the specific variant
+pub const MaterialInfo = struct {
     const normal_components = 2;
     const emissive_components = 3;
+
     // all materials have normal and emissive
-    normal: u32,
-    emissive: u32,
+    normal: ImageManager.Handle,
+    emissive: ImageManager.Handle,
+
+    // then material-specific data
+    variant: MaterialVariant,
+};
+
+pub const Material = extern struct {
+    // all materials have normal and emissive
+    normal: ImageManager.Handle,
+    emissive: ImageManager.Handle,
 
     // then each material has specific type which influences what buffer addr looks into
     type: MaterialType = .standard_pbr,
@@ -35,7 +50,7 @@ pub const MaterialType = enum(u32) {
     standard_pbr,
 };
 
-pub const AnyMaterial = union(MaterialType) {
+pub const MaterialVariant = union(MaterialType) {
     glass: Glass,
     lambert: Lambert,
     perfect_mirror: void, // no payload
@@ -47,66 +62,40 @@ pub const StandardPBR = extern struct {
     const metalness_components = 1;
     const roughness_components = 1;
 
-    color: u32,
-    metalness: u32,
-    roughness: u32,
+    color: ImageManager.Handle,
+    metalness: ImageManager.Handle,
+    roughness: ImageManager.Handle,
     ior: f32 = 1.5,
 };
 
 pub const Lambert = extern struct {
     const color_components = 3;
-    color: u32,
+    color: ImageManager.Handle,
 };
 
 pub const Glass = extern struct {
     ior: f32,
 };
 
-const VariantBuffers = blk: {
-    const variants = @typeInfo(AnyMaterial).Union.fields;
-    comptime var buffer_count = 0;
-    for (variants) |variant| {
-        if (variant.type != void) {
-            buffer_count += 1;
-        }
-    }
-    comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
-    comptime var current_field = 0;
-    for (variants) |variant| {
-        if (variant.type != void) {
-            fields[current_field] = .{
-                .name = variant.name,
-                .type = VkAllocator.DeviceBuffer(variant.type),
-                .default_value = &VkAllocator.DeviceBuffer(variant.type) {},
-                .is_comptime = false,
-                .alignment = @alignOf(VkAllocator.DeviceBuffer(variant.type)),
-            };
-            current_field += 1;
-        }
-    }
-    break :blk @Type(.{
-        .Struct = .{
-            .layout = .Auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
-};
-
-const VariantBufferAddresses = blk: {
-    const variants = @typeInfo(AnyMaterial).Union.fields;
+// takes in a tagged union and returns a struct that has each of the union fields as a field,
+// with type InnerFn(field)
+//
+// sometimes I have a little too much fun with metaprogramming
+fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) type {
+    if (@typeInfo(Union) != .Union) @compileError(@typeName(Union) ++ " must be a union, but is not");
+    const variants = @typeInfo(Union).Union.fields;
     comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
     for (&fields, variants) |*field, variant| {
+        const T = InnerFn(variant.type);
         field.* = .{
             .name = variant.name,
-            .type = vk.DeviceAddress,
-            .default_value = &@as(vk.DeviceAddress, 0),
+            .type = T,
+            .default_value = &(if (@typeInfo(T) == .Int) @as(T, 0) else T {}),
             .is_comptime = false,
-            .alignment = @alignOf(vk.DeviceAddress),
+            .alignment = @alignOf(T),
         };
     }
-    break :blk @Type(.{
+    return @Type(.{
         .Struct = .{
             .layout = .Auto,
             .fields = &fields,
@@ -114,31 +103,50 @@ const VariantBufferAddresses = blk: {
             .is_tuple = false,
         },
     });
-};
+}
+
+fn ReturnsDeviceAddress(comptime _: type) type {
+    return vk.DeviceAddress;
+}
+
+const VariantBuffers = StructFromTaggedUnion(MaterialVariant, VkAllocator.DeviceBuffer);
+const VariantBufferAddresses = StructFromTaggedUnion(MaterialVariant, ReturnsDeviceAddress);
 
 material_count: u32 = 0,
 textures: ImageManager = .{},
 materials: VkAllocator.DeviceBuffer(Material) = .{},
-addrs: VariantBufferAddresses = .{},
 
 variant_buffers: VariantBuffers = .{},
+addrs: VariantBufferAddresses = .{},
 
 const Self = @This();
 
-// inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList, inspection: bool) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: []const MaterialInfo) !Self {
+    var variant_lists = StructFromTaggedUnion(MaterialVariant, std.ArrayListUnmanaged) {};
+    defer inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
+        @field(variant_lists, field.name).deinit(allocator);
+    };
+    const variant_indices = try allocator.alloc(vk.DeviceAddress, materials.len);
+    defer allocator.free(variant_indices);
+    for (materials, variant_indices) |material_info, *variant_index| {
+        inline for (@typeInfo(MaterialVariant).Union.fields, 0..) |field, field_idx| {
+            if (@as(MaterialType, @enumFromInt(field_idx)) == std.meta.activeTag(material_info.variant)) {
+                variant_index.* = @field(variant_lists, field.name).items.len;
+                try @field(variant_lists, field.name).append(allocator, @field(material_info.variant, field.name));
+            }
+        }
+    }
+
     var variant_buffers = VariantBuffers {};
     var addrs = VariantBufferAddresses {};
-    inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
+    inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
-            if (@field(materials.variants, field.name).items.len != 0) {
-                const data = @field(materials.variants, field.name).items;
+            if (@field(variant_lists, field.name).items.len != 0) {
+                const data = @field(variant_lists, field.name).items;
                 const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, @intCast(data.len), .{ .transfer_src_bit = true });
                 defer host_buffer.destroy(vc);
 
-                var buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true };
-                if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(data.len), buffer_flags);
+                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, @intCast(data.len), .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
                 errdefer device_buffer.destroy(vc);
 
                 @memcpy(host_buffer.data, data);
@@ -152,22 +160,21 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         }
     }
 
-    const material_count: u32 = @intCast(materials.materials.items.len);
+    const material_count: u32 = @intCast(materials.len);
     const materials_gpu = blk: {
         var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
         defer materials_host.destroy(vc);
-        for (materials_host.data, materials.materials.items) |*data, material| {
-            data.* = material;
-            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
-                if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
-                    data.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
+        for (materials_host.data, materials, variant_indices) |*data, material, variant_index| {
+            data.normal = material.normal;
+            data.emissive = material.emissive;
+            data.type = std.meta.activeTag(material.variant);
+            inline for (@typeInfo(MaterialVariant).Union.fields, 0..) |union_field, field_idx| {
+                if (@as(MaterialType, @enumFromInt(field_idx)) == data.type) {
+                    data.addr = @field(addrs, union_field.name) + variant_index * @sizeOf(union_field.type);
                 }
             }
         }
-
-        var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
-        if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
+        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer materials_gpu.destroy(vc);
 
         if (material_count != 0)
@@ -183,7 +190,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var textures = ImageManager {};
     errdefer textures.destroy(vc, allocator);
     for (texture_sources) |source| {
-        try textures.uploadTexture(vc, vk_allocator, allocator, commands, source, "");
+        _ = try textures.uploadTexture(vc, vk_allocator, allocator, commands, source, "");
     }
 
     return Self {
@@ -196,7 +203,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 }
 
 pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime VariantType: type, command_buffer: vk.CommandBuffer, variant_idx: u32, new_data: VariantType) void {
-    const variant_name = inline for (@typeInfo(AnyMaterial).Union.fields) |union_field| {
+    const variant_name = inline for (@typeInfo(MaterialVariant).Union.fields) |union_field| {
         if (union_field.type == VariantType) {
             break union_field.name;
         }
@@ -235,7 +242,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
             const bytes = try allocator.alloc(u8, size_in_bytes);
             defer allocator.free(bytes);
             try msne_reader.readSlice(u8, bytes);
-            try manager.uploadTexture(vc, vk_allocator, allocator, commands, .{
+            _ = try manager.uploadTexture(vc, vk_allocator, allocator, commands, .{
                 .raw = .{
                     .bytes = bytes,
                     .extent = extent,
@@ -248,7 +255,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
 
     var variant_buffers = VariantBuffers {};
     var addrs = VariantBufferAddresses {};
-    inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
+    inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             const variant_instance_count = try msne_reader.readSize();
             if (variant_instance_count != 0) {
@@ -278,7 +285,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         defer materials_host.destroy(vc);
         try msne_reader.readSlice(Material, materials_host.data);
         for (materials_host.data) |*material| {
-            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
+            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(MaterialVariant).Union.fields) |enum_field, union_field| {
                 if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
                     material.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
                 }
@@ -314,63 +321,3 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         @field(self.variant_buffers, field.name).destroy(vc);
     }
 }
-
-pub const MaterialList = struct {
-    const VariantLists = blk: {
-        const variants = @typeInfo(AnyMaterial).Union.fields;
-        comptime var buffer_count = 0;
-        for (variants) |variant| {
-            if (variant.type != void) {
-                buffer_count += 1;
-            }
-        }
-        comptime var fields: [buffer_count]std.builtin.Type.StructField = undefined;
-        comptime var current_field = 0;
-        for (variants) |variant| {
-            if (variant.type != void) {
-                fields[current_field] = .{
-                    .name = variant.name,
-                    .type = std.ArrayListUnmanaged(variant.type),
-                    .default_value = &std.ArrayListUnmanaged(variant.type) {},
-                    .is_comptime = false,
-                    .alignment = @alignOf(std.ArrayListUnmanaged(variant.type)),
-                };
-                current_field += 1;
-            }
-        }
-        break :blk @Type(.{
-            .Struct = .{
-                .layout = .Auto,
-                .fields = &fields,
-                .decls = &.{},
-                .is_tuple = false,
-            },
-        });
-    };
-
-    materials: std.ArrayListUnmanaged(Material) = .{},
-
-    variants: VariantLists = .{},
-
-    pub fn append(self: *MaterialList, allocator: std.mem.Allocator, material: Material, any_material: AnyMaterial) !void {
-        var mat_local = material;
-        inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
-            if (@as(MaterialType, @enumFromInt(enum_field.value)) == any_material) {
-                mat_local.type = @enumFromInt(enum_field.value);
-                if (union_field.type != void) {
-                    mat_local.addr = @field(self.variants, enum_field.name).items.len;
-                    try @field(self.variants, enum_field.name).append(allocator, @field(any_material, enum_field.name));
-                }
-            }
-        }
-        try self.materials.append(allocator, mat_local);
-    }
-
-    pub fn destroy(self: *MaterialList, allocator: std.mem.Allocator) void {
-        self.materials.deinit(allocator);
-
-        inline for (@typeInfo(VariantLists).Struct.fields) |field| {
-            @field(self.variants, field.name).deinit(allocator);
-        }
-    }
-};

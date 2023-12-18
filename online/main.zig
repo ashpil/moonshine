@@ -249,7 +249,7 @@ pub fn main() !void {
                 try imgui.textFmt("normal: {}", .{material.normal});
                 try imgui.textFmt("emissive: {}", .{material.emissive});
                 try imgui.textFmt("type: {s}", .{@tagName(material.type)});
-                inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.AnyMaterial).Union.fields) |enum_field, union_field| {
+                inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.MaterialVariant).Union.fields) |enum_field, union_field| {
                     const VariantType = union_field.type;
                     if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
                         const material_idx: u32 = @intCast((material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));

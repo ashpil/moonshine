@@ -71,7 +71,7 @@ fn luminance(rgb: [3]f32) f32 {
 pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
     const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
     defer allocator.free(texture_name);
-    try self.images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+    _ = try self.images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
         .raw = .{
             .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
             .extent = color_image.extent,

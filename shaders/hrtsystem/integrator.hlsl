@@ -121,8 +121,8 @@ struct PathTracingIntegrator : Integrator {
             MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
             Frame textureFrame = getTextureFrame(materialIdx(instanceID, its.geometryIndex), attrs.texcoord, attrs.frame);
             float3 emissiveLight = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
-            AnyMaterialData materialData = dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))];
-            AnyMaterial material = AnyMaterial::load(materialData.type, materialData.materialAddress, attrs.texcoord);
+            MaterialVariantData materialData = dMaterials[NonUniformResourceIndex(materialIdx(instanceID, its.geometryIndex))];
+            MaterialVariant material = MaterialVariant::load(materialData.type, materialData.materialAddress, attrs.texcoord);
 
             float3 outgoingDirWs = -ray.Direction;
 

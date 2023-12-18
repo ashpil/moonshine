@@ -30,8 +30,8 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 
-pub const Material = MaterialManager.Material;
-pub const AnyMaterial = MaterialManager.AnyMaterial;
+pub const Material = MaterialManager.MaterialInfo;
+pub const MaterialVariant = MaterialManager.MaterialVariant;
 pub const Instance = Accel.Instance;
 pub const Geometry = Accel.Geometry;
 
@@ -106,12 +106,11 @@ descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !std.meta.Tuple(&.{ Material, AnyMaterial }) {
+fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !Material {
     // stuff that is in every material
-    const material = blk: {
+    var material = blk: {
         var material: Material = undefined;
         material.normal = @intCast(textures.items.len);
-        material.type = .standard_pbr;
         if (gltf_material.normal_texture) |texture| {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
             std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -178,7 +177,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     standard_pbr.ior = gltf_material.ior;
 
     if (gltf_material.transmission_factor == 1.0) {
-        return .{ material, .{ .glass = .{ .ior = standard_pbr.ior } } };
+        material.variant = .{ .glass = .{ .ior = standard_pbr.ior } };
+        return material;
     }
 
     standard_pbr.color = @intCast(textures.items.len);
@@ -247,17 +247,20 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 .format = .r8_unorm,
             },
         });
-        return .{ material, .{ .standard_pbr = standard_pbr } };
+        material.variant = .{ .standard_pbr = standard_pbr };
+        return material;
     } else {
         if (gltf_material.metallic_roughness.metallic_factor == 0.0 and gltf_material.metallic_roughness.roughness_factor == 1.0) {
             // parse as lambert
             const lambert = MaterialManager.Lambert {
                 .color = standard_pbr.color,
             };
-            return .{ material, .{ .lambert = lambert } };
+            material.variant = .{ .lambert = lambert };
+            return material;
         } else if (gltf_material.metallic_roughness.metallic_factor == 1.0 and gltf_material.metallic_roughness.roughness_factor == 0.0) {
             // parse as perfect mirror
-            return .{ material, .{ .perfect_mirror = {} } };
+            material.variant = .{ .perfect_mirror = {} };
+            return material;
         } else {
             try textures.append(ImageManager.TextureSource {
                 .f32x1 = gltf_material.metallic_roughness.metallic_factor,
@@ -265,7 +268,8 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             try textures.append(ImageManager.TextureSource {
                 .f32x1 = gltf_material.metallic_roughness.roughness_factor,
             });
-            return .{ material, .{ .standard_pbr = standard_pbr } };
+            material.variant = .{ .standard_pbr = standard_pbr };
+            return material;
         }
     }
 }
@@ -421,8 +425,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
     // materials
     var material_manager = blk: {
-        var material_list = MaterialManager.MaterialList {};
-        defer material_list.destroy(allocator);
+        var material_list = std.ArrayListUnmanaged(MaterialManager.MaterialInfo) {};
+        defer material_list.deinit(allocator);
 
         var textures = std.ArrayList(ImageManager.TextureSource).init(allocator);
         defer textures.deinit();
@@ -433,11 +437,11 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         };
 
         for (gltf.data.materials.items) |material| {
-            const mat_spbr = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
-            try material_list.append(allocator, mat_spbr[0], mat_spbr[1]);
+            const mat = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
+            try material_list.append(allocator, mat);
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, material_list, inspection);
+        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, material_list.items);
     };
     errdefer material_manager.destroy(vc, allocator);
 

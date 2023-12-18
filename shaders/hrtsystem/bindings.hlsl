@@ -61,7 +61,7 @@ enum class MaterialType : uint {
     StandardPBR,
 };
 
-struct AnyMaterialData {
+struct MaterialVariantData {
     // all materials have these two
     uint normal;
     uint emissive;
@@ -74,7 +74,7 @@ struct AnyMaterialData {
 
 [[vk::binding(6, 0)]] SamplerState dTextureSampler;
 [[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
-[[vk::binding(8, 0)]] StructuredBuffer<AnyMaterialData> dMaterials;
+[[vk::binding(8, 0)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
 [[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;
