@@ -77,7 +77,7 @@ const VariantBuffers = blk: {
             fields[current_field] = .{
                 .name = variant.name,
                 .type = VkAllocator.DeviceBuffer(variant.type),
-                .default_value = null,
+                .default_value = &VkAllocator.DeviceBuffer(variant.type) {},
                 .is_comptime = false,
                 .alignment = @alignOf(VkAllocator.DeviceBuffer(variant.type)),
             };
@@ -94,14 +94,14 @@ const VariantBuffers = blk: {
     });
 };
 
-const Addrs = blk: {
+const VariantBufferAddresses = blk: {
     const variants = @typeInfo(AnyMaterial).Union.fields;
     comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
     for (&fields, variants) |*field, variant| {
         field.* = .{
             .name = variant.name,
             .type = vk.DeviceAddress,
-            .default_value = null,
+            .default_value = &@as(vk.DeviceAddress, 0),
             .is_comptime = false,
             .alignment = @alignOf(vk.DeviceAddress),
         };
@@ -116,20 +116,19 @@ const Addrs = blk: {
     });
 };
 
-material_count: u32,
-textures: ImageManager,
-materials: VkAllocator.DeviceBuffer(Material),
-addrs: Addrs,
+material_count: u32 = 0,
+textures: ImageManager = .{},
+materials: VkAllocator.DeviceBuffer(Material) = .{},
+addrs: VariantBufferAddresses = .{},
 
-variant_buffers: VariantBuffers,
+variant_buffers: VariantBuffers = .{},
 
 const Self = @This();
 
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: MaterialList, inspection: bool) !Self {
-
-    var variant_buffers: VariantBuffers = undefined;
-    var addrs: Addrs = undefined;
+    var variant_buffers = VariantBuffers {};
+    var addrs = VariantBufferAddresses {};
     inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             if (@field(materials.variants, field.name).items.len != 0) {
@@ -149,12 +148,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
                 @field(variant_buffers, field.name) = device_buffer;
                 @field(addrs, field.name) = device_buffer.getAddress(vc);
-            } else {
-                @field(variant_buffers, field.name) = .{ .handle = .null_handle };
-                @field(addrs, field.name) = 0;
             }
-        } else {
-            @field(addrs, field.name) = 0;
         }
     }
 
@@ -162,7 +156,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const materials_gpu = blk: {
         var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
         defer materials_host.destroy(vc);
-        for (materials.materials.items, materials_host.data) |material, *data| {
+        for (materials_host.data, materials.materials.items) |*data, material| {
             data.* = material;
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(AnyMaterial).Union.fields) |enum_field, union_field| {
                 if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
@@ -252,8 +246,8 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         break :blk manager;
     };
 
-    var variant_buffers: VariantBuffers = undefined;
-    var addrs: Addrs = undefined;
+    var variant_buffers = VariantBuffers {};
+    var addrs = VariantBufferAddresses {};
     inline for (@typeInfo(AnyMaterial).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             const variant_instance_count = try msne_reader.readSize();
@@ -274,12 +268,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
 
                 @field(variant_buffers, field.name) = device_buffer;
                 @field(addrs, field.name) = device_buffer.getAddress(vc);
-            } else {
-                @field(variant_buffers, field.name) = .{ .handle = .null_handle };
-                @field(addrs, field.name) = 0;
             }
-        } else {
-            @field(addrs, field.name) = 0;
         }
     }
 
