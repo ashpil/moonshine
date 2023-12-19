@@ -252,8 +252,8 @@ pub fn main() !void {
                 inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.MaterialVariant).Union.fields) |enum_field, union_field| {
                     const VariantType = union_field.type;
                     if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
-                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.material_manager.addrs, enum_field.name)) / @sizeOf(VariantType));
-                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name), material_idx);
+                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.material_manager.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
+                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name).buffer, material_idx);
                         inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                             switch (struct_field.type) {
                                 f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {

@@ -90,7 +90,7 @@ fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) 
         field.* = .{
             .name = variant.name,
             .type = T,
-            .default_value = &(if (@typeInfo(T) == .Int) @as(T, 0) else T {}),
+            .default_value = &T {},
             .is_comptime = false,
             .alignment = @alignOf(T),
         };
@@ -105,19 +105,21 @@ fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) 
     });
 }
 
-fn ReturnsDeviceAddress(comptime _: type) type {
-    return vk.DeviceAddress;
+fn VariantBuffer(comptime T: type) type {
+    return struct {
+        buffer: VkAllocator.DeviceBuffer(T) = .{},
+        addr: vk.DeviceAddress = 0,
+        len: vk.DeviceSize = 0,
+    };
 }
 
-const VariantBuffers = StructFromTaggedUnion(MaterialVariant, VkAllocator.DeviceBuffer);
-const VariantBufferAddresses = StructFromTaggedUnion(MaterialVariant, ReturnsDeviceAddress);
+const VariantBuffers = StructFromTaggedUnion(MaterialVariant, VariantBuffer);
 
 material_count: u32 = 0,
 textures: ImageManager = .{},
 materials: VkAllocator.DeviceBuffer(Material) = .{},
 
 variant_buffers: VariantBuffers = .{},
-addrs: VariantBufferAddresses = .{},
 
 const Self = @This();
 
@@ -138,7 +140,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     }
 
     var variant_buffers = VariantBuffers {};
-    var addrs = VariantBufferAddresses {};
     inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             if (@field(variant_lists, field.name).items.len != 0) {
@@ -154,8 +155,11 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                 commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
                 try commands.submitAndIdleUntilDone(vc);
 
-                @field(variant_buffers, field.name) = device_buffer;
-                @field(addrs, field.name) = device_buffer.getAddress(vc);
+                @field(variant_buffers, field.name) = .{
+                    .buffer = device_buffer,
+                    .addr = device_buffer.getAddress(vc),
+                    .len = data.len,
+                };
             }
         }
     }
@@ -170,7 +174,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             data.type = std.meta.activeTag(material.variant);
             inline for (@typeInfo(MaterialVariant).Union.fields, 0..) |union_field, field_idx| {
                 if (@as(MaterialType, @enumFromInt(field_idx)) == data.type) {
-                    data.addr = @field(addrs, union_field.name) + variant_index * @sizeOf(union_field.type);
+                    data.addr = @field(variant_buffers, union_field.name).addr + variant_index * @sizeOf(union_field.type);
                 }
             }
         }
@@ -198,7 +202,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .material_count = material_count,
         .materials = materials_gpu,
         .variant_buffers = variant_buffers,
-        .addrs = addrs,
     };
 }
 
@@ -211,7 +214,7 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
 
     const offset = @sizeOf(VariantType) * variant_idx;
     const size = @sizeOf(VariantType);
-    vc.device.cmdUpdateBuffer(command_buffer, @field(self.variant_buffers, variant_name).handle, offset, size, &new_data);
+    vc.device.cmdUpdateBuffer(command_buffer, @field(self.variant_buffers, variant_name).buffer.handle, offset, size, &new_data);
 
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
@@ -222,7 +225,7 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
             .dst_access_mask = .{ .shader_storage_read_bit = true },
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .buffer = @field(self.variant_buffers, variant_name).handle,
+            .buffer = @field(self.variant_buffers, variant_name).buffer.handle,
             .offset = offset,
             .size = size,
         }),
@@ -254,7 +257,6 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
     };
 
     var variant_buffers = VariantBuffers {};
-    var addrs = VariantBufferAddresses {};
     inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
         if (@sizeOf(field.type) != 0) {
             const variant_instance_count = try msne_reader.readSize();
@@ -273,8 +275,11 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
                 commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
                 try commands.submitAndIdleUntilDone(vc);
 
-                @field(variant_buffers, field.name) = device_buffer;
-                @field(addrs, field.name) = device_buffer.getAddress(vc);
+                @field(variant_buffers, field.name) = .{
+                    .buffer = device_buffer,
+                    .addr = device_buffer.getAddress(vc),
+                    .len = host_buffer.data.len,
+                };
             }
         }
     }
@@ -287,7 +292,7 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         for (materials_host.data) |*material| {
             inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(MaterialVariant).Union.fields) |enum_field, union_field| {
                 if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
-                    material.addr = @field(addrs, enum_field.name) + material.addr * @sizeOf(union_field.type);
+                    material.addr = @field(variant_buffers, enum_field.name).addr + material.addr * @sizeOf(union_field.type);
                 }
             }
         }
@@ -309,7 +314,6 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         .material_count = material_count,
         .materials = materials_gpu,
         .variant_buffers = variant_buffers,
-        .addrs = addrs,
     };
 }
 
@@ -318,6 +322,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.materials.destroy(vc);
 
     inline for (@typeInfo(VariantBuffers).Struct.fields) |field| {
-        @field(self.variant_buffers, field.name).destroy(vc);
+        @field(self.variant_buffers, field.name).buffer.destroy(vc);
     }
 }
