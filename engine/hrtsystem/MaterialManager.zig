@@ -121,7 +121,45 @@ materials: VkAllocator.DeviceBuffer(Material) = .{},
 
 variant_buffers: VariantBuffers = .{},
 
+const Handle = u32;
+
 const Self = @This();
+
+const max_materials = 512; // TODO: resizable buffers
+
+// you can either do this or create below, but not both
+// texture handles must've been already added to the MaterialManager's textures
+pub fn uploadMaterial(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, info: MaterialInfo) !Handle {
+    std.debug.assert(self.material_count < max_materials);
+
+    try commands.startRecording(vc);
+    inline for (@typeInfo(MaterialVariant).Union.fields, 0..) |field, field_idx| {
+        if (@as(MaterialType, @enumFromInt(field_idx)) == std.meta.activeTag(info.variant)) {
+            if (@sizeOf(field.type) != 0) {
+                const variant_buffer = &@field(self.variant_buffers, field.name);
+                if (variant_buffer.buffer.is_null()) {
+                    variant_buffer.buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, max_materials, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
+                    variant_buffer.addr = variant_buffer.buffer.getAddress(vc);
+                }
+                commands.recordUpdateBuffer(field.type, vc, variant_buffer.buffer, &.{ @field(info.variant, field.name) }, variant_buffer.len);
+                variant_buffer.len += 1;
+            }
+
+            const gpu_material = Material {
+                .normal = info.normal,
+                .emissive = info.emissive,
+                .type = std.meta.activeTag(info.variant),
+                .addr = @field(self.variant_buffers, field.name).addr + (@field(self.variant_buffers, field.name).len - 1) * @sizeOf(field.type),
+            };
+            if (self.materials.is_null()) self.materials = try vk_allocator.createDeviceBuffer(vc, allocator, Material, max_materials, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+            commands.recordUpdateBuffer(Material, vc, self.materials, &.{ gpu_material }, self.material_count);
+        }
+    }
+    try commands.submitAndIdleUntilDone(vc);
+
+    self.material_count += 1;
+    return self.material_count - 1;
+}
 
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: []const MaterialInfo) !Self {
     var variant_lists = StructFromTaggedUnion(MaterialVariant, std.ArrayListUnmanaged) {};
