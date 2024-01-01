@@ -26,11 +26,12 @@ const F32x3 = vector.Vec3(f32);
 // each instance has:
 // - a transform
 // - a visible flag
-// - a mesh group
+// - a list of geometries
 //
-// each mesh group (BLAS) has:
-// - a list of meshes
-//
+// each geometry (BLAS) has:
+// - a mesh
+// - a material
+// - a sampled (for emitted light) flag
 
 pub const Instance = struct {
     transform: Mat3x4, // transform of this instance
@@ -56,27 +57,27 @@ const TableData = extern struct {
 };
 const AliasTableT = AliasTable(TableData);
 
-blases: BottomLevelAccels,
+blases: BottomLevelAccels = .{},
 
-instance_count: u32,
-instances_device: VkAllocator.DeviceBuffer(vk.AccelerationStructureInstanceKHR),
-instances_address: vk.DeviceAddress,
+instance_count: u32 = 0,
+instances_device: VkAllocator.DeviceBuffer(vk.AccelerationStructureInstanceKHR) = .{},
+instances_address: vk.DeviceAddress = 0,
 
 // keep track of inverse transform -- non-inverse we can get from instances_device
-world_to_instance: VkAllocator.DeviceBuffer(Mat3x4),
+world_to_instance: VkAllocator.DeviceBuffer(Mat3x4) = .{},
 
 // flat jagged array for geometries -- 
 // use instanceCustomIndex + GeometryID() here to get geometry
-geometries: VkAllocator.DeviceBuffer(Geometry),
+geometries: VkAllocator.DeviceBuffer(Geometry) = .{},
 
 // tlas stuff
-tlas_handle: vk.AccelerationStructureKHR,
-tlas_buffer: VkAllocator.DeviceBuffer(u8),
+tlas_handle: vk.AccelerationStructureKHR = .null_handle,
+tlas_buffer: VkAllocator.DeviceBuffer(u8) = .{},
 
-tlas_update_scratch_buffer: VkAllocator.DeviceBuffer(u8),
-tlas_update_scratch_address: vk.DeviceAddress,
+tlas_update_scratch_buffer: VkAllocator.DeviceBuffer(u8) = .{},
+tlas_update_scratch_address: vk.DeviceAddress = 0,
 
-alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry), // to sample lights
+alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry) = .{}, // to sample lights
 
 const Self = @This();
 
