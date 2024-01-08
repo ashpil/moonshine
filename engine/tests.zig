@@ -8,6 +8,7 @@ const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
+const MeshManager = engine.hrtsystem.MeshManager;
 
 const utils = engine.core.vk_helpers;
 
@@ -101,7 +102,13 @@ const TestingContext = struct {
 
 // TODO: use actual statistical tests
 
-test "white on white background is white" {
+// theoretically any convex shape works for the furnace test
+// the reason to use a sphere (rather than e.g., a box or pyramid with less geometric complexity)
+// is that a sphere will test the BRDF with all incoming directions
+// this is techically an argument for supporting primitives other than triangles,
+// if the goal is just to test the BRDF in the most comprehensive way
+
+test "white sphere on white background is white" {
     const allocator = std.testing.allocator;
 
     var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_external.glb", "assets/white.exr");
