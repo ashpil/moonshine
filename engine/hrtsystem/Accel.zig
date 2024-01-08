@@ -19,7 +19,7 @@ const F32x3 = vector.Vec3(f32);
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
 // how all the meshes and materials fit together
-// 
+//
 // an acceleration structure has:
 // - a list of instances
 //
@@ -64,10 +64,14 @@ instances_device: VkAllocator.DeviceBuffer(vk.AccelerationStructureInstanceKHR) 
 instances_address: vk.DeviceAddress = 0,
 
 // keep track of inverse transform -- non-inverse we can get from instances_device
+// transforms provided by shader only in hit/intersection shaders but we need them
+// in raygen
+// ray queries provide them in any shader which would be a benefit of using them
 world_to_instance: VkAllocator.DeviceBuffer(Mat3x4) = .{},
 
-// flat jagged array for geometries -- 
+// flat jagged array for geometries --
 // use instanceCustomIndex + GeometryID() here to get geometry
+geometry_count: u24 = 0,
 geometries: VkAllocator.DeviceBuffer(Geometry) = .{},
 
 // tlas stuff
@@ -81,8 +85,11 @@ alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry) = .{}, // to sampl
 
 const Self = @This();
 
+const max_instances = 512; // TODO: resizable buffers
+const max_geometries = 512; // TODO: resizable buffers
+
 // lots of temp memory allocations here
-fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, geometries: [][]const Geometry, blases: *BottomLevelAccels) !void {
+fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, geometries: []const []const Geometry, blases: *BottomLevelAccels) !void {
     const uncompacted_buffers = try allocator.alloc(VkAllocator.OwnedDeviceBuffer, geometries.len);
     defer allocator.free(uncompacted_buffers);
     defer for (uncompacted_buffers) |buffer| buffer.destroy(vc);
@@ -209,6 +216,121 @@ fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     try commands.copyAccelStructs(vc, copy_infos);
 }
 
+// accel must not be in use
+// alias table currently unimplemented
+pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance: Instance) !void {
+    try makeBlases(vc, vk_allocator, allocator, commands, mesh_manager, &.{ instance.geometries }, &self.blases);
+
+    // update geometries flat jagged array
+    {
+        if (self.geometries.is_null()) {
+            self.geometries = try vk_allocator.createDeviceBuffer(vc, allocator, Geometry, max_geometries, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+            try vk_helpers.setDebugName(vc, self.geometries.handle, "geometries");
+        }
+
+        try commands.startRecording(vc);
+        commands.recordUpdateBuffer(Geometry, vc, self.geometries, instance.geometries, self.geometry_count);
+        try commands.submitAndIdleUntilDone(vc);
+
+        self.geometry_count += @intCast(instance.geometries.len);
+    }
+
+    // upload instance
+    {
+        if (self.instances_device.is_null()) {
+            self.instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, max_instances, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true });
+            try vk_helpers.setDebugName(vc, self.instances_device.handle, "instances");
+            self.instances_address = self.instances_device.getAddress(vc);
+        }
+
+        const custom_index: u24 = self.geometry_count - @as(u24, @intCast(instance.geometries.len));
+        const vk_instance = vk.AccelerationStructureInstanceKHR {
+            .transform = vk.TransformMatrixKHR {
+                .matrix = @bitCast(instance.transform),
+            },
+            .instance_custom_index_and_mask = .{
+                .instance_custom_index = custom_index,
+                .mask = if (instance.visible) 0xFF else 0x00,
+            },
+            .instance_shader_binding_table_record_offset_and_flags = .{
+                .instance_shader_binding_table_record_offset = 0,
+                .flags = 0,
+            },
+            .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
+                .acceleration_structure = self.blases.items(.handle)[self.blases.len - 1],
+            }),
+        };
+
+        try commands.startRecording(vc);
+        commands.recordUpdateBuffer(vk.AccelerationStructureInstanceKHR, vc, self.instances_device, &.{ vk_instance }, self.instance_count);
+        try commands.submitAndIdleUntilDone(vc);
+
+        self.instance_count += 1;
+    }
+
+    // upload world_to_instance matrix
+    {
+        if (self.world_to_instance.is_null()) {
+            self.world_to_instance = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, max_instances, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        }
+
+        try commands.startRecording(vc);
+        commands.recordUpdateBuffer(Mat3x4, vc, self.world_to_instance, &.{ instance.transform.inverse_affine() }, self.instance_count - 1);
+        try commands.submitAndIdleUntilDone(vc);
+    }
+
+    // update TLAS
+    var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
+        .@"type" = .top_level_khr,
+        .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
+        .mode = .build_khr,
+        .geometry_count = 1,
+        .p_geometries = @ptrCast(&vk.AccelerationStructureGeometryKHR {
+            .geometry_type = .instances_khr,
+            .flags = .{ .opaque_bit_khr = true },
+            .geometry = .{
+                .instances = .{
+                    .array_of_pointers = vk.FALSE,
+                    .data = .{
+                        .device_address = self.instances_address,
+                    }
+                }
+            },
+        }),
+        .scratch_data = undefined,
+    };
+
+    const size_info = getBuildSizesInfo(vc, &geometry_info, @ptrCast(&self.instance_count));
+
+    const scratch_buffer = try vk_allocator.createOwnedDeviceBuffer(vc, size_info.build_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
+    defer scratch_buffer.destroy(vc);
+
+    self.tlas_buffer.destroy(vc);
+    self.tlas_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, size_info.acceleration_structure_size, .{ .acceleration_structure_storage_bit_khr = true });
+
+    vc.device.destroyAccelerationStructureKHR(self.tlas_handle, null);
+    geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
+        .buffer = self.tlas_buffer.handle,
+        .offset = 0,
+        .size = size_info.acceleration_structure_size,
+        .type = .top_level_khr,
+    }, null);
+    self.tlas_handle = geometry_info.dst_acceleration_structure;
+
+    geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
+
+    self.tlas_update_scratch_buffer.destroy(vc);
+    self.tlas_update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
+    self.tlas_update_scratch_address = self.tlas_update_scratch_buffer.getAddress(vc);
+
+    try commands.createAccelStructs(vc, &.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ @ptrCast(&vk.AccelerationStructureBuildRangeInfoKHR {
+        .primitive_count = self.instance_count,
+        .first_vertex = 0,
+        .primitive_offset = 0,
+        .transform_offset = 0,
+    })});
+}
+
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instances: []const Instance, inspection: bool) !Self {
     // as an optimization, see if any instances contain identical mesh lists,
@@ -249,17 +371,17 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     try makeBlases(vc, vk_allocator, allocator, commands, mesh_manager, unique_mesh_lists_hash.keys(), &blases);
 
     // create geometries flat jagged array
+    var total_geometry_count: u24 = 0;
     const geometries = blk: {
-        var geometry_count: u24 = 0;
         for (instances) |instance| {
-            geometry_count += @intCast(instance.geometries.len);
+            total_geometry_count += @intCast(instance.geometries.len);
         }
-        const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, geometry_count, .{ .transfer_src_bit = true });
+        const geometries_host = try vk_allocator.createHostBuffer(vc, Geometry, total_geometry_count, .{ .transfer_src_bit = true });
         defer geometries_host.destroy(vc);
 
         var buffer_flags = vk.BufferUsageFlags { .storage_buffer_bit = true, .transfer_dst_bit = true };
         if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-        const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, Geometry, geometry_count, buffer_flags);
+        const geometries = try vk_allocator.createDeviceBuffer(vc, allocator, Geometry, total_geometry_count, buffer_flags);
         errdefer geometries.destroy(vc);
         try vk_helpers.setDebugName(vc, geometries.handle, "geometries");
 
@@ -271,7 +393,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             }
         }
 
-        if (geometry_count != 0) {
+        if (total_geometry_count != 0) {
             try commands.startRecording(vc);
             commands.recordUploadBuffer(Geometry, vc, geometries, geometries_host);
             try commands.submitAndIdleUntilDone(vc);
@@ -281,7 +403,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
     errdefer geometries.destroy(vc);
 
-    // create instance info, tlas, and tlas state
+    // create instance
     const instance_count: u32 = @intCast(instances.len);
     const instances_device = blk: {
         var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
@@ -307,7 +429,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
                     .instance_shader_binding_table_record_offset = 0,
                     .flags = 0,
                 },
-                .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{ 
+                .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
                     .acceleration_structure = blases.items(.handle)[unique_mesh_lists_hash.get(instance.geometries).?],
                 }),
             };
@@ -326,6 +448,23 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instances_address = instances_device.getAddress(vc);
 
+    const world_to_instance = blk: {
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        errdefer buffer.destroy(vc);
+
+        const inverses = try allocator.alloc(Mat3x4, instance_count);
+        defer allocator.free(inverses);
+        for (instances, inverses) |instance, *inverse| {
+            inverse.* = instance.transform.inverse_affine();
+        }
+
+        if (instance_count != 0) try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
+
+        break :blk buffer;
+    };
+    errdefer world_to_instance.destroy(vc);
+
+    // create TLAS
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
         .@"type" = .top_level_khr,
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
@@ -367,23 +506,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const update_scratch_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, u8, size_info.update_scratch_size, .{ .shader_device_address_bit = true, .storage_buffer_bit = true });
     errdefer update_scratch_buffer.destroy(vc);
 
-    const world_to_instance = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const inverses = try allocator.alloc(Mat3x4, instance_count);
-        defer allocator.free(inverses);
-        for (instances, inverses) |instance, *inverse| {
-            inverse.* = instance.transform.inverse_affine();
-        }
-
-        if (instance_count != 0) try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
-
-        break :blk buffer;
-    };
-    errdefer world_to_instance.destroy(vc);
-
-    // build TLAS
     try commands.createAccelStructs(vc, &.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ @ptrCast(&vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = instance_count,
         .first_vertex = 0,
@@ -457,6 +579,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .tlas_update_scratch_buffer = update_scratch_buffer,
         .tlas_update_scratch_address = update_scratch_buffer.getAddress(vc),
 
+        .geometry_count = total_geometry_count,
         .geometries = geometries,
 
         .alias_table = alias_table,
