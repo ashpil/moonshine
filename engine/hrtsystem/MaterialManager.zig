@@ -22,7 +22,8 @@ const F32x3 = vector.Vec3(f32);
 // translating this into a GPU buffer for each variant, and have a base material struct
 // that simply has an enum and a device address, which points to the specific variant
 pub const MaterialInfo = struct {
-    const normal_components = 2;
+    pub const default_normal = F32x2.new(0.5, 0.5);
+    const normal_components = @TypeOf(default_normal).element_count;
     const emissive_components = 3;
 
     // all materials have normal and emissive
