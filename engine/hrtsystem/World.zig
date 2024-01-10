@@ -92,7 +92,7 @@ pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
-}, .{ .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, }, "World");
+}, .{ .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, }, "World");
 
 material_manager: MaterialManager,
 
@@ -100,9 +100,9 @@ mesh_manager: MeshManager,
 accel: Accel,
 
 sampler: vk.Sampler,
-descriptor_set: vk.DescriptorSet,
 
 descriptor_layout: DescriptorLayout,
+descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
@@ -274,7 +274,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
     }
 }
 
-fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator) !vk.DescriptorSet {
+pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) !void {
     const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
     defer allocator.free(image_infos);
 
@@ -414,7 +414,7 @@ fn createDescriptorSet(self: *const Self, vc: *const VulkanContext, allocator: s
 
     try vk_helpers.setDebugName(vc, descriptor_set, "World");
 
-    return descriptor_set;
+    self.descriptor_set = descriptor_set;
 }
 
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
@@ -562,8 +562,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         .descriptor_set = undefined,
         .descriptor_layout = descriptor_layout,
     };
-
-    world.descriptor_set = try world.createDescriptorSet(vc, allocator);
+    try world.createDescriptorSet(vc, allocator);
 
     return world;
 }
@@ -592,9 +591,24 @@ pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator:
         .descriptor_layout = descriptor_layout,
     };
 
-    world.descriptor_set = try world.createDescriptorSet(vc, allocator);
+    try world.createDescriptorSet(vc, allocator);
 
     return world;
+}
+
+pub fn createEmpty(vc: *const VulkanContext) !Self {
+    var self = Self {
+        .material_manager = .{},
+        .mesh_manager = .{},
+        .accel = .{},
+
+        .sampler = try ImageManager.createSampler(vc),
+
+        .descriptor_layout = try DescriptorLayout.create(vc, 2, .{}), // TODO: max sets
+        .descriptor_set = undefined,
+    };
+    try self.createDescriptorSet(vc, std.heap.page_allocator); // allocator should not allocate
+    return self;
 }
 
 pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
