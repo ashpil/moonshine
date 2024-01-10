@@ -16,11 +16,10 @@ const TestingContext = struct {
     vc: VulkanContext,
     vk_allocator: VkAllocator,
     commands: Commands,
-    scene: Scene,
     output_buffer: VkAllocator.HostBuffer(f32),
 
-    fn create(allocator: std.mem.Allocator, extent: vk.Extent2D, in_filepath: []const u8, skybox_filepath: []const u8) !TestingContext {
-        const vc = try VulkanContext.create(allocator, "offline", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
+    fn create(allocator: std.mem.Allocator, extent: vk.Extent2D) !TestingContext {
+        const vc = try VulkanContext.create(allocator, "tests", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
         errdefer vc.destroy();
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);
@@ -29,40 +28,36 @@ const TestingContext = struct {
         var commands = try Commands.create(&vc);
         errdefer commands.destroy(&vc);
 
-        var scene = try Scene.fromGlbExr(&vc, &vk_allocator, allocator, &commands, in_filepath, skybox_filepath, extent, false);
-        errdefer scene.destroy(&vc, allocator);
-
-        const output_buffer = try vk_allocator.createHostBuffer(&vc, f32, 4 * scene.camera.sensor.extent.width * scene.camera.sensor.extent.height, .{ .transfer_dst_bit = true });
+        const output_buffer = try vk_allocator.createHostBuffer(&vc, f32, 4 * extent.width * extent.height, .{ .transfer_dst_bit = true });
         errdefer output_buffer.destroy(&vc);
 
         return TestingContext {
             .vc = vc,
             .vk_allocator = vk_allocator,
             .commands = commands,
-            .scene = scene,
             .output_buffer = output_buffer,
         };
     }
 
-    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline) !void {
+    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline, scene: *const Scene) !void {
         try self.commands.startRecording(&self.vc);
 
         // prepare our stuff
-        self.scene.camera.sensor.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensor.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.scene.world.descriptor_set, self.scene.background.data.items[0].descriptor_set, self.scene.camera.sensor.descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensor.descriptor_set });
         
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ self.scene.camera.properties, self.scene.camera.sensor.sample_count });
+        const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.sensor.sample_count });
         self.vc.device.cmdPushConstants(self.commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.scene.camera.sensor.extent);
+        pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensor.extent);
 
         // copy our stuff
-        self.scene.camera.sensor.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensor.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -81,19 +76,18 @@ const TestingContext = struct {
                 .z = 0,
             },
             .image_extent = .{
-                .width = self.scene.camera.sensor.extent.width,
-                .height = self.scene.camera.sensor.extent.height,
+                .width = scene.camera.sensor.extent.width,
+                .height = scene.camera.sensor.extent.height,
                 .depth = 1,
             },  
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
 
     fn destroy(self: *TestingContext, allocator: std.mem.Allocator) void {
         self.output_buffer.destroy(&self.vc);
-        self.scene.destroy(&self.vc, allocator);
         self.commands.destroy(&self.vc);
         self.vk_allocator.destroy(&self.vc, allocator);
         self.vc.destroy();
@@ -105,16 +99,19 @@ const TestingContext = struct {
 // theoretically any convex shape works for the furnace test
 // the reason to use a sphere (rather than e.g., a box or pyramid with less geometric complexity)
 // is that a sphere will test the BRDF with all incoming directions
-// this is techically an argument for supporting primitives other than triangles,
+// this is technically an argument for supporting primitives other than triangles,
 // if the goal is just to test the BRDF in the most comprehensive way
 
 test "white sphere on white background is white" {
     const allocator = std.testing.allocator;
-
-    var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_external.glb", "assets/white.exr");
+    const extent = vk.Extent2D { .width = 32, .height = 32 };
+    var tc = try TestingContext.create(allocator, extent);
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world.descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.camera.descriptor_layout }, .{
+    var scene = try Scene.fromGlbExr(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, "assets/sphere_external.glb", "assets/white.exr", extent, false);
+    defer scene.destroy(&tc.vc, allocator);
+
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 16,
             .max_bounces = 1024,
@@ -124,7 +121,7 @@ test "white sphere on white background is white" {
     });
     defer pipeline.destroy(&tc.vc);
 
-    try tc.renderToOutput(&pipeline);
+    try tc.renderToOutput(&pipeline, &scene);
     
     for (tc.output_buffer.data) |pixel| {
         if (!std.math.approxEqAbs(f32, pixel, 1.0, 0.00001)) return error.NonWhitePixel;
@@ -134,10 +131,14 @@ test "white sphere on white background is white" {
 test "inside illuminating sphere is white" {
     const allocator = std.testing.allocator;
 
-    var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
+    const extent = vk.Extent2D { .width = 32, .height = 32 };
+    var tc = try TestingContext.create(allocator, extent);
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world.descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.camera.descriptor_layout }, .{
+    var scene = try Scene.fromGlbExr(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, "assets/sphere_internal.glb", "assets/white.exr", extent, false);
+    defer scene.destroy(&tc.vc, allocator);
+
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,
@@ -147,7 +148,7 @@ test "inside illuminating sphere is white" {
     });
     defer pipeline.destroy(&tc.vc);
 
-    try tc.renderToOutput(&pipeline);
+    try tc.renderToOutput(&pipeline, &scene);
     
     for (tc.output_buffer.data) |pixel| {
         if (!std.math.approxEqAbs(f32, pixel, 1.0, 0.04)) return error.NonWhitePixel;
@@ -157,10 +158,14 @@ test "inside illuminating sphere is white" {
 test "inside illuminating sphere is white with mesh sampling" {
     const allocator = std.testing.allocator;
 
-    var tc = try TestingContext.create(allocator, vk.Extent2D { .width = 32, .height = 32 }, "assets/sphere_internal.glb", "assets/white.exr");
+    const extent = vk.Extent2D { .width = 32, .height = 32 };
+    var tc = try TestingContext.create(allocator, extent);
     defer tc.destroy(allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.scene.world.descriptor_layout, tc.scene.background.descriptor_layout, tc.scene.camera.descriptor_layout }, .{
+    var scene = try Scene.fromGlbExr(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, "assets/sphere_internal.glb", "assets/white.exr", extent, false);
+    defer scene.destroy(&tc.vc, allocator);
+
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,
@@ -170,7 +175,7 @@ test "inside illuminating sphere is white with mesh sampling" {
     });
     defer pipeline.destroy(&tc.vc);
 
-    try tc.renderToOutput(&pipeline);
+    try tc.renderToOutput(&pipeline, &scene);
     
     for (tc.output_buffer.data) |pixel| {
         // TODO: this should be able to have tighter error bounds but is weird on my GPU for some reason
