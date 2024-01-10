@@ -18,12 +18,12 @@ const F32x2 = vector.Vec2(f32);
 // host-side mesh
 pub const Mesh = struct {
     // vertices
-    positions: []F32x3, // required
-    normals: ?[]F32x3, // optional
-    texcoords: ?[]F32x2, // optional
+    positions: []const F32x3,
+    normals: ?[]const F32x3 = null,
+    texcoords: ?[]const F32x2 = null,
 
     // indices
-    indices: []U32x3,
+    indices: []const U32x3,
 
     pub fn destroy(self: *Mesh, allocator: std.mem.Allocator) void {
         allocator.free(self.positions);
@@ -67,7 +67,9 @@ const Self = @This();
 
 const max_meshes = 512; // TODO: resizable buffers
 
-pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, host_mesh: Mesh) !void {
+const Handle = u32;
+
+pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, host_mesh: Mesh) !Handle {
     std.debug.assert(self.meshes.len < max_meshes);
     
     var position_staging_buffer = VkAllocator.HostBuffer(F32x3) {};
@@ -82,7 +84,7 @@ pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
     try commands.startRecording(vc);
     const position_buffer = blk: {
         position_staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, host_mesh.positions.len, .{ .transfer_src_bit = true });
-        std.mem.copy(F32x3, position_staging_buffer.data, host_mesh.positions);
+        @memcpy(position_staging_buffer.data, host_mesh.positions);
         const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, host_mesh.positions.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
         commands.recordUploadBuffer(F32x3, vc, gpu_buffer, position_staging_buffer);
 
@@ -93,7 +95,7 @@ pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
     const texcoord_buffer = blk: {
         if (host_mesh.texcoords) |texcoords| {
             texcoord_staging_buffer = try vk_allocator.createHostBuffer(vc, F32x2, texcoords.len, .{ .transfer_src_bit = true });
-            std.mem.copy(F32x2, texcoord_staging_buffer.data, texcoords);
+            @memcpy(texcoord_staging_buffer.data, texcoords);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x2, texcoords.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x2, vc, gpu_buffer, texcoord_staging_buffer);
             break :blk gpu_buffer;
@@ -106,7 +108,7 @@ pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
     const normal_buffer = blk: {
         if (host_mesh.normals) |normals| {
             normal_staging_buffer = try vk_allocator.createHostBuffer(vc, F32x3, normals.len, .{ .transfer_src_bit = true });
-            std.mem.copy(F32x3, normal_staging_buffer.data, normals);
+            @memcpy(normal_staging_buffer.data, normals);
             const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, F32x3, normals.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true });
             commands.recordUploadBuffer(F32x3, vc, gpu_buffer, normal_staging_buffer);
             break :blk gpu_buffer;
@@ -118,7 +120,7 @@ pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
 
     const index_buffer = blk: {
         index_staging_buffer = try vk_allocator.createHostBuffer(vc, U32x3, host_mesh.indices.len, .{ .transfer_src_bit = true });
-        std.mem.copy(U32x3, index_staging_buffer.data, host_mesh.indices);
+        @memcpy(index_staging_buffer.data, host_mesh.indices);
         const gpu_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, U32x3, host_mesh.indices.len, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true });
         commands.recordUploadBuffer(U32x3, vc, gpu_buffer, index_staging_buffer);
 
@@ -151,6 +153,8 @@ pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAlloca
         .positions = try allocator.dupe(F32x3, host_mesh.positions),
         .indices = try allocator.dupe(U32x3, host_mesh.indices),
     });
+
+    return @intCast(self.meshes.len - 1);
 }
 
 // can't uploadMesh if you do this
