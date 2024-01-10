@@ -132,7 +132,6 @@ pub fn main() !void {
 
     var window_data = WindowData{
         .camera = &scene.camera,
-        .camera_info = &scene.camera_create_info,
     };
 
     window.setAspectRatio(config.extent.width, config.extent.height);
@@ -178,16 +177,16 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Camera")) {
             imgui.pushItemWidth(imgui.getFontSize() * -7.5);
-            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera_create_info.vfov, 1, 179);
-            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera_create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera_create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Origin", &scene.camera_create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Forward", &scene.camera_create_info.forward, 0.1, -1.0, 1.0) or changed;
-            changed = imgui.dragVector(F32x3, "Up", &scene.camera_create_info.up, 0.1, -1.0, 1.0) or changed;
+            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera.create_info.vfov, 1, 179);
+            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Origin", &scene.camera.create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Forward", &scene.camera.create_info.forward, 0.1, -1.0, 1.0) or changed;
+            changed = imgui.dragVector(F32x3, "Up", &scene.camera.create_info.up, 0.1, -1.0, 1.0) or changed;
             if (changed) {
-                scene.camera_create_info.forward = scene.camera_create_info.forward.unit();
-                scene.camera_create_info.up = scene.camera_create_info.up.unit();
-                scene.camera.properties = Camera.Properties.new(scene.camera_create_info);
+                scene.camera.create_info.forward = scene.camera.create_info.forward.unit();
+                scene.camera.create_info.up = scene.camera.create_info.up.unit();
+                scene.camera.properties = Camera.Properties.new(scene.camera.create_info);
                 scene.camera.sensor.clear();
             }
             imgui.popItemWidth();
@@ -437,7 +436,6 @@ pub fn main() !void {
 
 const WindowData = struct {
     camera: *Camera,
-    camera_info: *Camera.CreateInfo,
 };
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Window.ModifierKeys) void {
@@ -445,7 +443,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
     const window_data: *WindowData = @ptrCast(@alignCast(ptr));
 
     if (action == .repeat or action == .press) {
-        var camera_info = window_data.camera_info;
+        var camera_info = window_data.camera.create_info;
         const side = camera_info.forward.cross(camera_info.up).unit();
 
         switch (key) {
@@ -478,8 +476,8 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
             else => return,
         }
 
-        window_data.camera_info = camera_info;
-        window_data.camera.properties = Camera.Properties.new(camera_info.*);
+        window_data.camera.create_info = camera_info;
+        window_data.camera.properties = Camera.Properties.new(camera_info);
         window_data.camera.sensor.clear();
     }
 }

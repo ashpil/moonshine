@@ -22,8 +22,6 @@ world: World,
 background: Background,
 camera: Camera,
 
-camera_create_info: Camera.CreateInfo,
-
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
@@ -58,8 +56,6 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
         .world = world,
         .background = background,
         .camera = camera,
-
-        .camera_create_info = camera_create_info,
     };
 }
 
@@ -86,8 +82,6 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
         .world = world,
         .background = background,
         .camera = camera,
-
-        .camera_create_info = camera_create_info,
     };
 }
 
