@@ -26,7 +26,7 @@ struct Rng {
 
         uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         word = (word >> 22) ^ word;
-        return float(word) * asfloat(0x2f800004u);
+        return min(ONE_MINUS_EPSILON, float(word) * 0x1p-32f);
     }
 };
 
@@ -64,7 +64,7 @@ float2 squareToTriangle(float2 square) {
 }
 
 float2 squareToGaussian(float2 square) {
-    const float u1 = max(1e-38, square.x);
+    const float u1 = 1.0 - square.x;
     const float u2 = square.y;
     const float r = sqrt(-2.0 * log(u1));
     const float theta = 2 * PI * u2;

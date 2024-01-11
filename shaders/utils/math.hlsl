@@ -5,6 +5,7 @@ static const float EPSILON = 0.000000119;
 static const float INFINITY = 1000000000000; // pranked
 static const uint MAX_UINT = 0xFFFFFFFF;
 static const float AIR_IOR = 1.000277;
+static const float ONE_MINUS_EPSILON = 0x1.fffffep-1;
 
 float3 sphericalToCartesian(float sinTheta, float cosTheta, float phi) {
     return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
