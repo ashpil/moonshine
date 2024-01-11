@@ -332,7 +332,7 @@ test "white sphere on white background is white" {
 
     var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
-            .samples_per_run = 128,
+            .samples_per_run = 512,
             .max_bounces = 1024,
             .env_samples_per_bounce = 0, // TODO: test with env sampling once that works well with small env maps
             .mesh_samples_per_bounce = 0,
@@ -344,8 +344,7 @@ test "white sphere on white background is white" {
 
     for (tc.output_buffer.data) |pixel| {
         for (pixel[0..3]) |component| {
-            // TODO: investigate what's required for tighter error bounds
-            if (!std.math.approxEqAbs(f32, component, 1.0, 0.01)) return error.NonWhitePixel;
+            if (!std.math.approxEqAbs(f32, component, 1.0, 0.00001)) return error.NonWhitePixel;
         }
     }
 }
@@ -429,7 +428,7 @@ test "inside illuminating sphere is white" {
 
     var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
-            .samples_per_run = 512,
+            .samples_per_run = 1024,
             .max_bounces = 1024,
             .env_samples_per_bounce = 0,
             .mesh_samples_per_bounce = 0,
@@ -441,7 +440,7 @@ test "inside illuminating sphere is white" {
 
     for (tc.output_buffer.data) |pixel| {
         for (pixel[0..3]) |component| {
-            if (!std.math.approxEqAbs(f32, component, 1.0, 0.04)) return error.NonWhitePixel;
+            if (!std.math.approxEqAbs(f32, component, 1.0, 0.02)) return error.NonWhitePixel;
         }
     }
 }
