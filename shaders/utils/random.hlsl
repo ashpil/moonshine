@@ -2,10 +2,24 @@
 
 #include "math.hlsl"
 
-uint pcg(uint v) {
-    uint state = v * 747796405u + 2891336453u;
-    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
+// https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
+// https://jcgt.org/published/0009/03/02/
+namespace Hash {
+    uint lcg(uint a) {
+        const uint multiplier = 747796405u;
+        const uint increment = 2891336453u;
+        return a * multiplier + increment;
+    }
+
+    // RXS-M-XS PCG permutation function
+    uint rxs_m_xs(uint a) {
+        const uint b = ((a >> ((a >> 28u) + 4u)) ^ a) * 277803737u;
+        return (b >> 22u) ^ b;
+    }
+
+    uint pcg(uint a) {
+        return rxs_m_xs(lcg(a));
+    }
 }
 
 struct Rng {
@@ -13,25 +27,22 @@ struct Rng {
 
     static Rng fromSeed(uint3 seed) {
         Rng rng;
-        rng.state = pcg(seed.x + pcg(seed.y + pcg(seed.z)));
+        rng.state = Hash::pcg(seed.x + Hash::pcg(seed.y + Hash::pcg(seed.z)));
         return rng;
     }
 
     void stepState() {
-        state = state * 747796405u + 1u;
+        state = Hash::lcg(state);
     }
 
     float getFloat() {
         stepState();
 
-        // shuffle state a bit
-        // ngl not sure why I'm doing this
-        uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-        word = (word >> 22) ^ word;
+        uint hashed_uint = Hash::rxs_m_xs(state);
 
         // convert to float [0-1)
         // https://pharr.org/matt/blog/2022/03/05/sampling-fp-unit-interval
-        return float(word >> 8) * 0x1p-24f;
+        return float(hashed_uint >> 8) * 0x1p-24f;
     }
 };
 
