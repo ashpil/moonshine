@@ -9,9 +9,13 @@ const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 
 const hrtsystem = engine.hrtsystem;
-const Scene = hrtsystem.Scene;
+const World = hrtsystem.World;
 const Camera = hrtsystem.Camera;
+const Background = hrtsystem.BackgroundManager;
 const Pipeline = hrtsystem.pipeline.StandardPipeline;
+
+const vector = engine.vector;
+const F32x3 = vector.Vec3(f32);
 
 pub const vulkan_context_device_functions = hrtsystem.required_device_functions;
 
@@ -26,8 +30,13 @@ pub const HdMoonshine = struct {
     vk_allocator: VkAllocator,
     vc: VulkanContext,
     commands: Commands,
-    scene: Scene,
+
+    world: World,
+    camera: Camera,
+    background: Background,
+
     pipeline: Pipeline,
+
     output_buffer: VkAllocator.HostBuffer([4]f32),
 
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
@@ -47,10 +56,26 @@ pub const HdMoonshine = struct {
         self.vk_allocator = VkAllocator.create(&self.vc, self.allocator.allocator()) catch return null;
         errdefer self.vk_allocator.destroy(&self.vc, self.allocator.allocator());
 
-        self.scene = Scene.createEmpty(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, Camera.CreateInfo {}, vk.Extent2D { .width = 601, .height = 495 }) catch return null;
-        errdefer self.scene.destroy(&self.vc, self.allocator.allocator());
+        self.world = World.createEmpty(&self.vc) catch return null;
+        errdefer self.world.destroy(&self.vc, self.allocator.allocator());
 
-        self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, .{ self.scene.world_descriptor_layout, self.scene.background.descriptor_layout, self.scene.film_descriptor_layout }, .{
+        // TODO: use actually passed camera
+        self.camera = Camera.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), vk.Extent2D { .width = 601, .height = 495}, Camera.CreateInfo {
+            .origin = F32x3.new(0, 0, 0),
+            .forward = F32x3.new(1, 0, 0),
+            .up = F32x3.new(0, 0, 1),
+            .vfov = std.math.pi / 3.0,
+            .aspect = 1,
+            .aperture = 0,
+            .focus_distance = 1,
+        }) catch return null;
+        errdefer self.camera.destroy(&self.vc, self.allocator.allocator());
+
+        self.background = Background.create(&self.vc) catch return null;
+        errdefer self.background.destroy(&self.vc, self.allocator.allocator());
+        self.background.addDefaultBackground(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands) catch return null;
+        
+        self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, .{ self.world.descriptor_layout, self.background.descriptor_layout, self.camera.descriptor_layout }, .{
             .@"0" = .{
                 .samples_per_run = 1,
                 .max_bounces = 1024,
@@ -60,7 +85,7 @@ pub const HdMoonshine = struct {
         }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
-        self.output_buffer = self.vk_allocator.createHostBuffer(&self.vc, [4]f32, self.scene.camera.film.extent.width * self.scene.camera.film.extent.height, .{ .transfer_dst_bit = true }) catch return null;
+        self.output_buffer = self.vk_allocator.createHostBuffer(&self.vc, [4]f32, self.camera.sensor.extent.width * self.camera.sensor.extent.height, .{ .transfer_dst_bit = true }) catch return null;
         errdefer self.output_buffer.destroy(&self.vc);
 
         return self;
@@ -70,21 +95,21 @@ pub const HdMoonshine = struct {
         self.commands.startRecording(&self.vc) catch return false;
 
         // prepare our stuff
-        self.scene.camera.film.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        self.camera.sensor.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         self.pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        self.pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.scene.world.descriptor_set, self.scene.background.data.items[0].descriptor_set, self.scene.camera.film.descriptor_set });
+        self.pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.world.descriptor_set, self.background.data.items[0].descriptor_set, self.camera.sensor.descriptor_set });
         
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ self.scene.camera.properties, @as(u32, 0) });
+        const bytes = std.mem.asBytes(&.{ self.camera.properties, @as(u32, 0) });
         self.vc.device.cmdPushConstants(self.commands.buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        self.pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.scene.camera.film.extent);
+        self.pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.camera.sensor.extent);
 
         // copy our stuff
-        self.scene.camera.film.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        self.camera.sensor.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -103,12 +128,12 @@ pub const HdMoonshine = struct {
                 .z = 0,
             },
             .image_extent = .{
-                .width = self.scene.camera.film.extent.width,
-                .height = self.scene.camera.film.extent.height,
+                .width = self.camera.sensor.extent.width,
+                .height = self.camera.sensor.extent.height,
                 .depth = 1,
             },  
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.scene.camera.film.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
  
         self.commands.submitAndIdleUntilDone(&self.vc) catch return false;
 
@@ -120,7 +145,9 @@ pub const HdMoonshine = struct {
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
         self.output_buffer.destroy(&self.vc);
         self.pipeline.destroy(&self.vc);
-        self.scene.destroy(&self.vc, self.allocator.allocator());
+        self.world.destroy(&self.vc, self.allocator.allocator());
+        self.background.destroy(&self.vc, self.allocator.allocator());
+        self.camera.destroy(&self.vc, self.allocator.allocator());
         self.commands.destroy(&self.vc);
         self.vk_allocator.destroy(&self.vc, self.allocator.allocator());
         self.vc.destroy();
