@@ -24,9 +24,14 @@ struct Rng {
     float getFloat() {
         stepState();
 
+        // shuffle state a bit
+        // ngl not sure why I'm doing this
         uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
         word = (word >> 22) ^ word;
-        return min(ONE_MINUS_EPSILON, float(word) * 0x1p-32f);
+
+        // convert to float [0-1)
+        // https://pharr.org/matt/blog/2022/03/05/sampling-fp-unit-interval
+        return float(word >> 8) * 0x1p-24f;
     }
 };
 
