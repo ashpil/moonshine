@@ -4,11 +4,12 @@
 
 interface MicrofacetDistribution {
     float D(float3 m);
-    float G(float3 w_i, float3 w_o, float3 m);
+    float G(float3 w_i, float3 w_o); // smith, backfacing facets should be ignored elsewhere
     float3 sample(float3 w_o, float2 square);
-    float pdf(float3 w_o, float3 h);
+    float pdf(float3 w_o, float3 m);
 };
 
+// AKA Trowbridge-Reitz
 struct GGX : MicrofacetDistribution {
     float α;
 
@@ -26,28 +27,19 @@ struct GGX : MicrofacetDistribution {
         return α2 / denom;
     }
 
-    // G_1 for GGX
-    // v, m must be in frame space
-    float G_1(float3 v, float3 m) {
-        float cos_theta_v = Frame::cosTheta(v);
-        float val = dot(v, m) / cos_theta_v;
-        if (val > 0.0) {
-            float cos_theta_v_squared = pow(cos_theta_v, 2);
-            float tan_theta_v_squared = (1.0 - cos_theta_v_squared) / cos_theta_v_squared;
-            float root = sqrt(1.0 + pow(α, 2) * tan_theta_v_squared);
-            return 2 / (1 + root);
-        } else {
-            return 0.0;
-        }
+    float Λ(float3 v) {
+        float tan_theta_v_squared = Frame::tan2Theta(v);
+        if (isinf(tan_theta_v_squared)) return 0.0f;
+        return (sqrt(1.0f + pow(α, 2) * tan_theta_v_squared) - 1.0f) / 2.0f;
     }
 
-    // smith shadow-masking for GGX
-    // w_i, w_o, m must be in frame space
-    float G(float3 w_i, float3 w_o, float3 m) {
-        return G_1(w_i, m) * G_1(w_o, m);
+    // w_i, w_o must be in frame space
+    float G(float3 w_i, float3 w_o) {
+        return 1.0f / (1.0f + Λ(w_i) + Λ(w_o));
     }
 
     // samples a half vector from the distribution
+    // TODO: sample visible normals
     float3 sample(float3 w_o, float2 square) {
         // figure out spherical coords of half vector
         float tanThetaSquared = α * α * square.x / (1 - square.x);
@@ -62,8 +54,8 @@ struct GGX : MicrofacetDistribution {
         return h;
     }
 
-    float pdf(float3 w_o, float3 h) {
-        return D(h) * abs(Frame::cosTheta(h));
+    float pdf(float3 w_o, float3 m) {
+        return D(m) * abs(Frame::cosTheta(m));
     }
 };
 
@@ -256,9 +248,9 @@ struct StandardPBR : Material {
         float3 fMetallic = Fresnel::schlick(dot(w_i, h), color);
 
         float3 F = lerp(fDielectric, fMetallic, metalness);
-        float G = distr.G(w_i, w_o, h);
+        float G = distr.G(w_i, w_o);
         float D = distr.D(h);
-        float3 specular = (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o)));
+        float3 specular = Frame::sameHemisphere(w_o, w_i) ? (F * G * D) / (4.0 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o))) : 0.0;
 
         float3 diffuse = Lambert::create(color).eval(w_i, w_o);
 
@@ -294,7 +286,7 @@ struct DisneyDiffuse : Material {
 
         float3 h = normalize(w_i + w_o);
         float cosThetaHI = dot(w_i, h);
-        
+
         float cosThetaNI = abs(Frame::cosTheta(w_i));
         float cosThetaNO = abs(Frame::cosTheta(w_o));
         float F_I = pow(1 - cosThetaNI, 5);
