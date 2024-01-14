@@ -65,7 +65,7 @@ const Self = @This();
 
 const max_meshes = 512; // TODO: resizable buffers
 
-const Handle = u32;
+pub const Handle = u32;
 
 pub fn upload(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, host_mesh: Mesh) !Handle {
     std.debug.assert(self.meshes.len < max_meshes);

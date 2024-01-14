@@ -120,7 +120,7 @@ materials: VkAllocator.DeviceBuffer(Material),
 
 variant_buffers: VariantBuffers,
 
-const Handle = u32;
+pub const Handle = u32;
 
 const Self = @This();
 
