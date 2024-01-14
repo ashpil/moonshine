@@ -150,7 +150,7 @@ pub fn main() !void {
                             .new_layout = .general,
                             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = scene.camera.sensor.images.data.items(.handle)[0],
+                            .image = scene.camera.sensor.image.handle,
                             .subresource_range = .{
                                 .aspect_mask = .{ .color_bit = true },
                                 .base_mip_level = 0,
@@ -189,7 +189,7 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.sensor.image.handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

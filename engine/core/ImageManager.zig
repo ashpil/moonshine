@@ -14,12 +14,6 @@ const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 
-pub const ImageCreateRawInfo = struct {
-    extent: vk.Extent2D,
-    usage: vk.ImageUsageFlags,
-    format: vk.Format,
-};
-
 pub const TextureSource = union(enum) {
     pub const Raw = struct {
         bytes: []const u8,
@@ -44,22 +38,6 @@ const Data = std.MultiArrayList(Image);
 data: Data = .{},
 
 const Self = @This();
-
-pub fn createRaw(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, infos: []const ImageCreateRawInfo) !Self {
-    var data = Data {};
-    try data.ensureTotalCapacity(allocator, infos.len);
-    errdefer data.deinit(allocator);
-
-    for (infos) |info| {
-        const image = try Image.create(vc, vk_allocator, info.extent, info.usage, info.format);
-
-        data.appendAssumeCapacity(image);
-    }
-
-    return Self {
-        .data = data,
-    };
-}
 
 pub const Handle = u32;
 
@@ -144,13 +122,12 @@ pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
     }, null);
 }
 
-const Image = struct {
-
+pub const Image = struct {
     handle: vk.Image,
     view: vk.ImageView,
     memory: vk.DeviceMemory,
 
-    fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format) !Image {
+    pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format) !Image {
         const extent = vk.Extent3D {
             .width = size.width,
             .height = size.height,
@@ -213,5 +190,11 @@ const Image = struct {
             .handle = handle,
             .view = view,
         };
+    }
+
+    pub fn destroy(self: Image, vc: *const VulkanContext) void {
+        vc.device.destroyImageView(self.view, null);
+        vc.device.destroyImage(self.handle, null);
+        vc.device.freeMemory(self.memory, null);
     }
 };

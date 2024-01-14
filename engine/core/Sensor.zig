@@ -19,25 +19,18 @@ pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
     }
 }, null, "Sensor");
 
-// TODO: there should probably be one global ImageManager rather than this having its own
-images: ImageManager,
+image: ImageManager.Image,
 descriptor_set: vk.DescriptorSet,
 extent: vk.Extent2D,
 sample_count: u32,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D) !Self {
-    var images = try ImageManager.createRaw(vc, vk_allocator, allocator, &.{
-        .{
-            .extent = extent,
-            .usage = .{ .storage_bit = true, .transfer_src_bit = true, },
-            .format = .r32g32b32a32_sfloat,
-        }
-    });
-    errdefer images.destroy(vc, allocator);
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D) !Self {
+    const image = try ImageManager.Image.create(vc, vk_allocator, extent, .{ .storage_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat);
+    errdefer image.destroy(vc);
 
-    try vk_helpers.setDebugName(vc, images.data.items(.handle)[0], "render");
+    try vk_helpers.setDebugName(vc, image.handle, "render");
 
     const descriptor_set = try descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
@@ -48,7 +41,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
             .descriptor_type = .storage_image,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = images.data.items(.view)[0],
+                .image_view = image.view,
                 .image_layout = .general,
             }),
             .p_buffer_info = undefined,
@@ -57,7 +50,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     });
 
     return Self {
-        .images = images,
+        .image = image,
         .descriptor_set = descriptor_set,
         .extent = extent,
         .sample_count = 0,
@@ -80,7 +73,7 @@ pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, comm
             .new_layout = .general,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.images.data.items(.handle)[0],
+            .image = self.image.handle,
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -104,7 +97,7 @@ pub fn recordPrepareForCopy(self: *const Self, vc: *const VulkanContext, command
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = self.images.data.items(.handle)[0],
+            .image = self.image.handle,
             .subresource_range = .{
                 .aspect_mask = .{ .color_bit = true },
                 .base_mip_level = 0,
@@ -120,6 +113,6 @@ pub fn clear(self: *Self) void {
     self.sample_count = 0;
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.images.destroy(vc, allocator);
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+    self.image.destroy(vc);
 }

@@ -101,18 +101,18 @@ descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D, create_info: CreateInfo) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, extent: vk.Extent2D, create_info: CreateInfo) !Self {
     var descriptor_layout = try DescriptorLayout.create(vc, 1, .{}); // todo: pass in max sets from somewhere
     errdefer descriptor_layout.destroy(vc);
     return Self {
         .create_info = create_info,
         .properties = Properties.new(create_info),
-        .sensor = try Sensor.create(vc, vk_allocator, allocator, &descriptor_layout, extent),
+        .sensor = try Sensor.create(vc, vk_allocator, &descriptor_layout, extent),
         .descriptor_layout = descriptor_layout,
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.sensor.destroy(vc, allocator);
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+    self.sensor.destroy(vc);
     self.descriptor_layout.destroy(vc);
 }

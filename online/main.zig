@@ -285,7 +285,7 @@ pub fn main() !void {
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensor.image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
@@ -365,7 +365,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.sensor.image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{

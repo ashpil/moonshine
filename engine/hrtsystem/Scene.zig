@@ -38,8 +38,8 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     try gltf.parse(buffer);
 
     const camera_create_info = try Camera.CreateInfo.fromGlb(gltf);
-    var camera = try Camera.create(vc, vk_allocator, allocator, extent, camera_create_info);
-    errdefer camera.destroy(vc, allocator);
+    var camera = try Camera.create(vc, vk_allocator, extent, camera_create_info);
+    errdefer camera.destroy(vc);
 
     var world = try World.fromGlb(vc, vk_allocator, allocator, commands, gltf, inspection);
     errdefer world.destroy(vc, allocator);
@@ -67,8 +67,8 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
     errdefer world.destroy(vc, allocator);
 
     const camera_create_info = try Camera.CreateInfo.fromMsne(msne);
-    var camera = try Camera.create(vc, vk_allocator, allocator, extent, camera_create_info);
-    errdefer camera.destroy(vc, allocator);
+    var camera = try Camera.create(vc, vk_allocator, extent, camera_create_info);
+    errdefer camera.destroy(vc);
 
     var background = try Background.create(vc);
     errdefer background.destroy(vc, allocator);
@@ -88,5 +88,5 @@ pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocat
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.world.destroy(vc, allocator);
     self.background.destroy(vc, allocator);
-    self.camera.destroy(vc, allocator);
+    self.camera.destroy(vc);
 }

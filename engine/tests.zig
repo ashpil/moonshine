@@ -95,7 +95,7 @@ const TestingContext = struct {
                 .depth = 1,
             },
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensor.image.handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
@@ -301,7 +301,7 @@ test "white sphere on white background is white" {
         try world.createDescriptorSet(&tc.vc, allocator);
     }
 
-    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, allocator, extent, Camera.CreateInfo {
+    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, extent, Camera.CreateInfo {
         .origin = F32x3.new(-3, 0, 0),
         .forward = F32x3.new(1, 0, 0),
         .up = F32x3.new(0, 0, 1),
@@ -310,7 +310,7 @@ test "white sphere on white background is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    defer camera.destroy(&tc.vc, allocator);
+    defer camera.destroy(&tc.vc);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);
@@ -397,7 +397,7 @@ test "inside illuminating sphere is white" {
         try world.createDescriptorSet(&tc.vc, allocator);
     }
 
-    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, allocator, extent, Camera.CreateInfo {
+    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, extent, Camera.CreateInfo {
         .origin = F32x3.new(0, 0, 0),
         .forward = F32x3.new(1, 0, 0),
         .up = F32x3.new(0, 0, 1),
@@ -406,7 +406,7 @@ test "inside illuminating sphere is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    defer camera.destroy(&tc.vc, allocator);
+    defer camera.destroy(&tc.vc);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);
