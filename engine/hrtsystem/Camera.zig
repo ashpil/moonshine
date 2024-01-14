@@ -19,7 +19,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
-pub const CreateInfo = extern struct {
+pub const LensCreateInfo = extern struct {
     origin: F32x3,
     forward: F32x3,
     up: F32x3,
@@ -28,7 +28,7 @@ pub const CreateInfo = extern struct {
     aperture: f32,
     focus_distance: f32,
 
-    pub fn fromGlb(gltf: Gltf) !CreateInfo {
+    pub fn fromGlb(gltf: Gltf) !LensCreateInfo {
         // just use first camera found in nodes
         const gltf_camera_node = for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
@@ -45,7 +45,7 @@ pub const CreateInfo = extern struct {
             );
         };
 
-        return CreateInfo {
+        return LensCreateInfo {
             .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
             .forward = transform.mul_vec(F32x3.new(0.0, 0.0, -1.0)).unit(),
             .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
@@ -56,12 +56,12 @@ pub const CreateInfo = extern struct {
         };
     }
 
-    pub fn fromMsne(msne_reader: MsneReader) !CreateInfo {
-        return try msne_reader.readStruct(CreateInfo);
+    pub fn fromMsne(msne_reader: MsneReader) !LensCreateInfo {
+        return try msne_reader.readStruct(LensCreateInfo);
     }
 };
 
-pub const Properties = struct {
+pub const LensProperties = struct {
     origin: F32x3,
     lower_left_corner: F32x3,
     horizontal: F32x3,
@@ -70,7 +70,7 @@ pub const Properties = struct {
     v: F32x3,
     lens_radius: f32,
 
-    pub fn new(create_info: CreateInfo) Properties {
+    pub fn new(create_info: LensCreateInfo) LensProperties {
         const h = std.math.tan(create_info.vfov / 2);
         const viewport_height = 2.0 * h * create_info.focus_distance;
         const viewport_width = create_info.aspect * viewport_height;
@@ -82,7 +82,7 @@ pub const Properties = struct {
         const horizontal = u.mul_scalar(viewport_width);
         const vertical = v.mul_scalar(viewport_height);
 
-        return Properties {
+        return LensProperties {
             .origin = create_info.origin,
             .horizontal = horizontal,
             .vertical = vertical,
@@ -94,25 +94,45 @@ pub const Properties = struct {
     }
 };
 
-create_info: CreateInfo,
-properties: Properties,
-sensor: Sensor,
+sensors: std.ArrayListUnmanaged(Sensor),
+lenses: std.ArrayListUnmanaged(struct {
+    properties: LensProperties,
+    create_info: LensCreateInfo,
+}),
 descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, extent: vk.Extent2D, create_info: CreateInfo) !Self {
+pub fn create(vc: *const VulkanContext) !Self {
     var descriptor_layout = try DescriptorLayout.create(vc, 1, .{}); // todo: pass in max sets from somewhere
     errdefer descriptor_layout.destroy(vc);
     return Self {
-        .create_info = create_info,
-        .properties = Properties.new(create_info),
-        .sensor = try Sensor.create(vc, vk_allocator, &descriptor_layout, extent),
+        .sensors = .{},
+        .lenses = .{},
         .descriptor_layout = descriptor_layout,
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    self.sensor.destroy(vc);
+const SensorHandle = u32;
+pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
+    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, &self.descriptor_layout, extent));
+    return @intCast(self.sensors.items.len - 1);
+}
+
+const LensHandle = u32;
+pub fn appendLens(self: *Self, allocator: std.mem.Allocator, create_info: LensCreateInfo) !LensHandle {
+    try self.lenses.append(allocator, .{
+        .properties = LensProperties.new(create_info),
+        .create_info = create_info,
+    });
+    return @intCast(self.lenses.items.len - 1);
+}
+
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    for (self.sensors.items) |*sensor| {
+        sensor.destroy(vc);
+    }
+    self.sensors.deinit(allocator);
+    self.lenses.deinit(allocator);
     self.descriptor_layout.destroy(vc);
 }

@@ -127,7 +127,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
     vc.device.cmdBindPipeline(self.command_buffer, .ray_tracing_khr, self.pipeline.handle);
     vc.device.cmdBindDescriptorSets(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 2, &[_]vk.DescriptorSet { self.descriptor_set, tlas_descriptor_set }, 0, undefined);
 
-    const bytes = std.mem.asBytes(&.{ camera.properties.origin, camera.properties.lower_left_corner, camera.properties.horizontal, camera.properties.vertical, normalized_coords });
+    const bytes = std.mem.asBytes(&.{ camera.lenses.items[0].properties.origin, camera.lenses.items[0].properties.lower_left_corner, camera.lenses.items[0].properties.horizontal, camera.lenses.items[0].properties.vertical, normalized_coords });
     vc.device.cmdPushConstants(self.command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace rays

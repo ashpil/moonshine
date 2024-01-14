@@ -57,21 +57,21 @@ const TestingContext = struct {
         try self.commands.startRecording(&self.vc);
 
         // prepare our stuff
-        scene.camera.sensor.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensor.descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ scene.camera.properties, scene.camera.sensor.sample_count });
+        const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0].properties, scene.camera.sensors.items[0].sample_count });
         self.vc.device.cmdPushConstants(self.commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensor.extent);
+        pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensors.items[0].extent);
 
         // copy our stuff
-        scene.camera.sensor.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -90,12 +90,12 @@ const TestingContext = struct {
                 .z = 0,
             },
             .image_extent = .{
-                .width = scene.camera.sensor.extent.width,
-                .height = scene.camera.sensor.extent.height,
+                .width = scene.camera.sensors.items[0].extent.width,
+                .height = scene.camera.sensors.items[0].extent.height,
                 .depth = 1,
             },
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensor.image.handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
@@ -301,7 +301,8 @@ test "white sphere on white background is white" {
         try world.createDescriptorSet(&tc.vc, allocator);
     }
 
-    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, extent, Camera.CreateInfo {
+    var camera = try Camera.create(&tc.vc);
+    _ = try camera.appendLens(allocator, Camera.LensCreateInfo {
         .origin = F32x3.new(-3, 0, 0),
         .forward = F32x3.new(1, 0, 0),
         .up = F32x3.new(0, 0, 1),
@@ -310,7 +311,8 @@ test "white sphere on white background is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    defer camera.destroy(&tc.vc);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);
@@ -397,7 +399,8 @@ test "inside illuminating sphere is white" {
         try world.createDescriptorSet(&tc.vc, allocator);
     }
 
-    var camera = try Camera.create(&tc.vc, &tc.vk_allocator, extent, Camera.CreateInfo {
+    var camera = try Camera.create(&tc.vc);
+    _ = try camera.appendLens(allocator, Camera.LensCreateInfo {
         .origin = F32x3.new(0, 0, 0),
         .forward = F32x3.new(1, 0, 0),
         .up = F32x3.new(0, 0, 1),
@@ -406,7 +409,8 @@ test "inside illuminating sphere is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    defer camera.destroy(&tc.vc);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);

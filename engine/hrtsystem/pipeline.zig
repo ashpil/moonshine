@@ -235,7 +235,7 @@ pub const StandardPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Properties) + @sizeOf(u32),
+            .size = @sizeOf(Camera.LensProperties) + @sizeOf(u32),
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     },
