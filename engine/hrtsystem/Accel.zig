@@ -219,6 +219,9 @@ fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 // accel must not be in use
 // alias table currently unimplemented
 pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance: Instance) !void {
+    std.debug.assert(self.geometry_count + instance.geometries.len <= max_geometries);
+    std.debug.assert(self.instance_count < max_instances);
+
     try makeBlases(vc, vk_allocator, allocator, commands, mesh_manager, &.{ instance.geometries }, &self.blases);
 
     // update geometries flat jagged array
