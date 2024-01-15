@@ -44,7 +44,7 @@ pub const HdMoonshine = struct {
 
     pipeline: Pipeline,
 
-    output_buffer: VkAllocator.HostBuffer([4]f32),
+    output_buffers: std.ArrayListUnmanaged(VkAllocator.HostBuffer([4]f32)),
 
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
         var allocator = Allocator {};
@@ -66,16 +66,7 @@ pub const HdMoonshine = struct {
         self.world = World.createEmpty(&self.vc) catch return null;
         errdefer self.world.destroy(&self.vc, self.allocator.allocator());
 
-        // TODO: use actually passed camera
-        self.camera = Camera.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), vk.Extent2D { .width = 601, .height = 495}, Camera.CreateInfo {
-            .origin = F32x3.new(-5, 0, 0),
-            .forward = F32x3.new(1, 0, 0),
-            .up = F32x3.new(0, 0, 1),
-            .vfov = std.math.pi / 3.0,
-            .aspect = 601.0 / 495.0,
-            .aperture = 0,
-            .focus_distance = 1,
-        }) catch return null;
+        self.camera = Camera.create(&self.vc) catch return null;
         errdefer self.camera.destroy(&self.vc, self.allocator.allocator());
 
         self.background = Background.create(&self.vc) catch return null;
@@ -92,31 +83,30 @@ pub const HdMoonshine = struct {
         }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
-        self.output_buffer = self.vk_allocator.createHostBuffer(&self.vc, [4]f32, self.camera.sensor.extent.width * self.camera.sensor.extent.height, .{ .transfer_dst_bit = true }) catch return null;
-        errdefer self.output_buffer.destroy(&self.vc);
+        self.output_buffers = .{};
 
         return self;
     }
 
-    pub export fn HdMoonshineRender(self: *HdMoonshine, out: [*]f32) bool {
+    pub export fn HdMoonshineRender(self: *HdMoonshine, sensor: Camera.SensorHandle, lens: Camera.LensHandle) bool {
         self.commands.startRecording(&self.vc) catch return false;
 
         // prepare our stuff
-        self.camera.sensor.recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        self.camera.sensors.items[sensor].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         self.pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        self.pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.world.descriptor_set, self.background.data.items[0].descriptor_set, self.camera.sensor.descriptor_set });
+        self.pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.world.descriptor_set, self.background.data.items[0].descriptor_set, self.camera.sensors.items[sensor].descriptor_set });
 
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ self.camera.properties, @as(u32, 0) });
+        const bytes = std.mem.asBytes(&.{ self.camera.lenses.items[lens], @as(u32, 0) });
         self.vc.device.cmdPushConstants(self.commands.buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
-        self.pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.camera.sensor.extent);
+        self.pipeline.recordTraceRays(&self.vc, self.commands.buffer, self.camera.sensors.items[sensor].extent);
 
         // copy our stuff
-        self.camera.sensor.recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        self.camera.sensors.items[sensor].recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -135,16 +125,14 @@ pub const HdMoonshine = struct {
                 .z = 0,
             },
             .image_extent = .{
-                .width = self.camera.sensor.extent.width,
-                .height = self.camera.sensor.extent.height,
+                .width = self.camera.sensors.items[sensor].extent.width,
+                .height = self.camera.sensors.items[sensor].extent.height,
                 .depth = 1,
             },
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.camera.sensor.images.data.items(.handle)[0], .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.camera.sensors.items[sensor].image.handle, .transfer_src_optimal, self.output_buffers.items[sensor].handle, 1, @ptrCast(&copy));
 
         self.commands.submitAndIdleUntilDone(&self.vc) catch return false;
-
-        @memcpy(@as([*][4]f32, @ptrCast(out)), self.output_buffer.data);
 
         return true;
     }
@@ -200,8 +188,29 @@ pub const HdMoonshine = struct {
         return true;
     }
 
+    pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {
+        self.output_buffers.append(self.allocator.allocator(), self.vk_allocator.createHostBuffer(&self.vc, [4]f32, extent.width * extent.height, .{ .transfer_dst_bit = true }) catch unreachable) catch unreachable;
+        return self.camera.appendSensor(&self.vc, &self.vk_allocator, self.allocator.allocator(), extent) catch unreachable; // TODO: error handling
+    }
+
+    pub export fn HdMoonshineGetSensorData(self: *const HdMoonshine, sensor: Camera.SensorHandle) [*][4]f32 {
+        return self.output_buffers.items[sensor].data.ptr;
+    }
+
+    pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Lens) Camera.LensHandle {
+        return self.camera.appendLens(self.allocator.allocator(), info) catch unreachable; // TODO: error handling
+    }
+
+    pub export fn HdMoonshineSetLens(self: *HdMoonshine, handle: Camera.LensHandle, info: Camera.Lens) void {
+        self.camera.lenses.items[handle] = info;
+        self.camera.sensors.items[handle].clear(); // not quite right
+    }
+
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
-        self.output_buffer.destroy(&self.vc);
+        for (self.output_buffers.items) |output_buffer| {
+            output_buffer.destroy(&self.vc);
+        }
+        self.output_buffers.deinit(self.allocator.allocator());
         self.pipeline.destroy(&self.vc);
         self.world.destroy(&self.vc, self.allocator.allocator());
         self.background.destroy(&self.vc, self.allocator.allocator());

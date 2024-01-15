@@ -1,14 +1,17 @@
 #pragma once
 
+#include "moonshine.h"
+
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/renderBuffer.h"
+#include "renderDelegate.hpp"
 
 #include <iostream>
 
 class HdMoonshineRenderBuffer : public PXR_NS::HdRenderBuffer
 {
 public:
-    HdMoonshineRenderBuffer(PXR_NS::SdfPath const& id);
+    HdMoonshineRenderBuffer(PXR_NS::SdfPath const& id, HdMoonshineRenderDelegate* renderDelegate);
     ~HdMoonshineRenderBuffer() override;
 
     bool Allocate(PXR_NS::GfVec3i const& dimensions, PXR_NS::HdFormat format, bool multiSampled) override;
@@ -17,16 +20,13 @@ public:
     unsigned int GetHeight() const override { return _height; }
     unsigned int GetDepth() const override { return 1; }
     PXR_NS::HdFormat GetFormat() const override { return PXR_NS::HdFormatFloat32Vec4; }
-    bool IsMultiSampled() const override { return _multiSampled; }
+    bool IsMultiSampled() const override { return false; }
 
     void* Map() override {
-        std::cout << "Map buffer" << std::endl;
-        return _buffer.data();
+        return _data;
     }
 
-    void Unmap() override {
-        std::cout << "Unmap buffer" << std::endl;
-    }
+    void Unmap() override {}
 
     bool IsMapped() const override {
         return false;
@@ -38,12 +38,12 @@ public:
 
     void Resolve() override;
 
+    SensorHandle _sensor;
 private:
     void _Deallocate() override;
 
+    HdMoonshineRenderDelegate* _renderDelegate;
     unsigned int _width;
     unsigned int _height;
-    PXR_NS::HdFormat _format;
-    bool _multiSampled;
-    std::vector<uint8_t> _buffer;
+    uint8_t* _data = nullptr;
 };
