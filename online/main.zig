@@ -120,7 +120,7 @@ pub fn main() !void {
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, &commands);
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, scene.camera.descriptor_layout, &commands);
     defer object_picker.destroy(&context);
 
     var pipeline_constants = Pipeline.SpecConstants{};
@@ -134,7 +134,7 @@ pub fn main() !void {
         .camera = &scene.camera,
     };
 
-    window.setAspectRatio(config.extent.width, config.extent.height);
+    // window.setAspectRatio(config.extent.width, config.extent.height);
     window.setUserPointer(&window_data);
     window.setKeyCallback(keyCallback);
 
@@ -177,16 +177,15 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Camera")) {
             imgui.pushItemWidth(imgui.getFontSize() * -7.5);
-            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera.lenses.items[0].create_info.vfov, 1, 179);
-            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.lenses.items[0].create_info.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.lenses.items[0].create_info.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Origin", &scene.camera.lenses.items[0].create_info.origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Forward", &scene.camera.lenses.items[0].create_info.forward, 0.1, -1.0, 1.0) or changed;
-            changed = imgui.dragVector(F32x3, "Up", &scene.camera.lenses.items[0].create_info.up, 0.1, -1.0, 1.0) or changed;
+            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera.lenses.items[0].vfov, 1, 179);
+            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.lenses.items[0].focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.lenses.items[0].aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Origin", &scene.camera.lenses.items[0].origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x3, "Forward", &scene.camera.lenses.items[0].forward, 0.1, -1.0, 1.0) or changed;
+            changed = imgui.dragVector(F32x3, "Up", &scene.camera.lenses.items[0].up, 0.1, -1.0, 1.0) or changed;
             if (changed) {
-                scene.camera.lenses.items[0].create_info.forward = scene.camera.lenses.items[0].create_info.forward.unit();
-                scene.camera.lenses.items[0].create_info.up = scene.camera.lenses.items[0].create_info.up.unit();
-                scene.camera.lenses.items[0].properties = Camera.LensProperties.new(scene.camera.lenses.items[0].create_info);
+                scene.camera.lenses.items[0].forward = scene.camera.lenses.items[0].forward.unit();
+                scene.camera.lenses.items[0].up = scene.camera.lenses.items[0].up.unit();
                 scene.camera.sensors.items[0].clear();
             }
             imgui.popItemWidth();
@@ -284,7 +283,7 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set);
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, scene.camera.sensors.items[0].descriptor_set);
             const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
@@ -300,7 +299,7 @@ pub fn main() !void {
             pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0].properties, scene.camera.sensors.items[0].sample_count });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff
@@ -443,7 +442,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
     const window_data: *WindowData = @ptrCast(@alignCast(ptr));
 
     if (action == .repeat or action == .press) {
-        var camera_info = window_data.camera.lenses.items[0].create_info;
+        var camera_info = window_data.camera.lenses.items[0];
         const side = camera_info.forward.cross(camera_info.up).unit();
 
         switch (key) {
@@ -476,8 +475,7 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
             else => return,
         }
 
-        window_data.camera.lenses.items[0].create_info = camera_info;
-        window_data.camera.lenses.items[0].properties = Camera.LensProperties.new(camera_info);
+        window_data.camera.lenses.items[0] = camera_info;
         window_data.camera.sensors.items[0].clear();
     }
 }

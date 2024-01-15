@@ -7,16 +7,12 @@ struct ClickData {
 
 [[vk::binding(0, 0)]] RWStructuredBuffer<ClickData> click_data;
 [[vk::binding(0, 1)]] RaytracingAccelerationStructure TLAS;
+[[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;
+
+#include "camera.hlsl"
 
 struct [raypayload] Payload {
     ClickData click_data : read(caller) : write(closesthit, miss);
-};
-
-struct Camera {
-    float3 origin;
-    float3 lower_left_corner;
-    float3 horizontal;
-    float3 vertical;
 };
 
 struct PushConsts {
@@ -25,23 +21,16 @@ struct PushConsts {
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
-RayDesc generateDir(Camera camera) {
+[shader("raygeneration")]
+void raygen() {
     float2 uv = pushConsts.coords;
     uv.y -= 1;
     uv.y *= -1;
-
-    RayDesc rayDesc;
-	rayDesc.Origin = camera.origin;
-	rayDesc.Direction = normalize(camera.lower_left_corner + uv.x * camera.horizontal + uv.y * camera.vertical - camera.origin);
-	rayDesc.TMin = 0.0001;
-	rayDesc.TMax = 10000.0;
-
-    return rayDesc;
-}
-
-[shader("raygeneration")]
-void raygen() {
-    RayDesc ray = generateDir(pushConsts.camera);
+    Camera camera = pushConsts.camera;
+    // make camera have perfect focus
+    camera.focus_distance = 1.0f;
+    camera.aperture = 0.0f;
+    RayDesc ray = pushConsts.camera.generateRay(uv, float2(0, 0));
 
     Payload payload;
     TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);

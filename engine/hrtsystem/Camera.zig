@@ -19,16 +19,15 @@ const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
-pub const LensCreateInfo = extern struct {
+pub const Lens = extern struct {
     origin: F32x3,
     forward: F32x3,
     up: F32x3,
     vfov: f32, // radians
-    aspect: f32, // width / height
     aperture: f32,
     focus_distance: f32,
 
-    pub fn fromGlb(gltf: Gltf) !LensCreateInfo {
+    pub fn fromGlb(gltf: Gltf) !Lens {
         // just use first camera found in nodes
         const gltf_camera_node = for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
@@ -45,60 +44,23 @@ pub const LensCreateInfo = extern struct {
             );
         };
 
-        return LensCreateInfo {
+        return Lens {
             .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
             .forward = transform.mul_vec(F32x3.new(0.0, 0.0, -1.0)).unit(),
             .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)),
             .vfov = gltf_camera.type.perspective.yfov,
-            .aspect = gltf_camera.type.perspective.aspect_ratio,
             .aperture = 0.0,
             .focus_distance = 1.0,
         };
     }
 
-    pub fn fromMsne(msne_reader: MsneReader) !LensCreateInfo {
-        return try msne_reader.readStruct(LensCreateInfo);
-    }
-};
-
-pub const LensProperties = struct {
-    origin: F32x3,
-    lower_left_corner: F32x3,
-    horizontal: F32x3,
-    vertical: F32x3,
-    u: F32x3,
-    v: F32x3,
-    lens_radius: f32,
-
-    pub fn new(create_info: LensCreateInfo) LensProperties {
-        const h = std.math.tan(create_info.vfov / 2);
-        const viewport_height = 2.0 * h * create_info.focus_distance;
-        const viewport_width = create_info.aspect * viewport_height;
-
-        const w = create_info.forward.mul_scalar(-1);
-        const u = create_info.up.cross(w).unit();
-        const v = w.cross(u);
-
-        const horizontal = u.mul_scalar(viewport_width);
-        const vertical = v.mul_scalar(viewport_height);
-
-        return LensProperties {
-            .origin = create_info.origin,
-            .horizontal = horizontal,
-            .vertical = vertical,
-            .lower_left_corner = create_info.origin.sub(horizontal.div_scalar(2.0)).sub(vertical.div_scalar(2.0)).sub(w.mul_scalar(create_info.focus_distance)),
-            .u = u,
-            .v = v,
-            .lens_radius = create_info.aperture / 2,
-        };
+    pub fn fromMsne(msne_reader: MsneReader) !Lens {
+        return try msne_reader.readStruct(Lens);
     }
 };
 
 sensors: std.ArrayListUnmanaged(Sensor),
-lenses: std.ArrayListUnmanaged(struct {
-    properties: LensProperties,
-    create_info: LensCreateInfo,
-}),
+lenses: std.ArrayListUnmanaged(Lens),
 descriptor_layout: DescriptorLayout,
 
 const Self = @This();
@@ -113,18 +75,15 @@ pub fn create(vc: *const VulkanContext) !Self {
     };
 }
 
-const SensorHandle = u32;
+pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
     try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, &self.descriptor_layout, extent));
     return @intCast(self.sensors.items.len - 1);
 }
 
-const LensHandle = u32;
-pub fn appendLens(self: *Self, allocator: std.mem.Allocator, create_info: LensCreateInfo) !LensHandle {
-    try self.lenses.append(allocator, .{
-        .properties = LensProperties.new(create_info),
-        .create_info = create_info,
-    });
+pub const LensHandle = u32;
+pub fn appendLens(self: *Self, allocator: std.mem.Allocator, lens: Lens) !LensHandle {
+    try self.lenses.append(allocator, lens);
     return @intCast(self.lenses.items.len - 1);
 }
 

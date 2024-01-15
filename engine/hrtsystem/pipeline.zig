@@ -193,12 +193,13 @@ pub const ObjectPickPipeline = Pipeline(
     struct {
         InputDescriptorLayout,
         WorldDescriptorLayout,
+        SensorDescriptorLayout,
     },
     struct {},
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(F32x3) * 4 + @sizeOf(F32x2),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2),
             .stage_flags = .{ .raygen_bit_khr = true },
         },
     },
@@ -235,7 +236,7 @@ pub const StandardPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.LensProperties) + @sizeOf(u32),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(u32),
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     },
