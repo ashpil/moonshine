@@ -46,6 +46,12 @@ pub const HdMoonshine = struct {
 
     output_buffers: std.ArrayListUnmanaged(VkAllocator.HostBuffer([4]f32)),
 
+    // as a temporary hack, while the resource system is not yet streamlined,
+    // force it to all be singlethreaded
+    //
+    // i view async zig as a prerequisite to cleaning up the resource system
+    mutex: std.Thread.Mutex,
+
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
         var allocator = Allocator {};
         errdefer _ = allocator.deinit();
@@ -84,11 +90,14 @@ pub const HdMoonshine = struct {
         errdefer self.pipeline.destroy(&self.vc);
 
         self.output_buffers = .{};
+        self.mutex = .{};
 
         return self;
     }
 
     pub export fn HdMoonshineRender(self: *HdMoonshine, sensor: Camera.SensorHandle, lens: Camera.LensHandle) bool {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         self.commands.startRecording(&self.vc) catch return false;
 
         // prepare our stuff
@@ -138,6 +147,8 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateMesh(self: *HdMoonshine, positions: [*]const F32x3, maybe_normals: ?[*]const F32x3, maybe_texcoords: ?[*]const F32x2, vertex_count: usize, indices: [*]const U32x3, index_count: usize) MeshManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const mesh = MeshManager.Mesh {
             .positions = positions[0..vertex_count],
             .normals = if (maybe_normals) |normals| normals[0..vertex_count] else null,
@@ -148,24 +159,32 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateSolidTexture1(self: *HdMoonshine, source: f32, name: [*:0]const u8) ImageManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.world.material_manager.textures.uploadTexture(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, ImageManager.TextureSource {
             .f32x1 = source,
         }, std.mem.span(name)) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineCreateSolidTexture2(self: *HdMoonshine, source: F32x2, name: [*:0]const u8) ImageManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.world.material_manager.textures.uploadTexture(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, ImageManager.TextureSource {
             .f32x2 = source,
         }, std.mem.span(name)) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineCreateSolidTexture3(self: *HdMoonshine, source: F32x3, name: [*:0]const u8) ImageManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.world.material_manager.textures.uploadTexture(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, ImageManager.TextureSource {
             .f32x3 = source,
         }, std.mem.span(name)) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineCreateMaterialLambert(self: *HdMoonshine, normal: ImageManager.Handle, emissive: ImageManager.Handle, color: ImageManager.Handle) MaterialManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.world.material_manager.uploadMaterial(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, MaterialManager.MaterialInfo {
             .normal = normal,
             .emissive = emissive,
@@ -178,6 +197,8 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize) bool {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const instance = Accel.Instance {
             .transform = transform,
             .visible = true,
@@ -189,6 +210,8 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         self.output_buffers.append(self.allocator.allocator(), self.vk_allocator.createHostBuffer(&self.vc, [4]f32, extent.width * extent.height, .{ .transfer_dst_bit = true }) catch unreachable) catch unreachable;
         return self.camera.appendSensor(&self.vc, &self.vk_allocator, self.allocator.allocator(), extent) catch unreachable; // TODO: error handling
     }
@@ -198,10 +221,14 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Lens) Camera.LensHandle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         return self.camera.appendLens(self.allocator.allocator(), info) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineSetLens(self: *HdMoonshine, handle: Camera.LensHandle, info: Camera.Lens) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         self.camera.lenses.items[handle] = info;
         self.camera.sensors.items[handle].clear(); // not quite right
     }
