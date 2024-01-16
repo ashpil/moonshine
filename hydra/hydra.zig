@@ -52,6 +52,8 @@ pub const HdMoonshine = struct {
     // i view async zig as a prerequisite to cleaning up the resource system
     mutex: std.Thread.Mutex,
 
+    const samples_per_run = 1;
+
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
         var allocator = Allocator {};
         errdefer _ = allocator.deinit();
@@ -81,7 +83,7 @@ pub const HdMoonshine = struct {
 
         self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, .{ self.world.descriptor_layout, self.background.descriptor_layout, self.camera.descriptor_layout }, .{
             .@"0" = .{
-                .samples_per_run = 1,
+                .samples_per_run = samples_per_run,
                 .max_bounces = 1024,
                 .env_samples_per_bounce = 1,
                 .mesh_samples_per_bounce = 1,
@@ -108,7 +110,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.world.descriptor_set, self.background.data.items[0].descriptor_set, self.camera.sensors.items[sensor].descriptor_set });
 
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ self.camera.lenses.items[lens], @as(u32, 0) });
+        const bytes = std.mem.asBytes(&.{ self.camera.lenses.items[lens], self.camera.sensors.items[sensor].sample_count });
         self.vc.device.cmdPushConstants(self.commands.buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
@@ -142,6 +144,8 @@ pub const HdMoonshine = struct {
         self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.camera.sensors.items[sensor].image.handle, .transfer_src_optimal, self.output_buffers.items[sensor].handle, 1, @ptrCast(&copy));
 
         self.commands.submitAndIdleUntilDone(&self.vc) catch return false;
+
+        self.camera.sensors.items[sensor].sample_count += samples_per_run;
 
         return true;
     }
@@ -230,7 +234,12 @@ pub const HdMoonshine = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.camera.lenses.items[handle] = info;
-        self.camera.sensors.items[handle].clear(); // not quite right
+
+        // technically only need to clear sensors associated with this lens
+        // but no easy mechanism to do this currently
+        for (self.camera.sensors.items) |*sensor| {
+            sensor.clear();
+        }
     }
 
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
