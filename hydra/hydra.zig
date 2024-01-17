@@ -85,8 +85,8 @@ pub const HdMoonshine = struct {
             .@"0" = .{
                 .samples_per_run = samples_per_run,
                 .max_bounces = 1024,
-                .env_samples_per_bounce = 1,
-                .mesh_samples_per_bounce = 1,
+                .env_samples_per_bounce = 0,
+                .mesh_samples_per_bounce = 0,
             }
         }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
