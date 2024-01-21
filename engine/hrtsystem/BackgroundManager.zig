@@ -34,7 +34,6 @@ pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
-images: ImageManager = .{},
 data: std.ArrayListUnmanaged(struct {
     marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
@@ -68,10 +67,10 @@ fn luminance(rgb: [3]f32) f32 {
 }
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
+pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *ImageManager, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
     const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
     defer allocator.free(texture_name);
-    _ = try self.images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+    const image_index = try images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
         .raw = .{
             .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
             .extent = color_image.extent,
@@ -139,7 +138,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             .descriptor_type = .sampled_image,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = self.images.data.items(.view)[0],
+                .image_view = images.data.items(.view)[image_index],
                 .image_layout = .shader_read_only_optimal,
             }),
             .p_buffer_info = undefined,
@@ -183,7 +182,6 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.images.destroy(vc, allocator);
     for (self.data.items) |data| {
         data.marginal.destroy(vc);
         data.conditional.destroy(vc);

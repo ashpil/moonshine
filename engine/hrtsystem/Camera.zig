@@ -70,8 +70,8 @@ pub fn create(vc: *const VulkanContext) !Self {
 }
 
 pub const SensorHandle = u32;
-pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
-    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, &self.descriptor_layout, extent));
+pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *ImageManager, extent: vk.Extent2D) !SensorHandle {
+    try self.sensors.append(allocator, try Sensor.create(vc, allocator, vk_allocator, &self.descriptor_layout, images, extent));
     return @intCast(self.sensors.items.len - 1);
 }
 
@@ -82,9 +82,6 @@ pub fn appendLens(self: *Self, allocator: std.mem.Allocator, lens: Lens) !LensHa
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    for (self.sensors.items) |*sensor| {
-        sensor.destroy(vc);
-    }
     self.sensors.deinit(allocator);
     self.lenses.deinit(allocator);
     self.descriptor_layout.destroy(vc);

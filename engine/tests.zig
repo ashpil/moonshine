@@ -30,6 +30,7 @@ const TestingContext = struct {
     vc: VulkanContext,
     vk_allocator: VkAllocator,
     commands: Commands,
+    images: ImageManager,
     output_buffer: VkAllocator.HostBuffer([4]f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D) !TestingContext {
@@ -38,6 +39,9 @@ const TestingContext = struct {
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);
         errdefer vk_allocator.destroy(&vc, allocator);
+
+        var images = ImageManager {};
+        errdefer images.destroy(&vc, allocator);
 
         var commands = try Commands.create(&vc);
         errdefer commands.destroy(&vc);
@@ -49,6 +53,7 @@ const TestingContext = struct {
             .vc = vc,
             .vk_allocator = vk_allocator,
             .commands = commands,
+            .images = images,
             .output_buffer = output_buffer,
         };
     }
@@ -57,7 +62,7 @@ const TestingContext = struct {
         try self.commands.startRecording(&self.vc);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, &self.images, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
@@ -71,7 +76,7 @@ const TestingContext = struct {
         pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensors.items[0].extent);
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&self.vc, &self.images, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -95,7 +100,7 @@ const TestingContext = struct {
                 .depth = 1,
             },
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
@@ -103,6 +108,7 @@ const TestingContext = struct {
     fn destroy(self: *TestingContext, allocator: std.mem.Allocator) void {
         self.output_buffer.destroy(&self.vc);
         self.commands.destroy(&self.vc);
+        self.images.destroy(&self.vc, allocator);
         self.vk_allocator.destroy(&self.vc, allocator);
         self.vc.destroy();
     }
@@ -267,13 +273,13 @@ test "white sphere on white background is white" {
     {
         const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
 
-        const normal_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const normal_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const albedo_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x3 = F32x3.new(1, 1, 1),
         }, "");
-        const emissive_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const emissive_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x3 = F32x3.new(0, 0, 0),
         }, "");
         const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
@@ -298,7 +304,7 @@ test "white sphere on white background is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, allocator);
+        try world.createDescriptorSet(&tc.vc, &tc.images, allocator);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -310,7 +316,7 @@ test "white sphere on white background is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, &tc.images, extent);
     defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
@@ -323,7 +329,7 @@ test "white sphere on white background is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, image, "white");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.images, &tc.commands, image, "white");
 
     var scene = Scene {
         .world = world,
@@ -364,13 +370,13 @@ test "inside illuminating sphere is white" {
     {
         const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
 
-        const normal_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const normal_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const albedo_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const emissive_texture = try world.material_manager.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const emissive_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
         const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
@@ -395,7 +401,7 @@ test "inside illuminating sphere is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, allocator);
+        try world.createDescriptorSet(&tc.vc, &tc.images, allocator);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -407,7 +413,7 @@ test "inside illuminating sphere is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, &tc.images, extent);
     defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
@@ -420,7 +426,7 @@ test "inside illuminating sphere is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, image, "black");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.images, &tc.commands, image, "black");
 
     var scene = Scene {
         .world = world,

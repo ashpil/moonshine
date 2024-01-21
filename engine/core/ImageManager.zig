@@ -30,6 +30,7 @@ pub const TextureSource = union(enum) {
 comptime {
     // so that we can do some hacky stuff below like
     // reinterpret the f32x3 field as F32x4
+    // TODO: even this is not quite right
     std.debug.assert(@sizeOf(TextureSource) >= @sizeOf(F32x4));
 }
 
@@ -37,9 +38,17 @@ const Data = std.MultiArrayList(Image);
 
 data: Data = .{},
 
+// TODO: image destruction
 const Self = @This();
 
 pub const Handle = u32;
+
+pub fn appendRawImage(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, name: [:0]const u8) !Handle {
+    const image = try Image.create(vc, vk_allocator, extent, usage, format, name);
+    try self.data.append(allocator, image);
+
+    return @intCast(self.data.len - 1);
+}
 
 pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: TextureSource, name: [:0]const u8) !Handle {
     var extent: vk.Extent2D = undefined;
@@ -78,8 +87,7 @@ pub fn uploadTexture(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             format = .r32_sfloat;
         },
     }
-    const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format);
-    if (name.len != 0) try vk_helpers.setDebugName(vc, image.handle, name);
+    const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, name);
     try self.data.append(allocator, image);
 
     try commands.uploadDataToImage(vc, vk_allocator, image.handle, bytes, extent, .shader_read_only_optimal);
@@ -127,7 +135,7 @@ pub const Image = struct {
     view: vk.ImageView,
     memory: vk.DeviceMemory,
 
-    pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format) !Image {
+    pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, name: [:0]const u8) !Image {
         const extent = vk.Extent3D {
             .width = size.width,
             .height = size.height,
@@ -151,6 +159,7 @@ pub const Image = struct {
 
         const handle = try vc.device.createImage(&image_create_info, null);
         errdefer vc.device.destroyImage(handle, null);
+        if (name.len != 0) try vk_helpers.setDebugName(vc, handle, name);
 
         const mem_requirements = vc.device.getImageMemoryRequirements(handle);
 

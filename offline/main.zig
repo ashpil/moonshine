@@ -6,6 +6,7 @@ const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
+const ImageManager = engine.core.ImageManager;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 
@@ -95,9 +96,12 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
+    var image_manager = ImageManager {};
+    defer image_manager.destroy(&context, allocator);
+
     try logger.log("set up initial state");
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &image_manager, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
     defer scene.destroy(&context, allocator);
 
     try logger.log("load world");
@@ -122,7 +126,7 @@ pub fn main() !void {
         try commands.startRecording(&context);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&context, &image_manager, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
@@ -150,7 +154,7 @@ pub fn main() !void {
                             .new_layout = .general,
                             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = scene.camera.sensors.items[0].image.handle,
+                            .image = image_manager.data.get(scene.camera.sensors.items[0].image).handle,
                             .subresource_range = .{
                                 .aspect_mask = .{ .color_bit = true },
                                 .base_mip_level = 0,
@@ -165,7 +169,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&context, &image_manager, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -189,7 +193,7 @@ pub fn main() !void {
                 .depth = 1,
             },  
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, image_manager.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

@@ -9,6 +9,7 @@ const VkAllocator = core.Allocator;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
 const SyncCopier = core.SyncCopier;
+const ImageManager = core.ImageManager;
 
 const hrtsystem = engine.hrtsystem;
 const Camera = hrtsystem.Camera;
@@ -102,9 +103,12 @@ pub fn main() !void {
     var sync_copier = try SyncCopier.create(&context, &vk_allocator, @sizeOf(vk.AccelerationStructureInstanceKHR));
     defer sync_copier.destroy(&context);
 
+    var image_manager = ImageManager {};
+    defer image_manager.destroy(&context, allocator);
+
     std.log.info("Set up initial state!", .{});
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &image_manager, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
 
     defer scene.destroy(&context, allocator);
 
@@ -274,7 +278,7 @@ pub fn main() !void {
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
             current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, scene.camera.sensors.items[0].descriptor_set);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, image_manager.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
@@ -282,7 +286,7 @@ pub fn main() !void {
         if (max_sample_count != 0 and scene.camera.sensors.items[0].sample_count > max_sample_count) scene.camera.sensors.items[0].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[0].sample_count < max_sample_count) {
             // prepare some stuff
-            scene.camera.sensors.items[0].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
+            scene.camera.sensors.items[0].recordPrepareForCapture(&context, &image_manager, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
@@ -296,7 +300,7 @@ pub fn main() !void {
             pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensors.items[0].extent);
 
             // copy some stuff
-            scene.camera.sensors.items[0].recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[0].recordPrepareForCopy(&context, &image_manager, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to
@@ -354,7 +358,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, image_manager.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{

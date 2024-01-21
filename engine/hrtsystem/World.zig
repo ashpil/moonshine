@@ -104,12 +104,12 @@ descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
-fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_material: Gltf.Material, textures: *std.ArrayList(ImageManager.TextureSource)) !Material {
+// TODO: consider just uploading all textures upfront rather than as part of this function
+fn gltfMaterialToMaterial(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, gltf_material: Gltf.Material, textures: *ImageManager) !Material {
     // stuff that is in every material
     var material = blk: {
         var material: Material = undefined;
-        material.normal = @intCast(textures.items.len);
-        if (gltf_material.normal_texture) |texture| {
+        material.normal = if (gltf_material.normal_texture) |texture| normal: {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
             std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
 
@@ -119,11 +119,14 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             defer img.deinit();
 
             var rg = try allocator.alloc(u8, img.pixels.len() * 2);
+            defer allocator.free(rg);
             for (img.pixels.rgb24, 0..) |pixel, i| {
                 rg[i * 2 + 0] = pixel.r;
                 rg[i * 2 + 1] = pixel.g;
             }
-            try textures.append(ImageManager.TextureSource {
+            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} normal", .{ gltf_material.name });
+            defer allocator.free(debug_name);
+            break :normal try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
                 .raw = .{
                     .bytes = rg,
                     .extent = vk.Extent2D {
@@ -132,15 +135,12 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                     },
                     .format = .r8g8_unorm,
                 },
-            });
-        } else {
-            try textures.append(ImageManager.TextureSource {
-                .f32x2 = F32x2.new(0.5, 0.5),
-            });
-        }
-
-        material.emissive = @intCast(textures.items.len);
-        if (gltf_material.emissive_texture) |texture| {
+            }, debug_name);
+        } else try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+            .f32x2 = Material.default_normal,
+        }, "default normal");
+        
+        material.emissive = if (gltf_material.emissive_texture) |texture| emissive: {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
             std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
 
@@ -149,10 +149,13 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             defer img.deinit();
 
             var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
+            defer rgba.deinit(allocator);
             for (img.pixels.rgb24, rgba.rgba32) |pixel, *rgba32| {
                 rgba32.* = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
             }
-            try textures.append(ImageManager.TextureSource {
+            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} emissive", .{ gltf_material.name });
+            defer allocator.free(debug_name);
+            break :emissive try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
                 .raw = .{
                     .bytes = rgba.asBytes(),
                     .extent = vk.Extent2D {
@@ -161,12 +164,15 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                     },
                     .format = .r8g8b8a8_srgb,
                 },
-            });
-        } else {
-            try textures.append(ImageManager.TextureSource {
-                .f32x3 = F32x3.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2]).mul_scalar(gltf_material.emissive_strength),
-            });
-        }
+            }, debug_name);
+        } else emissive: {
+            const constant = F32x3.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2]).mul_scalar(gltf_material.emissive_strength);
+            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant emissive {}", .{ gltf_material.name, constant });
+            defer allocator.free(debug_name);
+            break :emissive try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+                .f32x3 = constant,
+            }, debug_name);
+        };
         
         break :blk material;
     };
@@ -179,8 +185,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         return material;
     }
 
-    standard_pbr.color = @intCast(textures.items.len);
-    if (gltf_material.metallic_roughness.base_color_texture) |texture| {
+    standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
 
@@ -189,10 +194,13 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
         defer img.deinit();
 
         var rgba = try zigimg.color.PixelStorage.init(allocator, .rgba32, img.pixels.len());
+        defer rgba.deinit(allocator);
         for (img.pixels.rgb24, rgba.rgba32) |pixel, *rgba32| {
             rgba32.* = zigimg.color.Rgba32.initRgba(pixel.r, pixel.g, pixel.b, std.math.maxInt(u8));
         }
-        try textures.append(ImageManager.TextureSource {
+        const debug_name = try std.fmt.allocPrintZ(allocator, "{s} color", .{ gltf_material.name });
+        defer allocator.free(debug_name);
+        break :blk try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
             .raw = .{
                 .bytes = rgba.asBytes(),
                 .extent = vk.Extent2D {
@@ -201,15 +209,16 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 },
                 .format = .r8g8b8a8_srgb,
             },
-        });
-    } else {
-        try textures.append(ImageManager.TextureSource {
+        }, debug_name);
+    } else blk: {
+        const constant = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2]);
+        const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant color {}", .{ gltf_material.name, constant });
+        defer allocator.free(debug_name);
+        break :blk try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
             .f32x3 = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2])
-        });
-    }
+        }, debug_name);
+    };
 
-    standard_pbr.metalness = @intCast(textures.items.len);
-    standard_pbr.roughness = @intCast(textures.items.len + 1);
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
         std.debug.assert(std.mem.eql(u8, image.mime_type.?, "image/png"));
@@ -225,7 +234,9 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             r.* = pixel.r;
             g.* = pixel.g;
         }
-        try textures.append(ImageManager.TextureSource {
+        const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} metalness", .{ gltf_material.name });
+        defer allocator.free(debug_name_metalness);
+        standard_pbr.metalness = try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
             .raw = .{
                 .bytes = rs,
                 .extent = vk.Extent2D {
@@ -234,8 +245,10 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 },
                 .format = .r8_unorm,
             },
-        });
-        try textures.append(ImageManager.TextureSource {
+        }, debug_name_metalness);
+        const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} roughness", .{ gltf_material.name });
+        defer allocator.free(debug_name_roughness);
+        standard_pbr.roughness = try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
             .raw = .{
                 .bytes = gs,
                 .extent = vk.Extent2D {
@@ -244,7 +257,7 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
                 },
                 .format = .r8_unorm,
             },
-        });
+        }, debug_name_roughness);
         material.variant = .{ .standard_pbr = standard_pbr };
         return material;
     } else {
@@ -260,23 +273,27 @@ fn gltfMaterialToMaterial(allocator: std.mem.Allocator, gltf: Gltf, gltf_materia
             material.variant = .{ .perfect_mirror = {} };
             return material;
         } else {
-            try textures.append(ImageManager.TextureSource {
+            const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} constant metalness {}", .{ gltf_material.name, gltf_material.metallic_roughness.metallic_factor });
+            defer allocator.free(debug_name_metalness);
+            standard_pbr.metalness = try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
                 .f32x1 = gltf_material.metallic_roughness.metallic_factor,
-            });
-            try textures.append(ImageManager.TextureSource {
+            }, debug_name_metalness);
+            const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} constant debug_name_roughness {}", .{ gltf_material.name, gltf_material.metallic_roughness.roughness_factor });
+            defer allocator.free(debug_name_roughness);
+            standard_pbr.roughness = try textures.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
                 .f32x1 = gltf_material.metallic_roughness.roughness_factor,
-            });
+            }, debug_name_roughness);
             material.variant = .{ .standard_pbr = standard_pbr };
             return material;
         }
     }
 }
 
-pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) !void {
-    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, self.material_manager.textures.data.len);
+pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext, image_manager: *const ImageManager, allocator: std.mem.Allocator) !void {
+    const image_infos = try allocator.alloc(vk.DescriptorImageInfo, image_manager.data.len);
     defer allocator.free(image_infos);
 
-    const texture_views = self.material_manager.textures.data.items(.view);
+    const texture_views = image_manager.data.items(.view);
     for (image_infos, texture_views) |*info, texture_view| {
         info.* = .{
             .sampler = .null_handle,
@@ -418,7 +435,7 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext, allocator: std
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, inspection: bool) !Self {
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, image_manager: *ImageManager, inspection: bool) !Self {
     const sampler = try ImageManager.createSampler(vc);
 
     // materials
@@ -426,22 +443,14 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         var material_list = std.ArrayListUnmanaged(MaterialManager.MaterialInfo) {};
         defer material_list.deinit(allocator);
 
-        var textures = std.ArrayList(ImageManager.TextureSource).init(allocator);
-        defer textures.deinit();
-        defer for (textures.items) |texture| {
-            if (texture == .raw) {
-                allocator.free(texture.raw.bytes);
-            }
-        };
-
         for (gltf.data.materials.items) |material| {
-            const mat = try gltfMaterialToMaterial(allocator, gltf, material, &textures);
+            const mat = try gltfMaterialToMaterial(vc, vk_allocator, allocator, commands, gltf, material, image_manager);
             try material_list.append(allocator, mat);
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, textures.items, material_list.items);
+        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, material_list.items);
     };
-    errdefer material_manager.destroy(vc, allocator);
+    errdefer material_manager.destroy(vc);
 
     var objects = std.ArrayList(MeshManager.Mesh).init(allocator);
     defer objects.deinit();
@@ -560,7 +569,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         .descriptor_set = undefined,
         .descriptor_layout = descriptor_layout,
     };
-    try world.createDescriptorSet(vc, allocator);
+    try world.createDescriptorSet(vc, image_manager, allocator);
 
     return world;
 }
@@ -576,7 +585,7 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
         .descriptor_layout = try DescriptorLayout.create(vc, 2, .{}), // TODO: max sets
         .descriptor_set = undefined,
     };
-    try self.createDescriptorSet(vc, std.heap.page_allocator); // allocator should not allocate
+    try self.createDescriptorSet(vc, &ImageManager {}, std.heap.page_allocator); // allocator should not allocate
     return self;
 }
 
@@ -591,7 +600,7 @@ pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     vc.device.destroySampler(self.sampler, null);
 
-    self.material_manager.destroy(vc, allocator);
+    self.material_manager.destroy(vc);
     self.mesh_manager.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
 

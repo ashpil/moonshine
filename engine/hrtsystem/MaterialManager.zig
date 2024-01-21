@@ -115,7 +115,6 @@ fn VariantBuffer(comptime T: type) type {
 const VariantBuffers = StructFromTaggedUnion(MaterialVariant, VariantBuffer);
 
 material_count: u32 = 0,
-textures: ImageManager = .{},
 materials: VkAllocator.DeviceBuffer(Material) = .{},
 
 variant_buffers: VariantBuffers = .{},
@@ -160,7 +159,7 @@ pub fn uploadMaterial(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAl
     return self.material_count - 1;
 }
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, texture_sources: []const ImageManager.TextureSource, materials: []const MaterialInfo) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, materials: []const MaterialInfo) !Self {
     var variant_lists = StructFromTaggedUnion(MaterialVariant, std.ArrayListUnmanaged) {};
     defer inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
         @field(variant_lists, field.name).deinit(allocator);
@@ -228,14 +227,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         break :blk materials_gpu;
     };
 
-    var textures = ImageManager {};
-    errdefer textures.destroy(vc, allocator);
-    for (texture_sources) |source| {
-        _ = try textures.uploadTexture(vc, vk_allocator, allocator, commands, source, "");
-    }
-
     return Self {
-        .textures = textures,
         .material_count = material_count,
         .materials = materials_gpu,
         .variant_buffers = variant_buffers,
@@ -269,8 +261,7 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
     });
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.textures.destroy(vc, allocator);
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.materials.destroy(vc);
 
     inline for (@typeInfo(VariantBuffers).Struct.fields) |field| {
