@@ -8,8 +8,6 @@ const VulkanContext = core.VulkanContext;
 const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
-const MsneReader = engine.fileformats.msne.MsneReader;
-
 const Sensor = core.Sensor;
 const DescriptorLayout = Sensor.DescriptorLayout;
 const ImageManager = core.ImageManager;
@@ -52,10 +50,6 @@ pub const Lens = extern struct {
             .aperture = 0.0,
             .focus_distance = 1.0,
         };
-    }
-
-    pub fn fromMsne(msne_reader: MsneReader) !Lens {
-        return try msne_reader.readStruct(Lens);
     }
 };
 

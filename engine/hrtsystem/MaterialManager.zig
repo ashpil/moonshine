@@ -10,8 +10,6 @@ const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 const ImageManager = core.ImageManager;
 
-const MsneReader = engine.fileformats.msne.MsneReader;
-
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
@@ -269,91 +267,6 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
             .size = size,
         }),
     });
-}
-
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
-    const textures = blk: {
-        var manager = ImageManager {};
-        errdefer manager.destroy(vc, allocator);
-        const texture_count = try msne_reader.readSize();
-
-        for (0..texture_count) |_| {
-            const format = try msne_reader.reader.readEnum(vk.Format, .little);
-            const extent = try msne_reader.readStruct(vk.Extent2D);
-            const size_in_bytes = vk_helpers.imageSizeInBytes(format, extent);
-            const bytes = try allocator.alloc(u8, size_in_bytes);
-            defer allocator.free(bytes);
-            try msne_reader.readSlice(u8, bytes);
-            _ = try manager.uploadTexture(vc, vk_allocator, allocator, commands, .{
-                .raw = .{
-                    .bytes = bytes,
-                    .extent = extent,
-                    .format = format,
-                },
-            }, "");
-        }
-        break :blk manager;
-    };
-
-    var variant_buffers = VariantBuffers {};
-    inline for (@typeInfo(MaterialVariant).Union.fields) |field| {
-        if (@sizeOf(field.type) != 0) {
-            const variant_instance_count = try msne_reader.readSize();
-            if (variant_instance_count != 0) {
-                const host_buffer = try vk_allocator.createHostBuffer(vc, field.type, variant_instance_count, .{ .transfer_src_bit = true });
-                defer host_buffer.destroy(vc);
-
-                try msne_reader.readSlice(field.type, host_buffer.data);
-
-                var buffer_flags = vk.BufferUsageFlags{ .shader_device_address_bit = true, .transfer_dst_bit = true };
-                if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-                const device_buffer = try vk_allocator.createDeviceBuffer(vc, allocator, field.type, variant_instance_count, buffer_flags);
-                errdefer device_buffer.destroy(vc);
-
-                try commands.startRecording(vc);
-                commands.recordUploadBuffer(field.type, vc, device_buffer, host_buffer);
-                try commands.submitAndIdleUntilDone(vc);
-
-                @field(variant_buffers, field.name) = .{
-                    .buffer = device_buffer,
-                    .addr = device_buffer.getAddress(vc),
-                    .len = host_buffer.data.len,
-                };
-            }
-        }
-    }
-
-    const material_count = try msne_reader.readSize();
-    const materials_gpu = blk: {
-        var materials_host = try vk_allocator.createHostBuffer(vc, Material, material_count, .{ .transfer_src_bit = true });
-        defer materials_host.destroy(vc);
-        try msne_reader.readSlice(Material, materials_host.data);
-        for (materials_host.data) |*material| {
-            inline for (@typeInfo(MaterialType).Enum.fields, @typeInfo(MaterialVariant).Union.fields) |enum_field, union_field| {
-                if (@as(MaterialType, @enumFromInt(enum_field.value)) == material.type) {
-                    material.addr = @field(variant_buffers, enum_field.name).addr + material.addr * @sizeOf(union_field.type);
-                }
-            }
-        }
-
-        var buffer_flags = vk.BufferUsageFlags{ .storage_buffer_bit = true, .transfer_dst_bit = true };
-        if (inspection) buffer_flags = buffer_flags.merge(.{ .transfer_src_bit = true });
-        const materials_gpu = try vk_allocator.createDeviceBuffer(vc, allocator, Material, material_count, buffer_flags);
-        errdefer materials_gpu.destroy(vc);
-
-        try commands.startRecording(vc);
-        commands.recordUploadBuffer(Material, vc, materials_gpu, materials_host);
-        try commands.submitAndIdleUntilDone(vc);
-
-        break :blk materials_gpu;
-    };
-
-    return Self {
-        .textures = textures,
-        .material_count = material_count,
-        .materials = materials_gpu,
-        .variant_buffers = variant_buffers,
-    };
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

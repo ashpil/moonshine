@@ -13,7 +13,6 @@ const Background = @import("./BackgroundManager.zig");
 const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
 
-const MsneReader = engine.fileformats.msne.MsneReader;
 const exr = engine.fileformats.exr;
 
 const Self = @This();
@@ -45,34 +44,6 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
 
     var world = try World.fromGlb(vc, vk_allocator, allocator, commands, gltf, inspection);
     errdefer world.destroy(vc, allocator);
-
-    var background = try Background.create(vc);
-    errdefer background.destroy(vc, allocator);
-    {
-        const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
-        defer allocator.free(skybox_image.asSlice());
-        try background.addBackground(vc, vk_allocator, allocator, commands, skybox_image, "exr");
-    }
-
-    return Self {
-        .world = world,
-        .background = background,
-        .camera = camera,
-    };
-}
-
-pub fn fromMsneExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, inspection: bool) !Self {
-    const msne = try MsneReader.fromFilepath(msne_filepath);
-    defer msne.destroy();
-
-    var world = try World.fromMsne(vc, vk_allocator, allocator, commands, msne, inspection);
-    errdefer world.destroy(vc, allocator);
-
-    const camera_create_info = try Camera.Lens.fromMsne(msne);
-    var camera = try Camera.create(vc);
-    errdefer camera.destroy(vc, allocator);
-    _ = try camera.appendLens(allocator, camera_create_info);
-    _ = try camera.appendSensor(vc, vk_allocator, allocator, extent);
 
     var background = try Background.create(vc);
     errdefer background.destroy(vc, allocator);

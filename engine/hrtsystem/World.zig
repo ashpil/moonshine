@@ -16,8 +16,6 @@ const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
 const ImageManager = core.ImageManager;
 
-const MsneReader = engine.fileformats.msne.MsneReader;
-
 const MaterialManager = @import("./MaterialManager.zig");
 
 const MeshManager = @import("./MeshManager.zig");
@@ -562,35 +560,6 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         .descriptor_set = undefined,
         .descriptor_layout = descriptor_layout,
     };
-    try world.createDescriptorSet(vc, allocator);
-
-    return world;
-}
-
-pub fn fromMsne(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, msne_reader: MsneReader, inspection: bool) !Self {
-    var material_manager = try MaterialManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader, inspection);
-    errdefer material_manager.destroy(vc, allocator);
-
-    var mesh_manager = try MeshManager.fromMsne(vc, vk_allocator, allocator, commands, msne_reader);
-    errdefer mesh_manager.destroy(vc, allocator);
-
-    var accel = try Accel.fromMsne(vc, vk_allocator, allocator, commands, mesh_manager, msne_reader, inspection);
-    errdefer accel.destroy(vc, allocator);
-
-    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
-    errdefer descriptor_layout.destroy(vc);
-
-    var world = Self {
-        .material_manager = material_manager,
-        .mesh_manager = mesh_manager,
-
-        .accel = accel,
-
-        .sampler = try ImageManager.createSampler(vc),
-        .descriptor_set = undefined,
-        .descriptor_layout = descriptor_layout,
-    };
-
     try world.createDescriptorSet(vc, allocator);
 
     return world;
