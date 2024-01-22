@@ -297,7 +297,7 @@ pub fn main() !void {
             pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count, scene.background.data.items[0].texture });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff

@@ -138,7 +138,7 @@ pub fn main() !void {
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)) });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)), scene.background.data.items[0].texture });
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff

@@ -77,9 +77,8 @@ struct MaterialVariantData {
 [[vk::binding(7, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
-[[vk::binding(0, 2)]] Texture2D<float3> dBackgroundTexture;
-[[vk::binding(1, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
-[[vk::binding(2, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
+[[vk::binding(0, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: backgroundTexture.height
+[[vk::binding(1, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: backgroundTexture.height * backgroundTexture.width
 
 // OUTPUT
 [[vk::binding(0, 3)]] RWTexture2D<float4> dOutputImage;
@@ -89,6 +88,7 @@ struct MaterialVariantData {
 struct PushConsts {
 	Camera camera;
 	uint sampleCount;
+    uint backgroundTexture;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
