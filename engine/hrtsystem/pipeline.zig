@@ -12,10 +12,11 @@ const DestructionQueue = core.DestructionQueue;
 
 const Camera = @import("./Camera.zig");
 
-const WorldDescriptorLayout = @import("./World.zig").DescriptorLayout;
-const BackgroundDescriptorLayout = @import("./BackgroundManager.zig").DescriptorLayout;
+const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
+const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
 const SensorDescriptorLayout = core.Sensor.DescriptorLayout;
-const InputDescriptorLayout = @import("./ObjectPicker.zig").DescriptorLayout;
+const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
+const TextureDescriptorLayout = engine.core.Images.TextureManager.DescriptorLayout;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -221,6 +222,7 @@ pub const StandardPipeline = Pipeline(
     &.{ "hrtsystem/main.hlsl" },
     &.{ 0, 0, 0, 0 },
     struct {
+        TextureDescriptorLayout,
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
         SensorDescriptorLayout,

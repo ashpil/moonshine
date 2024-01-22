@@ -140,7 +140,7 @@ struct Lambert : Material {
         uint colorTextureIndex = vk::RawBufferLoad<uint>(addr);
 
         Lambert material;
-        material.r = dMaterialTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        material.r = dTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
         return material;
     }
 
@@ -183,9 +183,9 @@ struct StandardPBR : Material {
         float ior = vk::RawBufferLoad<float>(addr + sizeof(uint) * 3);
 
         StandardPBR material;
-        material.color = dMaterialTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
-        material.metalness = dMaterialTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
-        float roughness = dMaterialTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        material.color = dTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+        material.metalness = dTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
+        float roughness = dTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
         material.distr = GGX::create(max(pow(roughness, 2), 0.001));
         material.ior = ior;
         return material;
@@ -498,7 +498,7 @@ Frame createTextureFrame(float3 normalWorldSpace, Frame tangentFrame) {
 
 Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) {
     MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
-    float2 rg = dMaterialTextures[NonUniformResourceIndex(data.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
+    float2 rg = dTextures[NonUniformResourceIndex(data.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
     float3 normalTangentSpace = decodeNormal(rg);
     float3 normalWorldSpace = tangentNormalToWorld(normalTangentSpace, tangentFrame);
     return createTextureFrame(normalWorldSpace, tangentFrame);
@@ -506,5 +506,5 @@ Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) 
 
 float3 getEmissive(uint materialIndex, float2 texcoords) {
     MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
-    return dMaterialTextures[NonUniformResourceIndex(data.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
+    return dTextures[NonUniformResourceIndex(data.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
 }

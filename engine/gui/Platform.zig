@@ -43,7 +43,7 @@ pipeline: vk.Pipeline,
 
 font_sampler: vk.Sampler,
 font_image: TextureManager,
-font_image_set: vk.DescriptorSet,
+font_image_set: vk.DescriptorSet, // TODO: should be able to use set or TextureManager somehow
 
 vertex_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawVert),
 index_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawIdx),
@@ -211,7 +211,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        var image = TextureManager {};
+        var image = try TextureManager.create(vc);
         _ = try image.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
             .raw = .{
                 .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],

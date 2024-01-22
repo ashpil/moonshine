@@ -30,7 +30,7 @@ pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding
             comptime var pool_sizes: [bindings.len]vk.DescriptorPoolSize = undefined;
             comptime for (&pool_sizes, bindings) |*pool_size, binding| {
                 pool_size.* = .{
-                    .@"type" =  binding.descriptor_type,
+                    .type =  binding.descriptor_type,
                     .descriptor_count = binding.descriptor_count * max_sets,
                 };
             };

@@ -31,9 +31,10 @@ struct Instance { // same required by vulkan on host side
     }
 };
 
-[[vk::binding(0, 0)]] RaytracingAccelerationStructure dTLAS;
-[[vk::binding(1, 0)]] StructuredBuffer<Instance> dInstances;
-[[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
+[[vk::binding(0, 0)]] Texture2D dTextures[];
+[[vk::binding(0, 1)]] RaytracingAccelerationStructure dTLAS;
+[[vk::binding(1, 1)]] StructuredBuffer<Instance> dInstances;
+[[vk::binding(2, 1)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 
 struct LightAliasData {
     uint instanceIndex;
@@ -48,10 +49,10 @@ struct AliasEntry {
     Data data;
 };
 
-[[vk::binding(3, 0)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
+[[vk::binding(3, 1)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
 
-[[vk::binding(4, 0)]] StructuredBuffer<Mesh> dMeshes;
-[[vk::binding(5, 0)]] StructuredBuffer<Geometry> dGeometries;
+[[vk::binding(4, 1)]] StructuredBuffer<Mesh> dMeshes;
+[[vk::binding(5, 1)]] StructuredBuffer<Geometry> dGeometries;
 
 // MATERIALS
 enum class MaterialType : uint {
@@ -72,17 +73,16 @@ struct MaterialVariantData {
     uint64_t materialAddress;
 };
 
-[[vk::binding(6, 0)]] SamplerState dTextureSampler;
-[[vk::binding(7, 0)]] Texture2D dMaterialTextures[];
-[[vk::binding(8, 0)]] StructuredBuffer<MaterialVariantData> dMaterials;
+[[vk::binding(6, 1)]] SamplerState dTextureSampler;
+[[vk::binding(7, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
-[[vk::binding(0, 1)]] Texture2D<float3> dBackgroundTexture;
-[[vk::binding(1, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
-[[vk::binding(2, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
+[[vk::binding(0, 2)]] Texture2D<float3> dBackgroundTexture;
+[[vk::binding(1, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
+[[vk::binding(2, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
 
 // OUTPUT
-[[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(0, 3)]] RWTexture2D<float4> dOutputImage;
 
 // PUSH CONSTANTS
 #include "camera.hlsl" // hmmmmmm

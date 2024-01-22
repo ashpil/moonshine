@@ -48,12 +48,15 @@ const TestingContext = struct {
         const output_buffer = try vk_allocator.createHostBuffer(&vc, [4]f32, extent.width * extent.height, .{ .transfer_dst_bit = true });
         errdefer output_buffer.destroy(&vc);
 
+        var textures = try TextureManager.create(&vc);
+        errdefer textures.destroy(&vc, allocator);
+
         return TestingContext {
             .vc = vc,
             .vk_allocator = vk_allocator,
             .commands = commands,
             .images = StorageImageManager {},
-            .textures = TextureManager {},
+            .textures = textures,
             .output_buffer = output_buffer,
         };
     }
@@ -66,7 +69,7 @@ const TestingContext = struct {
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
         // push our stuff
         const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
@@ -304,7 +307,7 @@ test "white sphere on white background is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, &tc.textures, allocator);
+        try world.createDescriptorSet(&tc.vc);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -337,7 +340,7 @@ test "white sphere on white background is white" {
         .background = background,
     };
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,
@@ -401,7 +404,7 @@ test "inside illuminating sphere is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, &tc.textures, allocator);
+        try world.createDescriptorSet(&tc.vc);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -434,7 +437,7 @@ test "inside illuminating sphere is white" {
         .background = background,
     };
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 1024,
             .max_bounces = 1024,
