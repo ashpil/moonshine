@@ -15,13 +15,13 @@ const F32x2 = engine.vector.Vec2(f32);
 // TODO: image destruction
 
 pub const TextureManager = struct {
-    const max_textures = 20 * 5; // TODO: think about this more, really really really should
+    const max_descriptors = 1024; // TODO: consider using VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT
     // must be kept in sync with shader
     pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .{
             .binding = 0,
             .descriptor_type = .sampled_image,
-            .descriptor_count = max_textures,
+            .descriptor_count = max_descriptors,
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     }, .{ .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true } }, "Textures");
@@ -77,10 +77,11 @@ pub const TextureManager = struct {
     // TODO: ensure this works after initialization
     pub fn uploadTexture(self: *TextureManager, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: Source, name: [:0]const u8) !Handle {
         const texture_index: Handle = @intCast(self.data.len);
+        std.debug.assert(texture_index < max_descriptors);
+
         var extent: vk.Extent2D = undefined;
         var bytes: []const u8 = undefined;
         var format: vk.Format = undefined;
-
         switch (source) {
             .raw => |raw_info| {
                 bytes = raw_info.bytes;
