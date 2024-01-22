@@ -6,7 +6,8 @@ const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const ImageManager = engine.core.ImageManager;
+const TextureManager = engine.core.Images.TextureManager;
+const StorageImageManager = engine.core.Images.StorageImageManager;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 
@@ -96,12 +97,15 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var image_manager = ImageManager {};
-    defer image_manager.destroy(&context, allocator);
+    var images = StorageImageManager {};
+    defer images.destroy(&context, allocator);
+
+    var textures = TextureManager {};
+    defer textures.destroy(&context, allocator);
 
     try logger.log("set up initial state");
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &image_manager, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &images, &textures, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
     defer scene.destroy(&context, allocator);
 
     try logger.log("load world");
@@ -117,7 +121,7 @@ pub fn main() !void {
     defer pipeline.destroy(&context);
 
     try logger.log("create pipeline");
-    
+
     const output_buffer = try vk_allocator.createHostBuffer(&context, [4]f32, scene.camera.sensors.items[0].extent.width * scene.camera.sensors.items[0].extent.height, .{ .transfer_dst_bit = true });
     defer output_buffer.destroy(&context);
 
@@ -126,12 +130,12 @@ pub fn main() !void {
         try commands.startRecording(&context);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&context, &image_manager, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&context, &images, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
         pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
-        
+
         for (0..config.spp) |sample_count| {
             // push our stuff
             const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)) });
@@ -154,7 +158,7 @@ pub fn main() !void {
                             .new_layout = .general,
                             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = image_manager.data.get(scene.camera.sensors.items[0].image).handle,
+                            .image = images.data.get(scene.camera.sensors.items[0].image).handle,
                             .subresource_range = .{
                                 .aspect_mask = .{ .color_bit = true },
                                 .base_mip_level = 0,
@@ -169,7 +173,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(&context, &image_manager, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&context, &images, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -191,9 +195,9 @@ pub fn main() !void {
                 .width = scene.camera.sensors.items[0].extent.width,
                 .height = scene.camera.sensors.items[0].extent.height,
                 .depth = 1,
-            },  
+            },
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, image_manager.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

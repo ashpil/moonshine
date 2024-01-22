@@ -9,7 +9,7 @@ const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
 
-const ImageManager = engine.core.ImageManager;
+const TextureManager = engine.core.Images.TextureManager;
 const DescriptorLayout = engine.core.descriptor.DescriptorLayout;
 
 const Swapchain = engine.displaysystem.Swapchain;
@@ -42,7 +42,7 @@ pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
 font_sampler: vk.Sampler,
-font_image: ImageManager,
+font_image: TextureManager,
 font_image_set: vk.DescriptorSet,
 
 vertex_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawVert),
@@ -211,8 +211,8 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        var image = ImageManager {};
-        _ = try image.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+        var image = TextureManager {};
+        _ = try image.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
             .raw = .{
                 .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],
                 .extent = tex_data[1],

@@ -6,7 +6,7 @@ const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const vk_helpers = engine.core.vk_helpers;
-const ImageManager = engine.core.ImageManager;
+const TextureManager = engine.core.Images.TextureManager;
 
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
@@ -67,10 +67,10 @@ fn luminance(rgb: [3]f32) f32 {
 }
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *ImageManager, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
+pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *TextureManager, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
     const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
     defer allocator.free(texture_name);
-    const image_index = try images.uploadTexture(vc, vk_allocator, allocator, commands, ImageManager.TextureSource {
+    const image_index = try images.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
         .raw = .{
             .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
             .extent = color_image.extent,

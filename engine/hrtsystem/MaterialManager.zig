@@ -8,7 +8,7 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
-const ImageManager = core.ImageManager;
+const TextureManager = core.Images.TextureManager;
 
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
@@ -25,8 +25,8 @@ pub const MaterialInfo = struct {
     const emissive_components = 3;
 
     // all materials have normal and emissive
-    normal: ImageManager.Handle,
-    emissive: ImageManager.Handle,
+    normal: TextureManager.Handle,
+    emissive: TextureManager.Handle,
 
     // then material-specific data
     variant: MaterialVariant,
@@ -34,8 +34,8 @@ pub const MaterialInfo = struct {
 
 pub const Material = extern struct {
     // all materials have normal and emissive
-    normal: ImageManager.Handle,
-    emissive: ImageManager.Handle,
+    normal: TextureManager.Handle,
+    emissive: TextureManager.Handle,
 
     // then each material has specific type which influences what buffer addr looks into
     type: MaterialType = .standard_pbr,
@@ -61,15 +61,15 @@ pub const StandardPBR = extern struct {
     const metalness_components = 1;
     const roughness_components = 1;
 
-    color: ImageManager.Handle,
-    metalness: ImageManager.Handle,
-    roughness: ImageManager.Handle,
+    color: TextureManager.Handle,
+    metalness: TextureManager.Handle,
+    roughness: TextureManager.Handle,
     ior: f32 = 1.5,
 };
 
 pub const Lambert = extern struct {
     const color_components = 3;
-    color: ImageManager.Handle,
+    color: TextureManager.Handle,
 };
 
 pub const Glass = extern struct {

@@ -5,8 +5,8 @@ const engine = @import("../engine.zig");
 const VulkanContext =  engine.core.VulkanContext;
 const VkAllocator =  engine.core.Allocator;
 const Commands =  engine.core.Commands;
+const StorageImageManager =  engine.core.Images.StorageImageManager;
 
-const ImageManager = @import("./ImageManager.zig");
 const vk_helpers = @import("./vk_helpers.zig");
 
 // must be kept in sync with shader
@@ -19,15 +19,15 @@ pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
     }
 }, null, "Sensor");
 
-image: ImageManager.Handle,
+image: StorageImageManager.Handle,
 descriptor_set: vk.DescriptorSet,
 extent: vk.Extent2D,
 sample_count: u32,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, vk_allocator: *VkAllocator, descriptor_layout: *const DescriptorLayout, images: *ImageManager, extent: vk.Extent2D) !Self {
-    const image = try images.appendRawImage(vc, vk_allocator, allocator, extent, .{ .storage_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat, "sensor");
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, vk_allocator: *VkAllocator, descriptor_layout: *const DescriptorLayout, images: *StorageImageManager, extent: vk.Extent2D) !Self {
+    const image = try images.appendStorageImage(vc, vk_allocator, allocator, extent, .{ .storage_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat, "sensor");
 
     const descriptor_set = try descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
@@ -60,7 +60,7 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, vk_allocat
 //   recordPrepareForCapture(...)
 //   ...
 //   recordPrepareForCopy(...)
-pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, images: *const ImageManager, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2) void {
+pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, images: *const StorageImageManager, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2) void {
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
@@ -82,7 +82,7 @@ pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, imag
     });
 }
 
-pub fn recordPrepareForCopy(self: *const Self, vc: *const VulkanContext, images: *const ImageManager, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
+pub fn recordPrepareForCopy(self: *const Self, vc: *const VulkanContext, images: *const StorageImageManager, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {

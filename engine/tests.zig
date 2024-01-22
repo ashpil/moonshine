@@ -6,7 +6,8 @@ const engine = @import("engine");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const ImageManager = engine.core.ImageManager;
+const StorageImageManager = engine.core.Images.StorageImageManager;
+const TextureManager = engine.core.Images.TextureManager;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 const World = engine.hrtsystem.World;
@@ -30,7 +31,8 @@ const TestingContext = struct {
     vc: VulkanContext,
     vk_allocator: VkAllocator,
     commands: Commands,
-    images: ImageManager,
+    textures: TextureManager,
+    images: StorageImageManager,
     output_buffer: VkAllocator.HostBuffer([4]f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D) !TestingContext {
@@ -39,9 +41,6 @@ const TestingContext = struct {
 
         var vk_allocator = try VkAllocator.create(&vc, allocator);
         errdefer vk_allocator.destroy(&vc, allocator);
-
-        var images = ImageManager {};
-        errdefer images.destroy(&vc, allocator);
 
         var commands = try Commands.create(&vc);
         errdefer commands.destroy(&vc);
@@ -53,7 +52,8 @@ const TestingContext = struct {
             .vc = vc,
             .vk_allocator = vk_allocator,
             .commands = commands,
-            .images = images,
+            .images = StorageImageManager {},
+            .textures = TextureManager {},
             .output_buffer = output_buffer,
         };
     }
@@ -273,13 +273,13 @@ test "white sphere on white background is white" {
     {
         const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
 
-        const normal_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const normal_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const albedo_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(1, 1, 1),
         }, "");
-        const emissive_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const emissive_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0, 0, 0),
         }, "");
         const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
@@ -304,7 +304,7 @@ test "white sphere on white background is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, &tc.images, allocator);
+        try world.createDescriptorSet(&tc.vc, &tc.textures, allocator);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -329,7 +329,7 @@ test "white sphere on white background is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.images, &tc.commands, image, "white");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.textures, &tc.commands, image, "white");
 
     var scene = Scene {
         .world = world,
@@ -370,13 +370,13 @@ test "inside illuminating sphere is white" {
     {
         const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
 
-        const normal_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const normal_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const albedo_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const emissive_texture = try tc.images.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, ImageManager.TextureSource {
+        const emissive_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
         const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
@@ -401,7 +401,7 @@ test "inside illuminating sphere is white" {
             },
         });
 
-        try world.createDescriptorSet(&tc.vc, &tc.images, allocator);
+        try world.createDescriptorSet(&tc.vc, &tc.textures, allocator);
     }
 
     var camera = try Camera.create(&tc.vc);
@@ -426,7 +426,7 @@ test "inside illuminating sphere is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.images, &tc.commands, image, "black");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.textures, &tc.commands, image, "black");
 
     var scene = Scene {
         .world = world,

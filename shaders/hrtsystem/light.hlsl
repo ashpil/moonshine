@@ -56,7 +56,7 @@ struct EnvMap : Light {
         
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        lightSample.radiance = dBackgroundTexture.Load(float3(discreteuv, 0));
+        lightSample.radiance = dBackgroundTexture[discreteuv];
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, lightSample.dirWs)), lightSample.dirWs, INFINITY)) {
@@ -78,7 +78,7 @@ struct EnvMap : Light {
 
         LightEval l;
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        l.radiance = dBackgroundTexture.Load(uint3(coords, 0));
+        l.radiance = dBackgroundTexture[coords];
         return l;
     }
 

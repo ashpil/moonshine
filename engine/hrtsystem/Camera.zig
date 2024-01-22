@@ -10,7 +10,7 @@ const Commands = core.Commands;
 
 const Sensor = core.Sensor;
 const DescriptorLayout = Sensor.DescriptorLayout;
-const ImageManager = core.ImageManager;
+const StorageImageManager = core.Images.StorageImageManager;
 
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
@@ -70,7 +70,7 @@ pub fn create(vc: *const VulkanContext) !Self {
 }
 
 pub const SensorHandle = u32;
-pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *ImageManager, extent: vk.Extent2D) !SensorHandle {
+pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *StorageImageManager, extent: vk.Extent2D) !SensorHandle {
     try self.sensors.append(allocator, try Sensor.create(vc, allocator, vk_allocator, &self.descriptor_layout, images, extent));
     return @intCast(self.sensors.items.len - 1);
 }
