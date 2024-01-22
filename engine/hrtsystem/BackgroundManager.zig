@@ -44,17 +44,16 @@ pub fn create(vc: *const VulkanContext) !Self {
     };
 }
 
-pub fn addDefaultBackground(self: Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !void {
-    const image = Rgba2D {
-        .ptr = .{
-            .{ 1.0, 1.0, 1.0, 1.0 },
-        },
+pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *TextureManager, commands: *Commands) !void {
+    var color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
+    const rgba = Rgba2D {
+        .ptr = @ptrCast(&color),
         .extent = .{
             .width = 1,
             .height = 1,
         }
     };
-    try self.addBackground(vc, vk_allocator, allocator, commands, image, "default");
+    try self.addBackground(vc, vk_allocator, allocator, images, commands, rgba, "default");
 }
 
 fn luminance(rgb: [3]f32) f32 {

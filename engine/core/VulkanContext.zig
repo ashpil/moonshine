@@ -366,6 +366,7 @@ const PhysicalDevice = struct {
             .runtime_descriptor_array = vk.TRUE,
             .descriptor_binding_partially_bound = vk.TRUE,
             .host_query_reset = vk.TRUE,
+            .descriptor_binding_update_unused_while_pending = vk.TRUE,
         };
 
         return try instance.createDevice(

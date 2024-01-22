@@ -24,7 +24,7 @@ pub const TextureManager = struct {
             .descriptor_count = max_textures,
             .stage_flags = .{ .raygen_bit_khr = true },
         }
-    }, .{ .{ .partially_bound_bit = true } }, "Textures");
+    }, .{ .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true } }, "Textures");
 
     pub const Source = union(enum) {
         pub const Raw = struct {
