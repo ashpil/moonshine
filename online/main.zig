@@ -104,7 +104,7 @@ pub fn main() !void {
     var sync_copier = try SyncCopier.create(&context, &vk_allocator, @sizeOf(vk.AccelerationStructureInstanceKHR));
     defer sync_copier.destroy(&context);
 
-    var images = StorageImageManager {};
+    var images = try StorageImageManager.create(&context);
     defer images.destroy(&context, allocator);
 
     var textures = try TextureManager.create(&context);
@@ -118,12 +118,12 @@ pub fn main() !void {
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, scene.camera.descriptor_layout, &commands);
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, images.descriptor_layout, &commands);
     defer object_picker.destroy(&context);
 
     var pipeline_constants = Pipeline.SpecConstants{};
     var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, pipeline_constants);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ textures.descriptor_layout, images.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -138,6 +138,7 @@ pub fn main() !void {
 
     // random state we need for gui
     var max_sample_count: u32 = 0; // unlimited
+    const active_background: u32 = 0;
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var rebuild_error = false;
@@ -281,7 +282,7 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, scene.camera.sensors.items[0].descriptor_set);
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, images.descriptor_set, scene.camera.sensors.items[0].image);
             const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
@@ -294,10 +295,10 @@ pub fn main() !void {
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ textures.descriptor_set, images.descriptor_set, scene.world.descriptor_set, scene.background.data.items[active_background].descriptor_set });
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count, scene.background.data.items[0].texture });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count, scene.background.data.items[active_background].texture, scene.camera.sensors.items[0].image });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff

@@ -39,8 +39,8 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     try gltf.parse(buffer);
 
     const camera_create_info = try Camera.Lens.fromGlb(gltf);
-    var camera = try Camera.create(vc);
-    errdefer camera.destroy(vc, allocator);
+    var camera = try Camera.create();
+    errdefer camera.destroy(allocator);
     _ = try camera.appendLens(allocator, camera_create_info);
     _ = try camera.appendSensor(vc, vk_allocator, allocator, images, extent);
 
@@ -65,5 +65,5 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.world.destroy(vc, allocator);
     self.background.destroy(vc, allocator);
-    self.camera.destroy(vc, allocator);
+    self.camera.destroy(allocator);
 }

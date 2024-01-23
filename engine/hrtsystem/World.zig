@@ -223,7 +223,9 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, vk_allocator: *VkAllocator, 
         defer img.deinit();
 
         const rs = try allocator.alloc(u8, img.pixels.len());
+        defer allocator.free(rs);
         const gs = try allocator.alloc(u8, img.pixels.len());
+        defer allocator.free(gs);
         for (img.pixels.rgb24, rs, gs) |pixel, *r, *g| {
             r.* = pixel.r;
             g.* = pixel.g;

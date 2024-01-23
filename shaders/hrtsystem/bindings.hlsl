@@ -32,9 +32,10 @@ struct Instance { // same required by vulkan on host side
 };
 
 [[vk::binding(0, 0)]] Texture2D dTextures[];
-[[vk::binding(0, 1)]] RaytracingAccelerationStructure dTLAS;
-[[vk::binding(1, 1)]] StructuredBuffer<Instance> dInstances;
-[[vk::binding(2, 1)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
+[[vk::binding(0, 1)]] RWTexture2D<float4> dStorageImages[];
+[[vk::binding(0, 2)]] RaytracingAccelerationStructure dTLAS;
+[[vk::binding(1, 2)]] StructuredBuffer<Instance> dInstances;
+[[vk::binding(2, 2)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 
 struct LightAliasData {
     uint instanceIndex;
@@ -49,10 +50,10 @@ struct AliasEntry {
     Data data;
 };
 
-[[vk::binding(3, 1)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
+[[vk::binding(3, 2)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
 
-[[vk::binding(4, 1)]] StructuredBuffer<Mesh> dMeshes;
-[[vk::binding(5, 1)]] StructuredBuffer<Geometry> dGeometries;
+[[vk::binding(4, 2)]] StructuredBuffer<Mesh> dMeshes;
+[[vk::binding(5, 2)]] StructuredBuffer<Geometry> dGeometries;
 
 // MATERIALS
 enum class MaterialType : uint {
@@ -73,15 +74,12 @@ struct MaterialVariantData {
     uint64_t materialAddress;
 };
 
-[[vk::binding(6, 1)]] SamplerState dTextureSampler;
-[[vk::binding(7, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
+[[vk::binding(6, 2)]] SamplerState dTextureSampler;
+[[vk::binding(7, 2)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
-[[vk::binding(0, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: backgroundTexture.height
-[[vk::binding(1, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: backgroundTexture.height * backgroundTexture.width
-
-// OUTPUT
-[[vk::binding(0, 3)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(0, 3)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: backgroundTexture.height
+[[vk::binding(1, 3)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: backgroundTexture.height * backgroundTexture.width
 
 // PUSH CONSTANTS
 #include "camera.hlsl" // hmmmmmm
@@ -89,6 +87,7 @@ struct PushConsts {
 	Camera camera;
 	uint sampleCount;
     uint backgroundTexture;
+    uint outputImage;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 

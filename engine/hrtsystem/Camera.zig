@@ -9,7 +9,6 @@ const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
 const Sensor = core.Sensor;
-const DescriptorLayout = Sensor.DescriptorLayout;
 const StorageImageManager = core.Images.StorageImageManager;
 
 const vector = @import("../vector.zig");
@@ -55,23 +54,19 @@ pub const Lens = extern struct {
 
 sensors: std.ArrayListUnmanaged(Sensor),
 lenses: std.ArrayListUnmanaged(Lens),
-descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext) !Self {
-    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{}); // todo: pass in max sets from somewhere
-    errdefer descriptor_layout.destroy(vc);
+pub fn create() !Self {
     return Self {
         .sensors = .{},
         .lenses = .{},
-        .descriptor_layout = descriptor_layout,
     };
 }
 
 pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *StorageImageManager, extent: vk.Extent2D) !SensorHandle {
-    try self.sensors.append(allocator, try Sensor.create(vc, allocator, vk_allocator, &self.descriptor_layout, images, extent));
+    try self.sensors.append(allocator, try Sensor.create(vc, allocator, vk_allocator, images, extent));
     return @intCast(self.sensors.items.len - 1);
 }
 
@@ -81,8 +76,7 @@ pub fn appendLens(self: *Self, allocator: std.mem.Allocator, lens: Lens) !LensHa
     return @intCast(self.lenses.items.len - 1);
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
     self.sensors.deinit(allocator);
     self.lenses.deinit(allocator);
-    self.descriptor_layout.destroy(vc);
 }

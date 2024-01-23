@@ -14,9 +14,9 @@ const Camera = @import("./Camera.zig");
 
 const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
 const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
-const SensorDescriptorLayout = core.Sensor.DescriptorLayout;
 const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
 const TextureDescriptorLayout = engine.core.Images.TextureManager.DescriptorLayout;
+const StorageImageDescriptorLayout = engine.core.Images.StorageImageManager.DescriptorLayout;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -192,15 +192,15 @@ pub const ObjectPickPipeline = Pipeline(
     &.{ "hrtsystem/input.hlsl" },
     &.{ 0, 0, 0 },
     struct {
+        StorageImageDescriptorLayout,
         InputDescriptorLayout,
         WorldDescriptorLayout,
-        SensorDescriptorLayout,
     },
     struct {},
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2) + @sizeOf(engine.core.Images.StorageImageManager.Handle),
             .stage_flags = .{ .raygen_bit_khr = true },
         },
     },
@@ -223,9 +223,9 @@ pub const StandardPipeline = Pipeline(
     &.{ 0, 0, 0, 0 },
     struct {
         TextureDescriptorLayout,
+        StorageImageDescriptorLayout,
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
-        SensorDescriptorLayout,
     },
     struct {
         @"0": extern struct {
@@ -238,7 +238,7 @@ pub const StandardPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(u32) + @sizeOf(engine.core.Images.TextureManager.Handle),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(u32) + @sizeOf(engine.core.Images.TextureManager.Handle) + @sizeOf(engine.core.Images.StorageImageManager.Handle),
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     },

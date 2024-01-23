@@ -10,10 +10,10 @@ struct Camera {
     float aperture;
     float focus_distance;
 
-    RayDesc generateRay(float2 uv, float2 rand) {
+    RayDesc generateRay(uint outputImage, float2 uv, float2 rand) {
         uint2 sensor_size;
-        dOutputImage.GetDimensions(sensor_size.x, sensor_size.y);
-        float aspect2 = float(sensor_size.x) / float(sensor_size.y);
+        dStorageImages[outputImage].GetDimensions(sensor_size.x, sensor_size.y);
+        float aspect = float(sensor_size.x) / float(sensor_size.y);
 
         float3 w = forward * -1.0f;
         float3 u = normalize(cross(up, w));
@@ -21,7 +21,7 @@ struct Camera {
 
         float h = tan(vfov / 2.0f);
         float viewport_height = 2.0 * h * focus_distance;
-        float viewport_width = aspect2 * viewport_height;
+        float viewport_width = aspect * viewport_height;
 
         float3 horizontal = u * viewport_width;
         float3 vertical = v * viewport_height;

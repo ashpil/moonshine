@@ -5,9 +5,9 @@ struct ClickData {
     float2 barycentrics;
 };
 
-[[vk::binding(0, 0)]] RWStructuredBuffer<ClickData> click_data;
-[[vk::binding(0, 1)]] RaytracingAccelerationStructure TLAS;
-[[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(0, 0)]] RWTexture2D<float4> dStorageImages[];
+[[vk::binding(0, 1)]] RWStructuredBuffer<ClickData> click_data;
+[[vk::binding(0, 2)]] RaytracingAccelerationStructure TLAS;
 
 #include "camera.hlsl"
 
@@ -18,6 +18,7 @@ struct [raypayload] Payload {
 struct PushConsts {
 	Camera camera;
 	float2 coords;
+    uint outputImage;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -30,7 +31,7 @@ void raygen() {
     // make camera have perfect focus
     camera.focus_distance = 1.0f;
     camera.aperture = 0.0f;
-    RayDesc ray = pushConsts.camera.generateRay(uv, float2(0, 0));
+    RayDesc ray = pushConsts.camera.generateRay(pushConsts.outputImage, uv, float2(0, 0));
 
     Payload payload;
     TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, payload);
