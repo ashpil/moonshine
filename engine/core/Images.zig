@@ -74,7 +74,6 @@ pub const TextureManager = struct {
 
     pub const Handle = u32;
 
-    // TODO: ensure this works after initialization
     pub fn uploadTexture(self: *TextureManager, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: Source, name: [:0]const u8) !Handle {
         const texture_index: Handle = @intCast(self.data.len);
         std.debug.assert(texture_index < max_descriptors);
