@@ -15,7 +15,7 @@ const Camera = @import("./Camera.zig");
 const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
 const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
 const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
-const TextureDescriptorLayout = engine.core.Images.TextureManager.DescriptorLayout;
+const TextureDescriptorLayout = engine.hrtsystem.MaterialManager.TextureManager.DescriptorLayout;
 const SensorDescriptorLayout = engine.core.Sensor.DescriptorLayout;
 
 const vector = engine.vector;

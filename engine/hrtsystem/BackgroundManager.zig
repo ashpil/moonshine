@@ -5,7 +5,7 @@ const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const Image = engine.core.Images.Image;
+const Image = engine.core.Image;
 
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 

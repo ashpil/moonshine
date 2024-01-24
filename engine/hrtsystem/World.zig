@@ -14,12 +14,12 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const vk_helpers = core.vk_helpers;
-const TextureManager = core.Images.TextureManager;
 
-const MaterialManager = @import("./MaterialManager.zig");
+const MaterialManager = engine.hrtsystem.MaterialManager;
+const TextureManager = MaterialManager.TextureManager;
 
-const MeshManager = @import("./MeshManager.zig");
-const Accel = @import("./Accel.zig");
+const MeshManager = engine.hrtsystem.MeshManager;
+const Accel = engine.hrtsystem.Accel;
 
 const vector = engine.vector;
 const Mat3x4 = vector.Mat3x4(f32);

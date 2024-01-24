@@ -8,7 +8,7 @@ const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 
-const Image = engine.core.Images.Image;
+const Image = engine.core.Image;
 const DescriptorLayout = engine.core.descriptor.DescriptorLayout;
 
 const Swapchain = engine.displaysystem.Swapchain;

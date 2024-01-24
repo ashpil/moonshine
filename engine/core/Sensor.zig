@@ -5,8 +5,8 @@ const engine = @import("../engine.zig");
 const VulkanContext =  engine.core.VulkanContext;
 const VkAllocator =  engine.core.Allocator;
 const Commands =  engine.core.Commands;
+const Image = engine.core.Image;
 
-const Image = engine.core.Images.Image;
 
 // must be kept in sync with shader
 pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{

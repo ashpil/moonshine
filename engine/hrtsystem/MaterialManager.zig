@@ -7,12 +7,12 @@ const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
+const Image = core.Image;
 const vk_helpers = core.vk_helpers;
-const TextureManager = core.Images.TextureManager;
 
-const vector = @import("../vector.zig");
-const F32x2 = vector.Vec2(f32);
-const F32x3 = vector.Vec3(f32);
+const F32x2 = engine.vector.Vec2(f32);
+const F32x3 = engine.vector.Vec3(f32);
+const F32x4 = engine.vector.Vec4(f32);
 
 // on the host side, materials are represented as a regular tagged union
 //
@@ -280,3 +280,159 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         @field(self.variant_buffers, field.name).buffer.destroy(vc);
     }
 }
+
+// TODO: individual texture destruction
+pub const TextureManager = struct {
+    const max_descriptors = 1024; // TODO: consider using VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT, reallocation
+    // must be kept in sync with shader
+    pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
+        .{
+            .binding = 0,
+            .descriptor_type = .sampled_image,
+            .descriptor_count = max_descriptors,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        }
+    }, .{ .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true } }, "Textures");
+
+    pub const Source = union(enum) {
+        pub const Raw = struct {
+            bytes: []const u8,
+            extent: vk.Extent2D,
+            format: vk.Format,
+        };
+
+        raw: Raw,
+        f32x3: F32x3,
+        f32x2: F32x2,
+        f32x1: f32,
+    };
+
+    comptime {
+        // so that we can do some hacky stuff below like
+        // reinterpret the f32x3 field as F32x4
+        // TODO: even this is not quite right
+        std.debug.assert(@sizeOf(Source) >= @sizeOf(F32x4));
+    }
+
+    data: std.MultiArrayList(Image),
+    descriptor_layout: DescriptorLayout,
+    descriptor_set: vk.DescriptorSet,
+
+    pub fn create(vc: *const VulkanContext) !TextureManager {
+        const descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+        const descriptor_set = try descriptor_layout.allocate_set(vc, .{
+            vk.WriteDescriptorSet {
+                .dst_set = undefined,
+                .dst_binding = 0,
+                .dst_array_element = 0,
+                .descriptor_count = 0,
+                .descriptor_type = .sampled_image,
+                .p_image_info = undefined,
+                .p_buffer_info = undefined,
+                .p_texel_buffer_view = undefined,
+            }
+        });
+        try vk_helpers.setDebugName(vc, descriptor_set, "textures");
+        return TextureManager {
+            .data = .{},
+            .descriptor_layout = descriptor_layout,
+            .descriptor_set = descriptor_set,
+        };
+    }
+
+    pub const Handle = u32;
+
+    pub fn uploadTexture(self: *TextureManager, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: Source, name: [:0]const u8) !TextureManager.Handle {
+        const texture_index: TextureManager.Handle = @intCast(self.data.len);
+        std.debug.assert(texture_index < max_descriptors);
+
+        var extent: vk.Extent2D = undefined;
+        var bytes: []const u8 = undefined;
+        var format: vk.Format = undefined;
+        switch (source) {
+            .raw => |raw_info| {
+                bytes = raw_info.bytes;
+                extent = raw_info.extent;
+                format = raw_info.format;
+            },
+            .f32x3 => {
+                bytes = std.mem.asBytes(&source.f32x3);
+                bytes.len = @sizeOf(F32x4); // we store this as f32x4
+                extent = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                format = .r32g32b32a32_sfloat;
+            },
+            .f32x2 => {
+                bytes = std.mem.asBytes(&source.f32x2);
+                extent = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                format = .r32g32_sfloat;
+            },
+            .f32x1 => {
+                bytes = std.mem.asBytes(&source.f32x1);
+                extent = vk.Extent2D {
+                    .width = 1,
+                    .height = 1,
+                };
+                format = .r32_sfloat;
+            },
+        }
+        const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, name);
+        try self.data.append(allocator, image);
+
+        try commands.uploadDataToImage(vc, vk_allocator, image.handle, bytes, extent, .shader_read_only_optimal);
+
+        vc.device.updateDescriptorSets(1, @ptrCast(&.{
+            vk.WriteDescriptorSet {
+                .dst_set = self.descriptor_set,
+                .dst_binding = 0,
+                .dst_array_element = texture_index,
+                .descriptor_count = 1,
+                .descriptor_type = .sampled_image,
+                .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
+                    .image_layout = .shader_read_only_optimal,
+                    .image_view = image.view,
+                    .sampler = .null_handle,
+                }),
+                .p_buffer_info = undefined,
+                .p_texel_buffer_view = undefined,
+            },
+        }), 0, null);
+
+        return texture_index;
+    }
+
+    pub fn destroy(self: *TextureManager, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+        for (0..self.data.len) |i| {
+            const image = self.data.get(i);
+            image.destroy(vc);
+        }
+        self.data.deinit(allocator);
+        self.descriptor_layout.destroy(vc);
+    }
+
+    pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
+        return try vc.device.createSampler(&.{
+            .flags = .{},
+            .mag_filter = .nearest,
+            .min_filter = .nearest,
+            .mipmap_mode = .nearest,
+            .address_mode_u = .repeat,
+            .address_mode_v = .repeat,
+            .address_mode_w = .repeat,
+            .mip_lod_bias = 0.0,
+            .anisotropy_enable = vk.FALSE,
+            .max_anisotropy = 0.0,
+            .compare_enable = vk.FALSE,
+            .compare_op = .always,
+            .min_lod = 0.0,
+            .max_lod = 0.0,
+            .border_color = .float_opaque_white,
+            .unnormalized_coordinates = vk.FALSE,
+        }, null);
+    }
+};
