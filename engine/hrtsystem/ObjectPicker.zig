@@ -12,8 +12,7 @@ const hrtsystem = engine.hrtsystem;
 const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
 const descriptor = core.descriptor;
 const WorldDescriptorLayout = hrtsystem.World.DescriptorLayout;
-const StorageImageManager = core.Images.StorageImageManager;
-const StorageImageDescriptorLayout = StorageImageManager.DescriptorLayout;
+const SensorDescriptorLayout = core.Sensor.DescriptorLayout;
 const Camera = hrtsystem.Camera;
 
 // must be kept in sync with shader
@@ -67,7 +66,7 @@ command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, sensor_layout: StorageImageDescriptorLayout, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, sensor_layout: SensorDescriptorLayout, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
 
     const descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
@@ -89,7 +88,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         },
     });
 
-    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ sensor_layout, descriptor_layout, world_layout }, .{});
+    const pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, world_layout, sensor_layout }, .{});
 
     const command_pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
@@ -121,15 +120,15 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet, sensor_descriptor_set: vk.DescriptorSet, sensor_image: StorageImageManager.Handle) !?ClickedObject {
+pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet, sensor_descriptor_set: vk.DescriptorSet) !?ClickedObject {
     // begin
     try vc.device.beginCommandBuffer(self.command_buffer, &.{ .flags = .{} });
 
     // bind pipeline + sets
     vc.device.cmdBindPipeline(self.command_buffer, .ray_tracing_khr, self.pipeline.handle);
-    vc.device.cmdBindDescriptorSets(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[_]vk.DescriptorSet { sensor_descriptor_set, self.descriptor_set, tlas_descriptor_set }, 0, undefined);
+    vc.device.cmdBindDescriptorSets(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[_]vk.DescriptorSet { self.descriptor_set, tlas_descriptor_set, sensor_descriptor_set }, 0, undefined);
 
-    const bytes = std.mem.asBytes(&.{ camera.lenses.items[0], normalized_coords, sensor_image });
+    const bytes = std.mem.asBytes(&.{ camera.lenses.items[0], normalized_coords });
     vc.device.cmdPushConstants(self.command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
     // trace rays

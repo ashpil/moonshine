@@ -26,17 +26,14 @@ interface Light {
 };
 
 struct EnvMap : Light {
-    uint backgroundTexture;
-
-    static EnvMap create(uint backgroundTexture) {
+    static EnvMap create() {
         EnvMap map;
-        map.backgroundTexture = backgroundTexture;
         return map;
     }
 
     float sample2D(inout float2 uv, out uint2 result) {
         uint2 size;
-        dTextures[backgroundTexture].GetDimensions(size.x, size.y);
+        dBackgroundTexture.GetDimensions(size.x, size.y);
 
         float pdf_y = sampleAlias<float, AliasEntry<float> >(dBackgroundMarginalAlias, size.y, 0, uv.y, result.y);
         float pdf_x = sampleAlias<float, AliasEntry<float> >(dBackgroundConditionalAlias, size.x, result.y * size.x, uv.x, result.x);
@@ -46,7 +43,7 @@ struct EnvMap : Light {
 
     LightSample sample(float3 positionWs, float3 normalWs, float2 rand) {
         uint2 size;
-        dTextures[backgroundTexture].GetDimensions(size.x, size.y);
+        dBackgroundTexture.GetDimensions(size.x, size.y);
 
         uint2 discreteuv;
         float pdf2d = sample2D(rand, discreteuv);
@@ -56,10 +53,10 @@ struct EnvMap : Light {
         float theta = uv.y * PI;
 
         float sinTheta = sin(theta);
-        
+
         LightSample lightSample;
         lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        lightSample.radiance = dTextures[backgroundTexture][discreteuv].rgb;
+        lightSample.radiance = dBackgroundTexture[discreteuv];
         lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, lightSample.dirWs)), lightSample.dirWs, INFINITY)) {
@@ -74,14 +71,14 @@ struct EnvMap : Light {
         float2 uv = phiTheta / float2(2 * PI, PI);
 
         uint2 size;
-        dTextures[backgroundTexture].GetDimensions(size.x, size.y);
+        dBackgroundTexture.GetDimensions(size.x, size.y);
         uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
         float pdf2d = dBackgroundMarginalAlias[coords.y].data * dBackgroundConditionalAlias[coords.y * size.x + coords.x].data * float(size.x * size.y);
         float sinTheta = sin(phiTheta.y);
 
         LightEval l;
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
-        l.radiance = dTextures[backgroundTexture][coords].rgb;
+        l.radiance = dBackgroundTexture[coords];
         return l;
     }
 
@@ -97,7 +94,7 @@ struct EnvMap : Light {
     float3 incomingRadiance(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
-        return dTextures[backgroundTexture].SampleLevel(dTextureSampler, uv, 0).rgb;
+        return dBackgroundTexture.SampleLevel(dTextureSampler, uv, 0);
     }
 };
 

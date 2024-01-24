@@ -9,7 +9,8 @@ const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
 const Sensor = core.Sensor;
-const StorageImageManager = core.Images.StorageImageManager;
+const DescriptorLayout = Sensor.DescriptorLayout;
+const ImageManager = core.ImageManager;
 
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
@@ -29,7 +30,7 @@ pub const Lens = extern struct {
         const gltf_camera_node = for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera| break .{ gltf.data.cameras.items[camera], node };
         } else return error.NoCameraInGlb;
-        
+
         const gltf_camera = gltf_camera_node[0];
         const transform = blk: {
             const mat = Gltf.getGlobalTransform(&gltf.data, gltf_camera_node[1]);
@@ -54,19 +55,23 @@ pub const Lens = extern struct {
 
 sensors: std.ArrayListUnmanaged(Sensor),
 lenses: std.ArrayListUnmanaged(Lens),
+descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn create() !Self {
+pub fn create(vc: *const VulkanContext) !Self {
+    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{}); // todo: pass in max sets from somewhere
+    errdefer descriptor_layout.destroy(vc);
     return Self {
         .sensors = .{},
         .lenses = .{},
+        .descriptor_layout = descriptor_layout,
     };
 }
 
 pub const SensorHandle = u32;
-pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *StorageImageManager, extent: vk.Extent2D) !SensorHandle {
-    try self.sensors.append(allocator, try Sensor.create(vc, allocator, vk_allocator, images, extent));
+pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
+    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, &self.descriptor_layout, extent));
     return @intCast(self.sensors.items.len - 1);
 }
 
@@ -76,7 +81,11 @@ pub fn appendLens(self: *Self, allocator: std.mem.Allocator, lens: Lens) !LensHa
     return @intCast(self.lenses.items.len - 1);
 }
 
-pub fn destroy(self: *Self, allocator: std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    for (self.sensors.items) |*sensor| {
+        sensor.destroy(vc);
+    }
     self.sensors.deinit(allocator);
     self.lenses.deinit(allocator);
+    self.descriptor_layout.destroy(vc);
 }

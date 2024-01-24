@@ -86,21 +86,19 @@ float3 estimateDirect(Frame frame, Light light, Material material, float3 outgoi
 }
 
 interface Integrator {
-    float3 incomingRadiance(RayDesc ray, inout Rng rng); // TODO: this should take a scene and not rely on any global descriptor state
+    float3 incomingRadiance(RayDesc ray, inout Rng rng); // TODO: this should take a scene and not rely on any global descriptor state if this is possible with HLSL
 };
 
 struct PathTracingIntegrator : Integrator {
     uint max_bounces;
     uint env_samples_per_bounce;
     uint mesh_samples_per_bounce;
-    uint background_texture;
 
-    static PathTracingIntegrator create(uint max_bounces, uint env_samples_per_bounce, uint mesh_samples_per_bounce, uint background_texture) {
+    static PathTracingIntegrator create(uint max_bounces, uint env_samples_per_bounce, uint mesh_samples_per_bounce) {
         PathTracingIntegrator integrator;
         integrator.max_bounces = max_bounces;
         integrator.env_samples_per_bounce = env_samples_per_bounce;
         integrator.mesh_samples_per_bounce = mesh_samples_per_bounce;
-        integrator.background_texture = background_texture;
         return integrator;
     }
 
@@ -168,7 +166,7 @@ struct PathTracingIntegrator : Integrator {
                 // accumulate direct light samples from env map
                 for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    accumulatedColor += throughput * estimateDirectMISLight(shadingFrame, EnvMap::create(background_texture), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
+                    accumulatedColor += throughput * estimateDirectMISLight(shadingFrame, EnvMap::create(), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
                 }
 
                 // accumulate direct light samples from emissive meshes
@@ -187,7 +185,7 @@ struct PathTracingIntegrator : Integrator {
                 if (rng.getFloat() > pSurvive) return accumulatedColor;
                 throughput /= pSurvive;
             }
-            
+
             // sample direction for next bounce
             MaterialSample sample = material.sample(outgoingDirSs, float2(rng.getFloat(), rng.getFloat()));
             if (sample.pdf == 0.0) return accumulatedColor;
@@ -206,10 +204,10 @@ struct PathTracingIntegrator : Integrator {
         // handle env map
         if (env_samples_per_bounce == 0 || bounceCount == 0 || isLastMaterialDelta) {
             // add background color if it isn't explicitly sampled or this is a primary ray
-            accumulatedColor += throughput * EnvMap::create(background_texture).incomingRadiance(ray.Direction);
+            accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction);
         } else {
             // MIS env map if it is sampled at later bounces
-            LightEval l = EnvMap::create(background_texture).evalNoTrace(ray.Direction);
+            LightEval l = EnvMap::create().evalNoTrace(ray.Direction);
 
             if (l.pdf > 0.0) {
                 float weight = powerHeuristic(1, lastMaterialPdf, env_samples_per_bounce, l.pdf);
@@ -226,13 +224,11 @@ struct PathTracingIntegrator : Integrator {
 struct DirectLightIntegrator : Integrator {
     uint env_samples_per_bounce;
     uint mesh_samples_per_bounce;
-    uint background_texture;
 
-    static DirectLightIntegrator create(uint env_samples_per_bounce, uint mesh_samples_per_bounce, uint background_texture) {
+    static DirectLightIntegrator create(uint env_samples_per_bounce, uint mesh_samples_per_bounce) {
         DirectLightIntegrator integrator;
         integrator.env_samples_per_bounce = env_samples_per_bounce;
         integrator.mesh_samples_per_bounce = mesh_samples_per_bounce;
-        integrator.background_texture = background_texture;
         return integrator;
     }
 
@@ -271,7 +267,7 @@ struct DirectLightIntegrator : Integrator {
             // accumulate direct light samples from env map
             for (uint directCount = 0; directCount < env_samples_per_bounce; directCount++) {
                 float2 rand = float2(rng.getFloat(), rng.getFloat());
-                accumulatedColor += estimateDirectMISLight(shadingFrame, EnvMap::create(background_texture), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
+                accumulatedColor += estimateDirectMISLight(shadingFrame, EnvMap::create(), material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, env_samples_per_bounce) / env_samples_per_bounce;
             }
 
             // accumulate direct light samples from emissive meshes
@@ -281,7 +277,7 @@ struct DirectLightIntegrator : Integrator {
             }
         } else {
             // add background color
-            accumulatedColor += EnvMap::create(background_texture).incomingRadiance(initialRay.Direction);
+            accumulatedColor += EnvMap::create().incomingRadiance(initialRay.Direction);
         }
 
         return accumulatedColor;

@@ -16,7 +16,7 @@ const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
 const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
 const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
 const TextureDescriptorLayout = engine.core.Images.TextureManager.DescriptorLayout;
-const StorageImageDescriptorLayout = engine.core.Images.StorageImageManager.DescriptorLayout;
+const SensorDescriptorLayout = engine.core.Sensor.DescriptorLayout;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -192,15 +192,15 @@ pub const ObjectPickPipeline = Pipeline(
     &.{ "hrtsystem/input.hlsl" },
     &.{ 0, 0, 0 },
     struct {
-        StorageImageDescriptorLayout,
         InputDescriptorLayout,
         WorldDescriptorLayout,
+        SensorDescriptorLayout,
     },
     struct {},
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2) + @sizeOf(engine.core.Images.StorageImageManager.Handle),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2),
             .stage_flags = .{ .raygen_bit_khr = true },
         },
     },
@@ -223,9 +223,9 @@ pub const StandardPipeline = Pipeline(
     &.{ 0, 0, 0, 0 },
     struct {
         TextureDescriptorLayout,
-        StorageImageDescriptorLayout,
         WorldDescriptorLayout,
         BackgroundDescriptorLayout,
+        SensorDescriptorLayout,
     },
     struct {
         @"0": extern struct {
@@ -238,7 +238,7 @@ pub const StandardPipeline = Pipeline(
     &[_]vk.PushConstantRange {
         .{
             .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(u32) + @sizeOf(engine.core.Images.TextureManager.Handle) + @sizeOf(engine.core.Images.StorageImageManager.Handle),
+            .size = @sizeOf(Camera.Lens) + @sizeOf(u32),
             .stage_flags = .{ .raygen_bit_khr = true },
         }
     },
@@ -324,7 +324,7 @@ const ShaderBindingTable = struct {
 
         const handle_size_aligned = std.mem.alignForward(u32, rt_properties.shader_group_handle_size, rt_properties.shader_group_handle_alignment);
         const group_count = raygen_entry_count + miss_entry_count + hit_entry_count + callable_entry_count;
-        
+
         const raygen_index = 0;
         const miss_index = std.mem.alignForward(u32, raygen_index + raygen_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
         const hit_index = std.mem.alignForward(u32, miss_index + miss_entry_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
@@ -340,12 +340,12 @@ const ShaderBindingTable = struct {
         const miss_size = handle_size_aligned * miss_entry_count;
         const hit_size = handle_size_aligned * hit_entry_count;
         const callable_size = handle_size_aligned * callable_entry_count;
-        
+
         // must align up to shader_group_base_alignment
         std.mem.copyBackwards(u8, sbt.data[callable_index..callable_index + callable_size], sbt.data[raygen_size + miss_size + hit_size..raygen_size + miss_size + hit_size + callable_size]);
         std.mem.copyBackwards(u8, sbt.data[hit_index..hit_index + hit_size], sbt.data[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
         std.mem.copyBackwards(u8, sbt.data[miss_index..miss_index + miss_size], sbt.data[raygen_size..raygen_size + miss_size]);
-        
+
         const handle = try vk_allocator.createDeviceBuffer(vc, allocator, u8, sbt_size, .{ .shader_binding_table_bit_khr = true, .transfer_dst_bit = true, .shader_device_address_bit = true });
         errdefer handle.destroy(vc);
 
@@ -396,7 +396,7 @@ const ShaderBindingTable = struct {
 
         const handle_size_aligned = self.handle_size_aligned;
         const group_count = self.raygen_count + self.miss_count + self.hit_count + self.callable_count;
-        
+
         const raygen_index = 0;
         const miss_index = std.mem.alignForward(u32, raygen_index + self.raygen_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
         const hit_index = std.mem.alignForward(u32, miss_index + self.miss_count * handle_size_aligned, rt_properties.shader_group_base_alignment);
@@ -412,12 +412,12 @@ const ShaderBindingTable = struct {
         const miss_size = handle_size_aligned * self.miss_count;
         const hit_size = handle_size_aligned * self.hit_count;
         const callable_size = handle_size_aligned * self.callable_count;
-        
+
         // must align up to shader_group_base_alignment
         std.mem.copyBackwards(u8, sbt.data[callable_index..callable_index + callable_size], sbt.data[raygen_size + miss_size + hit_size..raygen_size + miss_size + hit_size + callable_size]);
         std.mem.copyBackwards(u8, sbt.data[hit_index..hit_index + hit_size], sbt.data[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
         std.mem.copyBackwards(u8, sbt.data[miss_index..miss_index + miss_size], sbt.data[raygen_size..raygen_size + miss_size]);
-        
+
         try cmd.startRecording(vc);
         cmd.recordUploadBuffer(u8, vc, self.handle, sbt);
         try cmd.submitAndIdleUntilDone(vc);
@@ -428,7 +428,7 @@ const ShaderBindingTable = struct {
             .device_address = if (self.raygen_count != 0) self.raygen_address else 0,
             .stride = self.handle_size_aligned,
             .size = self.handle_size_aligned * self.raygen_count,
-        }; 
+        };
     }
 
     pub fn getMissSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
@@ -436,7 +436,7 @@ const ShaderBindingTable = struct {
             .device_address = if (self.miss_count != 0) self.miss_address else 0,
             .stride = self.handle_size_aligned,
             .size = self.handle_size_aligned * self.miss_count,
-        }; 
+        };
     }
 
     pub fn getHitSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
@@ -444,7 +444,7 @@ const ShaderBindingTable = struct {
             .device_address = if (self.hit_count != 0) self.hit_address else 0,
             .stride = self.handle_size_aligned,
             .size = self.handle_size_aligned * self.hit_count,
-        }; 
+        };
     }
 
     pub fn getCallableSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {
@@ -452,7 +452,7 @@ const ShaderBindingTable = struct {
             .device_address = if (self.callable_count != 0) self.callable_address else 0,
             .stride = self.handle_size_aligned,
             .size = self.handle_size_aligned * self.callable_count,
-        }; 
+        };
     }
 
     fn destroy(self: *ShaderBindingTable, vc: *const VulkanContext) void {

@@ -31,8 +31,6 @@ const TestingContext = struct {
     vc: VulkanContext,
     vk_allocator: VkAllocator,
     commands: Commands,
-    textures: TextureManager,
-    images: StorageImageManager,
     output_buffer: VkAllocator.HostBuffer([4]f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D) !TestingContext {
@@ -48,18 +46,10 @@ const TestingContext = struct {
         const output_buffer = try vk_allocator.createHostBuffer(&vc, [4]f32, extent.width * extent.height, .{ .transfer_dst_bit = true });
         errdefer output_buffer.destroy(&vc);
 
-        var textures = try TextureManager.create(&vc);
-        errdefer textures.destroy(&vc, allocator);
-
-        var images = try StorageImageManager.create(&vc);
-        errdefer images.destroy(&vc, allocator);
-
         return TestingContext {
             .vc = vc,
             .vk_allocator = vk_allocator,
             .commands = commands,
-            .images = images,
-            .textures = textures,
             .output_buffer = output_buffer,
         };
     }
@@ -68,21 +58,21 @@ const TestingContext = struct {
         try self.commands.startRecording(&self.vc);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, &self.images, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { self.textures.descriptor_set, self.images.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set });
+        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count, scene.background.data.items[0].texture, scene.camera.sensors.items[0].image });
+        const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
         self.vc.device.cmdPushConstants(self.commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
         // trace our stuff
         pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensors.items[0].extent);
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(&self.vc, &self.images, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -106,7 +96,7 @@ const TestingContext = struct {
                 .depth = 1,
             },
         };
-        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, self.images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
+        self.vc.device.cmdCopyImageToBuffer(self.commands.buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, self.output_buffer.handle, 1, @ptrCast(&copy));
 
         try self.commands.submitAndIdleUntilDone(&self.vc);
     }
@@ -114,7 +104,6 @@ const TestingContext = struct {
     fn destroy(self: *TestingContext, allocator: std.mem.Allocator) void {
         self.output_buffer.destroy(&self.vc);
         self.commands.destroy(&self.vc);
-        self.images.destroy(&self.vc, allocator);
         self.vk_allocator.destroy(&self.vc, allocator);
         self.vc.destroy();
     }
@@ -277,18 +266,18 @@ test "white sphere on white background is white" {
 
     // add sphere to world
     {
-        const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
+        const mesh_handle = try world.meshes.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
 
-        const normal_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const normal_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const albedo_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(1, 1, 1),
         }, "");
-        const emissive_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const emissive_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0, 0, 0),
         }, "");
-        const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
+        const material_handle = try world.materials.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
             .normal = normal_texture,
             .emissive = emissive_texture,
             .variant = MaterialManager.MaterialVariant {
@@ -298,7 +287,7 @@ test "white sphere on white background is white" {
             }
         });
 
-        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.mesh_manager, Accel.Instance {
+        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .geometries = &[1]Accel.Geometry {
@@ -313,7 +302,7 @@ test "white sphere on white background is white" {
         try world.createDescriptorSet(&tc.vc);
     }
 
-    var camera = try Camera.create();
+    var camera = try Camera.create(&tc.vc);
     _ = try camera.appendLens(allocator, Camera.Lens {
         .origin = F32x3.new(-3, 0, 0),
         .forward = F32x3.new(1, 0, 0),
@@ -322,8 +311,8 @@ test "white sphere on white background is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, &tc.images, extent);
-    defer camera.destroy(allocator);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);
@@ -335,7 +324,7 @@ test "white sphere on white background is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.textures, &tc.commands, image, "white");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, image, "white");
 
     var scene = Scene {
         .world = world,
@@ -343,7 +332,7 @@ test "white sphere on white background is white" {
         .background = background,
     };
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.textures.descriptor_layout, tc.images.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 512,
             .max_bounces = 1024,
@@ -374,18 +363,18 @@ test "inside illuminating sphere is white" {
 
     // add sphere to world
     {
-        const mesh_handle = try world.mesh_manager.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
+        const mesh_handle = try world.meshes.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
 
-        const normal_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const normal_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const albedo_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const emissive_texture = try tc.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const emissive_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const material_handle = try world.material_manager.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
+        const material_handle = try world.materials.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
             .normal = normal_texture,
             .emissive = emissive_texture,
             .variant = MaterialManager.MaterialVariant {
@@ -395,7 +384,7 @@ test "inside illuminating sphere is white" {
             }
         });
 
-        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.mesh_manager, Accel.Instance {
+        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .geometries = &[1]Accel.Geometry {
@@ -410,7 +399,7 @@ test "inside illuminating sphere is white" {
         try world.createDescriptorSet(&tc.vc);
     }
 
-    var camera = try Camera.create();
+    var camera = try Camera.create(&tc.vc);
     _ = try camera.appendLens(allocator, Camera.Lens {
         .origin = F32x3.new(0, 0, 0),
         .forward = F32x3.new(1, 0, 0),
@@ -419,8 +408,8 @@ test "inside illuminating sphere is white" {
         .aperture = 0,
         .focus_distance = 1,
     });
-    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, &tc.images, extent);
-    defer camera.destroy(allocator);
+    _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
+    defer camera.destroy(&tc.vc, allocator);
 
     var background = try Background.create(&tc.vc);
     defer background.destroy(&tc.vc, allocator);
@@ -432,7 +421,7 @@ test "inside illuminating sphere is white" {
             .height = 1,
         }
     };
-    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.textures, &tc.commands, image, "black");
+    try background.addBackground(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, image, "black");
 
     var scene = Scene {
         .world = world,
@@ -440,7 +429,7 @@ test "inside illuminating sphere is white" {
         .background = background,
     };
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ tc.textures.descriptor_layout, tc.images.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 1024,
             .max_bounces = 1024,

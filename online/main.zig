@@ -10,7 +10,6 @@ const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
 const SyncCopier = core.SyncCopier;
 const TextureManager = core.Images.TextureManager;
-const StorageImageManager = core.Images.StorageImageManager;
 
 const hrtsystem = engine.hrtsystem;
 const Camera = hrtsystem.Camera;
@@ -104,26 +103,20 @@ pub fn main() !void {
     var sync_copier = try SyncCopier.create(&context, &vk_allocator, @sizeOf(vk.AccelerationStructureInstanceKHR));
     defer sync_copier.destroy(&context);
 
-    var images = try StorageImageManager.create(&context);
-    defer images.destroy(&context, allocator);
-
-    var textures = try TextureManager.create(&context);
-    defer textures.destroy(&context, allocator);
-
     std.log.info("Set up initial state!", .{});
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &images, &textures, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, true);
 
     defer scene.destroy(&context, allocator);
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, images.descriptor_layout, &commands);
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, scene.camera.descriptor_layout, &commands);
     defer object_picker.destroy(&context);
 
     var pipeline_constants = Pipeline.SpecConstants{};
     var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ textures.descriptor_layout, images.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout }, pipeline_constants);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -138,7 +131,6 @@ pub fn main() !void {
 
     // random state we need for gui
     var max_sample_count: u32 = 0; // unlimited
-    const active_background: u32 = 0;
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var rebuild_error = false;
@@ -229,15 +221,15 @@ pub fn main() !void {
                 const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device, object.instance_index);
                 const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
                 var geometry = try sync_copier.copyBufferItem(&context, Accel.Geometry, scene.world.accel.geometries, accel_geometry_index);
-                const material = try sync_copier.copyBufferItem(&context, MaterialManager.Material, scene.world.material_manager.materials, geometry.material);
+                const material = try sync_copier.copyBufferItem(&context, MaterialManager.Material, scene.world.materials.materials, geometry.material);
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
-                if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.material_manager.material_count) {
+                if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
                     scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
                     scene.camera.sensors.items[0].clear();
                 }
                 try imgui.textFmt("Sampled: {}", .{geometry.sampled});
                 imgui.separatorText("mesh");
-                const mesh = scene.world.mesh_manager.meshes.get(geometry.mesh);
+                const mesh = scene.world.meshes.meshes.get(geometry.mesh);
                 try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
                 try imgui.textFmt("Index count: {d}", .{mesh.index_count});
                 try imgui.textFmt("Has texcoords: {}", .{!mesh.texcoord_buffer.is_null()});
@@ -249,12 +241,12 @@ pub fn main() !void {
                 inline for (@typeInfo(MaterialManager.MaterialType).Enum.fields, @typeInfo(MaterialManager.MaterialVariant).Union.fields) |enum_field, union_field| {
                     const VariantType = union_field.type;
                     if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
-                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.material_manager.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
-                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.material_manager.variant_buffers, enum_field.name).buffer, material_idx);
+                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
+                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer, material_idx);
                         inline for (@typeInfo(VariantType).Struct.fields) |struct_field| {
                             switch (struct_field.type) {
                                 f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
-                                    scene.world.material_manager.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
+                                    scene.world.materials.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
                                     scene.camera.sensors.items[0].clear();
                                 },
                                 u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
@@ -282,8 +274,8 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, images.descriptor_set, scene.camera.sensors.items[0].image);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, scene.camera.sensors.items[0].descriptor_set);
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
@@ -291,21 +283,21 @@ pub fn main() !void {
         if (max_sample_count != 0 and scene.camera.sensors.items[0].sample_count > max_sample_count) scene.camera.sensors.items[0].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[0].sample_count < max_sample_count) {
             // prepare some stuff
-            scene.camera.sensors.items[0].recordPrepareForCapture(&context, &images, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
+            scene.camera.sensors.items[0].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet{ textures.descriptor_set, images.descriptor_set, scene.world.descriptor_set, scene.background.data.items[active_background].descriptor_set });
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count, scene.background.data.items[active_background].texture, scene.camera.sensors.items[0].image });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
             context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace some stuff
             pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensors.items[0].extent);
 
             // copy some stuff
-            scene.camera.sensors.items[0].recordPrepareForCopy(&context, &images, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[0].recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to
@@ -363,7 +355,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{

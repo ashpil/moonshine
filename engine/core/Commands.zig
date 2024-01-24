@@ -29,6 +29,8 @@ pub fn create(vc: *const VulkanContext) !Self {
         .command_buffer_count = 1,
     }, @ptrCast(&buffer));
 
+    try vk_helpers.setDebugName(vc, buffer, "commands");
+
     return Self {
         .pool = pool,
         .buffer = buffer,

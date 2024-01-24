@@ -86,9 +86,9 @@ pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
     },
 }, .{ .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, }, "World");
 
-material_manager: MaterialManager,
+materials: MaterialManager,
 
-mesh_manager: MeshManager,
+meshes: MeshManager,
 accel: Accel,
 
 sampler: vk.Sampler,
@@ -351,7 +351,7 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.mesh_manager.addresses_buffer.handle,
+                .buffer = self.meshes.addresses_buffer.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -393,7 +393,7 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.material_manager.materials.handle,
+                .buffer = self.materials.materials.handle,
                 .offset = 0,
                 .range = vk.WHOLE_SIZE,
             }),
@@ -409,22 +409,28 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, image_manager: *TextureManager, inspection: bool) !Self {
+pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, inspection: bool) !Self {
     const sampler = try TextureManager.createSampler(vc);
 
     // materials
-    var material_manager = blk: {
+    var materials = blk: {
         var material_list = std.ArrayListUnmanaged(MaterialManager.MaterialInfo) {};
         defer material_list.deinit(allocator);
 
+        var textures = try TextureManager.create(vc);
+
         for (gltf.data.materials.items) |material| {
-            const mat = try gltfMaterialToMaterial(vc, vk_allocator, allocator, commands, gltf, material, image_manager);
+            const mat = try gltfMaterialToMaterial(vc, vk_allocator, allocator, commands, gltf, material, &textures);
             try material_list.append(allocator, mat);
         }
 
-        break :blk try MaterialManager.create(vc, vk_allocator, allocator, commands, material_list.items);
+        var materials = try MaterialManager.create(vc, vk_allocator, allocator, commands, material_list.items);
+        materials.textures.destroy(vc, allocator); // strange
+        materials.textures = textures;
+
+        break :blk materials; 
     };
-    errdefer material_manager.destroy(vc);
+    errdefer materials.destroy(vc, allocator);
 
     var objects = std.ArrayList(MeshManager.Mesh).init(allocator);
     defer objects.deinit();
@@ -524,18 +530,18 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
         }
     }
 
-    var mesh_manager = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
-    errdefer mesh_manager.destroy(vc, allocator);
+    var meshes = try MeshManager.create(vc, vk_allocator, allocator, commands, objects.items);
+    errdefer meshes.destroy(vc, allocator);
 
-    var accel = try Accel.create(vc, vk_allocator, allocator, commands, mesh_manager, instances.items, inspection);
+    var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
     var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
     errdefer descriptor_layout.destroy(vc);
 
     var world = Self {
-        .material_manager = material_manager,
-        .mesh_manager = mesh_manager,
+        .materials = materials,
+        .meshes = meshes,
 
         .accel = accel,
 
@@ -550,8 +556,8 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
 pub fn createEmpty(vc: *const VulkanContext) !Self {
     var self = Self {
-        .material_manager = .{},
-        .mesh_manager = .{},
+        .materials = try MaterialManager.createEmpty(vc),
+        .meshes = .{},
         .accel = .{},
 
         .sampler = try TextureManager.createSampler(vc),
@@ -574,8 +580,8 @@ pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     vc.device.destroySampler(self.sampler, null);
 
-    self.material_manager.destroy(vc);
-    self.mesh_manager.destroy(vc, allocator);
+    self.materials.destroy(vc, allocator);
+    self.meshes.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
 
     self.descriptor_layout.destroy(vc);

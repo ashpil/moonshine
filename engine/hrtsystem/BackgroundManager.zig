@@ -12,14 +12,20 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
 // must be kept in sync with shader
 pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
-    .{ // marginal
+    .{ // image
         .binding = 0,
+        .descriptor_type = .sampled_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+    },
+    .{ // marginal
+        .binding = 1,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
     .{ // conditional
-        .binding = 1,
+        .binding = 2,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
@@ -28,12 +34,12 @@ pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
+images: TextureManager, // TODO: use own image
 data: std.ArrayListUnmanaged(struct {
     marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     descriptor_set: vk.DescriptorSet,
-    texture: TextureManager.Handle,
-}) = .{},
+}),
 descriptor_layout: DescriptorLayout,
 
 const Self = @This();
@@ -41,6 +47,8 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext) !Self {
     return Self {
         .descriptor_layout = try DescriptorLayout.create(vc, 1, .{}), // todo: pass in max sets from somewhere
+        .images = try TextureManager.create(vc),
+        .data = .{},
     };
 }
 
@@ -61,17 +69,17 @@ fn luminance(rgb: [3]f32) f32 {
 }
 
 // a lot of unnecessary copying if this ever needs to be optimized
-pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *TextureManager, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
+pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
     const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
     defer allocator.free(texture_name);
-    const texture = try images.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
+    _ = try self.images.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
         .raw = .{
             .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
             .extent = color_image.extent,
             .format = .r32g32b32a32_sfloat,
         },
     }, texture_name);
-    
+
     // compute grayscale luminance image to use as our sampling weights
     const luminance_image = blk: {
         const buffer = try allocator.alloc(f32, color_image.extent.height * color_image.extent.width);
@@ -83,7 +91,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
         break :blk buffer;
     };
     defer allocator.free(luminance_image);
-    
+
     // marginal weights to select a row
     const marginal_weights = try allocator.alloc(f32, color_image.extent.height);
     defer allocator.free(marginal_weights);
@@ -129,6 +137,20 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             .dst_binding = 0,
             .dst_array_element = 0,
             .descriptor_count = 1,
+            .descriptor_type = .sampled_image,
+            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
+                .sampler = .null_handle,
+                .image_view = self.images.data.items(.view)[0],
+                .image_layout = .shader_read_only_optimal,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
@@ -140,7 +162,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
         },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
-            .dst_binding = 1,
+            .dst_binding = 2,
             .dst_array_element = 0,
             .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
@@ -158,11 +180,11 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
         .descriptor_set = descriptor_set,
         .marginal = marginal,
         .conditional = conditional,
-        .texture = texture,
     });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    self.images.destroy(vc, allocator);
     for (self.data.items) |data| {
         data.marginal.destroy(vc);
         data.conditional.destroy(vc);

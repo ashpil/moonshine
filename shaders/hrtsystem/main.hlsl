@@ -4,13 +4,13 @@
 #include "integrator.hlsl"
 
 // https://www.nu42.com/2015/03/how-you-average-numbers.html
-void storeColor(uint outputImage, float3 sampledColor) {
+void storeColor(float3 sampledColor) {
     uint2 imageCoords = DispatchRaysIndex().xy;
     if (pushConsts.sampleCount == 0) {
-        dStorageImages[outputImage][imageCoords] = float4(sampledColor / SAMPLES_PER_RUN, 1.0);
+        dOutputImage[imageCoords] = float4(sampledColor / SAMPLES_PER_RUN, 1.0);
     } else {
-        float3 priorSampleAverage = dStorageImages[outputImage][imageCoords].rgb;
-        dStorageImages[outputImage][imageCoords] += float4((sampledColor - priorSampleAverage) / (pushConsts.sampleCount + SAMPLES_PER_RUN), 1.0);
+        float3 priorSampleAverage = dOutputImage[imageCoords].rgb;
+        dOutputImage[imageCoords] += float4((sampledColor - priorSampleAverage) / (pushConsts.sampleCount + SAMPLES_PER_RUN), 1.0);
     }
 }
 
@@ -24,7 +24,7 @@ float2 dispatchUV(float2 rand) {
 
 [shader("raygeneration")]
 void raygen() {
-    PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, ENV_SAMPLES_PER_BOUNCE, MESH_SAMPLES_PER_BOUNCE, pushConsts.backgroundTexture);
+    PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, ENV_SAMPLES_PER_BOUNCE, MESH_SAMPLES_PER_BOUNCE);
 
     // the result that we write to our buffer
     float3 color = float3(0.0, 0.0, 0.0);
@@ -34,13 +34,13 @@ void raygen() {
         Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount + sampleCount, DispatchRaysIndex().x, DispatchRaysIndex().y));
 
         // set up initial directions for first bounce
-        RayDesc initialRay = pushConsts.camera.generateRay(pushConsts.outputImage, dispatchUV(float2(rng.getFloat(), rng.getFloat())), float2(rng.getFloat(), rng.getFloat()));
+        RayDesc initialRay = pushConsts.camera.generateRay(dispatchUV(float2(rng.getFloat(), rng.getFloat())), float2(rng.getFloat(), rng.getFloat()));
 
         // trace the ray
         color += integrator.incomingRadiance(initialRay, rng);
     }
 
-    storeColor(pushConsts.outputImage, color);
+    storeColor(color);
 }
 
 struct Attributes

@@ -7,7 +7,6 @@ const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
 const TextureManager = engine.core.Images.TextureManager;
-const StorageImageManager = engine.core.Images.StorageImageManager;
 const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 
@@ -97,20 +96,14 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var images = try StorageImageManager.create(&context);
-    defer images.destroy(&context, allocator);
-
-    var textures = try TextureManager.create(&context);
-    defer textures.destroy(&context, allocator);
-
     try logger.log("set up initial state");
 
-    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &images, &textures, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
+    var scene = try Scene.fromGlbExr(&context, &vk_allocator, allocator, &commands, config.in_filepath, config.skybox_filepath, config.extent, false);
     defer scene.destroy(&context, allocator);
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ textures.descriptor_layout, images.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, .{
         .@"0" = .{
             .samples_per_run = 1,
             .max_bounces = 1024,
@@ -130,15 +123,15 @@ pub fn main() !void {
         try commands.startRecording(&context);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&context, &images, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
-        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { textures.descriptor_set, images.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set });
+        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)), scene.background.data.items[0].texture, scene.camera.sensors.items[0].image });
+            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)) });
             context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
 
             // trace our stuff
@@ -158,7 +151,7 @@ pub fn main() !void {
                             .new_layout = .general,
                             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = images.data.get(scene.camera.sensors.items[0].image).handle,
+                            .image = scene.camera.sensors.items[0].image.handle,
                             .subresource_range = .{
                                 .aspect_mask = .{ .color_bit = true },
                                 .base_mip_level = 0,
@@ -173,7 +166,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(&context, &images, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         const copy = vk.BufferImageCopy {
@@ -197,7 +190,7 @@ pub fn main() !void {
                 .depth = 1,
             },
         };
-        context.device.cmdCopyImageToBuffer(commands.buffer, images.data.get(scene.camera.sensors.items[0].image).handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
+        context.device.cmdCopyImageToBuffer(commands.buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, output_buffer.handle, 1, @ptrCast(&copy));
 
         try commands.submitAndIdleUntilDone(&context);
     }

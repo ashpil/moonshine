@@ -211,7 +211,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        var image = try TextureManager.create(vc);
+        var image = try TextureManager.create(vc); // TODO: should use texture manager with max only one descriptor
         _ = try image.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
             .raw = .{
                 .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],

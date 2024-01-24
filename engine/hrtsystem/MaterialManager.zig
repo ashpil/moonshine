@@ -15,7 +15,7 @@ const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 
 // on the host side, materials are represented as a regular tagged union
-// 
+//
 // since GPUs do not support tagged unions, we solve this with a little indirection,
 // translating this into a GPU buffer for each variant, and have a base material struct
 // that simply has an enum and a device address, which points to the specific variant
@@ -114,16 +114,26 @@ fn VariantBuffer(comptime T: type) type {
 
 const VariantBuffers = StructFromTaggedUnion(MaterialVariant, VariantBuffer);
 
-material_count: u32 = 0,
-materials: VkAllocator.DeviceBuffer(Material) = .{},
+material_count: u32,
+textures: TextureManager,
+materials: VkAllocator.DeviceBuffer(Material),
 
-variant_buffers: VariantBuffers = .{},
+variant_buffers: VariantBuffers,
 
 const Handle = u32;
 
 const Self = @This();
 
 const max_materials = 512; // TODO: resizable buffers
+
+pub fn createEmpty(vc: *const VulkanContext) !Self {
+    return Self {
+        .material_count = 0,
+        .materials = .{},
+        .variant_buffers = .{},
+        .textures = try TextureManager.create(vc),
+    };
+}
 
 // you can either do this or create below, but not both
 // texture handles must've been already added to the MaterialManager's textures
@@ -228,6 +238,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 
     return Self {
+        .textures = try TextureManager.create(vc),
         .material_count = material_count,
         .materials = materials_gpu,
         .variant_buffers = variant_buffers,
@@ -261,7 +272,8 @@ pub fn recordUpdateSingleVariant(self: *Self, vc: *const VulkanContext, comptime
     });
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    self.textures.destroy(vc, allocator);
     self.materials.destroy(vc);
 
     inline for (@typeInfo(VariantBuffers).Struct.fields) |field| {
