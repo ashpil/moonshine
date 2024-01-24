@@ -265,18 +265,18 @@ test "white sphere on white background is white" {
 
     // add sphere to world
     {
-        const mesh_handle = try world.meshes.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
+        const mesh_handle = try world.meshes.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, false));
 
-        const normal_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const normal_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const albedo_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(1, 1, 1),
         }, "");
-        const emissive_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const emissive_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0, 0, 0),
         }, "");
-        const material_handle = try world.materials.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
+        const material_handle = try world.materials.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
             .normal = normal_texture,
             .emissive = emissive_texture,
             .variant = MaterialManager.MaterialVariant {
@@ -362,18 +362,18 @@ test "inside illuminating sphere is white" {
 
     // add sphere to world
     {
-        const mesh_handle = try world.meshes.uploadMesh(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
+        const mesh_handle = try world.meshes.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, try icosphere(5, allocator, true));
 
-        const normal_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const normal_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x2 = MaterialManager.MaterialInfo.default_normal,
         }, "");
-        const albedo_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const albedo_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const emissive_texture = try world.materials.textures.uploadTexture(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
+        const emissive_texture = try world.materials.textures.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, TextureManager.Source {
             .f32x3 = F32x3.new(0.5, 0.5, 0.5),
         }, "");
-        const material_handle = try world.materials.uploadMaterial(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
+        const material_handle = try world.materials.upload(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, MaterialManager.MaterialInfo {
             .normal = normal_texture,
             .emissive = emissive_texture,
             .variant = MaterialManager.MaterialVariant {

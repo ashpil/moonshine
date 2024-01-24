@@ -137,7 +137,7 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
 
 // you can either do this or create below, but not both
 // texture handles must've been already added to the MaterialManager's textures
-pub fn uploadMaterial(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, info: MaterialInfo) !Handle {
+pub fn upload(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, info: MaterialInfo) !Handle {
     std.debug.assert(self.material_count < max_materials);
 
     try commands.startRecording(vc);
@@ -342,7 +342,7 @@ pub const TextureManager = struct {
 
     pub const Handle = u32;
 
-    pub fn uploadTexture(self: *TextureManager, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: Source, name: [:0]const u8) !TextureManager.Handle {
+    pub fn upload(self: *TextureManager, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, source: Source, name: [:0]const u8) !TextureManager.Handle {
         const texture_index: TextureManager.Handle = @intCast(self.data.len);
         std.debug.assert(texture_index < max_descriptors);
 

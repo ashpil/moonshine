@@ -67,7 +67,7 @@ const max_meshes = 512; // TODO: resizable buffers
 
 const Handle = u32;
 
-pub fn uploadMesh(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, host_mesh: Mesh) !Handle {
+pub fn upload(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, host_mesh: Mesh) !Handle {
     std.debug.assert(self.meshes.len < max_meshes);
     
     var position_staging_buffer = VkAllocator.HostBuffer(F32x3) {};
