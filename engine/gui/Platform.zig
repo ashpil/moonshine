@@ -7,9 +7,8 @@ const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const vk_helpers = engine.core.vk_helpers;
 
-const TextureManager = engine.core.Images.TextureManager;
+const Image = engine.core.Images.Image;
 const DescriptorLayout = engine.core.descriptor.DescriptorLayout;
 
 const Swapchain = engine.displaysystem.Swapchain;
@@ -42,15 +41,15 @@ pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
 
 font_sampler: vk.Sampler,
-font_image: TextureManager,
-font_image_set: vk.DescriptorSet, // TODO: should be able to use set or TextureManager somehow
+font_image: Image,
+font_image_set: vk.DescriptorSet,
 
 vertex_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawVert),
 index_buffers: [frames_in_flight]VkAllocator.HostBuffer(imgui.DrawIdx),
 
 views: std.BoundedArray(vk.ImageView, Swapchain.max_image_count),
 
-pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, extent: vk.Extent2D, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, extent: vk.Extent2D, vk_allocator: *VkAllocator, commands: *Commands) !Self {
     if (imgui.getCurrentContext()) |_| @panic("cannot create more than one Gui");
 
     imgui.createContext();
@@ -211,14 +210,10 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        var image = try TextureManager.create(vc); // TODO: should use texture manager with max only one descriptor
-        _ = try image.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
-            .raw = .{
-                .bytes = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)],
-                .extent = tex_data[1],
-                .format = .r8_unorm,
-            },
-        }, "fonts");
+        const image = try Image.create(vc, vk_allocator, tex_data[1], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r8_unorm, "imgui font");
+        errdefer image.destroy(vc);
+
+        try commands.uploadDataToImage(vc, vk_allocator, image.handle, tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)], tex_data[1], .shader_read_only_optimal);
         break :blk image;
         //     io.Fonts->SetTexID((ImTextureID)bd->FontDescriptorSet); TODO required?
     };
@@ -232,7 +227,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .descriptor_type = .combined_image_sampler,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo{
                 .sampler = font_sampler,
-                .image_view = font_image.data.items(.view)[0],
+                .image_view = font_image.view,
                 .image_layout = .read_only_optimal,
             }),
             .p_buffer_info = undefined,
@@ -321,7 +316,7 @@ pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void
     self.extent = swapchain.extent;
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
 
     self.descriptor_set_layout.destroy(vc);
@@ -329,7 +324,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     vc.device.destroyPipeline(self.pipeline, null);
 
     vc.device.destroySampler(self.font_sampler, null);
-    self.font_image.destroy(vc, allocator);
+    self.font_image.destroy(vc);
 
     for (self.vertex_buffers) |buffer| buffer.destroy(vc);
     for (self.index_buffers) |buffer| buffer.destroy(vc);

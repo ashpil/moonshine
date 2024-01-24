@@ -94,8 +94,8 @@ pub fn main() !void {
     var commands = try Commands.create(&context);
     defer commands.destroy(&context);
 
-    var gui = try Platform.create(&context, display.swapchain, window, window_extent, &vk_allocator, allocator, &commands);
-    defer gui.destroy(&context, allocator);
+    var gui = try Platform.create(&context, display.swapchain, window, window_extent, &vk_allocator, &commands);
+    defer gui.destroy(&context);
 
     var destruction_queue = DestructionQueue.create(); // TODO: need to clean this every once in a while since we're only allowed a limited amount of most types of handles
     defer destruction_queue.destroy(&context, allocator);

@@ -5,8 +5,7 @@ const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
 const Commands = engine.core.Commands;
 const VkAllocator = engine.core.Allocator;
-const vk_helpers = engine.core.vk_helpers;
-const TextureManager = engine.core.Images.TextureManager;
+const Image = engine.core.Images.Image;
 
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
@@ -34,10 +33,10 @@ pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
-images: TextureManager, // TODO: use own image
 data: std.ArrayListUnmanaged(struct {
     marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
+    image: Image,
     descriptor_set: vk.DescriptorSet,
 }),
 descriptor_layout: DescriptorLayout,
@@ -47,12 +46,11 @@ const Self = @This();
 pub fn create(vc: *const VulkanContext) !Self {
     return Self {
         .descriptor_layout = try DescriptorLayout.create(vc, 1, .{}), // todo: pass in max sets from somewhere
-        .images = try TextureManager.create(vc),
         .data = .{},
     };
 }
 
-pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, images: *TextureManager, commands: *Commands) !void {
+pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !void {
     var color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
     const rgba = Rgba2D {
         .ptr = @ptrCast(&color),
@@ -61,7 +59,7 @@ pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator:
             .height = 1,
         }
     };
-    try self.addBackground(vc, vk_allocator, allocator, images, commands, rgba, "default");
+    try self.addBackground(vc, vk_allocator, allocator, commands, rgba, "default");
 }
 
 fn luminance(rgb: [3]f32) f32 {
@@ -70,15 +68,13 @@ fn luminance(rgb: [3]f32) f32 {
 
 // a lot of unnecessary copying if this ever needs to be optimized
 pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
-    const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{name});
+    const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{ name });
     defer allocator.free(texture_name);
-    _ = try self.images.uploadTexture(vc, vk_allocator, allocator, commands, TextureManager.Source {
-        .raw = .{
-            .bytes = std.mem.sliceAsBytes(color_image.asSlice()),
-            .extent = color_image.extent,
-            .format = .r32g32b32a32_sfloat,
-        },
-    }, texture_name);
+
+    const image = try Image.create(vc, vk_allocator, color_image.extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
+    errdefer image.destroy(vc);
+
+    try commands.uploadDataToImage(vc, vk_allocator, image.handle, std.mem.sliceAsBytes(color_image.asSlice()), color_image.extent, .shader_read_only_optimal);
 
     // compute grayscale luminance image to use as our sampling weights
     const luminance_image = blk: {
@@ -140,7 +136,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             .descriptor_type = .sampled_image,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
-                .image_view = self.images.data.items(.view)[0],
+                .image_view = image.view,
                 .image_layout = .shader_read_only_optimal,
             }),
             .p_buffer_info = undefined,
@@ -177,6 +173,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     });
 
     try self.data.append(allocator, .{
+        .image = image,
         .descriptor_set = descriptor_set,
         .marginal = marginal,
         .conditional = conditional,
@@ -184,10 +181,10 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.images.destroy(vc, allocator);
     for (self.data.items) |data| {
         data.marginal.destroy(vc);
         data.conditional.destroy(vc);
+        data.image.destroy(vc);
     }
     self.data.deinit(allocator);
     self.descriptor_layout.destroy(vc);
