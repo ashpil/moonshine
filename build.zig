@@ -1,7 +1,7 @@
 const std = @import("std");
 const vkgen = @import("./deps/vulkan-zig/generator/index.zig");
 
-pub fn build(b: *std.build.Builder) !void {
+pub fn build(b: *std.Build) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -19,7 +19,7 @@ pub fn build(b: *std.build.Builder) !void {
     const tinyexr = makeTinyExrLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
 
-    var exes = std.ArrayList(*std.Build.CompileStep).init(b.allocator);
+    var exes = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
 
     // TODO: make custom test runner parallel + share some state across tests
     try exes.append(blk: {
@@ -35,9 +35,9 @@ pub fn build(b: *std.build.Builder) !void {
             .target = target,
             .optimize = optimize,
         });
-        tests.addModule("vulkan", vk);
-        tests.addModule("engine", engine);
-        tinyexr.add(tests);
+        tests.root_module.addImport("vulkan", vk);
+        tests.root_module.addImport("engine", engine);
+        tinyexr.add(&tests.root_module); // TODO: shouldn't need this
 
         break :blk tests;
     });
@@ -54,11 +54,14 @@ pub fn build(b: *std.build.Builder) !void {
             .target = target,
             .optimize = optimize,
         });
-        exe.addModule("vulkan", vk);
-        exe.addModule("engine", engine);
-        glfw.add(exe);
-        tinyexr.add(exe);
-        cimgui.add(exe);
+        exe.root_module.addImport("vulkan", vk);
+        exe.root_module.addImport("engine", engine);
+        glfw.add(&exe.root_module);
+        glfw.add(engine);
+        tinyexr.add(&exe.root_module);
+        tinyexr.add(engine);
+        cimgui.add(&exe.root_module);
+        cimgui.add(engine);
 
         break :blk exe;
     });
@@ -75,9 +78,10 @@ pub fn build(b: *std.build.Builder) !void {
             .target = target,
             .optimize = optimize,
         });
-        exe.addModule("vulkan", vk);
-        exe.addModule("engine", engine);
-        tinyexr.add(exe);
+        exe.root_module.addImport("vulkan", vk);
+        exe.root_module.addImport("engine", engine);
+        tinyexr.add(&exe.root_module);
+        tinyexr.add(engine);
 
         break :blk exe;
     });
@@ -141,7 +145,7 @@ pub const EngineOptions = struct {
     window: bool = true,
     gui: bool = true,
 
-    fn fromCli(b: *std.build.Builder) EngineOptions {
+    fn fromCli(b: *std.Build) EngineOptions {
         var options = EngineOptions {};
 
         if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
@@ -152,9 +156,9 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: EngineOptions) *std.build.Module {
-    const zgltf = b.createModule(.{ .source_file = .{ .path = "deps/zgltf/src/main.zig" } });
-    const zigimg = b.createModule(.{ .source_file = .{ .path = "deps/zigimg/zigimg.zig" } });
+fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions) *std.Build.Module {
+    const zgltf = b.createModule(.{ .root_source_file = .{ .path = "deps/zgltf/src/main.zig" } });
+    const zigimg = b.createModule(.{ .root_source_file = .{ .path = "deps/zigimg/zigimg.zig" } });
 
     // actual engine
     const build_options = b.addOptions();
@@ -167,9 +171,9 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
     build_options.addOption(bool, "gui", options.gui);
     build_options.addOption(bool, "hrtsystem", options.hrtsystem);
 
-    var dependencies = std.ArrayList(std.Build.ModuleDependency).init(b.allocator);
+    var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
 
-    dependencies.appendSlice(&.{
+    imports.appendSlice(&.{
         .{
             .name = "vulkan",
             .module = vk,
@@ -211,7 +215,7 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
         const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
         compute_shader_comp.step.name = "Compile compute shaders";
 
-        dependencies.appendSlice(&.{
+        imports.appendSlice(&.{
             .{
                 .name = "rt_shaders",
                 .module = rt_shader_comp.getModule(),
@@ -224,22 +228,22 @@ fn makeEngineModule(b: *std.build.Builder, vk: *std.build.Module, options: Engin
     }
 
     return b.createModule(.{
-        .source_file = .{ .path = "engine/engine.zig" },
-        .dependencies = dependencies.items,
+        .root_source_file = .{ .path = "engine/engine.zig" },
+        .imports = imports.items,
     });
 }
 
 const CLibrary = struct {
     include_path: []const u8,
-    library: *std.build.LibExeObjStep,
+    library: *std.Build.Step.Compile,
 
-    fn add(self: CLibrary, exe: *std.Build.CompileStep) void {
-        exe.linkLibrary(self.library);
-        exe.addIncludePath(.{ .path = self.include_path });
+    fn add(self: CLibrary, module: *std.Build.Module) void {
+        module.linkLibrary(self.library);
+        module.addIncludePath(.{ .path = self.include_path });
     }
 };
 
-fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: CLibrary) CLibrary {
+fn makeCImguiLibrary(b: *std.Build, target: std.Build.ResolvedTarget, glfw: CLibrary) CLibrary {
     const path = "./deps/cimgui/";
 
     const lib = b.addStaticLibrary(.{
@@ -271,7 +275,7 @@ fn makeCImguiLibrary(b: *std.build.Builder, target: std.zig.CrossTarget, glfw: C
     };
 }
 
-fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibrary {
+fn makeTinyExrLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
     const tinyexr_path = "./deps/tinyexr/";
     const miniz_path = tinyexr_path ++ "deps/miniz/";
 
@@ -295,7 +299,7 @@ fn makeTinyExrLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) CLibra
     };
 }
 
-fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary {
+fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
     const path = "./deps/glfw/";
     const lib = b.addStaticLibrary(.{
         .name = "glfw",
@@ -308,7 +312,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
 
     if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
     
-    if (target.isLinux() and build_wayland) {
+    if (target.result.os.tag == .linux and build_wayland) {
         const wayland_include_path = generateWaylandHeaders(b);
         lib.addIncludePath(wayland_include_path);
     }
@@ -370,11 +374,11 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
         
         try sources.appendSlice(&general_sources);
 
-        if (target.isLinux()) {
+        if (target.result.os.tag == .linux) {
             try sources.appendSlice(&linux_sources);
             if (build_wayland) try sources.appendSlice(&wayland_sources);
             if (build_x11) try sources.appendSlice(&x11_sources);
-        } else if (target.isWindows()) try sources.appendSlice(&windows_sources);
+        } else if (target.result.os.tag == .windows) try sources.appendSlice(&windows_sources);
 
         break :blk sources.items;
     };
@@ -382,10 +386,10 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     const flags = blk: {
         var flags = std.ArrayList([]const u8).init(b.allocator);
 
-        if (target.isLinux()) {
+        if (target.result.os.tag == .linux) {
             if (build_wayland) try flags.append("-D_GLFW_WAYLAND");
             if (build_x11) try flags.append("-D_GLFW_X11");
-        } else if (target.isWindows()) try flags.append("-D_GLFW_WIN32");
+        } else if (target.result.os.tag == .windows) try flags.append("-D_GLFW_WIN32");
 
         break :blk flags.items;
     };
@@ -395,10 +399,10 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     // link and include necessary deps
     lib.linkLibC();
 
-    if (target.isLinux()) {
+    if (target.result.os.tag == .linux) {
         if (build_wayland) lib.linkSystemLibrary("wayland-client");
         if (build_x11) lib.linkSystemLibrary("X11");
-    } else if (target.isWindows()) lib.linkSystemLibrary("gdi32");
+    } else if (target.result.os.tag == .windows) lib.linkSystemLibrary("gdi32");
 
     return CLibrary {
         .include_path = path ++ "include",
@@ -406,7 +410,7 @@ fn makeGlfwLibrary(b: *std.build.Builder, target: std.zig.CrossTarget) !CLibrary
     };
 }
 
-fn generateWaylandHeaders(b: *std.build.Builder) std.Build.LazyPath {
+fn generateWaylandHeaders(b: *std.Build) std.Build.LazyPath {
     // ignore pkg-config errors -- this'll make wayland-scanner error down the road, 
     // but it'll mean that when glfw isn't actually being used we won't error on 
     // missing wayland
@@ -435,7 +439,7 @@ fn generateWaylandHeaders(b: *std.build.Builder) std.Build.LazyPath {
     return write_file_step.getDirectory();
 }
 
-fn generateWaylandHeader(b: *std.build.Builder, write_file_step: *std.build.Step.WriteFile, protocol_path: []const u8, xml: []const u8, out_name: []const u8) void {
+fn generateWaylandHeader(b: *std.Build, write_file_step: *std.Build.Step.WriteFile, protocol_path: []const u8, xml: []const u8, out_name: []const u8) void {
     const xml_path = b.pathJoin(&.{ protocol_path, xml });
 
     const out_source_name = std.fmt.allocPrint(b.allocator, "wayland{s}-client-protocol-code.h", .{ out_name }) catch @panic("OOM");
