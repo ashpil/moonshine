@@ -37,7 +37,6 @@ pub fn build(b: *std.Build) !void {
         });
         tests.root_module.addImport("vulkan", vk);
         tests.root_module.addImport("engine", engine);
-        tinyexr.add(&tests.root_module); // TODO: shouldn't need this
 
         break :blk tests;
     });
@@ -227,10 +226,14 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         }) catch @panic("OOM");
     }
 
-    return b.createModule(.{
+    const module = b.createModule(.{
         .root_source_file = .{ .path = "engine/engine.zig" },
         .imports = imports.items,
     });
+
+    module.link_libc = true; // always needed to load vulkan
+
+    return module;
 }
 
 const CLibrary = struct {
