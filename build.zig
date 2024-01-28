@@ -191,40 +191,40 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         },
     }) catch @panic("OOM");
 
-    // embed shaders if requested
-    if (options.shader_source == .embed) {
-        const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
-        rt_shader_comp.step.name = "Compile ray tracing shaders";
-        rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
-        rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
-            .watched_files = &.{
-                "shaders/hrtsystem/bindings.hlsl",
-                "shaders/hrtsystem/camera.hlsl",
-                "shaders/hrtsystem/geometry.hlsl",
-                "shaders/hrtsystem/integrator.hlsl",
-                "shaders/hrtsystem/intersection.hlsl",
-                "shaders/hrtsystem/light.hlsl",
-                "shaders/hrtsystem/material.hlsl",
-                "shaders/hrtsystem/reflection_frame.hlsl",
-                "shaders/utils/random.hlsl",
-                "shaders/utils/math.hlsl",
-            }
-        });
+    // embed shaders even if options.shader_source == .load so that 
+    // initial shader correctness is checked at compile time even
+    // if runtime modification is allowed
+    const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
+    rt_shader_comp.step.name = "Compile ray tracing shaders";
+    rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
+    rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
+        .watched_files = &.{
+            "shaders/hrtsystem/bindings.hlsl",
+            "shaders/hrtsystem/camera.hlsl",
+            "shaders/hrtsystem/geometry.hlsl",
+            "shaders/hrtsystem/integrator.hlsl",
+            "shaders/hrtsystem/intersection.hlsl",
+            "shaders/hrtsystem/light.hlsl",
+            "shaders/hrtsystem/material.hlsl",
+            "shaders/hrtsystem/reflection_frame.hlsl",
+            "shaders/utils/random.hlsl",
+            "shaders/utils/math.hlsl",
+        }
+    });
 
-        const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
-        compute_shader_comp.step.name = "Compile compute shaders";
+    const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
+    compute_shader_comp.step.name = "Compile compute shaders";
 
-        imports.appendSlice(&.{
-            .{
-                .name = "rt_shaders",
-                .module = rt_shader_comp.getModule(),
-            },
-            .{
-                .name = "compute_shaders",
-                .module = compute_shader_comp.getModule(),
-            },
-        }) catch @panic("OOM");
-    }
+    imports.appendSlice(&.{
+        .{
+            .name = "rt_shaders",
+            .module = rt_shader_comp.getModule(),
+        },
+        .{
+            .name = "compute_shaders",
+            .module = compute_shader_comp.getModule(),
+        },
+    }) catch @panic("OOM");
 
     const module = b.createModule(.{
         .root_source_file = .{ .path = "engine/engine.zig" },
