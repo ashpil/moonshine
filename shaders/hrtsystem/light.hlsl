@@ -13,16 +13,8 @@ interface Light {
     // samples a light direction based on given position and geometric normal, returning
     // radiance at that point from light and pdf of this direction + radiance
     //
-    // pdf is with respect to unobstructed solid angle
-    // should trace a ray to determine obstruction
+    // pdf is with respect to obstructed solid angle, that is, this traces a ray
     LightSample sample(float3 positionWs, float3 triangleNormalDirWs, float2 square);
-
-    // evaluates a given position, returning radiance arriving at that point from
-    // light and the pdf of that radiance
-    //
-    // pdf is with respect to unobstructed solid angle
-    // should trace a ray to determine obstruction
-    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs);
 };
 
 struct EnvMap : Light {
@@ -66,7 +58,8 @@ struct EnvMap : Light {
         return lightSample;
     }
 
-    LightEval evalNoTrace(float3 dirWs) {
+    // pdf is with respect to solid angle (no trace)
+    LightEval eval(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
 
@@ -79,15 +72,6 @@ struct EnvMap : Light {
         LightEval l;
         l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
         l.radiance = dBackgroundTexture[coords];
-        return l;
-    }
-
-    LightEval eval(float3 positionWs, float3 normalWs, float3 dirWs) {
-        LightEval l = evalNoTrace(dirWs);
-
-        if (l.pdf > 0.0 && ShadowIntersection::hit(offsetAlongNormal(positionWs, faceForward(normalWs, dirWs)), dirWs, INFINITY)) {
-            l.pdf = 0.0;
-        }
         return l;
     }
 
@@ -140,32 +124,5 @@ struct MeshLights : Light {
             lightSample.pdf = 0.0;
         }
         return lightSample;
-    }
-
-    LightEval eval(float3 positionWs, float3 triangleNormalDirWs, float3 dirWs) {
-        // trace ray to determine if we hit an emissive mesh
-        RayDesc ray;
-        ray.Origin = offsetAlongNormal(positionWs, faceForward(triangleNormalDirWs, dirWs));
-        ray.Direction = dirWs;
-        ray.TMin = 0.0;
-        ray.TMax = INFINITY;
-        Intersection its = Intersection::find(ray);
-
-        // process intersection
-        uint instanceID = dInstances[its.instanceIndex].instanceID();
-        Geometry geometry = getGeometry(instanceID, its.geometryIndex);
-
-        LightEval l;
-        if (geometry.sampled) {
-            MeshAttributes attrs = MeshAttributes::lookupAndInterpolate(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics).inWorld(its.instanceIndex);
-            float sum = dEmitterAliasTable[0].select;
-            l.pdf = areaMeasureToSolidAngleMeasure(attrs.position, positionWs, dirWs, attrs.triangleFrame.n) / sum;
-            l.radiance = getEmissive(materialIdx(instanceID, its.geometryIndex), attrs.texcoord);
-        } else {
-            // geometry not sampled, pdf is zero
-            l.pdf = 0.0;
-        }
-
-        return l;
     }
 };

@@ -14,45 +14,6 @@ float powerHeuristic(uint numf, float fPdf, uint numg, float gPdf) {
 }
 
 // estimates direct lighting from light + brdf via MIS
-// samples light and material
-template <class Light, class Material>
-float3 estimateDirectMISLightMaterial(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float4 rand) {
-    float3 directLighting = float3(0.0, 0.0, 0.0);
-
-    // sample light
-    {
-        LightSample lightSample = light.sample(positionWs, triangleNormalDirWs, rand.xy);
-
-        if (lightSample.pdf > 0.0) {
-            float3 lightDirFs = frame.worldToFrame(lightSample.dirWs);
-            float scatteringPdf = material.pdf(lightDirFs, outgoingDirFs);
-            if (scatteringPdf > 0.0) {
-                float3 brdf = material.eval(lightDirFs, outgoingDirFs);
-                float weight = powerHeuristic(1, lightSample.pdf, 1, scatteringPdf);
-                directLighting += lightSample.radiance * brdf * abs(Frame::cosTheta(lightDirFs)) * weight / lightSample.pdf;
-            }
-        }
-    }
-
-    // sample material
-    {
-        MaterialSample materialSample = material.sample(outgoingDirFs, rand.zw);
-
-        if (materialSample.pdf > 0.0) {
-            float3 brdfDirWs = frame.frameToWorld(materialSample.dirFs);
-            LightEval lightContrib = light.eval(positionWs, triangleNormalDirWs, brdfDirWs);
-            if (lightContrib.pdf > 0.0) {
-                float3 brdf = material.eval(materialSample.dirFs, outgoingDirFs);
-                float weight = powerHeuristic(1, materialSample.pdf, 1, lightContrib.pdf);
-                directLighting += lightContrib.radiance * brdf * abs(Frame::cosTheta(materialSample.dirFs)) * weight / materialSample.pdf;
-            }
-        }
-    }
-
-    return directLighting;
-}
-
-// estimates direct lighting from light + brdf via MIS
 // only samples light
 template <class Light, class Material>
 float3 estimateDirectMISLight(Frame frame, Light light, Material material, float3 outgoingDirFs, float3 positionWs, float3 triangleNormalDirWs, float2 rand, uint samplesTaken) {
@@ -207,7 +168,7 @@ struct PathTracingIntegrator : Integrator {
             accumulatedColor += throughput * EnvMap::create().incomingRadiance(ray.Direction);
         } else {
             // MIS env map if it is sampled at later bounces
-            LightEval l = EnvMap::create().evalNoTrace(ray.Direction);
+            LightEval l = EnvMap::create().eval(ray.Direction);
 
             if (l.pdf > 0.0) {
                 float weight = powerHeuristic(1, lastMaterialPdf, env_samples_per_bounce, l.pdf);
