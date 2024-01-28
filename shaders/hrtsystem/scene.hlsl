@@ -1,17 +1,11 @@
 #pragma once
 
 #include "light.hlsl"
+#include "world.hlsl"
 
 struct Scene {
     RaytracingAccelerationStructure tlas;
-    StructuredBuffer<Instance> instances;
-    StructuredBuffer<row_major float3x4> worldToInstance;
-
-    StructuredBuffer<Mesh> meshes;
-    StructuredBuffer<Geometry> geometries;
-
-    StructuredBuffer<MaterialVariantData> materials;
-
+    World world;
     EnvMap envMap;
     MeshLights meshLights;
 };

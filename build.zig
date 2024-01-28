@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) !void {
 
         break :blk exe;
     });
-    
+
     // create run step for all exes
     for (exes.items) |exe| {
         const run = b.addRunArtifact(exe);
@@ -191,7 +191,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         },
     }) catch @panic("OOM");
 
-    // embed shaders even if options.shader_source == .load so that 
+    // embed shaders even if options.shader_source == .load so that
     // initial shader correctness is checked at compile time even
     // if runtime modification is allowed
     const rt_shader_comp = vkgen.ShaderCompileStep.create(b, &rt_shader_compile_cmd, "-Fo");
@@ -201,7 +201,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         .watched_files = &.{
             "shaders/hrtsystem/bindings.hlsl",
             "shaders/hrtsystem/camera.hlsl",
-            "shaders/hrtsystem/geometry.hlsl",
+            "shaders/hrtsystem/world.hlsl",
             "shaders/hrtsystem/integrator.hlsl",
             "shaders/hrtsystem/intersection.hlsl",
             "shaders/hrtsystem/light.hlsl",
@@ -314,7 +314,7 @@ fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
     const build_x11 = b.option(bool, "x11", "Support X11 on Linux. (default: true)") orelse true;
 
     if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
-    
+
     if (target.result.os.tag == .linux and build_wayland) {
         const wayland_include_path = generateWaylandHeaders(b);
         lib.addIncludePath(wayland_include_path);
@@ -374,7 +374,7 @@ fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
             source_path ++ "win32_window.c",
             source_path ++ "win32_module.c",
         };
-        
+
         try sources.appendSlice(&general_sources);
 
         if (target.result.os.tag == .linux) {
@@ -414,8 +414,8 @@ fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
 }
 
 fn generateWaylandHeaders(b: *std.Build) std.Build.LazyPath {
-    // ignore pkg-config errors -- this'll make wayland-scanner error down the road, 
-    // but it'll mean that when glfw isn't actually being used we won't error on 
+    // ignore pkg-config errors -- this'll make wayland-scanner error down the road,
+    // but it'll mean that when glfw isn't actually being used we won't error on
     // missing wayland
     const protocol_path = blk: {
         var out_code: u8 = undefined;

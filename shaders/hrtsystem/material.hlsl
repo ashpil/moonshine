@@ -1,4 +1,7 @@
+#pragma once
+
 #include "../utils/math.hlsl"
+#include "world.hlsl"
 
 // all code below expects stuff to be in the reflection frame
 
@@ -496,15 +499,15 @@ Frame createTextureFrame(float3 normalWorldSpace, Frame tangentFrame) {
     return textureFrame;
 }
 
-Frame getTextureFrame(uint materialIndex, float2 texcoords, Frame tangentFrame) {
-    MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+Frame getTextureFrame(World world, uint materialIndex, float2 texcoords, Frame tangentFrame) {
+    MaterialVariantData data = world.materials[NonUniformResourceIndex(materialIndex)];
     float2 rg = dTextures[NonUniformResourceIndex(data.normal)].SampleLevel(dTextureSampler, texcoords, 0).rg;
     float3 normalTangentSpace = decodeNormal(rg);
     float3 normalWorldSpace = tangentNormalToWorld(normalTangentSpace, tangentFrame);
     return createTextureFrame(normalWorldSpace, tangentFrame);
 }
 
-float3 getEmissive(uint materialIndex, float2 texcoords) {
-    MaterialVariantData data = dMaterials[NonUniformResourceIndex(materialIndex)];
+float3 getEmissive(World world, uint materialIndex, float2 texcoords) {
+    MaterialVariantData data = world.materials[NonUniformResourceIndex(materialIndex)];
     return dTextures[NonUniformResourceIndex(data.emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb;
 }

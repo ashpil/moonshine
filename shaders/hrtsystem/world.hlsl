@@ -1,3 +1,73 @@
+#pragma once
+
+#include "reflection_frame.hlsl"
+
+
+struct Instance { // same required by vulkan on host side
+    row_major float3x4 transform;
+    uint instanceCustomIndexAndMask;
+    uint instanceShaderBindingTableRecordOffsetAndFlags;
+    uint64_t accelerationStructureReference;
+
+    uint instanceID() {
+        return instanceCustomIndexAndMask & 0x00FFFFFF;
+    }
+};
+
+struct Geometry {
+    uint meshIdx;
+    uint materialIdx;
+    bool sampled;
+};
+
+struct Mesh {
+    uint64_t positionAddress;
+    uint64_t texcoordAddress; // may be zero, for no texcoords
+    uint64_t normalAddress; // may be zero, for no vertex normals
+
+    uint64_t indexAddress;
+};
+
+enum class MaterialType : uint {
+    Glass,
+    Lambert,
+    PerfectMirror,
+    StandardPBR,
+};
+
+struct MaterialVariantData {
+    // all materials have these two
+    uint normal;
+    uint emissive;
+
+    // then material specific stuff
+    // find appropriate thing to decode from address using `type`
+    MaterialType type;
+    uint64_t materialAddress;
+};
+
+struct World {
+    StructuredBuffer<Instance> instances;
+    StructuredBuffer<row_major float3x4> worldToInstance;
+
+    StructuredBuffer<Mesh> meshes;
+    StructuredBuffer<Geometry> geometries;
+
+    StructuredBuffer<MaterialVariantData> materials;
+
+    Geometry getGeometry(uint instanceID, uint geometryIndex) {
+        return geometries[NonUniformResourceIndex(instanceID + geometryIndex)];
+    }
+
+    uint meshIdx(uint instanceID, uint geometryIndex) {
+        return getGeometry(instanceID, geometryIndex).meshIdx;
+    }
+
+    uint materialIdx(uint instanceID, uint geometryIndex) {
+        return getGeometry(instanceID, geometryIndex).materialIdx;
+    }
+};
+
 float3 loadPosition(uint64_t addr, uint index) {
     return vk::RawBufferLoad<float3>(addr + sizeof(float3) * index);
 }
@@ -31,18 +101,6 @@ T interpolate(float3 barycentrics, T v1, T v2, T v3) {
     return barycentrics.x * v1 + barycentrics.y * v2 + barycentrics.z * v3;
 }
 
-Geometry getGeometry(uint instanceID, uint geometryIndex) {
-    return dGeometries[NonUniformResourceIndex(instanceID + geometryIndex)];
-}
-
-uint meshIdx(uint instanceID, uint geometryIndex) {
-    return getGeometry(instanceID, geometryIndex).meshIdx;
-}
-
-uint materialIdx(uint instanceID, uint geometryIndex) {
-    return getGeometry(instanceID, geometryIndex).materialIdx;
-}
-
 struct MeshAttributes {
     float3 position;
     float2 texcoord;
@@ -50,10 +108,10 @@ struct MeshAttributes {
     Frame triangleFrame; // from triangle positions
     Frame frame; // from vertex attributes
 
-    static MeshAttributes lookupAndInterpolate(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 attribs) {
-        uint instanceID = dInstances[instanceIndex].instanceID();
-        uint meshIndex = meshIdx(instanceID, geometryIndex);
-        Mesh mesh = dMeshes[NonUniformResourceIndex(meshIndex)];
+    static MeshAttributes lookupAndInterpolate(World world, uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 attribs) {
+        uint instanceID = world.instances[instanceIndex].instanceID();
+        uint meshIndex = world.meshIdx(instanceID, geometryIndex);
+        Mesh mesh = world.meshes[NonUniformResourceIndex(meshIndex)];
         float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
         MeshAttributes attrs;
@@ -100,9 +158,9 @@ struct MeshAttributes {
         return attrs;
     }
 
-     MeshAttributes inWorld(uint instanceIndex) {
-        float3x4 toWorld = dInstances[NonUniformResourceIndex(instanceIndex)].transform;
-        float3x4 toMesh = dWorldToInstance[NonUniformResourceIndex(instanceIndex)];
+    MeshAttributes inWorld(World world, uint instanceIndex) {
+        float3x4 toWorld = world.instances[NonUniformResourceIndex(instanceIndex)].transform;
+        float3x4 toMesh = world.worldToInstance[NonUniformResourceIndex(instanceIndex)];
 
         position = mul(toWorld, float4(position, 1.0));
 
@@ -110,6 +168,5 @@ struct MeshAttributes {
         frame = frame.inSpace(transpose(toMesh));
 
         return this;
-     }
+    }
 };
-

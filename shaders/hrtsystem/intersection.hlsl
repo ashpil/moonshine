@@ -15,9 +15,9 @@ struct [raypayload] Intersection {
     }
 
     // traces a ray to find the nearest intersection
-    static Intersection find(RayDesc ray) {
+    static Intersection find(RaytracingAccelerationStructure accel, RayDesc ray) {
         Intersection its;
-        TraceRay(dTLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, its);
+        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, its);
         return its;
     }
 
@@ -30,7 +30,7 @@ struct [raypayload] ShadowIntersection {
     bool inShadow : read(caller) : write(miss);
 
     // traces a shadow ray, returning whether it hit geometry
-    static bool hit(float3 origin, float3 direction, float tmax) {
+    static bool hit(RaytracingAccelerationStructure accel, float3 origin, float3 direction, float tmax) {
         const uint shadowTraceFlags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
         
         RayDesc ray;
@@ -41,7 +41,7 @@ struct [raypayload] ShadowIntersection {
 
         ShadowIntersection its;
         its.inShadow = true;
-        TraceRay(dTLAS, shadowTraceFlags, 0xFF, 0, 0, 1, ray, its);
+        TraceRay(accel, shadowTraceFlags, 0xFF, 0, 0, 1, ray, its);
         return its.inShadow;
     }
 };

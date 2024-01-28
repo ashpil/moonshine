@@ -1,4 +1,5 @@
-// different than PBRT as in our system y is up
+#pragma once
+
 struct Frame {
     float3 n; // normal
     float3 s; // tangent
