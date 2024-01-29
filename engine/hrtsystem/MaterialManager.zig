@@ -291,6 +291,11 @@ pub const TextureManager = struct {
             .descriptor_count = max_descriptors,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true },
+        },
+        .{
+            .descriptor_type = .sampler,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
         }
     }, .{}, 1, "Textures");
 
@@ -317,9 +322,11 @@ pub const TextureManager = struct {
     data: std.MultiArrayList(Image),
     descriptor_layout: DescriptorLayout,
     descriptor_set: vk.DescriptorSet,
+    sampler: vk.Sampler,
 
     pub fn create(vc: *const VulkanContext) !TextureManager {
-        const descriptor_layout = try DescriptorLayout.create(vc, .{});
+        const sampler = try createSampler(vc);
+        const descriptor_layout = try DescriptorLayout.create(vc, .{ sampler });
 
         var descriptor_set: vk.DescriptorSet = undefined;
         try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
@@ -333,6 +340,7 @@ pub const TextureManager = struct {
             .data = .{},
             .descriptor_layout = descriptor_layout,
             .descriptor_set = descriptor_set,
+            .sampler = sampler,
         };
     }
 
@@ -409,6 +417,7 @@ pub const TextureManager = struct {
         }
         self.data.deinit(allocator);
         self.descriptor_layout.destroy(vc);
+        vc.device.destroySampler(self.sampler, null);
     }
 
     pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {

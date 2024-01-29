@@ -72,12 +72,6 @@ pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .stage_flags = .{ .raygen_bit_khr = true },
         .binding_flags = .{ .partially_bound_bit = true },
     },
-    .{ // textureSampler
-        .descriptor_type = .sampler,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{},
-    },
     .{ // materialValues
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
@@ -90,8 +84,6 @@ materials: MaterialManager,
 
 meshes: MeshManager,
 accel: Accel,
-
-sampler: vk.Sampler,
 
 descriptor_layout: DescriptorLayout,
 descriptor_set: vk.DescriptorSet,
@@ -286,7 +278,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, vk_allocator: *VkAllocator, 
 }
 
 pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
-    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [8]vk.WriteDescriptorSet {
+    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -376,20 +368,6 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
             .dst_binding = 6,
             .dst_array_element = 0,
             .descriptor_count = 1,
-            .descriptor_type = .sampler,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = self.sampler,
-                .image_view = .null_handle,
-                .image_layout = undefined,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 7,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
             .descriptor_type = .storage_buffer,
             .p_image_info = undefined,
             .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
@@ -410,9 +388,6 @@ pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
 pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, gltf: Gltf, inspection: bool) !Self {
-    const sampler = try TextureManager.createSampler(vc);
-
-    // materials
     var materials = blk: {
         var material_list = std.ArrayListUnmanaged(MaterialManager.MaterialInfo) {};
         defer material_list.deinit(allocator);
@@ -536,7 +511,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
-    var descriptor_layout = try DescriptorLayout.create(vc, .{ sampler });
+    var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
 
     var world = Self {
@@ -545,7 +520,6 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 
         .accel = accel,
 
-        .sampler = sampler,
         .descriptor_set = undefined,
         .descriptor_layout = descriptor_layout,
     };
@@ -555,15 +529,12 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 }
 
 pub fn createEmpty(vc: *const VulkanContext) !Self {
-    const sampler = try TextureManager.createSampler(vc);
     var self = Self {
         .materials = try MaterialManager.createEmpty(vc),
         .meshes = .{},
         .accel = .{},
 
-        .sampler = sampler,
-
-        .descriptor_layout = try DescriptorLayout.create(vc, .{ sampler }),
+        .descriptor_layout = try DescriptorLayout.create(vc, .{}),
         .descriptor_set = undefined,
     };
     try self.createDescriptorSet(vc);
@@ -579,8 +550,6 @@ pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    vc.device.destroySampler(self.sampler, null);
-
     self.materials.destroy(vc, allocator);
     self.meshes.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);

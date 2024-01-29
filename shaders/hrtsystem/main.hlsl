@@ -20,7 +20,7 @@
 [[vk::binding(3, 1)]] StructuredBuffer<AliasEntry<LightAliasData> > dEmitterAliasTable;
 [[vk::binding(4, 1)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(5, 1)]] StructuredBuffer<Geometry> dGeometries;
-[[vk::binding(7, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
+[[vk::binding(6, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
 [[vk::combinedImageSampler]] [[vk::binding(0, 2)]] Texture2D<float3> dBackgroundTexture;
