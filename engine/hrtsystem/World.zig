@@ -536,7 +536,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
-    var descriptor_layout = try DescriptorLayout.create(vc);
+    var descriptor_layout = try DescriptorLayout.create(vc, .{ sampler });
     errdefer descriptor_layout.destroy(vc);
 
     var world = Self {
@@ -555,14 +555,15 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
 }
 
 pub fn createEmpty(vc: *const VulkanContext) !Self {
+    const sampler = try TextureManager.createSampler(vc);
     var self = Self {
         .materials = try MaterialManager.createEmpty(vc),
         .meshes = .{},
         .accel = .{},
 
-        .sampler = try TextureManager.createSampler(vc),
+        .sampler = sampler,
 
-        .descriptor_layout = try DescriptorLayout.create(vc),
+        .descriptor_layout = try DescriptorLayout.create(vc, .{ sampler }),
         .descriptor_set = undefined,
     };
     try self.createDescriptorSet(vc);

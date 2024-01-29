@@ -18,18 +18,33 @@ pub fn DescriptorLayout(comptime bindings: []const DescriptorBindingInfo, compti
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext) !Self {
-            comptime var vk_bindings: [bindings.len]vk.DescriptorSetLayoutBinding = undefined;
+        const sampler_count = blk: {
+            var count = 0;
+            for (bindings) |binding| {
+                if (binding.descriptor_type == .sampler or binding.descriptor_type == .combined_image_sampler) {
+                    count += binding.descriptor_count;
+                }
+            }
+            break :blk count;
+        };
+
+        pub fn create(vc: *const VulkanContext, samplers: [sampler_count]vk.Sampler) !Self {
+            var vk_bindings: [bindings.len]vk.DescriptorSetLayoutBinding = undefined;
             comptime var vk_binding_flags: [bindings.len]vk.DescriptorBindingFlags = undefined;
-            comptime for (bindings, &vk_bindings, &vk_binding_flags, 0..) |binding, *vk_binding, *vk_binding_flag, binding_index| {
+            comptime var samplers_so_far = 0;
+            inline for (bindings, &vk_bindings, &vk_binding_flags, 0..) |binding, *vk_binding, *vk_binding_flag, binding_index| {
                 vk_binding.* = vk.DescriptorSetLayoutBinding {
                     .binding = binding_index,
                     .descriptor_type = binding.descriptor_type,
                     .descriptor_count = binding.descriptor_count,
                     .stage_flags = binding.stage_flags,
                 };
+                if (binding.descriptor_type == .sampler or binding.descriptor_type == .combined_image_sampler) {
+                    vk_binding.p_immutable_samplers = samplers[samplers_so_far..samplers_so_far +  binding.descriptor_count];
+                    samplers_so_far += binding.descriptor_count;
+                }
                 vk_binding_flag.* = binding.binding_flags;
-            };
+            }
             const create_info = vk.DescriptorSetLayoutCreateInfo {
                 .flags = layout_flags,
                 .binding_count = bindings.len,
@@ -76,11 +91,13 @@ pub fn DescriptorLayout(comptime bindings: []const DescriptorBindingInfo, compti
             }, @ptrCast(&descriptor_set));
 
             // avoid writing descriptors in certain invalid states:
-            // 1. descriptor count is zero
-            // 2. buffer is vk_null_handle
+            // 1. descriptor type is sampler (only immutable samplers are supported)
+            // 2. descriptor count is zero
+            // 3. buffer is vk_null_handle
             var valid_writes: [bindings.len]vk.WriteDescriptorSet = undefined;
             var valid_write_count: u32 = 0;
             for (writes) |write| {
+                if (write.descriptor_type == .sampler) continue;
                 if (write.descriptor_count == 0) continue;
                 switch (write.descriptor_type) {
                     .storage_buffer => if (write.p_buffer_info[0].buffer == .null_handle) continue,

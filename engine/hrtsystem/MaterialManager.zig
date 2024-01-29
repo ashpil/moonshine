@@ -319,7 +319,7 @@ pub const TextureManager = struct {
     descriptor_set: vk.DescriptorSet,
 
     pub fn create(vc: *const VulkanContext) !TextureManager {
-        const descriptor_layout = try DescriptorLayout.create(vc);
+        const descriptor_layout = try DescriptorLayout.create(vc, .{});
 
         var descriptor_set: vk.DescriptorSet = undefined;
         try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {

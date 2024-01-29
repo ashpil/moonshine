@@ -57,7 +57,25 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
     imgui.getIO().IniFilename = null;
 
     // load required vulkan state
-    const descriptor_set_layout = try GuiDescriptorLayout.create(vc);
+    const font_sampler = try vc.device.createSampler(&.{
+        .mag_filter = .linear,
+        .min_filter = .linear,
+        .mipmap_mode = .linear,
+        .address_mode_u = .repeat,
+        .address_mode_v = .repeat,
+        .address_mode_w = .repeat,
+        .min_lod = -1000,
+        .max_lod = 1000,
+        .anisotropy_enable = vk.FALSE,
+        .max_anisotropy = 1.0,
+        .compare_enable = vk.FALSE,
+        .compare_op = .never,
+        .border_color = .float_transparent_black,
+        .unnormalized_coordinates = vk.FALSE,
+        .mip_lod_bias = 0.0,
+    }, null);
+
+    const descriptor_set_layout = try GuiDescriptorLayout.create(vc, .{ font_sampler });
 
     const pipeline_layout = try vc.device.createPipelineLayout(&vk.PipelineLayoutCreateInfo {
         .set_layout_count = 1,
@@ -190,24 +208,6 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         break :blk pipeline;
     };
 
-    const font_sampler = try vc.device.createSampler(&.{
-        .mag_filter = .linear,
-        .min_filter = .linear,
-        .mipmap_mode = .linear,
-        .address_mode_u = .repeat,
-        .address_mode_v = .repeat,
-        .address_mode_w = .repeat,
-        .min_lod = -1000,
-        .max_lod = 1000,
-        .anisotropy_enable = vk.FALSE,
-        .max_anisotropy = 1.0,
-        .compare_enable = vk.FALSE,
-        .compare_op = .never,
-        .border_color = .float_transparent_black,
-        .unnormalized_coordinates = vk.FALSE,
-        .mip_lod_bias = 0.0,
-    }, null);
-
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
         const image = try Image.create(vc, vk_allocator, tex_data[1], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r8_unorm, "imgui font");
@@ -226,7 +226,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .descriptor_count = 1,
             .descriptor_type = .combined_image_sampler,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo{
-                .sampler = font_sampler,
+                .sampler = undefined,
                 .image_view = font_image.view,
                 .image_layout = .read_only_optimal,
             }),

@@ -60,7 +60,7 @@ descriptor_layout: DescriptorLayout,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext) !Self {
-    var descriptor_layout = try DescriptorLayout.create(vc);
+    var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
     return Self {
         .sensors = .{},

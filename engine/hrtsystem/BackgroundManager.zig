@@ -42,7 +42,7 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext) !Self {
     return Self {
-        .descriptor_layout = try DescriptorLayout.create(vc),
+        .descriptor_layout = try DescriptorLayout.create(vc, .{}),
         .data = .{},
     };
 }

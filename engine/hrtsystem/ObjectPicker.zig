@@ -69,7 +69,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
     errdefer buffer.destroy(vc);
 
-    var descriptor_layout = try DescriptorLayout.create(vc);
+    var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
 
     const descriptor_set = try descriptor_layout.allocate_set(vc, [1]vk.WriteDescriptorSet {
