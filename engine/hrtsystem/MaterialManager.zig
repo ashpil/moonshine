@@ -414,9 +414,9 @@ pub const TextureManager = struct {
     pub fn createSampler(vc: *const VulkanContext) !vk.Sampler {
         return try vc.device.createSampler(&.{
             .flags = .{},
-            .mag_filter = .nearest,
-            .min_filter = .nearest,
-            .mipmap_mode = .nearest,
+            .mag_filter = .linear,
+            .min_filter = .linear,
+            .mipmap_mode = .linear,
             .address_mode_u = .repeat,
             .address_mode_v = .repeat,
             .address_mode_w = .repeat,

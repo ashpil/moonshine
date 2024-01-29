@@ -33,12 +33,14 @@ interface Light {
 
 struct EnvMap : Light {
     Texture2D<float3> texture;
+    SamplerState sampler;
     StructuredBuffer<AliasEntry<float> > marginalAlias; // size: texture.height
     StructuredBuffer<AliasEntry<float> > conditionalAlias; // size: texture.height * texture.width
 
-    static EnvMap create(Texture2D<float3> texture, StructuredBuffer<AliasEntry<float> > marginalAlias, StructuredBuffer<AliasEntry<float> > conditionalAlias) {
+    static EnvMap create(Texture2D<float3> texture, SamplerState sampler, StructuredBuffer<AliasEntry<float> > marginalAlias, StructuredBuffer<AliasEntry<float> > conditionalAlias) {
         EnvMap map;
         map.texture = texture;
+        map.sampler = sampler;
         map.marginalAlias = marginalAlias;
         map.conditionalAlias = conditionalAlias;
         return map;
@@ -99,7 +101,7 @@ struct EnvMap : Light {
     float3 incomingRadiance(float3 dirWs) {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
-        return texture.SampleLevel(dTextureSampler, uv, 0);
+        return texture.SampleLevel(sampler, uv, 0);
     }
 };
 

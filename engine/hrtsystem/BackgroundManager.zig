@@ -12,7 +12,7 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 // must be kept in sync with shader
 pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
     .{ // image
-        .descriptor_type = .sampled_image,
+        .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
@@ -37,13 +37,34 @@ data: std.ArrayListUnmanaged(struct {
     descriptor_set: vk.DescriptorSet,
 }),
 descriptor_layout: DescriptorLayout,
+sampler: vk.Sampler,
 
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext) !Self {
+    const sampler = try vc.device.createSampler(&.{
+        .flags = .{},
+        .mag_filter = .nearest,
+        .min_filter = .nearest,
+        .mipmap_mode = .nearest,
+        .address_mode_u = .repeat,
+        .address_mode_v = .repeat,
+        .address_mode_w = .repeat,
+        .mip_lod_bias = 0.0,
+        .anisotropy_enable = vk.FALSE,
+        .max_anisotropy = 0.0,
+        .compare_enable = vk.FALSE,
+        .compare_op = .always,
+        .min_lod = 0.0,
+        .max_lod = 0.0,
+        .border_color = .float_opaque_white,
+        .unnormalized_coordinates = vk.FALSE,
+    }, null);
+
     return Self {
-        .descriptor_layout = try DescriptorLayout.create(vc, .{}),
+        .descriptor_layout = try DescriptorLayout.create(vc, .{ sampler }),
         .data = .{},
+        .sampler = sampler,
     };
 }
 
@@ -130,7 +151,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
             .dst_binding = 0,
             .dst_array_element = 0,
             .descriptor_count = 1,
-            .descriptor_type = .sampled_image,
+            .descriptor_type = .combined_image_sampler,
             .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                 .sampler = .null_handle,
                 .image_view = image.view,
@@ -185,4 +206,5 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     }
     self.data.deinit(allocator);
     self.descriptor_layout.destroy(vc);
+    vc.device.destroySampler(self.sampler, null);
 }
