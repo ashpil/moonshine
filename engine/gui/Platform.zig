@@ -57,7 +57,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
     imgui.getIO().IniFilename = null;
 
     // load required vulkan state
-    const descriptor_set_layout = try GuiDescriptorLayout.create(vc, 1, .{});
+    const descriptor_set_layout = try GuiDescriptorLayout.create(vc);
 
     const pipeline_layout = try vc.device.createPipelineLayout(&vk.PipelineLayoutCreateInfo {
         .set_layout_count = 1,
@@ -431,12 +431,12 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
 
 pub const GuiDescriptorLayout = DescriptorLayout(&.{
     .{
-        .binding = 0,
         .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .fragment_bit = true },
+        .binding_flags = .{},
     },
-}, null, "Gui");
+}, .{}, 1, "Gui");
 
 // glsl_shader.vert, compiled with:
 // # glslangValidator -V -x -o glsl_shader.vert.u32 glsl_shader.vert

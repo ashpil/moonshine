@@ -287,12 +287,12 @@ pub const TextureManager = struct {
     // must be kept in sync with shader
     pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .{
-            .binding = 0,
             .descriptor_type = .sampled_image,
             .descriptor_count = max_descriptors,
             .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true },
         }
-    }, .{ .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true } }, "Textures");
+    }, .{}, 1, "Textures");
 
     pub const Source = union(enum) {
         pub const Raw = struct {
@@ -319,7 +319,7 @@ pub const TextureManager = struct {
     descriptor_set: vk.DescriptorSet,
 
     pub fn create(vc: *const VulkanContext) !TextureManager {
-        const descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+        const descriptor_layout = try DescriptorLayout.create(vc);
         const descriptor_set = try descriptor_layout.allocate_set(vc, .{
             vk.WriteDescriptorSet {
                 .dst_set = undefined,

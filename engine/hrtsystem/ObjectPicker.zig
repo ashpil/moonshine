@@ -18,12 +18,11 @@ const Camera = hrtsystem.Camera;
 // must be kept in sync with shader
 pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
     .{
-        .binding = 0,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
-}, null, "Input");
+}, .{}, 1, "Input");
 
 const F32x2 = @import("../vector.zig").Vec2(f32);
 
@@ -70,7 +69,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
     errdefer buffer.destroy(vc);
 
-    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+    var descriptor_layout = try DescriptorLayout.create(vc);
     errdefer descriptor_layout.destroy(vc);
 
     const descriptor_set = try descriptor_layout.allocate_set(vc, [1]vk.WriteDescriptorSet {

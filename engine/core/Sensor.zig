@@ -11,12 +11,11 @@ const Image = engine.core.Image;
 // must be kept in sync with shader
 pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
     .{
-        .binding = 0,
         .descriptor_type = .storage_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     }
-}, null, "Sensor");
+}, .{}, 1, "Sensor");
 
 image: Image,
 descriptor_set: vk.DescriptorSet,

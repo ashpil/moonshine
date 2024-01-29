@@ -37,54 +37,54 @@ pub const Geometry = Accel.Geometry;
 const max_textures = 20 * 5; // TODO: think about this more, really really should
 pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
     .{ // TLAS
-        .binding = 0,
         .descriptor_type = .acceleration_structure_khr,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // instances
-        .binding = 1,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // worldToInstance
-        .binding = 2,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // emitterAliasTable
-        .binding = 3,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // meshes
-        .binding = 4,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // geometries
-        .binding = 5,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
     .{ // textureSampler
-        .binding = 6,
         .descriptor_type = .sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{},
     },
     .{ // materialValues
-        .binding = 7,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
+        .binding_flags = .{ .partially_bound_bit = true },
     },
-}, .{ .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{ .partially_bound_bit = true }, .{}, .{ .partially_bound_bit = true }, }, "World");
+}, .{}, 2, "World");
 
 materials: MaterialManager,
 
@@ -536,7 +536,7 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
-    var descriptor_layout = try DescriptorLayout.create(vc, 1, .{});
+    var descriptor_layout = try DescriptorLayout.create(vc);
     errdefer descriptor_layout.destroy(vc);
 
     var world = Self {
@@ -562,7 +562,7 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
 
         .sampler = try TextureManager.createSampler(vc),
 
-        .descriptor_layout = try DescriptorLayout.create(vc, 2, .{}), // TODO: max sets
+        .descriptor_layout = try DescriptorLayout.create(vc),
         .descriptor_set = undefined,
     };
     try self.createDescriptorSet(vc);

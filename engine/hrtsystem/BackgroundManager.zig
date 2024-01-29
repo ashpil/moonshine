@@ -12,24 +12,21 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 // must be kept in sync with shader
 pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
     .{ // image
-        .binding = 0,
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
     .{ // marginal
-        .binding = 1,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
     .{ // conditional
-        .binding = 2,
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
-}, null, "Background");
+}, .{}, 1, "Background");
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
@@ -45,7 +42,7 @@ const Self = @This();
 
 pub fn create(vc: *const VulkanContext) !Self {
     return Self {
-        .descriptor_layout = try DescriptorLayout.create(vc, 1, .{}), // todo: pass in max sets from somewhere
+        .descriptor_layout = try DescriptorLayout.create(vc),
         .data = .{},
     };
 }

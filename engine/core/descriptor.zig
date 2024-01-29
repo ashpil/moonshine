@@ -4,23 +4,40 @@ const core = @import("../engine.zig").core;
 const vk_helpers = core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 
-pub fn DescriptorLayout(comptime bindings: []const vk.DescriptorSetLayoutBinding, comptime binding_flags: ?[bindings.len]vk.DescriptorBindingFlags, comptime debug_name: [*:0]const u8) type {
+const DescriptorBindingInfo = struct {
+    descriptor_type: vk.DescriptorType,
+    descriptor_count: u32,
+    stage_flags: vk.ShaderStageFlags,
+    binding_flags: vk.DescriptorBindingFlags = .{},
+};
+
+pub fn DescriptorLayout(comptime bindings: []const DescriptorBindingInfo, comptime layout_flags: vk.DescriptorSetLayoutCreateFlags, comptime max_sets: comptime_int, comptime debug_name: [*:0]const u8) type {
     return struct {
         handle: vk.DescriptorSetLayout,
         pool: vk.DescriptorPool,
 
         const Self = @This();
 
-        pub fn create(vc: *const VulkanContext, comptime max_sets: comptime_int, layout_flags: vk.DescriptorSetLayoutCreateFlags) !Self {
-            const binding_flags_create_info = if (binding_flags) |flags| (&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
-                .binding_count = bindings.len,
-                .p_binding_flags = &flags,
-            }) else null;
+        pub fn create(vc: *const VulkanContext) !Self {
+            comptime var vk_bindings: [bindings.len]vk.DescriptorSetLayoutBinding = undefined;
+            comptime var vk_binding_flags: [bindings.len]vk.DescriptorBindingFlags = undefined;
+            comptime for (bindings, &vk_bindings, &vk_binding_flags, 0..) |binding, *vk_binding, *vk_binding_flag, binding_index| {
+                vk_binding.* = vk.DescriptorSetLayoutBinding {
+                    .binding = binding_index,
+                    .descriptor_type = binding.descriptor_type,
+                    .descriptor_count = binding.descriptor_count,
+                    .stage_flags = binding.stage_flags,
+                };
+                vk_binding_flag.* = binding.binding_flags;
+            };
             const create_info = vk.DescriptorSetLayoutCreateInfo {
                 .flags = layout_flags,
                 .binding_count = bindings.len,
-                .p_bindings = bindings.ptr,
-                .p_next = binding_flags_create_info,
+                .p_bindings = &vk_bindings,
+                .p_next = @ptrCast(&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
+                    .binding_count = bindings.len,
+                    .p_binding_flags = &vk_binding_flags,
+                }),
             };
             const handle = try vc.device.createDescriptorSetLayout(&create_info, null);
             errdefer vc.device.destroyDescriptorSetLayout(handle, null);
