@@ -13,6 +13,7 @@ pub const required_device_extensions = [_][*:0]const u8{
     vk.extension_info.khr_deferred_host_operations.name,
     vk.extension_info.khr_acceleration_structure.name,
     vk.extension_info.khr_ray_tracing_pipeline.name,
+    vk.extension_info.khr_push_descriptor.name,
 };
 
 pub const required_device_features = vk.PhysicalDeviceRayTracingPipelineFeaturesKHR {
@@ -33,4 +34,5 @@ pub const required_device_functions = vk.DeviceCommandFlags {
     .cmdTraceRaysKHR = true,
     .cmdWriteAccelerationStructuresPropertiesKHR = true,
     .cmdCopyAccelerationStructureKHR = true,
+    .cmdPushDescriptorSetKHR = true,
 };

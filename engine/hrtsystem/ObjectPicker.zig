@@ -12,17 +12,28 @@ const hrtsystem = engine.hrtsystem;
 const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
 const descriptor = core.descriptor;
 const WorldDescriptorLayout = hrtsystem.World.DescriptorLayout;
-const SensorDescriptorLayout = core.Sensor.DescriptorLayout;
+const Sensor = core.Sensor;
+const SensorDescriptorLayout = Sensor.DescriptorLayout;
 const Camera = hrtsystem.Camera;
 
 // must be kept in sync with shader
 pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
     .{
+        .descriptor_type = .acceleration_structure_khr,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+    },
+    .{
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .raygen_bit_khr = true },
+    },
+    .{
         .descriptor_type = .storage_buffer,
         .descriptor_count = 1,
         .stage_flags = .{ .raygen_bit_khr = true },
     },
-}, .{}, 1, "Input");
+}, .{ .push_descriptor_bit_khr = true }, 1, "Input");
 
 const F32x2 = @import("../vector.zig").Vec2(f32);
 
@@ -59,7 +70,6 @@ buffer: VkAllocator.HostBuffer(ClickDataShader),
 pipeline: Pipeline,
 
 descriptor_layout: DescriptorLayout,
-descriptor_set: vk.DescriptorSet,
 
 command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
@@ -71,23 +81,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
-
-    const descriptor_set = try descriptor_layout.allocate_set(vc, [1]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-    });
 
     var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, world_layout, sensor_layout }, .{});
     errdefer pipeline.destroy(vc);
@@ -115,7 +108,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .pipeline = pipeline,
 
         .descriptor_layout = descriptor_layout,
-        .descriptor_set = descriptor_set,
 
         .command_pool = command_pool,
         .command_buffer = command_buffer,
@@ -123,13 +115,56 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     };
 }
 
-pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, tlas_descriptor_set: vk.DescriptorSet, sensor_descriptor_set: vk.DescriptorSet) !?ClickedObject {
+pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, accel: vk.AccelerationStructureKHR, sensor: Sensor) !?ClickedObject {
     // begin
     try vc.device.beginCommandBuffer(self.command_buffer, &.{ .flags = .{} });
 
     // bind pipeline + sets
     vc.device.cmdBindPipeline(self.command_buffer, .ray_tracing_khr, self.pipeline.handle);
-    vc.device.cmdBindDescriptorSets(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[_]vk.DescriptorSet { self.descriptor_set, tlas_descriptor_set, sensor_descriptor_set }, 0, undefined);
+    vc.device.cmdPushDescriptorSetKHR(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[3]vk.WriteDescriptorSet {
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 0,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .acceleration_structure_khr,
+            .p_image_info = undefined,
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
+                .acceleration_structure_count = 1,
+                .p_acceleration_structures = @ptrCast(&accel),
+            },
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 1,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_image,
+            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
+                .sampler = .null_handle,
+                .image_view = sensor.image.view,
+                .image_layout = .general,
+            }),
+            .p_buffer_info = undefined,
+            .p_texel_buffer_view = undefined,
+        },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 2,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
+                .buffer = self.buffer.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
+    });
 
     const bytes = std.mem.asBytes(&.{ camera.lenses.items[0], normalized_coords });
     vc.device.cmdPushConstants(self.command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);

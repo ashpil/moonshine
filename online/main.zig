@@ -274,7 +274,7 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.descriptor_set, scene.camera.sensors.items[0].descriptor_set);
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.accel.tlas_handle, scene.camera.sensors.items[0]);
             const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;

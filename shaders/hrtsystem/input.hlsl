@@ -5,9 +5,9 @@ struct ClickData {
     float2 barycentrics;
 };
 
-[[vk::binding(0, 0)]] RWStructuredBuffer<ClickData> click_data;
-[[vk::binding(0, 1)]] RaytracingAccelerationStructure TLAS;
-[[vk::binding(0, 2)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(0, 0)]] RaytracingAccelerationStructure TLAS;
+[[vk::binding(1, 0)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(2, 0)]] RWStructuredBuffer<ClickData> click_data;
 
 #include "camera.hlsl"
 
