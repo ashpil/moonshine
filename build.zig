@@ -199,7 +199,6 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
     rt_shader_comp.add("@\"hrtsystem/input.hlsl\"", "shaders/hrtsystem/input.hlsl", .{});
     rt_shader_comp.add("@\"hrtsystem/main.hlsl\"", "shaders/hrtsystem/main.hlsl", .{
         .watched_files = &.{
-            "shaders/hrtsystem/bindings.hlsl",
             "shaders/hrtsystem/camera.hlsl",
             "shaders/hrtsystem/world.hlsl",
             "shaders/hrtsystem/integrator.hlsl",

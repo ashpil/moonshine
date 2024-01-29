@@ -1,4 +1,3 @@
-#include "bindings.hlsl"
 #include "intersection.hlsl"
 #include "camera.hlsl"
 #include "scene.hlsl"
