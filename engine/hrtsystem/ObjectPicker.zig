@@ -11,9 +11,7 @@ const Commands = core.Commands;
 const hrtsystem = engine.hrtsystem;
 const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
 const descriptor = core.descriptor;
-const WorldDescriptorLayout = hrtsystem.World.DescriptorLayout;
 const Sensor = core.Sensor;
-const SensorDescriptorLayout = Sensor.DescriptorLayout;
 const Camera = hrtsystem.Camera;
 
 // must be kept in sync with shader
@@ -75,14 +73,14 @@ command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, world_layout: WorldDescriptorLayout, sensor_layout: SensorDescriptorLayout, commands: *Commands) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
     errdefer buffer.destroy(vc);
 
     var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
 
-    var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout, world_layout, sensor_layout }, .{});
+    var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout }, .{});
     errdefer pipeline.destroy(vc);
 
     const command_pool = try vc.device.createCommandPool(&.{

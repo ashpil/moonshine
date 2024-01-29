@@ -9,8 +9,6 @@ const VkAllocator = core.Allocator;
 const Commands = core.Commands;
 
 const Sensor = core.Sensor;
-const DescriptorLayout = Sensor.DescriptorLayout;
-const ImageManager = core.ImageManager;
 
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
@@ -55,23 +53,19 @@ pub const Lens = extern struct {
 
 sensors: std.ArrayListUnmanaged(Sensor),
 lenses: std.ArrayListUnmanaged(Lens),
-descriptor_layout: DescriptorLayout,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext) !Self {
-    var descriptor_layout = try DescriptorLayout.create(vc, .{});
-    errdefer descriptor_layout.destroy(vc);
+pub fn create() !Self {
     return Self {
         .sensors = .{},
         .lenses = .{},
-        .descriptor_layout = descriptor_layout,
     };
 }
 
 pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
-    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, &self.descriptor_layout, extent));
+    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, extent));
     return @intCast(self.sensors.items.len - 1);
 }
 
@@ -87,5 +81,4 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     }
     self.sensors.deinit(allocator);
     self.lenses.deinit(allocator);
-    self.descriptor_layout.destroy(vc);
 }

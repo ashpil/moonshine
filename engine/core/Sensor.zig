@@ -7,47 +7,18 @@ const VkAllocator =  engine.core.Allocator;
 const Commands =  engine.core.Commands;
 const Image = engine.core.Image;
 
-
-// must be kept in sync with shader
-pub const DescriptorLayout = @import("./descriptor.zig").DescriptorLayout(&.{
-    .{
-        .descriptor_type = .storage_image,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    }
-}, .{}, 1, "Sensor");
-
 image: Image,
-descriptor_set: vk.DescriptorSet,
 extent: vk.Extent2D,
 sample_count: u32,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, descriptor_layout: *const DescriptorLayout, extent: vk.Extent2D) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, extent: vk.Extent2D) !Self {
     const image = try Image.create(vc, vk_allocator, extent, .{ .storage_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat, "render");
     errdefer image.destroy(vc);
 
-    const descriptor_set = try descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = image.view,
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        }
-    });
-
     return Self {
         .image = image,
-        .descriptor_set = descriptor_set,
         .extent = extent,
         .sample_count = 0,
     };

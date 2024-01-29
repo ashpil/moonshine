@@ -9,34 +9,13 @@ const Image = engine.core.Image;
 
 const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 
-// must be kept in sync with shader
-pub const DescriptorLayout = engine.core.descriptor.DescriptorLayout(&.{
-    .{ // image
-        .descriptor_type = .combined_image_sampler,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-    .{ // marginal
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-    .{ // conditional
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-}, .{}, 1, "Background");
-
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
 data: std.ArrayListUnmanaged(struct {
     marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     image: Image,
-    descriptor_set: vk.DescriptorSet,
 }),
-descriptor_layout: DescriptorLayout,
 sampler: vk.Sampler,
 
 const Self = @This();
@@ -62,7 +41,6 @@ pub fn create(vc: *const VulkanContext) !Self {
     }, null);
 
     return Self {
-        .descriptor_layout = try DescriptorLayout.create(vc, .{ sampler }),
         .data = .{},
         .sampler = sampler,
     };
@@ -145,54 +123,8 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     };
     errdefer marginal.destroy(vc);
 
-    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .combined_image_sampler,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = image.view,
-                .image_layout = .shader_read_only_optimal,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = marginal.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = conditional.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-    });
-
     try self.data.append(allocator, .{
         .image = image,
-        .descriptor_set = descriptor_set,
         .marginal = marginal,
         .conditional = conditional,
     });
@@ -205,6 +137,5 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         data.image.destroy(vc);
     }
     self.data.deinit(allocator);
-    self.descriptor_layout.destroy(vc);
     vc.device.destroySampler(self.sampler, null);
 }

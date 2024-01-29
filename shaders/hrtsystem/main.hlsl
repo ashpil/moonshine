@@ -22,13 +22,13 @@
 [[vk::binding(6, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
-[[vk::combinedImageSampler]] [[vk::binding(0, 2)]] Texture2D<float3> dBackgroundTexture;
-[[vk::combinedImageSampler]] [[vk::binding(0, 2)]] SamplerState dBackgroundSampler;
-[[vk::binding(1, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
-[[vk::binding(2, 2)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
+[[vk::combinedImageSampler]] [[vk::binding(7, 1)]] Texture2D<float3> dBackgroundTexture;
+[[vk::combinedImageSampler]] [[vk::binding(7, 1)]] SamplerState dBackgroundSampler;
+[[vk::binding(8, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
+[[vk::binding(9, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
 
 // OUTPUT
-[[vk::binding(0, 3)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(10, 1)]] RWTexture2D<float4> dOutputImage;
 
 // PUSH CONSTANTS
 struct PushConsts {

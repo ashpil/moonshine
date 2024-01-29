@@ -111,12 +111,12 @@ pub fn main() !void {
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, scene.world.descriptor_layout, scene.camera.descriptor_layout, &commands);
+    var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, &commands);
     defer object_picker.destroy(&context);
 
     var pipeline_constants = Pipeline.SpecConstants{};
     var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.world.descriptor_layout, scene.background.descriptor_layout, scene.camera.descriptor_layout }, pipeline_constants);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, pipeline_constants);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -287,7 +287,8 @@ pub fn main() !void {
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set, scene.world.descriptor_set, scene.background.data.items[0].descriptor_set, scene.camera.sensors.items[0].descriptor_set });
+            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
+            scene.pushDescriptors(&context, command_buffer, pipeline.layout, 0, 0);
 
             // push some stuff
             const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });

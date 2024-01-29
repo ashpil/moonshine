@@ -1,7 +1,7 @@
 // a world contains:
-// - a list of meshes
-// - an acceleration structure/mesh heirarchy
+// - meshes
 // - materials
+// - an acceleration structure/mesh heirarchy
 
 const std = @import("std");
 const vk = @import("vulkan");
@@ -33,60 +33,10 @@ pub const MaterialVariant = MaterialManager.MaterialVariant;
 pub const Instance = Accel.Instance;
 pub const Geometry = Accel.Geometry;
 
-// must be kept in sync with shader
-const max_textures = 20 * 5; // TODO: think about this more, really really should
-pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
-    .{ // TLAS
-        .descriptor_type = .acceleration_structure_khr,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // instances
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // worldToInstance
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // emitterAliasTable
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // meshes
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // geometries
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-    .{ // materialValues
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-        .binding_flags = .{ .partially_bound_bit = true },
-    },
-}, .{}, 2, "World");
-
+meshes: MeshManager,
 materials: MaterialManager,
 
-meshes: MeshManager,
 accel: Accel,
-
-descriptor_layout: DescriptorLayout,
-descriptor_set: vk.DescriptorSet,
 
 const Self = @This();
 
@@ -277,113 +227,6 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, vk_allocator: *VkAllocator, 
     }
 }
 
-pub fn createDescriptorSet(self: *Self, vc: *const VulkanContext) !void {
-    const descriptor_set = try self.descriptor_layout.allocate_set(vc, [_]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .acceleration_structure_khr,
-            .p_image_info = undefined,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
-                .acceleration_structure_count = 1,
-                .p_acceleration_structures = @ptrCast(&self.accel.tlas_handle),
-            },
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.instances_device.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.world_to_instance.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 3,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.alias_table.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 4,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.meshes.addresses_buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 5,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.accel.geometries.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 6,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.materials.materials.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-    });
-
-    try vk_helpers.setDebugName(vc, descriptor_set, "World");
-
-    self.descriptor_set = descriptor_set;
-}
-
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
@@ -511,34 +354,20 @@ pub fn fromGlb(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: 
     var accel = try Accel.create(vc, vk_allocator, allocator, commands, meshes, instances.items, inspection);
     errdefer accel.destroy(vc, allocator);
 
-    var descriptor_layout = try DescriptorLayout.create(vc, .{});
-    errdefer descriptor_layout.destroy(vc);
-
-    var world = Self {
+    return Self {
         .materials = materials,
         .meshes = meshes,
 
         .accel = accel,
-
-        .descriptor_set = undefined,
-        .descriptor_layout = descriptor_layout,
     };
-    try world.createDescriptorSet(vc);
-
-    return world;
 }
 
 pub fn createEmpty(vc: *const VulkanContext) !Self {
-    var self = Self {
+    return Self {
         .materials = try MaterialManager.createEmpty(vc),
         .meshes = .{},
         .accel = .{},
-
-        .descriptor_layout = try DescriptorLayout.create(vc, .{}),
-        .descriptor_set = undefined,
     };
-    try self.createDescriptorSet(vc);
-    return self;
 }
 
 pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
@@ -553,6 +382,4 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.materials.destroy(vc, allocator);
     self.meshes.destroy(vc, allocator);
     self.accel.destroy(vc, allocator);
-
-    self.descriptor_layout.destroy(vc);
 }

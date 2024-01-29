@@ -13,6 +13,7 @@ const DestructionQueue = core.DestructionQueue;
 const Camera = @import("./Camera.zig");
 
 const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
+const SceneDescriptorLayout = engine.hrtsystem.Scene.DescriptorLayout;
 const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
 const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
 const TextureDescriptorLayout = engine.hrtsystem.MaterialManager.TextureManager.DescriptorLayout;
@@ -178,7 +179,7 @@ pub fn Pipeline(
             vc.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.handle);
         }
 
-        pub fn recordBindDescriptorSets(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, sets: [set_layout_count]vk.DescriptorSet) void {
+        pub fn recordBindDescriptorSets(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, sets: [set_layout_count - 1]vk.DescriptorSet) void { // TODO
             vc.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, self.layout, 0, sets.len, &sets, 0, undefined);
         }
 
@@ -193,8 +194,6 @@ pub const ObjectPickPipeline = Pipeline(
     &.{ 0, 0, 0 },
     struct {
         InputDescriptorLayout,
-        WorldDescriptorLayout,
-        SensorDescriptorLayout,
     },
     struct {},
     &[_]vk.PushConstantRange {
@@ -223,9 +222,7 @@ pub const StandardPipeline = Pipeline(
     &.{ 0, 0, 0, 0 },
     struct {
         TextureDescriptorLayout,
-        WorldDescriptorLayout,
-        BackgroundDescriptorLayout,
-        SensorDescriptorLayout,
+        SceneDescriptorLayout,
     },
     struct {
         @"0": extern struct {
