@@ -164,8 +164,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
         },
     });
 
-    const bytes = std.mem.asBytes(&.{ camera.lenses.items[0], normalized_coords });
-    vc.device.cmdPushConstants(self.command_buffer, self.pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+    self.pipeline.recordPushConstants(vc, self.command_buffer, .{ .lens = camera.lenses.items[0], .click_position = normalized_coords });
 
     // trace rays
     const callable_table = vk.StridedDeviceAddressRegionKHR {

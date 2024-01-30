@@ -114,9 +114,8 @@ pub fn main() !void {
     var object_picker = try ObjectPicker.create(&context, &vk_allocator, allocator, &commands);
     defer object_picker.destroy(&context);
 
-    var pipeline_constants = Pipeline.SpecConstants{};
-    var pipeline_opts = &pipeline_constants.@"0";
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, pipeline_constants);
+    var pipeline_opts = Pipeline.SpecConstants{};
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, pipeline_opts);
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -192,7 +191,7 @@ pub fn main() !void {
             if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
-                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, pipeline_constants, &destruction_queue)) {
+                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, pipeline_opts, &destruction_queue)) {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
                     rebuild_error = false;
@@ -288,11 +287,10 @@ pub fn main() !void {
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
             pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
-            scene.pushDescriptors(&context, command_buffer, pipeline.layout, 0, 0);
 
             // push some stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
-            context.device.cmdPushConstants(command_buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+            scene.pushDescriptors(&context, command_buffer, pipeline.layout, 0, 0);
+            pipeline.recordPushConstants(&context, command_buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace some stuff
             pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensors.items[0].extent);

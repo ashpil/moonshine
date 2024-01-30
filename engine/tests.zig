@@ -62,11 +62,10 @@ const TestingContext = struct {
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
         pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
-        scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline.layout, 0, 0);
 
         // push our stuff
-        const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], scene.camera.sensors.items[0].sample_count });
-        self.vc.device.cmdPushConstants(self.commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+        scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline.layout, 0, 0);
+        pipeline.recordPushConstants(&self.vc, self.commands.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
         // trace our stuff
         pipeline.recordTraceRays(&self.vc, self.commands.buffer, scene.camera.sensors.items[0].extent);
@@ -331,12 +330,10 @@ test "white sphere on white background is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
-        .@"0" = .{
-            .samples_per_run = 512,
-            .max_bounces = 1024,
-            .env_samples_per_bounce = 0, // TODO: test with env sampling once that works well with small env maps
-            .mesh_samples_per_bounce = 0,
-        }
+        .samples_per_run = 512,
+        .max_bounces = 1024,
+        .env_samples_per_bounce = 0, // TODO: test with env sampling once that works well with small env maps
+        .mesh_samples_per_bounce = 0,
     });
     defer pipeline.destroy(&tc.vc);
 
@@ -426,12 +423,10 @@ test "inside illuminating sphere is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
-        .@"0" = .{
-            .samples_per_run = 1024,
-            .max_bounces = 1024,
-            .env_samples_per_bounce = 0,
-            .mesh_samples_per_bounce = 0,
-        }
+        .samples_per_run = 1024,
+        .max_bounces = 1024,
+        .env_samples_per_bounce = 0,
+        .mesh_samples_per_bounce = 0,
     });
     defer pipeline.destroy(&tc.vc);
 

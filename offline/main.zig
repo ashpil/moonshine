@@ -104,12 +104,10 @@ pub fn main() !void {
     try logger.log("load world");
 
     var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
-        .@"0" = .{
-            .samples_per_run = 1,
-            .max_bounces = 1024,
-            .env_samples_per_bounce = 1,
-            .mesh_samples_per_bounce = 1,
-        }
+        .samples_per_run = 1,
+        .max_bounces = 1024,
+        .env_samples_per_bounce = 1,
+        .mesh_samples_per_bounce = 1,
     });
     defer pipeline.destroy(&context);
 
@@ -132,8 +130,7 @@ pub fn main() !void {
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            const bytes = std.mem.asBytes(&.{ scene.camera.lenses.items[0], @as(u32, @intCast(sample_count)) });
-            context.device.cmdPushConstants(commands.buffer, pipeline.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+            pipeline.recordPushConstants(&context, commands.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace our stuff
             pipeline.recordTraceRays(&context, commands.buffer, scene.camera.sensors.items[0].extent);

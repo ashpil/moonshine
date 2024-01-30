@@ -12,30 +12,107 @@ const DestructionQueue = core.DestructionQueue;
 
 const Camera = @import("./Camera.zig");
 
-const WorldDescriptorLayout = engine.hrtsystem.World.DescriptorLayout;
 const SceneDescriptorLayout = engine.hrtsystem.Scene.DescriptorLayout;
-const BackgroundDescriptorLayout = engine.hrtsystem.BackgroundManager.DescriptorLayout;
 const InputDescriptorLayout = engine.hrtsystem.ObjectPicker.DescriptorLayout;
 const TextureDescriptorLayout = engine.hrtsystem.MaterialManager.TextureManager.DescriptorLayout;
-const SensorDescriptorLayout = engine.core.Sensor.DescriptorLayout;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 
-const PushConstant = struct {
-    type: type,
-    stage_flags: vk.ShaderStageFlags,
+const ShaderType = enum {
+    ray_tracing,
+    compute,
+};
+
+// creates shader modules, respecting build option to statically embed or dynamically load shader code
+fn createShaderModule(vc: *const VulkanContext, comptime shader_path: []const u8, allocator: std.mem.Allocator, comptime shader_type: ShaderType) !vk.ShaderModule {
+    var to_free: []const u8 = undefined;
+    defer if (build_options.shader_source == .load) allocator.free(to_free);
+    const shader_code = if (build_options.shader_source == .embed) switch (shader_type) {
+            .ray_tracing => @field(@import("rt_shaders"), shader_path),
+            .compute => @field(@import("compute_shaders"), shader_path),
+        } else blk: {
+        const compile_cmd = switch (shader_type) {
+            .ray_tracing => build_options.rt_shader_compile_cmd,
+            .compute => build_options.compute_shader_compile_cmd,
+        };
+        var compile_process = std.ChildProcess.init(compile_cmd ++ &[_][]const u8 { "shaders/" ++ shader_path }, allocator);
+        compile_process.stdout_behavior = .Pipe;
+        try compile_process.spawn();
+        const stdout = blk_inner: {
+            var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
+            defer poller.deinit();
+
+            while (try poller.poll()) {}
+
+            var fifo = poller.fifo(.stdout);
+            if (fifo.head > 0) {
+                @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
+            }
+
+            to_free = fifo.buf;
+            const stdout = fifo.buf[0..fifo.count];
+            fifo.* = std.io.PollFifo.init(allocator);
+
+            break :blk_inner stdout;
+        };
+
+        const term = try compile_process.wait();
+        if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
+        break :blk stdout;
+    };
+    return try vc.device.createShaderModule(&.{
+        .code_size = shader_code.len,
+        .p_code = @as([*]const u32, @ptrCast(@alignCast(if (build_options.shader_source == .embed) &shader_code else shader_code.ptr))),
+    }, null);
+}
+
+const StageType = enum {
+    miss,
+    raygen,
+    callable,
+    closest_hit,
+
+    fn to_vk_stage(self: StageType) vk.ShaderStageFlags {
+        return switch (self) {
+            .miss => .{ .miss_bit_khr = true },
+            .raygen => .{ .raygen_bit_khr = true },
+            .callable => .{ .callable_bit_khr = true },
+            .closest_hit => .{ .closest_hit_bit_khr = true },
+        };
+    }
+
+    fn to_vk_group(self: StageType) vk.RayTracingShaderGroupTypeKHR {
+        return switch (self) {
+            .miss => .general_khr,
+            .raygen => .general_khr,
+            .callable => .general_khr,
+            .closest_hit => .triangles_hit_group_khr,
+        };
+    }
+
+    fn name(self: StageType) []const u8 {
+        return switch (self) {
+            .miss => "general_shader",
+            .raygen => "general_shader",
+            .callable => "general_shader",
+            .closest_hit => "closest_hit_shader",
+        };
+    }
+};
+
+const Stage = struct {
+    entrypoint: [*:0]const u8,
+    type: StageType,
 };
 
 pub fn Pipeline(
-        comptime shader_names: []const []const u8,
-        comptime module_to_stage: []const comptime_int,
+        comptime shader_name: []const u8,
         comptime SetLayouts: type,
         comptime SpecConstantsT: type,
-        comptime push_constant_ranges: []const vk.PushConstantRange,
-        comptime stages: []const vk.PipelineShaderStageCreateInfo,
-        comptime groups: []const vk.RayTracingShaderGroupCreateInfoKHR,
+        comptime PushConstants: type,
+        comptime stages: []const Stage,
     ) type {
 
     return struct {
@@ -50,54 +127,76 @@ pub fn Pipeline(
         const set_layout_count = @typeInfo(SetLayouts).Struct.fields.len;
 
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: SetLayouts, constants: SpecConstants) !Self {
-            comptime std.debug.assert(stages.len == module_to_stage.len);
 
             var set_layout_handles: [set_layout_count]vk.DescriptorSetLayout = undefined;
             inline for (&set_layout_handles, set_layouts) |*handle, set_layout| {
                 handle.* = set_layout.handle;
             }
+            const push_constants = if (@sizeOf(PushConstants) != 0) [1]vk.PushConstantRange {
+                .{
+                    .offset = 0,
+                    .size = @sizeOf(PushConstants),
+                    .stage_flags = .{ .raygen_bit_khr = true }, // push constants only for raygen
+                }
+            } else .{};
             const layout = try vc.device.createPipelineLayout(&.{
                 .set_layout_count = set_layout_handles.len,
                 .p_set_layouts = &set_layout_handles,
-                .push_constant_range_count = push_constant_ranges.len,
-                .p_push_constant_ranges = push_constant_ranges.ptr,
+                .push_constant_range_count = push_constants.len,
+                .p_push_constant_ranges = &push_constants,
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator, .rt);
-            defer for (modules) |module| vc.device.destroyShaderModule(module, null);
+            const module = try createShaderModule(vc, shader_name, allocator, .ray_tracing);
+            defer vc.device.destroyShaderModule(module, null);
 
-            var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
-            inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
-                var_stage.* = stage;
-                var_stage.module = modules[map];
+            var vk_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
+            var vk_groups: [stages.len]vk.RayTracingShaderGroupCreateInfoKHR = undefined;
+            inline for (stages, &vk_stages, &vk_groups, 0..) |stage, *vk_stage, *vk_group, i| {
+                vk_stage.* = vk.PipelineShaderStageCreateInfo {
+                    .module = module,
+                    .p_name = stage.entrypoint,
+                    .stage = stage.type.to_vk_stage(),
+                };
+                vk_group.* = vk.RayTracingShaderGroupCreateInfoKHR {
+                    .type = stage.type.to_vk_group(),
+                    .general_shader = vk.SHADER_UNUSED_KHR,
+                    .closest_hit_shader = vk.SHADER_UNUSED_KHR,
+                    .any_hit_shader = vk.SHADER_UNUSED_KHR,
+                    .intersection_shader = vk.SHADER_UNUSED_KHR,
+                };
+                @field(vk_group, stage.type.name()) = i;
             }
 
-            inline for (@typeInfo(SpecConstants).Struct.fields, 0..) |field, i| {
-                if (@sizeOf(field.type) != 0) {
-                    const inner_fields = @typeInfo(field.type).Struct.fields;
-                    var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
-                    inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
-                        map_entry.* = vk.SpecializationMapEntry {
-                            .constant_id = j,
-                            .offset = @offsetOf(field.type, inner_field.name),
-                            .size = @sizeOf(inner_field.type),
+            if (@sizeOf(SpecConstants) != 0) {
+                const inner_fields = @typeInfo(SpecConstants).Struct.fields;
+                var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
+                inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
+                    map_entry.* = vk.SpecializationMapEntry {
+                        .constant_id = j,
+                        .offset = @offsetOf(SpecConstants, inner_field.name),
+                        .size = @sizeOf(inner_field.type),
+                    };
+                }
+
+                for (stages, &vk_stages) |stage, *vk_stage|{
+                    // only use specialization constants in raygen
+                    if (stage.type == .raygen) {
+                        vk_stage.p_specialization_info = &vk.SpecializationInfo {
+                            .map_entry_count = map_entries.len,
+                            .p_map_entries = &map_entries,
+                            .data_size = @sizeOf(SpecConstants),
+                            .p_data = &constants,
                         };
                     }
-                    var_stages[i].p_specialization_info = &vk.SpecializationInfo {
-                        .map_entry_count = map_entries.len,
-                        .p_map_entries = &map_entries,
-                        .data_size = @sizeOf(field.type),
-                        .p_data = &@field(constants, field.name),
-                    };
                 }
             }
 
             const create_info = vk.RayTracingPipelineCreateInfoKHR {
-                .stage_count = var_stages.len,
-                .p_stages = &var_stages,
-                .group_count = groups.len,
-                .p_groups = groups.ptr,
+                .stage_count = vk_stages.len,
+                .p_stages = &vk_stages,
+                .group_count = vk_groups.len,
+                .p_groups = &vk_groups,
                 .max_pipeline_ray_recursion_depth = 1,
                 .layout = layout,
                 .base_pipeline_handle = .null_handle,
@@ -107,7 +206,7 @@ pub fn Pipeline(
             _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast(&create_info), null, @ptrCast(&handle));
             errdefer vc.device.destroyPipeline(handle, null);
 
-            const shader_info = ShaderInfo.find(stages);
+            const shader_info = comptime ShaderInfo.find(stages);
             const sbt = try ShaderBindingTable.create(vc, vk_allocator, allocator, handle, cmd, shader_info.raygen_count, shader_info.miss_count, shader_info.hit_count, shader_info.callable_count);
             errdefer sbt.destroy(vc);
 
@@ -120,40 +219,56 @@ pub fn Pipeline(
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
-            const modules = try core.vk_helpers.createShaderModules(vc, shader_names, allocator, .rt);
-            defer for (modules) |module| vc.device.destroyShaderModule(module, null);
+            const module = try createShaderModule(vc, shader_name, allocator, .ray_tracing);
+            defer vc.device.destroyShaderModule(module, null);
 
-            var var_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
-            inline for (&var_stages, stages, module_to_stage) |*var_stage, stage, map| {
-                var_stage.* = stage;
-                var_stage.module = modules[map];
+            var vk_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
+            var vk_groups: [stages.len]vk.RayTracingShaderGroupCreateInfoKHR = undefined;
+            inline for (stages, &vk_stages, &vk_groups, 0..) |stage, *vk_stage, *vk_group, i| {
+                vk_stage.* = vk.PipelineShaderStageCreateInfo {
+                    .module = module,
+                    .p_name = stage.entrypoint,
+                    .stage = stage.type.to_vk_stage(),
+                };
+                vk_group.* = vk.RayTracingShaderGroupCreateInfoKHR {
+                    .type = stage.type.to_vk_group(),
+                    .general_shader = vk.SHADER_UNUSED_KHR,
+                    .closest_hit_shader = vk.SHADER_UNUSED_KHR,
+                    .any_hit_shader = vk.SHADER_UNUSED_KHR,
+                    .intersection_shader = vk.SHADER_UNUSED_KHR,
+                };
+                @field(vk_group, stage.type.name()) = i;
             }
 
-            inline for (@typeInfo(SpecConstants).Struct.fields, 0..) |field, i| {
-                if (@sizeOf(field.type) != 0) {
-                    const inner_fields = @typeInfo(field.type).Struct.fields;
-                    var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
-                    inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
-                        map_entry.* = vk.SpecializationMapEntry {
-                            .constant_id = j,
-                            .offset = @offsetOf(field.type, inner_field.name),
-                            .size = @sizeOf(inner_field.type),
+            if (@sizeOf(SpecConstants) != 0) {
+                const inner_fields = @typeInfo(SpecConstants).Struct.fields;
+                var map_entries: [inner_fields.len]vk.SpecializationMapEntry = undefined;
+                inline for (&map_entries, inner_fields, 0..) |*map_entry, inner_field, j| {
+                    map_entry.* = vk.SpecializationMapEntry {
+                        .constant_id = j,
+                        .offset = @offsetOf(SpecConstants, inner_field.name),
+                        .size = @sizeOf(inner_field.type),
+                    };
+                }
+
+                for (stages, &vk_stages) |stage, *vk_stage|{
+                    // only use specialization constants in raygen
+                    if (stage.type == .raygen) {
+                        vk_stage.p_specialization_info = &vk.SpecializationInfo {
+                            .map_entry_count = map_entries.len,
+                            .p_map_entries = &map_entries,
+                            .data_size = @sizeOf(SpecConstants),
+                            .p_data = &constants,
                         };
                     }
-                    var_stages[i].p_specialization_info = &vk.SpecializationInfo {
-                        .map_entry_count = map_entries.len,
-                        .p_map_entries = &map_entries,
-                        .data_size = @sizeOf(field.type),
-                        .p_data = &@field(constants, field.name),
-                    };
                 }
             }
 
             const create_info = vk.RayTracingPipelineCreateInfoKHR {
-                .stage_count = var_stages.len,
-                .p_stages = &var_stages,
-                .group_count = groups.len,
-                .p_groups = groups.ptr,
+                .stage_count = vk_stages.len,
+                .p_stages = &vk_stages,
+                .group_count = vk_groups.len,
+                .p_groups = &vk_groups,
                 .max_pipeline_ray_recursion_depth = 1,
                 .layout = self.layout,
                 .base_pipeline_handle = .null_handle,
@@ -186,71 +301,55 @@ pub fn Pipeline(
         pub fn recordTraceRays(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, extent: vk.Extent2D) void {
             vc.device.cmdTraceRaysKHR(command_buffer, &self.sbt.getRaygenSBT(), &self.sbt.getMissSBT(), &self.sbt.getHitSBT(), &self.sbt.getCallableSBT(), extent.width, extent.height, 1);
         }
+
+        pub fn recordPushConstants(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, constants: PushConstants) void {
+            const bytes = std.mem.asBytes(&constants);
+            vc.device.cmdPushConstants(command_buffer, self.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
+        }
     };
 }
 
 pub const ObjectPickPipeline = Pipeline(
-    &.{ "hrtsystem/input.hlsl" },
-    &.{ 0, 0, 0 },
+    "hrtsystem/input.hlsl",
     struct {
         InputDescriptorLayout,
     },
-    struct {},
-    &[_]vk.PushConstantRange {
-        .{
-            .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(F32x2),
-            .stage_flags = .{ .raygen_bit_khr = true },
-        },
+    extern struct {},
+    extern struct {
+        lens: Camera.Lens,
+        click_position: F32x2,
     },
-    &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen" },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss" },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "closesthit" },
-    },
-    &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 2, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-    },
+    &[_]Stage {
+        .{ .type = .raygen, .entrypoint = "raygen" },
+        .{ .type = .miss, .entrypoint = "miss" },
+        .{ .type = .closest_hit, .entrypoint = "closesthit" },
+    }
 );
 
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub const StandardPipeline = Pipeline(
-    &.{ "hrtsystem/main.hlsl" },
-    &.{ 0, 0, 0, 0 },
+    "hrtsystem/main.hlsl",
     struct {
         TextureDescriptorLayout,
         SceneDescriptorLayout,
     },
-    struct {
-        @"0": extern struct {
-            samples_per_run: u32 = 1,
-            max_bounces: u32 = 4,
-            env_samples_per_bounce: u32 = 1,
-            mesh_samples_per_bounce: u32 = 1,
-        } = .{},
+    extern struct {
+        samples_per_run: u32 = 1,
+        max_bounces: u32 = 4,
+        env_samples_per_bounce: u32 = 1,
+        mesh_samples_per_bounce: u32 = 1,
     },
-    &[_]vk.PushConstantRange {
-        .{
-            .offset = 0,
-            .size = @sizeOf(Camera.Lens) + @sizeOf(u32),
-            .stage_flags = .{ .raygen_bit_khr = true },
-        }
+    extern struct {
+        lens: Camera.Lens,
+        sample_count: u32,
     },
-    &[_]vk.PipelineShaderStageCreateInfo {
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .raygen_bit_khr = true }, .module = undefined, .p_name = "raygen"},
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "miss" },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .miss_bit_khr = true }, .module = undefined, .p_name = "shadowmiss" },
-        .{ .flags = .{}, .stage = vk.ShaderStageFlags { .closest_hit_bit_khr = true }, .module = undefined, .p_name = "closesthit" },
-    },
-    &[_]vk.RayTracingShaderGroupCreateInfoKHR {
-        .{ .@"type" = .general_khr, .general_shader = 0, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-        .{ .@"type" = .general_khr, .general_shader = 1, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-        .{ .@"type" = .general_khr, .general_shader = 2, .closest_hit_shader = vk.SHADER_UNUSED_KHR, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-        .{ .@"type" = .triangles_hit_group_khr, .general_shader = vk.SHADER_UNUSED_KHR, .closest_hit_shader = 3, .any_hit_shader = vk.SHADER_UNUSED_KHR, .intersection_shader = vk.SHADER_UNUSED_KHR },
-    },
+    &[_]Stage {
+        .{ .type = .raygen, .entrypoint = "raygen" },
+        .{ .type = .miss, .entrypoint = "miss" },
+        .{ .type = .miss, .entrypoint = "shadowmiss" },
+        .{ .type = .closest_hit, .entrypoint = "closesthit" },
+    }
 );
 
 const ShaderInfo = struct {
@@ -259,7 +358,7 @@ const ShaderInfo = struct {
     hit_count: u32,
     callable_count: u32,
 
-    fn find(stages: []const vk.PipelineShaderStageCreateInfo) ShaderInfo {
+    fn find(stages: []const Stage) ShaderInfo {
 
         var raygen_count: u32 = 0;
         var miss_count: u32 = 0;
@@ -267,14 +366,11 @@ const ShaderInfo = struct {
         var callable_count: u32 = 0;
 
         for (stages) |stage| {
-            if (stage.stage.contains(.{ .raygen_bit_khr = true })) {
-                raygen_count += 1;
-            } else if (stage.stage.contains(.{ .miss_bit_khr = true })) {
-                miss_count += 1;
-            } else if (stage.stage.contains(.{ .closest_hit_bit_khr = true })) {
-                hit_count += 1;
-            } else if (stage.stage.contains(.{ .callable_bit_khr = true })) {
-                callable_count += 1;
+            switch (stage.type) {
+                .miss => miss_count += 1,
+                .raygen => raygen_count += 1,
+                .callable => callable_count += 1,
+                .closest_hit => hit_count += 1,
             }
         }
 

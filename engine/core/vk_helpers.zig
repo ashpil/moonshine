@@ -34,58 +34,6 @@ pub fn imageSizeInBytes(format: vk.Format, extent: vk.Extent2D) u32 {
     };
 }
 
-const ShaderType = enum {
-    rt,
-    compute,
-};
-
-// creates shader modules, respecting build option to statically embed or dynamically load shader code
-pub fn createShaderModules(vc: *const VulkanContext, comptime shader_names: []const []const u8, allocator: std.mem.Allocator, comptime shader_type: ShaderType) ![shader_names.len]vk.ShaderModule {
-    var modules: [shader_names.len]vk.ShaderModule = undefined;
-    inline for (shader_names, &modules) |shader_name, *module| {
-        var to_free: []const u8 = undefined;
-        defer if (build_options.shader_source == .load) allocator.free(to_free);
-        const shader_code = if (build_options.shader_source == .embed) switch (shader_type) {
-                .rt => @field(@import("rt_shaders"), shader_name),
-                .compute => @field(@import("compute_shaders"), shader_name),
-            } else blk: {
-            const compile_cmd = switch (shader_type) {
-                .rt => build_options.rt_shader_compile_cmd,
-                .compute => build_options.compute_shader_compile_cmd,
-            };
-            var compile_process = std.ChildProcess.init(compile_cmd ++ &[_][]const u8 { "shaders/" ++ shader_name }, allocator);
-            compile_process.stdout_behavior = .Pipe;
-            try compile_process.spawn();
-            const stdout = blk_inner: {
-                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
-                defer poller.deinit();
-
-                while (try poller.poll()) {}
-
-                var fifo = poller.fifo(.stdout);
-                if (fifo.head > 0) {
-                    @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
-                }
-
-                to_free = fifo.buf;
-                const stdout = fifo.buf[0..fifo.count];
-                fifo.* = std.io.PollFifo.init(allocator);
-
-                break :blk_inner stdout;
-            };
-
-            const term = try compile_process.wait();
-            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
-            break :blk stdout;
-        };
-        module.* = try vc.device.createShaderModule(&.{
-            .code_size = shader_code.len,
-            .p_code = @as([*]const u32, @ptrCast(@alignCast(if (build_options.shader_source == .embed) &shader_code else shader_code.ptr))),
-        }, null);
-    }
-    return modules;
-}
-
 fn GetVkSliceInternal(comptime func: anytype) type {
     const params = @typeInfo(@TypeOf(func)).Fn.params;
     const OptionalType = params[params.len - 1].type.?;
