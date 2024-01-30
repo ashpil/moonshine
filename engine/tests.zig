@@ -61,7 +61,7 @@ const TestingContext = struct {
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
-        pipeline.recordBindDescriptorSets(&self.vc, self.commands.buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
+        pipeline.recordBindTextureDescriptorSet(&self.vc, self.commands.buffer, scene.world.materials.textures.descriptor_set);
 
         // push our stuff
         scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline.layout, 0, 0);

@@ -125,7 +125,7 @@ pub fn main() !void {
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
-        pipeline.recordBindDescriptorSets(&context, commands.buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
+        pipeline.recordBindTextureDescriptorSet(&context, commands.buffer, scene.world.materials.textures.descriptor_set);
         scene.pushDescriptors(&context, commands.buffer, pipeline.layout, 0, 0);
 
         for (0..config.spp) |sample_count| {

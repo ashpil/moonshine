@@ -294,8 +294,8 @@ pub fn Pipeline(
             vc.device.cmdBindPipeline(command_buffer, .ray_tracing_khr, self.handle);
         }
 
-        pub fn recordBindDescriptorSets(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, sets: [set_layout_count - 1]vk.DescriptorSet) void { // TODO
-            vc.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, self.layout, 0, sets.len, &sets, 0, undefined);
+        pub fn recordBindTextureDescriptorSet(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, set: vk.DescriptorSet) void {
+            vc.device.cmdBindDescriptorSets(command_buffer, .ray_tracing_khr, self.layout, 0, 1, &[_]vk.DescriptorSet { set }, 0, undefined);
         }
 
         pub fn recordTraceRays(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, extent: vk.Extent2D) void {

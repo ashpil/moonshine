@@ -286,7 +286,7 @@ pub fn main() !void {
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
-            pipeline.recordBindDescriptorSets(&context, command_buffer, [_]vk.DescriptorSet { scene.world.materials.textures.descriptor_set });
+            pipeline.recordBindTextureDescriptorSet(&context, command_buffer, scene.world.materials.textures.descriptor_set);
 
             // push some stuff
             scene.pushDescriptors(&context, command_buffer, pipeline.layout, 0, 0);
