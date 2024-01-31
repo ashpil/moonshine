@@ -115,7 +115,7 @@ pub fn main() !void {
     defer object_picker.destroy(&context);
 
     var pipeline_opts = Pipeline.SpecConstants{};
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, pipeline_opts);
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, scene.world.materials.textures.descriptor_layout, pipeline_opts, .{ scene.background.sampler });
     defer pipeline.destroy(&context);
 
     std.log.info("Created pipelines!", .{});
@@ -289,7 +289,7 @@ pub fn main() !void {
             pipeline.recordBindTextureDescriptorSet(&context, command_buffer, scene.world.materials.textures.descriptor_set);
 
             // push some stuff
-            scene.pushDescriptors(&context, command_buffer, pipeline.layout, 0, 0);
+            scene.pushDescriptors(&context, command_buffer, &pipeline, 0, 0);
             pipeline.recordPushConstants(&context, command_buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace some stuff

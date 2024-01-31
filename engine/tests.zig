@@ -64,7 +64,7 @@ const TestingContext = struct {
         pipeline.recordBindTextureDescriptorSet(&self.vc, self.commands.buffer, scene.world.materials.textures.descriptor_set);
 
         // push our stuff
-        scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline.layout, 0, 0);
+        scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline, 0, 0);
         pipeline.recordPushConstants(&self.vc, self.commands.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
         // trace our stuff
@@ -324,17 +324,15 @@ test "white sphere on white background is white" {
         .world = world,
         .camera = camera,
         .background = background,
-
-        .descriptor_layout = try Scene.DescriptorLayout.create(&tc.vc, .{ world.materials.textures.sampler }),
     };
     defer scene.destroy(&tc.vc, allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, scene.world.materials.textures.descriptor_layout, .{
         .samples_per_run = 512,
         .max_bounces = 1024,
         .env_samples_per_bounce = 0, // TODO: test with env sampling once that works well with small env maps
         .mesh_samples_per_bounce = 0,
-    });
+    }, .{ scene.background.sampler });
     defer pipeline.destroy(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene);
@@ -417,17 +415,15 @@ test "inside illuminating sphere is white" {
         .world = world,
         .camera = camera,
         .background = background,
-        
-        .descriptor_layout = try Scene.DescriptorLayout.create(&tc.vc, .{ world.materials.textures.sampler }),
     };
     defer scene.destroy(&tc.vc, allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, scene.world.materials.textures.descriptor_layout, .{
         .samples_per_run = 1024,
         .max_bounces = 1024,
         .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 0,
-    });
+    }, .{ scene.background.sampler });
     defer pipeline.destroy(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene);

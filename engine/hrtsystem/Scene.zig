@@ -87,8 +87,6 @@ world: World,
 background: Background,
 camera: Camera,
 
-descriptor_layout: DescriptorLayout,
-
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
@@ -121,20 +119,15 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
         try background.addBackground(vc, vk_allocator, allocator, commands, skybox_image, "exr");
     }
 
-    const descriptor_layout = try DescriptorLayout.create(vc, .{ background.sampler });
-    errdefer descriptor_layout.destroy(vc);
-
     return Self {
         .world = world,
         .background = background,
         .camera = camera,
-
-        .descriptor_layout = descriptor_layout,
     };
 }
 
 // TODO: put this into pipeline
-pub fn pushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, layout: vk.PipelineLayout, sensor: u32, background: u32) void {
+pub fn pushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, pipeline: *const engine.hrtsystem.pipeline.StandardPipeline, sensor: u32, background: u32) void {
     const writes = [_]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
@@ -178,20 +171,20 @@ pub fn pushDescriptors(self: *const Self, vc: *const VulkanContext, command_buff
             }),
             .p_texel_buffer_view = undefined,
         },
-        // vk.WriteDescriptorSet {
-        //     .dst_set = undefined,
-        //     .dst_binding = 3,
-        //     .dst_array_element = 0,
-        //     .descriptor_count = 1,
-        //     .descriptor_type = .storage_buffer,
-        //     .p_image_info = undefined,
-        //     .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-        //         .buffer = self.world.accel.alias_table.handle,
-        //         .offset = 0,
-        //         .range = vk.WHOLE_SIZE,
-        //     }),
-        //     .p_texel_buffer_view = undefined,
-        // },
+        vk.WriteDescriptorSet {
+            .dst_set = undefined,
+            .dst_binding = 3,
+            .dst_array_element = 0,
+            .descriptor_count = 1,
+            .descriptor_type = .storage_buffer,
+            .p_image_info = undefined,
+            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
+                .buffer = self.world.accel.alias_table.handle,
+                .offset = 0,
+                .range = vk.WHOLE_SIZE,
+            }),
+            .p_texel_buffer_view = undefined,
+        },
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 4,
@@ -291,11 +284,10 @@ pub fn pushDescriptors(self: *const Self, vc: *const VulkanContext, command_buff
             .p_texel_buffer_view = undefined,
         }
     };
-    vc.device.cmdPushDescriptorSetKHR(command_buffer, .ray_tracing_khr, layout, 1, writes.len, &writes);
+    pipeline.recordPushDescriptors(vc, command_buffer, writes);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    self.descriptor_layout.destroy(vc);
     self.world.destroy(vc, allocator);
     self.background.destroy(vc, allocator);
     self.camera.destroy(vc, allocator);

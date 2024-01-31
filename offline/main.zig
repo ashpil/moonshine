@@ -103,12 +103,12 @@ pub fn main() !void {
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, .{ scene.world.materials.textures.descriptor_layout, scene.descriptor_layout }, .{
+    var pipeline = try Pipeline.create(&context, &vk_allocator, allocator, &commands, scene.world.materials.textures.descriptor_layout, .{
         .samples_per_run = 1,
         .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 1,
-    });
+    }, .{ scene.background.sampler });
     defer pipeline.destroy(&context);
 
     try logger.log("create pipeline");
@@ -126,7 +126,7 @@ pub fn main() !void {
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);
         pipeline.recordBindTextureDescriptorSet(&context, commands.buffer, scene.world.materials.textures.descriptor_set);
-        scene.pushDescriptors(&context, commands.buffer, pipeline.layout, 0, 0);
+        scene.pushDescriptors(&context, commands.buffer, &pipeline, 0, 0);
 
         for (0..config.spp) |sample_count| {
             // push our stuff

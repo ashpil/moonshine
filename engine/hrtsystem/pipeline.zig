@@ -9,6 +9,7 @@ const VulkanContext = core.VulkanContext;
 const Commands = core.Commands;
 const VkAllocator = core.Allocator;
 const DestructionQueue = core.DestructionQueue;
+const descriptor = core.descriptor;
 
 const Camera = @import("./Camera.zig");
 
@@ -109,13 +110,15 @@ const Stage = struct {
 
 pub fn Pipeline(
         comptime shader_name: []const u8,
-        comptime SetLayouts: type,
         comptime SpecConstantsT: type,
         comptime PushConstants: type,
+        comptime has_textures: bool,
+        comptime push_set_layout_info: []const descriptor.DescriptorBindingInfo,
         comptime stages: []const Stage,
     ) type {
 
     return struct {
+        push_set_layout: PushSetLayout,
         layout: vk.PipelineLayout,
         handle: vk.Pipeline,
         sbt: ShaderBindingTable,
@@ -124,14 +127,15 @@ pub fn Pipeline(
 
         pub const SpecConstants = SpecConstantsT;
 
-        const set_layout_count = @typeInfo(SetLayouts).Struct.fields.len;
+        const PushSetLayout = descriptor.DescriptorLayout(push_set_layout_info, .{ .push_descriptor_bit_khr = true }, 1, "shader_name");
 
-        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, set_layouts: SetLayouts, constants: SpecConstants) !Self {
+        pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, texture_layout: if (has_textures) TextureDescriptorLayout else void, constants: SpecConstants, samplers: [PushSetLayout.sampler_count]vk.Sampler) !Self {
+            const push_set_layout = try PushSetLayout.create(vc, samplers);
+            const set_layout_handles = if (has_textures) [2]vk.DescriptorSetLayout {
+                texture_layout.handle,
+                push_set_layout.handle,
+            } else [1]vk.DescriptorSetLayout { push_set_layout.handle };
 
-            var set_layout_handles: [set_layout_count]vk.DescriptorSetLayout = undefined;
-            inline for (&set_layout_handles, set_layouts) |*handle, set_layout| {
-                handle.* = set_layout.handle;
-            }
             const push_constants = if (@sizeOf(PushConstants) != 0) [1]vk.PushConstantRange {
                 .{
                     .offset = 0,
@@ -211,6 +215,7 @@ pub fn Pipeline(
             errdefer sbt.destroy(vc);
 
             return Self {
+                .push_set_layout = push_set_layout,
                 .layout = layout,
                 .handle = handle,
 
@@ -288,6 +293,7 @@ pub fn Pipeline(
             self.sbt.destroy(vc);
             vc.device.destroyPipelineLayout(self.layout, null);
             vc.device.destroyPipeline(self.handle, null);
+            self.push_set_layout.destroy(vc);
         }
 
         pub fn recordBindPipeline(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer) void {
@@ -306,18 +312,47 @@ pub fn Pipeline(
             const bytes = std.mem.asBytes(&constants);
             vc.device.cmdPushConstants(command_buffer, self.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
         }
+
+        pub fn recordPushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, writes: [push_set_layout_info.len]vk.WriteDescriptorSet) void {
+            var pruned_writes = std.BoundedArray(vk.WriteDescriptorSet, push_set_layout_info.len) {};
+            for (writes) |write| {
+                if (write.descriptor_type == .sampler) continue;
+                if (write.descriptor_count == 0) continue;
+                switch (write.descriptor_type) {
+                    .storage_buffer => if (write.p_buffer_info[0].buffer == .null_handle) continue,
+                    else => {},
+                }
+                pruned_writes.append(write) catch unreachable;
+            }
+            vc.device.cmdPushDescriptorSetKHR(command_buffer, .ray_tracing_khr, self.layout, if (has_textures) 1 else 0, pruned_writes.len, &pruned_writes.buffer);
+        }
     };
 }
 
 pub const ObjectPickPipeline = Pipeline(
     "hrtsystem/input.hlsl",
-    struct {
-        InputDescriptorLayout,
-    },
     extern struct {},
     extern struct {
         lens: Camera.Lens,
         click_position: F32x2,
+    },
+    false,
+    &.{
+        .{
+            .descriptor_type = .acceleration_structure_khr,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
+        .{
+            .descriptor_type = .storage_image,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
+        .{
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
     },
     &[_]Stage {
         .{ .type = .raygen, .entrypoint = "raygen" },
@@ -330,10 +365,6 @@ pub const ObjectPickPipeline = Pipeline(
 // rendering operations
 pub const StandardPipeline = Pipeline(
     "hrtsystem/main.hlsl",
-    struct {
-        TextureDescriptorLayout,
-        SceneDescriptorLayout,
-    },
     extern struct {
         samples_per_run: u32 = 1,
         max_bounces: u32 = 4,
@@ -343,6 +374,71 @@ pub const StandardPipeline = Pipeline(
     extern struct {
         lens: Camera.Lens,
         sample_count: u32,
+    },
+    true,
+    &.{
+        .{ // TLAS
+            .descriptor_type = .acceleration_structure_khr,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // instances
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // worldToInstance
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // emitterAliasTable
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // meshes
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // geometries
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // materialValues
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+            .binding_flags = .{ .partially_bound_bit = true },
+        },
+        .{ // backgroundImage
+            .descriptor_type = .combined_image_sampler,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
+        .{ // backgroundMarginalAlias
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
+        .{ // backgroundConditionalAlias
+            .descriptor_type = .storage_buffer,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
+        .{ // outputImage
+            .descriptor_type = .storage_image,
+            .descriptor_count = 1,
+            .stage_flags = .{ .raygen_bit_khr = true },
+        },
     },
     &[_]Stage {
         .{ .type = .raygen, .entrypoint = "raygen" },

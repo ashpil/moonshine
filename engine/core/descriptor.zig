@@ -4,7 +4,7 @@ const core = @import("../engine.zig").core;
 const vk_helpers = core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 
-const DescriptorBindingInfo = struct {
+pub const DescriptorBindingInfo = struct {
     descriptor_type: vk.DescriptorType,
     descriptor_count: u32,
     stage_flags: vk.ShaderStageFlags,
@@ -18,7 +18,7 @@ pub fn DescriptorLayout(comptime bindings: []const DescriptorBindingInfo, compti
 
         const Self = @This();
 
-        const sampler_count = blk: {
+        pub const sampler_count = blk: {
             var count = 0;
             for (bindings) |binding| {
                 if (binding.descriptor_type == .sampler or binding.descriptor_type == .combined_image_sampler) {

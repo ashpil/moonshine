@@ -80,7 +80,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     var descriptor_layout = try DescriptorLayout.create(vc, .{});
     errdefer descriptor_layout.destroy(vc);
 
-    var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, .{ descriptor_layout }, .{});
+    var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, {}, .{}, .{});
     errdefer pipeline.destroy(vc);
 
     const command_pool = try vc.device.createCommandPool(&.{
