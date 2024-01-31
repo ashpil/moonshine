@@ -339,16 +339,19 @@ pub const ObjectPickPipeline = Pipeline(
     false,
     &.{
         .{
+            .name = "tlas",
             .descriptor_type = .acceleration_structure_khr,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
         .{
+            .name = "output_image",
             .descriptor_type = .storage_image,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
         .{
+            .name = "click",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
@@ -377,64 +380,75 @@ pub const StandardPipeline = Pipeline(
     },
     true,
     &.{
-        .{ // TLAS
+        .{
+            .name = "tlas",
             .descriptor_type = .acceleration_structure_khr,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // instances
+        .{
+            .name = "instances",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // worldToInstance
+        .{
+            .name = "world_to_instances",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // emitterAliasTable
+        .{
+            .name = "emitter_alias_table",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // meshes
+        .{
+            .name = "meshes",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // geometries
+        .{
+            .name = "geometries",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // materialValues
+        .{
+            .name = "material_values",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true },
         },
-        .{ // backgroundImage
+        .{
+            .name = "background_image",
             .descriptor_type = .combined_image_sampler,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
-        .{ // backgroundMarginalAlias
+        .{
+            .name = "background_marginal_alias",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
-        .{ // backgroundConditionalAlias
+        .{
+            .name = "background_conditional_alias",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
-        .{ // outputImage
+        .{
+            .name = "output_image",
             .descriptor_type = .storage_image,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },

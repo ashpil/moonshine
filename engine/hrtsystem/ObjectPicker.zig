@@ -10,28 +10,8 @@ const Commands = core.Commands;
 
 const hrtsystem = engine.hrtsystem;
 const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
-const descriptor = core.descriptor;
 const Sensor = core.Sensor;
 const Camera = hrtsystem.Camera;
-
-// must be kept in sync with shader
-pub const DescriptorLayout = descriptor.DescriptorLayout(&.{
-    .{
-        .descriptor_type = .acceleration_structure_khr,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-    .{
-        .descriptor_type = .storage_image,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-    .{
-        .descriptor_type = .storage_buffer,
-        .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true },
-    },
-}, .{ .push_descriptor_bit_khr = true }, 1, "Input");
 
 const F32x2 = @import("../vector.zig").Vec2(f32);
 
@@ -67,8 +47,6 @@ pub const ClickedObject = struct {
 buffer: VkAllocator.HostBuffer(ClickDataShader),
 pipeline: Pipeline,
 
-descriptor_layout: DescriptorLayout,
-
 command_pool: vk.CommandPool,
 command_buffer: vk.CommandBuffer,
 ready_fence: vk.Fence,
@@ -76,9 +54,6 @@ ready_fence: vk.Fence,
 pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands) !Self {
     const buffer = try vk_allocator.createHostBuffer(vc, ClickDataShader, 1, .{ .storage_buffer_bit = true });
     errdefer buffer.destroy(vc);
-
-    var descriptor_layout = try DescriptorLayout.create(vc, .{});
-    errdefer descriptor_layout.destroy(vc);
 
     var pipeline = try Pipeline.create(vc, vk_allocator, allocator, commands, {}, .{}, .{});
     errdefer pipeline.destroy(vc);
@@ -105,8 +80,6 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
         .buffer = buffer,
         .pipeline = pipeline,
 
-        .descriptor_layout = descriptor_layout,
-
         .command_pool = command_pool,
         .command_buffer = command_buffer,
         .ready_fence = ready_fence,
@@ -118,8 +91,8 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
     try vc.device.beginCommandBuffer(self.command_buffer, &.{ .flags = .{} });
 
     // bind pipeline + sets
-    vc.device.cmdBindPipeline(self.command_buffer, .ray_tracing_khr, self.pipeline.handle);
-    vc.device.cmdPushDescriptorSetKHR(self.command_buffer, .ray_tracing_khr, self.pipeline.layout, 0, 3, &[3]vk.WriteDescriptorSet {
+    self.pipeline.recordBindPipeline(vc, self.command_buffer);
+    self.pipeline.recordPushDescriptors(vc, self.command_buffer, [3]vk.WriteDescriptorSet {
         vk.WriteDescriptorSet {
             .dst_set = undefined,
             .dst_binding = 0,
@@ -167,12 +140,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
     self.pipeline.recordPushConstants(vc, self.command_buffer, .{ .lens = camera.lenses.items[0], .click_position = normalized_coords });
 
     // trace rays
-    const callable_table = vk.StridedDeviceAddressRegionKHR {
-        .device_address = 0,
-        .stride = 0,
-        .size = 0,
-    };
-    vc.device.cmdTraceRaysKHR(self.command_buffer, &self.pipeline.sbt.getRaygenSBT(), &self.pipeline.sbt.getMissSBT(), &self.pipeline.sbt.getHitSBT(), &callable_table, 1, 1, 1);
+    self.pipeline.recordTraceRays(vc, self.command_buffer, vk.Extent2D { .width = 1, .height = 1 });
 
     // end
     try vc.device.endCommandBuffer(self.command_buffer);
@@ -199,7 +167,6 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    self.descriptor_layout.destroy(vc);
     self.buffer.destroy(vc);
     self.pipeline.destroy(vc);
     vc.device.destroyCommandPool(self.command_pool, null);

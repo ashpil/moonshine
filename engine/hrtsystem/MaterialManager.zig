@@ -287,12 +287,14 @@ pub const TextureManager = struct {
     // must be kept in sync with shader
     pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
         .{
+            .name = "textures",
             .descriptor_type = .sampled_image,
             .descriptor_count = max_descriptors,
             .stage_flags = .{ .raygen_bit_khr = true },
             .binding_flags = .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true },
         },
         .{
+            .name = "sampler",
             .descriptor_type = .sampler,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },

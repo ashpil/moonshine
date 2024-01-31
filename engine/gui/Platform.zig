@@ -431,6 +431,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext, command_buffer: vk.Comman
 
 pub const GuiDescriptorLayout = DescriptorLayout(&.{
     .{
+        .name = "texture",
         .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
         .stage_flags = .{ .fragment_bit = true },

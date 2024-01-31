@@ -5,7 +5,8 @@ const vk_helpers = core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 
 pub const DescriptorBindingInfo = struct {
-    descriptor_type: vk.DescriptorType,
+    name: []const u8,
+    descriptor_type: vk.DescriptorType, // todo: could be more type safe, e.g., have buffer inner type
     descriptor_count: u32,
     stage_flags: vk.ShaderStageFlags,
     binding_flags: vk.DescriptorBindingFlags = .{},
