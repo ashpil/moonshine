@@ -79,10 +79,11 @@
     * At most should be doing filesystem to staging buffer to GPU
     * On some machines, can do filesystem to GPU directly
 * Destruction queue needs work
-* Resource binding
-  * Need to come up with some more ergonomic way to do this
 * Resource uploading
   * Need some sort of way to efficently and ergonomically do resource transfers
+* Dynamic resource management
+  * most resources have some sort of hardcoded limit, and pre-allocate memory up to it
+  * would be better to instead only allocate as much as needed and resize on demand
 
 ### Some notes about conventions
 * `+z` is up
