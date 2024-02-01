@@ -14,6 +14,7 @@ const World = @import("./World.zig");
 const Camera = @import("./Camera.zig");
 
 const exr = engine.fileformats.exr;
+const StandardPipeline = engine.hrtsystem.pipeline.StandardPipeline;
 
 const Self = @This();
 
@@ -60,165 +61,20 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     };
 }
 
-// TODO: put this into pipeline
-pub fn pushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, pipeline: *const engine.hrtsystem.pipeline.StandardPipeline, sensor: u32, background: u32) void {
-    const writes = [_]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .acceleration_structure_khr,
-            .p_image_info = undefined,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
-                .acceleration_structure_count = 1,
-                .p_acceleration_structures = @ptrCast(&self.world.accel.tlas_handle),
-            },
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.accel.instances_device.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.accel.world_to_instance.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 3,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.accel.alias_table.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 4,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.meshes.addresses_buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 5,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.accel.geometries.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 6,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.world.materials.materials.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 7,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .combined_image_sampler,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = self.background.data.items[background].image.view,
-                .image_layout = .shader_read_only_optimal,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 8,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.background.data.items[background].marginal.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 9,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.background.data.items[background].conditional.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 10,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = self.camera.sensors.items[sensor].image.view,
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        }
+pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) StandardPipeline.PushDescriptorData {
+    return engine.hrtsystem.pipeline.StandardPipeline.PushDescriptorData {
+        .tlas = self.world.accel.tlas_handle,
+        .instances = self.world.accel.instances_device.handle,
+        .world_to_instances = self.world.accel.world_to_instance.handle,
+        .emitter_alias_table = self.world.accel.alias_table.handle,
+        .meshes = self.world.meshes.addresses_buffer.handle,
+        .geometries = self.world.accel.geometries.handle,
+        .material_values = self.world.materials.materials.handle,
+        .background_image = self.background.data.items[background].image.view,
+        .background_marginal_alias = self.background.data.items[background].marginal.handle,
+        .background_conditional_alias = self.background.data.items[background].conditional.handle,
+        .output_image = self.camera.sensors.items[sensor].image.view,
     };
-    pipeline.recordPushDescriptors(vc, command_buffer, writes);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {

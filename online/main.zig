@@ -289,7 +289,7 @@ pub fn main() !void {
             pipeline.recordBindTextureDescriptorSet(&context, command_buffer, scene.world.materials.textures.descriptor_set);
 
             // push some stuff
-            scene.pushDescriptors(&context, command_buffer, &pipeline, 0, 0);
+            pipeline.recordPushDescriptors(&context, command_buffer, scene.pushDescriptors(0, 0));
             pipeline.recordPushConstants(&context, command_buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace some stuff

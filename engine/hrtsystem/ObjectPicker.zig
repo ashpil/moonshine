@@ -92,49 +92,10 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
 
     // bind pipeline + sets
     self.pipeline.recordBindPipeline(vc, self.command_buffer);
-    self.pipeline.recordPushDescriptors(vc, self.command_buffer, [3]vk.WriteDescriptorSet {
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 0,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .acceleration_structure_khr,
-            .p_image_info = undefined,
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-            .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
-                .acceleration_structure_count = 1,
-                .p_acceleration_structures = @ptrCast(&accel),
-            },
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 1,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_image,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .sampler = .null_handle,
-                .image_view = sensor.image.view,
-                .image_layout = .general,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
-        vk.WriteDescriptorSet {
-            .dst_set = undefined,
-            .dst_binding = 2,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .storage_buffer,
-            .p_image_info = undefined,
-            .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                .buffer = self.buffer.handle,
-                .offset = 0,
-                .range = vk.WHOLE_SIZE,
-            }),
-            .p_texel_buffer_view = undefined,
-        },
+    self.pipeline.recordPushDescriptors(vc, self.command_buffer, Pipeline.PushDescriptorData {
+        .tlas = accel,
+        .output_image = sensor.image.view,
+        .click_data = self.buffer.handle,
     });
 
     self.pipeline.recordPushConstants(vc, self.command_buffer, .{ .lens = camera.lenses.items[0], .click_position = normalized_coords });

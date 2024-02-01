@@ -113,7 +113,7 @@ pub fn Pipeline(
         comptime SpecConstantsT: type,
         comptime PushConstants: type,
         comptime has_textures: bool,
-        comptime push_set_layout_info: []const descriptor.DescriptorBindingInfo,
+        comptime push_set_bindings: []const descriptor.DescriptorBindingInfo,
         comptime stages: []const Stage,
     ) type {
 
@@ -127,7 +127,37 @@ pub fn Pipeline(
 
         pub const SpecConstants = SpecConstantsT;
 
-        const PushSetLayout = descriptor.DescriptorLayout(push_set_layout_info, .{ .push_descriptor_bit_khr = true }, 1, "shader_name");
+        pub const PushDescriptorData = blk: {
+            var fields: [push_set_bindings.len]std.builtin.Type.StructField = undefined;
+            for (push_set_bindings, &fields) |binding, *field| {
+                const InnerType = switch (binding.descriptor_type) {
+                    .storage_buffer => vk.Buffer,
+                    .acceleration_structure_khr => vk.AccelerationStructureKHR,
+                    .storage_image => vk.ImageView,
+                    .combined_image_sampler => vk.ImageView,
+                    else => unreachable, // TODO
+                };
+                field.* = std.builtin.Type.StructField {
+                    .name = binding.name,
+                    .type = InnerType,
+                    .default_value = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(InnerType),
+                };
+            }
+
+            const info = std.builtin.Type {
+                .Struct = std.builtin.Type.Struct {
+                    .fields = &fields,
+                    .layout = .Auto,
+                    .decls = &.{},
+                    .is_tuple = false,
+                },
+            };
+            break :blk @Type(info);
+        };
+
+        const PushSetLayout = descriptor.DescriptorLayout(push_set_bindings, .{ .push_descriptor_bit_khr = true }, 1, shader_name ++ " push descriptor");
 
         pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, texture_layout: if (has_textures) TextureDescriptorLayout else void, constants: SpecConstants, samplers: [PushSetLayout.sampler_count]vk.Sampler) !Self {
             const push_set_layout = try PushSetLayout.create(vc, samplers);
@@ -151,7 +181,7 @@ pub fn Pipeline(
             }, null);
             errdefer vc.device.destroyPipelineLayout(layout, null);
 
-            const module = try createShaderModule(vc, shader_name, allocator, .ray_tracing);
+            const module = try createShaderModule(vc, "hrtsystem/" ++ shader_name ++ ".hlsl", allocator, .ray_tracing);
             defer vc.device.destroyShaderModule(module, null);
 
             var vk_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
@@ -224,7 +254,7 @@ pub fn Pipeline(
         }
 
         pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
-            const module = try createShaderModule(vc, shader_name, allocator, .ray_tracing);
+            const module = try createShaderModule(vc, "hrtsystem/" ++ shader_name ++ ".hlsl", allocator, .ray_tracing);
             defer vc.device.destroyShaderModule(module, null);
 
             var vk_stages: [stages.len]vk.PipelineShaderStageCreateInfo = undefined;
@@ -313,8 +343,74 @@ pub fn Pipeline(
             vc.device.cmdPushConstants(command_buffer, self.layout, .{ .raygen_bit_khr = true }, 0, bytes.len, bytes);
         }
 
-        pub fn recordPushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, writes: [push_set_layout_info.len]vk.WriteDescriptorSet) void {
-            var pruned_writes = std.BoundedArray(vk.WriteDescriptorSet, push_set_layout_info.len) {};
+        pub fn recordPushDescriptors(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, data: PushDescriptorData) void {
+            // create vk.WriteDescriptorSet from PushDescriptorData
+            var writes: [push_set_bindings.len]vk.WriteDescriptorSet = undefined;
+            inline for (push_set_bindings, &writes, 0..) |binding, *write, i| {
+                write.* = switch (binding.descriptor_type) {
+                    .storage_buffer => vk.WriteDescriptorSet {
+                        .dst_set = undefined,
+                        .dst_binding = i,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .storage_buffer,
+                        .p_image_info = undefined,
+                        .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
+                            .buffer = @field(data, binding.name),
+                            .offset = 0,
+                            .range = vk.WHOLE_SIZE,
+                        }),
+                        .p_texel_buffer_view = undefined,
+                    },
+                    .acceleration_structure_khr => vk.WriteDescriptorSet {
+                        .dst_set = undefined,
+                        .dst_binding = i,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .acceleration_structure_khr,
+                        .p_image_info = undefined,
+                        .p_buffer_info = undefined,
+                        .p_texel_buffer_view = undefined,
+                        .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
+                            .acceleration_structure_count = 1,
+                            .p_acceleration_structures = @ptrCast(&@field(data, binding.name)),
+                        },
+                    },
+                    .storage_image => vk.WriteDescriptorSet {
+                        .dst_set = undefined,
+                        .dst_binding = i,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .storage_image,
+                        .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
+                            .sampler = .null_handle,
+                            .image_view = @field(data, binding.name),
+                            .image_layout = .general,
+                        }),
+                        .p_buffer_info = undefined,
+                        .p_texel_buffer_view = undefined,
+                    },
+                    .combined_image_sampler => vk.WriteDescriptorSet {
+                        .dst_set = undefined,
+                        .dst_binding = i,
+                        .dst_array_element = 0,
+                        .descriptor_count = 1,
+                        .descriptor_type = .combined_image_sampler,
+                        .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
+                            .sampler = .null_handle,
+                            .image_view = @field(data, binding.name),
+                            .image_layout = .shader_read_only_optimal,
+                        }),
+                        .p_buffer_info = undefined,
+                        .p_texel_buffer_view = undefined,
+                    },
+                    else => unreachable, // TODO
+                };
+            }
+
+            // remove any writes we may not actually want, e.g.,
+            // samplers or zero-size things
+            var pruned_writes = std.BoundedArray(vk.WriteDescriptorSet, push_set_bindings.len) {};
             for (writes) |write| {
                 if (write.descriptor_type == .sampler) continue;
                 if (write.descriptor_count == 0) continue;
@@ -324,13 +420,14 @@ pub fn Pipeline(
                 }
                 pruned_writes.append(write) catch unreachable;
             }
+
             vc.device.cmdPushDescriptorSetKHR(command_buffer, .ray_tracing_khr, self.layout, if (has_textures) 1 else 0, pruned_writes.len, &pruned_writes.buffer);
         }
     };
 }
 
 pub const ObjectPickPipeline = Pipeline(
-    "hrtsystem/input.hlsl",
+    "input",
     extern struct {},
     extern struct {
         lens: Camera.Lens,
@@ -351,7 +448,7 @@ pub const ObjectPickPipeline = Pipeline(
             .stage_flags = .{ .raygen_bit_khr = true },
         },
         .{
-            .name = "click",
+            .name = "click_data",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
@@ -367,7 +464,7 @@ pub const ObjectPickPipeline = Pipeline(
 // a "standard" pipeline -- that is, the one we use for most
 // rendering operations
 pub const StandardPipeline = Pipeline(
-    "hrtsystem/main.hlsl",
+    "main",
     extern struct {
         samples_per_run: u32 = 1,
         max_bounces: u32 = 4,

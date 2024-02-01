@@ -64,7 +64,7 @@ const TestingContext = struct {
         pipeline.recordBindTextureDescriptorSet(&self.vc, self.commands.buffer, scene.world.materials.textures.descriptor_set);
 
         // push our stuff
-        scene.pushDescriptors(&self.vc, self.commands.buffer, pipeline, 0, 0);
+        pipeline.recordPushDescriptors(&self.vc, self.commands.buffer, scene.pushDescriptors(0, 0));
         pipeline.recordPushConstants(&self.vc, self.commands.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
 
         // trace our stuff
