@@ -30,10 +30,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, extent: vk.E
 //   recordPrepareForCapture(...)
 //   ...
 //   recordPrepareForCopy(...)
-pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2) void {
+pub fn recordPrepareForCapture(self: *const Self, vc: *const VulkanContext, command_buffer: vk.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
     vc.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
+            .src_stage_mask = copy_stage,
+            .src_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
             .dst_stage_mask = capture_stage,
             .dst_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .old_layout = if (self.sample_count == 0) .undefined else .transfer_src_optimal,
@@ -59,7 +61,7 @@ pub fn recordPrepareForCopy(self: *const Self, vc: *const VulkanContext, command
             .src_stage_mask = capture_stage,
             .src_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .dst_stage_mask = copy_stage,
-            .dst_access_mask = .{ .transfer_read_bit = true },
+            .dst_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
             .old_layout = .general,
             .new_layout = .transfer_src_optimal,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,

@@ -121,7 +121,7 @@ pub fn main() !void {
         try commands.startRecording(&context);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&context, commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(&context, commands.buffer);

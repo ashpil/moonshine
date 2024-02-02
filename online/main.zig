@@ -282,7 +282,7 @@ pub fn main() !void {
         if (max_sample_count != 0 and scene.camera.sensors.items[0].sample_count > max_sample_count) scene.camera.sensors.items[0].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[0].sample_count < max_sample_count) {
             // prepare some stuff
-            scene.camera.sensors.items[0].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true });
+            scene.camera.sensors.items[0].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
@@ -303,6 +303,8 @@ pub fn main() !void {
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2{
+                .src_stage_mask = .{ .color_attachment_output_bit = true },
+                .src_access_mask = .{},
                 .dst_stage_mask = .{ .blit_bit = true },
                 .dst_access_mask = .{ .transfer_write_bit = true },
                 .old_layout = .undefined,
@@ -383,6 +385,8 @@ pub fn main() !void {
         const return_swap_image_memory_barriers = [_]vk.ImageMemoryBarrier2{.{
             .src_stage_mask = .{ .color_attachment_output_bit = true },
             .src_access_mask = .{ .color_attachment_write_bit = true },
+            .dst_stage_mask = .{ .color_attachment_output_bit = true },
+            .dst_access_mask = .{},
             .old_layout = .color_attachment_optimal,
             .new_layout = .present_src_khr,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,

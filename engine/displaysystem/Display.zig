@@ -111,7 +111,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
 
     try vc.device.endCommandBuffer(frame.command_buffer);
 
-    // TODO: these sync stage flags are probably wrong
+    // TODO: figure out why color_attachment_output_bit is the right thing here
     try vc.device.queueSubmit2(vc.queue, 1, &[_]vk.SubmitInfo2 { .{
         .flags = .{},
         .wait_semaphore_info_count = 1,

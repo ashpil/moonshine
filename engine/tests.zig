@@ -57,7 +57,7 @@ const TestingContext = struct {
         try self.commands.startRecording(&self.vc);
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true });
+        scene.camera.sensors.items[0].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(&self.vc, self.commands.buffer);
