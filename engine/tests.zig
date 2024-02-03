@@ -298,7 +298,7 @@ test "white sphere on white background is white" {
         });
     }
 
-    var camera = try Camera.create();
+    var camera = Camera {};
     _ = try camera.appendLens(allocator, Camera.Lens {
         .origin = F32x3.new(-3, 0, 0),
         .forward = F32x3.new(1, 0, 0),
@@ -389,7 +389,7 @@ test "inside illuminating sphere is white" {
         });
     }
 
-    var camera = try Camera.create();
+    var camera = Camera {};
     _ = try camera.appendLens(allocator, Camera.Lens {
         .origin = F32x3.new(0, 0, 0),
         .forward = F32x3.new(1, 0, 0),

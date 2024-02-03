@@ -51,17 +51,10 @@ pub const Lens = extern struct {
     }
 };
 
-sensors: std.ArrayListUnmanaged(Sensor),
-lenses: std.ArrayListUnmanaged(Lens),
+sensors: std.ArrayListUnmanaged(Sensor) = .{},
+lenses: std.ArrayListUnmanaged(Lens) = .{},
 
 const Self = @This();
-
-pub fn create() !Self {
-    return Self {
-        .sensors = .{},
-        .lenses = .{},
-    };
-}
 
 pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {

@@ -38,7 +38,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     try gltf.parse(buffer);
 
     const camera_create_info = try Camera.Lens.fromGlb(gltf);
-    var camera = try Camera.create();
+    var camera = Camera {};
     errdefer camera.destroy(vc, allocator);
     _ = try camera.appendLens(allocator, camera_create_info);
     _ = try camera.appendSensor(vc, vk_allocator, allocator, extent);
