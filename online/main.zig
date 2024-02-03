@@ -120,8 +120,10 @@ pub fn main() !void {
 
     std.log.info("Created pipelines!", .{});
 
+    var active_sensor: u32 = 0;
     var window_data = WindowData{
         .camera = &scene.camera,
+        .active_sensor = &active_sensor,
     };
 
     // window.setAspectRatio(config.extent.width, config.extent.height);
@@ -140,8 +142,10 @@ pub fn main() !void {
     while (!window.shouldClose()) {
         const command_buffer = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
-                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
+                const new_extent = window.getExtent();
+                try display.recreate(&context, new_extent, &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
+                active_sensor = try scene.camera.appendSensor(&context, &vk_allocator, allocator, new_extent);
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
@@ -157,10 +161,10 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Sensor")) {
             if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
-                scene.camera.sensors.items[0].clear();
+                scene.camera.sensors.items[active_sensor].clear();
             }
             imgui.sameLine();
-            try imgui.textFmt("Sample count: {}", .{scene.camera.sensors.items[0].sample_count});
+            try imgui.textFmt("Sample count: {}", .{scene.camera.sensors.items[active_sensor].sample_count});
             imgui.pushItemWidth(imgui.getFontSize() * -10);
             _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
             imgui.popItemWidth();
@@ -176,7 +180,7 @@ pub fn main() !void {
             if (changed) {
                 scene.camera.lenses.items[0].forward = scene.camera.lenses.items[0].forward.unit();
                 scene.camera.lenses.items[0].up = scene.camera.lenses.items[0].up.unit();
-                scene.camera.sensors.items[0].clear();
+                scene.camera.sensors.items[active_sensor].clear();
             }
             imgui.popItemWidth();
         }
@@ -195,7 +199,7 @@ pub fn main() !void {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
                     rebuild_error = false;
-                    scene.camera.sensors.items[0].clear();
+                    scene.camera.sensors.items[active_sensor].clear();
                 } else |err| if (err == error.ShaderCompileFail) {
                     rebuild_error = true;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
@@ -205,7 +209,7 @@ pub fn main() !void {
             imgui.popItemWidth();
         }
         imgui.end();
-        imgui.setNextWindowPos(@as(f32, @floatFromInt(display.swapchain.extent.width - 50)) - 250, 50);
+        imgui.setNextWindowPos(@as(f32, @floatFromInt(@max(display.swapchain.extent.width, 50) - 50)) - 250, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Click");
         if (has_clicked) {
@@ -224,7 +228,7 @@ pub fn main() !void {
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                 if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
                     scene.world.accel.recordUpdateSingleMaterial(&context, command_buffer, accel_geometry_index, geometry.material);
-                    scene.camera.sensors.items[0].clear();
+                    scene.camera.sensors.items[active_sensor].clear();
                 }
                 try imgui.textFmt("Sampled: {}", .{geometry.sampled});
                 imgui.separatorText("mesh");
@@ -246,7 +250,7 @@ pub fn main() !void {
                             switch (struct_field.type) {
                                 f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
                                     scene.world.materials.recordUpdateSingleVariant(&context, VariantType, command_buffer, material_idx, material_variant);
-                                    scene.camera.sensors.items[0].clear();
+                                    scene.camera.sensors.items[active_sensor].clear();
                                 },
                                 u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
                                 else => unreachable,
@@ -261,7 +265,7 @@ pub fn main() !void {
                 if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
                     scene.world.accel.recordUpdateSingleTransform(&context, command_buffer, object.instance_index, old_transform.with_translation(translation));
                     try scene.world.accel.recordRebuild(&context, command_buffer);
-                    scene.camera.sensors.items[0].clear();
+                    scene.camera.sensors.items[active_sensor].clear();
                 }
             }
             imgui.popItemWidth();
@@ -273,30 +277,30 @@ pub fn main() !void {
             const pos = window.getCursorPos();
             const x = @as(f32, @floatCast(pos.x)) / @as(f32, @floatFromInt(display.swapchain.extent.width));
             const y = @as(f32, @floatCast(pos.y)) / @as(f32, @floatFromInt(display.swapchain.extent.height));
-            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.accel.tlas_handle, scene.camera.sensors.items[0]);
-            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
+            current_clicked_object = try object_picker.getClickedObject(&context, F32x2.new(x, y), scene.camera, scene.world.accel.tlas_handle, scene.camera.sensors.items[active_sensor]);
+            const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y), .z = 0 });
             current_clicked_color = clicked_pixel.truncate();
             has_clicked = true;
         }
 
-        if (max_sample_count != 0 and scene.camera.sensors.items[0].sample_count > max_sample_count) scene.camera.sensors.items[0].clear();
-        if (max_sample_count == 0 or scene.camera.sensors.items[0].sample_count < max_sample_count) {
+        if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
+        if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
             // prepare some stuff
-            scene.camera.sensors.items[0].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
 
             // bind some stuff
             pipeline.recordBindPipeline(&context, command_buffer);
             pipeline.recordBindTextureDescriptorSet(&context, command_buffer, scene.world.materials.textures.descriptor_set);
 
             // push some stuff
-            pipeline.recordPushDescriptors(&context, command_buffer, scene.pushDescriptors(0, 0));
-            pipeline.recordPushConstants(&context, command_buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
+            pipeline.recordPushDescriptors(&context, command_buffer, scene.pushDescriptors(active_sensor, 0));
+            pipeline.recordPushConstants(&context, command_buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
 
             // trace some stuff
-            pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensors.items[0].extent);
+            pipeline.recordTraceRays(&context, command_buffer, scene.camera.sensors.items[active_sensor].extent);
 
             // copy some stuff
-            scene.camera.sensors.items[0].recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(&context, command_buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to
@@ -337,8 +341,8 @@ pub fn main() !void {
                 .y = 0,
                 .z = 0,
             }, .{
-                .x = @as(i32, @intCast(scene.camera.sensors.items[0].extent.width)),
-                .y = @as(i32, @intCast(scene.camera.sensors.items[0].extent.height)),
+                .x = @as(i32, @intCast(scene.camera.sensors.items[active_sensor].extent.width)),
+                .y = @as(i32, @intCast(scene.camera.sensors.items[active_sensor].extent.height)),
                 .z = 1,
             } },
             .dst_subresource = subresource,
@@ -356,7 +360,7 @@ pub fn main() !void {
             },
         };
 
-        context.device.cmdBlitImage(command_buffer, scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
+        context.device.cmdBlitImage(command_buffer, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, @ptrCast(&region), .nearest);
         context.device.cmdPipelineBarrier2(command_buffer, &vk.DependencyInfo{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2{.{
@@ -407,18 +411,20 @@ pub fn main() !void {
 
         if (display.endFrame(&context)) |ok| {
             // only update frame count if we presented successfully
-            scene.camera.sensors.items[0].sample_count += pipeline_opts.samples_per_run;
-            if (max_sample_count != 0) scene.camera.sensors.items[0].sample_count = @min(scene.camera.sensors.items[0].sample_count, max_sample_count);
+            scene.camera.sensors.items[active_sensor].sample_count += pipeline_opts.samples_per_run;
+            if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
-                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
+                const new_extent = window.getExtent();
+                try display.recreate(&context, new_extent, &destruction_queue, allocator);
                 try gui.resize(&context, display.swapchain);
+                active_sensor = try scene.camera.appendSensor(&context, &vk_allocator, allocator, new_extent);
             }
-        } else |err| {
-            if (err == error.OutOfDateKHR) {
-                try display.recreate(&context, window.getExtent(), &destruction_queue, allocator);
-                try gui.resize(&context, display.swapchain);
-            }
-        }
+        } else |err| if (err == error.OutOfDateKHR) {
+            const new_extent = window.getExtent();
+            try display.recreate(&context, new_extent, &destruction_queue, allocator);
+            try gui.resize(&context, display.swapchain);
+            active_sensor = try scene.camera.appendSensor(&context, &vk_allocator, allocator, new_extent);
+        } else return err;
 
         window.pollEvents();
     }
@@ -429,6 +435,7 @@ pub fn main() !void {
 
 const WindowData = struct {
     camera: *Camera,
+    active_sensor: *u32,
 };
 
 fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Window.ModifierKeys) void {
@@ -470,6 +477,6 @@ fn keyCallback(window: *const Window, key: u32, action: Window.Action, mods: Win
         }
 
         window_data.camera.lenses.items[0] = camera_info;
-        window_data.camera.sensors.items[0].clear();
+        window_data.camera.sensors.items[window_data.active_sensor.*].clear();
     }
 }

@@ -65,7 +65,10 @@ pub fn create() !Self {
 
 pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
-    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, extent));
+    var buf: [32]u8 = undefined;
+    const name = try std.fmt.bufPrintZ(&buf, "render {}", .{self.sensors.items.len});
+
+    try self.sensors.append(allocator, try Sensor.create(vc, vk_allocator, extent, name));
     return @intCast(self.sensors.items.len - 1);
 }
 
