@@ -21,10 +21,10 @@ pub fn build(b: *std.Build) !void {
     const tinyexr = makeTinyExrLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
 
-    var exes = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
+    var compiles = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
 
     // TODO: make custom test runner parallel + share some state across tests
-    try exes.append(blk: {
+    try compiles.append(blk: {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
@@ -44,7 +44,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // online exe
-    try exes.append(blk: {
+    try compiles.append(blk: {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source = .load; // for hot shader reload
@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // offline exe
-    try exes.append(blk: {
+    try compiles.append(blk: {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
@@ -106,15 +106,16 @@ pub fn build(b: *std.Build) !void {
         zig_lib.root_module.addImport("vulkan", vk);
         zig_lib.root_module.addImport("engine", engine);
         zig_lib.linkLibC();
+        try compiles.append(zig_lib);
 
         const lib = b.addSharedLibrary(.{
             .name = "hdMoonshine",
-            .root_source_file = .{ .path = "hydra/rendererPlugin.cpp" },
             .target = target,
             .optimize = optimize,
         });
         lib.addCSourceFiles(.{
            .files = &.{
+                "hydra/rendererPlugin.cpp",
                 "hydra/renderDelegate.cpp",
                 "hydra/renderPass.cpp",
                 "hydra/renderBuffer.cpp",
@@ -208,7 +209,8 @@ pub fn build(b: *std.Build) !void {
     }
     
     // create run step for all exes
-    for (exes.items) |exe| {
+    for (compiles.items) |exe| {
+        if (exe.kind == .lib or exe.kind == .obj) continue;
         const run = b.addRunArtifact(exe);
         if (b.args) |args| run.addArgs(args);
 
@@ -218,21 +220,21 @@ pub fn build(b: *std.Build) !void {
         step.dependOn(&run.step);
     }
 
-    // create install step for all exes
-    for (exes.items) |exe| {
-        const install = b.addInstallArtifact(exe, .{});
+    // create install step for all compiles
+    for (compiles.items) |compile| {
+        const install = b.addInstallArtifact(compile, .{});
 
-        const step_name = try std.fmt.allocPrint(b.allocator, "install-{s}", .{ exe.name });
-        const step_description = try std.fmt.allocPrint(b.allocator, "Install {s}", .{ exe.name });
+        const step_name = try std.fmt.allocPrint(b.allocator, "install-{s}", .{ compile.name });
+        const step_description = try std.fmt.allocPrint(b.allocator, "Install {s}", .{ compile.name });
         const step = b.step(step_name, step_description);
         step.dependOn(&install.step);
     }
 
-    // create check step that type-checks all exes
+    // create check step that type-checks all compiles
     // probably does a bit more atm but what can you do
     const check_step = b.step("check", "Type check all");
-    for (exes.items) |exe| {
-        check_step.dependOn(&exe.step);
+    for (compiles.items) |compile| {
+        check_step.dependOn(&compile.step);
     }
 }
 
