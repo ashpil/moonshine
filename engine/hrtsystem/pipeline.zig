@@ -209,7 +209,7 @@ pub fn Pipeline(
                     map_entry.* = vk.SpecializationMapEntry {
                         .constant_id = j,
                         .offset = @offsetOf(SpecConstants, inner_field.name),
-                        .size = @sizeOf(inner_field.type),
+                        .size = inner_field.alignment,
                     };
                 }
 
@@ -282,7 +282,7 @@ pub fn Pipeline(
                     map_entry.* = vk.SpecializationMapEntry {
                         .constant_id = j,
                         .offset = @offsetOf(SpecConstants, inner_field.name),
-                        .size = @sizeOf(inner_field.type),
+                        .size = inner_field.alignment, // not completely sure this is right -- purpose is so that e.g., we can have a 32 bit bool. should work.
                     };
                 }
 
@@ -470,6 +470,7 @@ pub const StandardPipeline = Pipeline(
         max_bounces: u32 = 4,
         env_samples_per_bounce: u32 = 1,
         mesh_samples_per_bounce: u32 = 1,
+        flip_image: bool align(@alignOf(vk.Bool32)) = true,
     },
     extern struct {
         lens: Camera.Lens,

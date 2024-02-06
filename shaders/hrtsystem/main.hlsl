@@ -38,19 +38,20 @@ struct PushConsts {
 [[vk::push_constant]] PushConsts pushConsts;
 
 // SPECIALIZATION CONSTANTS
-[[vk::constant_id(0)]] const uint SAMPLES_PER_RUN = 1;
-[[vk::constant_id(1)]] const uint MAX_BOUNCES = 4;
-[[vk::constant_id(2)]] const uint ENV_SAMPLES_PER_BOUNCE = 1;     // how many times the environment map should be sampled per bounce for light
-[[vk::constant_id(3)]] const uint MESH_SAMPLES_PER_BOUNCE = 1;    // how many times emissive meshes should be sampled per bounce for light
+[[vk::constant_id(0)]] const uint samples_per_run = 1;
+[[vk::constant_id(1)]] const uint max_bounces = 4;
+[[vk::constant_id(2)]] const uint env_samples_per_bounce = 1;     // how many times the environment map should be sampled per bounce for light
+[[vk::constant_id(3)]] const uint mesh_samples_per_bounce = 1;    // how many times emissive meshes should be sampled per bounce for light
+[[vk::constant_id(4)]] const bool flip_image = true;
 
 // https://www.nu42.com/2015/03/how-you-average-numbers.html
 void storeColor(float3 sampledColor) {
     uint2 imageCoords = DispatchRaysIndex().xy;
     if (pushConsts.sampleCount == 0) {
-        dOutputImage[imageCoords] = float4(sampledColor / SAMPLES_PER_RUN, 1.0);
+        dOutputImage[imageCoords] = float4(sampledColor / samples_per_run, 1.0);
     } else {
         float3 priorSampleAverage = dOutputImage[imageCoords].rgb;
-        dOutputImage[imageCoords] += float4((sampledColor - priorSampleAverage) / (pushConsts.sampleCount + SAMPLES_PER_RUN), 1.0);
+        dOutputImage[imageCoords] += float4((sampledColor - priorSampleAverage) / (pushConsts.sampleCount + samples_per_run), 1.0);
     }
 }
 
@@ -58,13 +59,13 @@ void storeColor(float3 sampledColor) {
 float2 dispatchUV(float2 rand) {
     float2 randomCenter = float2(0.5, 0.5) + 0.5 * squareToGaussian(rand);
     float2 uv = (float2(DispatchRaysIndex().xy) + randomCenter) / float2(DispatchRaysDimensions().xy);
-    uv.y = -(uv.y - 1);
+    if (flip_image) uv.y = -(uv.y - 1);
     return uv;
 }
 
 [shader("raygeneration")]
 void raygen() {
-    PathTracingIntegrator integrator = PathTracingIntegrator::create(MAX_BOUNCES, ENV_SAMPLES_PER_BOUNCE, MESH_SAMPLES_PER_BOUNCE);
+    PathTracingIntegrator integrator = PathTracingIntegrator::create(max_bounces, env_samples_per_bounce, mesh_samples_per_bounce);
 
     World world;
     world.instances = dInstances;
@@ -81,8 +82,8 @@ void raygen() {
 
     // the result that we write to our buffer
     float3 color = float3(0.0, 0.0, 0.0);
-    
-    for (uint sampleCount = 0; sampleCount < SAMPLES_PER_RUN; sampleCount++) {
+
+    for (uint sampleCount = 0; sampleCount < samples_per_run; sampleCount++) {
         // create rng for this sample
         Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount + sampleCount, DispatchRaysIndex().x, DispatchRaysIndex().y));
 
