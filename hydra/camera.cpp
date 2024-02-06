@@ -3,7 +3,7 @@
 #include "camera.hpp"
 #include "renderDelegate.hpp"
 
-#include <ostream>
+#include <pxr/base/gf/matrix4f.h>
 #include <pxr/imaging/hd/renderIndex.h>
 #include <pxr/imaging/hd/sceneDelegate.h>
 
@@ -23,18 +23,18 @@ void HdMoonshineCamera::Sync(PXR_NS::HdSceneDelegate* sceneDelegate, PXR_NS::HdR
     PXR_NS::HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
     HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
 
-    PXR_NS::GfMatrix4d transform = GetTransform();
-    PXR_NS::GfVec3d origin = transform.Transform(PXR_NS::GfVec3d(0.0, 0.0, 0.0));
-    PXR_NS::GfVec3d forward = transform.TransformDir(PXR_NS::GfVec3d(0.0, 0.0, -1.0));
-    PXR_NS::GfVec3d up = transform.TransformDir(PXR_NS::GfVec3d(0.0, 1.0, 0.0));
+    PXR_NS::GfMatrix4f transform = PXR_NS::GfMatrix4f(GetTransform());
+    PXR_NS::GfVec3f origin = transform.Transform(PXR_NS::GfVec3f(0.0, 0.0, 0.0));
+    PXR_NS::GfVec3f forward = transform.TransformDir(PXR_NS::GfVec3f(0.0, 0.0, -1.0));
+    PXR_NS::GfVec3f up = transform.TransformDir(PXR_NS::GfVec3f(0.0, 1.0, 0.0));
 
     forward.Normalize();
     up.Normalize();
 
     Lens lens = Lens {
-        .origin = F32x3 { .x = static_cast<float>(origin[0]), .y = static_cast<float>(origin[1]), .z = static_cast<float>(origin[2]) },
-        .forward = F32x3 { .x = static_cast<float>(forward[0]), .y = static_cast<float>(forward[1]), .z = static_cast<float>(forward[2]) },
-        .up = F32x3 { .x = static_cast<float>(up[0]), .y = static_cast<float>(up[1]), .z = static_cast<float>(up[2]) },
+        .origin = F32x3 { .x = origin[0], .y = origin[1], .z = origin[2] },
+        .forward = F32x3 { .x = forward[0], .y = forward[1], .z = forward[2] },
+        .up = F32x3 { .x = up[0], .y = up[1], .z = up[2] },
         .vfov = 2.0f * std::atan(GetVerticalAperture() / (2.0f * GetFocalLength())),
         .aperture = 0,
         .focus_distance = 1,
