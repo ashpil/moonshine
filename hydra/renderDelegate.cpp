@@ -3,8 +3,7 @@
 #include "renderBuffer.hpp"
 #include "mesh.hpp"
 #include "camera.hpp"
-
-#include "pxr/imaging/hd/camera.h"
+#include "instancer.hpp"
 
 #include <iostream>
 
@@ -59,9 +58,9 @@ PXR_NS::HdResourceRegistrySharedPtr HdMoonshineRenderDelegate::GetResourceRegist
 void HdMoonshineRenderDelegate::CommitResources(PXR_NS::HdChangeTracker *tracker) {}
 
 PXR_NS::HdRenderPassSharedPtr HdMoonshineRenderDelegate::CreateRenderPass(PXR_NS::HdRenderIndex *index, PXR_NS::HdRprimCollection const& collection) {
-    std::cout << "Create RenderPass with Collection=" << collection.GetName() << std::endl; 
+    std::cout << "Create RenderPass with Collection=" << collection.GetName() << std::endl;
 
-    return PXR_NS::HdRenderPassSharedPtr(new HdMoonshineRenderPass(index, collection));  
+    return PXR_NS::HdRenderPassSharedPtr(new HdMoonshineRenderPass(index, collection));
 }
 
 PXR_NS::HdRprim* HdMoonshineRenderDelegate::CreateRprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& rprimId) {
@@ -133,11 +132,12 @@ void HdMoonshineRenderDelegate::DestroyBprim(PXR_NS::HdBprim *bPrim) {
 
 PXR_NS::HdInstancer* HdMoonshineRenderDelegate::CreateInstancer(PXR_NS::HdSceneDelegate *delegate, PXR_NS::SdfPath const& id) {
     std::cout << "Create render instancer" << std::endl;
-    return nullptr;
+    return new HdMoonshineInstancer(delegate, id);
 }
 
 void HdMoonshineRenderDelegate::DestroyInstancer(PXR_NS::HdInstancer *instancer) {
     std::cout << "Destroy render instancer" << std::endl;
+    delete instancer;
 }
 
 PXR_NS::HdRenderParam* HdMoonshineRenderDelegate::GetRenderParam() const {

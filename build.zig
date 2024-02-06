@@ -121,6 +121,7 @@ pub fn build(b: *std.Build) !void {
                 "hydra/renderBuffer.cpp",
                 "hydra/mesh.cpp",
                 "hydra/camera.cpp",
+                "hydra/instancer.cpp",
             },
         });
         lib.linkLibrary(zig_lib);

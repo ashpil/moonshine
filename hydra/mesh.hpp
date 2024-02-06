@@ -19,5 +19,7 @@ protected:
 
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
+private:
+    bool initialized_ = false; // don't allow updating for now, only initialization
 };
 
