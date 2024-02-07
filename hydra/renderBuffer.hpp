@@ -6,8 +6,6 @@
 #include "pxr/imaging/hd/renderBuffer.h"
 #include "renderDelegate.hpp"
 
-#include <iostream>
-
 class HdMoonshineRenderBuffer : public PXR_NS::HdRenderBuffer
 {
 public:

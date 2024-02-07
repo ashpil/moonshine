@@ -13,25 +13,20 @@
 HdMoonshineMesh::HdMoonshineMesh(PXR_NS::SdfPath const& id) : PXR_NS::HdMesh(id) {}
 
 PXR_NS::HdDirtyBits HdMoonshineMesh::GetInitialDirtyBitsMask() const {
-    std::cout << "* (multithreaded) Get Initial Dirty Bits Mask id==" << GetId() << std::endl;
     return PXR_NS::HdChangeTracker::DirtyPoints
         | PXR_NS::HdChangeTracker::DirtyTransform
         | PXR_NS::HdChangeTracker::DirtyInstancer;
 }
 
 PXR_NS::HdDirtyBits HdMoonshineMesh::_PropagateDirtyBits(PXR_NS::HdDirtyBits bits) const {
-    std::cout << "* (multithreaded) Propogate diry bits id=" << GetId() << bits << std::endl;
     return bits;
 }
 
-void HdMoonshineMesh::_InitRepr(PXR_NS::TfToken const& reprToken, PXR_NS::HdDirtyBits* dirtyBits) {
-    std::cout << "* (multithreaded) _InitRepr id=" << GetId() << std::endl;
-}
+void HdMoonshineMesh::_InitRepr(PXR_NS::TfToken const& reprToken, PXR_NS::HdDirtyBits* dirtyBits) {}
 
 void HdMoonshineMesh::Sync(PXR_NS::HdSceneDelegate* sceneDelegate, PXR_NS::HdRenderParam* renderParam, PXR_NS::HdDirtyBits* dirtyBits, PXR_NS::TfToken const& reprToken) {
-    std::cout << "* (multithreaded) Sync Moonshine Mesh id=" << GetId() << std::endl;
     if (initialized_) {
-        std::cout << "* (multithreaded) Mesh id=" << GetId() << " already initialized!" << std::endl;
+        std::cerr << "* (multithreaded) Mesh id=" << GetId() << " already initialized!" << std::endl;
         return;
     }
 

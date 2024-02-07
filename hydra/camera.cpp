@@ -7,14 +7,9 @@
 #include <pxr/imaging/hd/renderIndex.h>
 #include <pxr/imaging/hd/sceneDelegate.h>
 
-#include <iostream>
-
-HdMoonshineCamera::HdMoonshineCamera(PXR_NS::SdfPath const& id) : PXR_NS::HdCamera(id) {
-    std::cout << "Camera constructor id=" << GetId() << std::endl;
-}
+HdMoonshineCamera::HdMoonshineCamera(PXR_NS::SdfPath const& id) : PXR_NS::HdCamera(id) {}
 
 PXR_NS::HdDirtyBits HdMoonshineCamera::GetInitialDirtyBitsMask() const {
-    std::cout << "* (multithreaded) Get Initial Dirty Bits Mask id==" << GetId() << std::endl;
     return PXR_NS::HdChangeTracker::DirtyTransform;
 }
 

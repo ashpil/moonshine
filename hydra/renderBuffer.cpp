@@ -8,21 +8,15 @@
 #include "pxr/base/gf/vec3i.h"
 
 #include <cstdint>
-#include <iostream>
 
-HdMoonshineRenderBuffer::HdMoonshineRenderBuffer(PXR_NS::SdfPath const& id, HdMoonshineRenderDelegate* renderDelegate) : PXR_NS::HdRenderBuffer(id), _renderDelegate(renderDelegate) {
-    std::cout << "Create render buffer id=" << id << std::endl;
-}
+HdMoonshineRenderBuffer::HdMoonshineRenderBuffer(PXR_NS::SdfPath const& id, HdMoonshineRenderDelegate* renderDelegate) : PXR_NS::HdRenderBuffer(id), _renderDelegate(renderDelegate) {}
 
 HdMoonshineRenderBuffer::~HdMoonshineRenderBuffer() = default;
 
-void HdMoonshineRenderBuffer::_Deallocate() {
-    std::cout << "Deallocate buffer" << std::endl;
-}
+void HdMoonshineRenderBuffer::_Deallocate() {} // TODO
 
 bool HdMoonshineRenderBuffer::Allocate(PXR_NS::GfVec3i const& dimensions, PXR_NS::HdFormat format, bool multiSampled)
 {
-    std::cout << "Allocate buffer dimensions=" << dimensions << " format=" << format << std::endl;
     _width = dimensions[0];
     _height = dimensions[1];
 

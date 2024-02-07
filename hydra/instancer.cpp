@@ -10,8 +10,6 @@
 #include "pxr/base/gf/quaternion.h"
 #include "pxr/base/tf/staticTokens.h"
 
-#include <iostream>
-
 HdMoonshineInstancer::HdMoonshineInstancer(PXR_NS::HdSceneDelegate* delegate, PXR_NS::SdfPath const& id) : PXR_NS::HdInstancer(delegate, id) {}
 
 HdMoonshineInstancer::~HdMoonshineInstancer() {}
@@ -77,7 +75,6 @@ void HdMoonshineInstancer::Sync(PXR_NS::HdSceneDelegate* delegate, PXR_NS::HdRen
         }
         if (i < rotations.size()) {
             temp.SetRotate(rotations[instanceIndex]);
-            std::cout << rotations[instanceIndex] << std::endl;
             out = temp * out;
         }
         if (i < scales.size()) {
