@@ -25,75 +25,91 @@ HdDirtyBits HdMoonshineMesh::_PropagateDirtyBits(HdDirtyBits bits) const {
 void HdMoonshineMesh::_InitRepr(TfToken const& reprToken, HdDirtyBits* dirtyBits) {}
 
 void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
-    if (initialized_) {
-        TF_CODING_ERROR("%s already initialized; update not supported!", GetId().GetText());
-        return;
-    }
-
     SdfPath const& id = GetId();
 
-    if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
-        HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
-        HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
+    HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
+    HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
 
-        const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
-        HdMeshUtil meshUtil(&topology,id);
-        VtIntArray primitiveParams;
-        VtVec3iArray indices;
-        meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
+    bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
-        const auto points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
+    if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
+        transform_ = GfMatrix4f(sceneDelegate->GetTransform(id));
+        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyTransform;
+    }
 
-        const MeshHandle mesh = HdMoonshineCreateMesh(renderDelegate->_moonshine, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+    const auto instancerId = GetInstancerId();
+    _UpdateInstancer(sceneDelegate, dirtyBits);
+    HdInstancer::_SyncInstancerAndParents(renderIndex, instancerId);
 
-        const ImageHandle emissive = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "emissive");
-        const ImageHandle normal = HdMoonshineCreateSolidTexture2(renderDelegate->_moonshine, F32x2 { .x = 0.5f, .y = 0.5f }, "normal");
-        const ImageHandle color = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "color");
-        const MaterialHandle material = HdMoonshineCreateMaterialLambert(renderDelegate->_moonshine, normal, emissive, color);
-
-        GfMatrix4f transform(1.0f);
-
-        if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
-            transform = GfMatrix4f(sceneDelegate->GetTransform(id));
+    if (HdChangeTracker::IsInstancerDirty(*dirtyBits, id)) {
+        const size_t old_len = instances_transforms_.size();
+        instances_transforms_.clear();
+        if (instancerId.IsEmpty()) {
+            instances_transforms_.push_back(GfMatrix4f(1.0));
+        } else {
+            HdInstancer *instancer = renderIndex.GetInstancer(instancerId);
+            VtMatrix4dArray instanceTransforms = static_cast<HdMoonshineInstancer*>(instancer)->ComputeInstanceTransforms(id);
+            for (size_t i = 0; i < instanceTransforms.size(); i++) {
+                instances_transforms_.push_back(GfMatrix4f(instanceTransforms[i]));
+            }
         }
+        const size_t new_len = instances_transforms_.size();
+        if (initialized_ && old_len != new_len) {
+            TF_CODING_ERROR("%s changed instance count; not supported!", GetId().GetText());
+        }
+        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyInstancer;
+    }
 
-        const Geometry geometry = Geometry {
-            .mesh = mesh,
-            .material = material,
-            .sampled = false,
-        };
+    if (!initialized_) {
+        if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
+            const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
+            HdMeshUtil meshUtil(&topology,id);
+            VtIntArray primitiveParams;
+            VtVec3iArray indices;
+            meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
 
-        _UpdateInstancer(sceneDelegate, dirtyBits);
-        const auto instancerId = GetInstancerId();
-        HdInstancer::_SyncInstancerAndParents(renderIndex, instancerId);
+            const auto points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
 
-        if (HdChangeTracker::IsInstancerDirty(*dirtyBits, id)) {
-            if (instancerId.IsEmpty()) {
+            const MeshHandle mesh = HdMoonshineCreateMesh(renderDelegate->_moonshine, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+
+            const ImageHandle emissive = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "emissive");
+            const ImageHandle normal = HdMoonshineCreateSolidTexture2(renderDelegate->_moonshine, F32x2 { .x = 0.5f, .y = 0.5f }, "normal");
+            const ImageHandle color = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "color");
+            const MaterialHandle material = HdMoonshineCreateMaterialLambert(renderDelegate->_moonshine, normal, emissive, color);
+
+            const Geometry geometry = Geometry {
+                .mesh = mesh,
+                .material = material,
+                .sampled = false,
+            };
+
+            for (size_t i = 0; i < instances_transforms_.size(); i++) {
+                GfMatrix4f instanceTransform = transform_ * instances_transforms_[i];
                 const Mat3x4 matrix = Mat3x4 {
-                    .x = F32x4 { .x = transform[0][0], .y = transform[1][0], .z = transform[2][0], .w = transform[3][0] },
-                    .y = F32x4 { .x = transform[0][1], .y = transform[1][1], .z = transform[2][1], .w = transform[3][1] },
-                    .z = F32x4 { .x = transform[0][2], .y = transform[1][2], .z = transform[2][2], .w = transform[3][2] },
+                    .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
+                    .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
+                    .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
                 };
                 instances_.push_back(HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1));
-            } else {
-                HdInstancer *instancer = renderIndex.GetInstancer(instancerId);
-                VtMatrix4dArray transforms = static_cast<HdMoonshineInstancer*>(instancer)->ComputeInstanceTransforms(id);
-
-                for (size_t i = 0; i < transforms.size(); ++i) {
-                    GfMatrix4f instanceTransform = transform * GfMatrix4f(transforms[i]);
-                    const Mat3x4 matrix = Mat3x4 {
-                        .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
-                        .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
-                        .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
-                    };
-                    instances_.push_back(HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1));
-                }
             }
+            *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
+        }
+    } else if (transform_changed) {
+        for (size_t i = 0; i < instances_transforms_.size(); i++) {
+            GfMatrix4f instanceTransform = transform_ * instances_transforms_[i];
+            const Mat3x4 matrix = Mat3x4 {
+                .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
+                .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
+                .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
+            };
+            HdMoonshineSetInstanceTransform(renderDelegate->_moonshine, instances_[i], matrix);
         }
     }
 
     initialized_ = true;
-    *dirtyBits = HdChangeTracker::Clean;
+    if (!HdChangeTracker::IsClean(*dirtyBits)) {
+        TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), GetId().GetText());
+    }
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

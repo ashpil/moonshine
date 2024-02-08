@@ -64,6 +64,7 @@ extern "C" ImageHandle HdMoonshineCreateSolidTexture2(HdMoonshine*, F32x2, const
 extern "C" ImageHandle HdMoonshineCreateSolidTexture3(HdMoonshine*, F32x3, const char*);
 extern "C" MaterialHandle HdMoonshineCreateMaterialLambert(HdMoonshine*, ImageHandle, ImageHandle, ImageHandle);
 extern "C" InstanceHandle HdMoonshineCreateInstance(HdMoonshine*, Mat3x4, const Geometry*, size_t);
+extern "C" void HdMoonshineSetInstanceTransform(HdMoonshine*, InstanceHandle, Mat3x4);
 extern "C" SensorHandle HdMoonshineCreateSensor(HdMoonshine*, Extent2D);
 extern "C" float* HdMoonshineGetSensorData(const HdMoonshine*, SensorHandle);
 extern "C" LensHandle HdMoonshineCreateLens(HdMoonshine*, Lens);

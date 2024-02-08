@@ -4,6 +4,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/mesh.h"
+#include <pxr/base/gf/matrix4f.h>
 
 #include <vector>
 
@@ -26,8 +27,13 @@ protected:
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
 private:
-    bool initialized_ = false; // don't allow updating for now, only initialization
+    bool initialized_ = false;
+
+    GfMatrix4f transform_{1.0f};
+
+    // these two have same len
     std::vector<InstanceHandle> instances_ = {};
+    std::vector<GfMatrix4f> instances_transforms_ = {};
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

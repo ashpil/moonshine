@@ -53,6 +53,8 @@ pub const HdMoonshine = struct {
     // i view async zig as a prerequisite to cleaning up the resource system
     mutex: std.Thread.Mutex,
 
+    instance_transform_updates: std.AutoArrayHashMapUnmanaged(Accel.Handle, Mat3x4),
+
     const samples_per_run = 1;
 
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
@@ -93,6 +95,7 @@ pub const HdMoonshine = struct {
 
         self.output_buffers = .{};
         self.mutex = .{};
+        self.instance_transform_updates = .{};
 
         return self;
     }
@@ -101,6 +104,103 @@ pub const HdMoonshine = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.commands.startRecording(&self.vc) catch return false;
+
+        // update instance transforms
+        {
+            var transform_iterator = self.instance_transform_updates.iterator();
+            while (transform_iterator.next()) |pair| {
+                const instance_idx = pair.key_ptr.*;
+                const transform = pair.value_ptr.*;
+                const offset = @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_idx + @offsetOf(vk.AccelerationStructureInstanceKHR, "transform");
+                const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
+                const size = @sizeOf(vk.TransformMatrixKHR);
+                self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.accel.instances_device.handle, offset, size, &transform);
+                self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.accel.world_to_instance.handle, offset_inverse, size, &transform.inverse_affine());
+            }
+
+            if (self.instance_transform_updates.count() != 0) {
+                const update_barriers = [_]vk.BufferMemoryBarrier2 {
+                    .{
+                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_access_mask = .{ .transfer_write_bit = true },
+                        .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                        .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .buffer = self.world.accel.instances_device.handle,
+                        .offset = 0,
+                        .size = vk.WHOLE_SIZE,
+                    },
+                    .{
+                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_access_mask = .{ .transfer_write_bit = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .shader_storage_read_bit = true },
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .buffer = self.world.accel.world_to_instance.handle,
+                        .offset = 0,
+                        .size = vk.WHOLE_SIZE,
+                    },
+                };
+                self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
+                    .buffer_memory_barrier_count = update_barriers.len,
+                    .p_buffer_memory_barriers = &update_barriers,
+                });
+
+                const geometry = vk.AccelerationStructureGeometryKHR {
+                    .geometry_type = .instances_khr,
+                    .flags = .{ .opaque_bit_khr = true },
+                    .geometry = .{
+                        .instances = .{
+                            .array_of_pointers = vk.FALSE,
+                            .data = .{
+                                .device_address = self.world.accel.instances_address,
+                            }
+                        }
+                    },
+                };
+
+                var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
+                    .@"type" = .top_level_khr,
+                    .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
+                    .mode = .update_khr,
+                    .src_acceleration_structure = self.world.accel.tlas_handle,
+                    .dst_acceleration_structure = self.world.accel.tlas_handle,
+                    .geometry_count = 1,
+                    .p_geometries = @ptrCast(&geometry),
+                    .scratch_data = .{
+                        .device_address = self.world.accel.tlas_update_scratch_address,
+                    },
+                };
+
+                const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
+                    .primitive_count = self.world.accel.instance_count,
+                    .first_vertex = 0,
+                    .primitive_offset = 0,
+                    .transform_offset = 0,
+                };
+
+                const build_info_ref = &build_info;
+
+                self.vc.device.cmdBuildAccelerationStructuresKHR(self.commands.buffer, 1, @ptrCast(&geometry_info), @ptrCast(&build_info_ref));
+
+                const ray_trace_barriers = [_]vk.MemoryBarrier2 {
+                    .{
+                        .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                        .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
+                    }
+                };
+                self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
+                    .memory_barrier_count = ray_trace_barriers.len,
+                    .p_memory_barriers = &ray_trace_barriers,
+                });
+            }
+
+            self.instance_transform_updates.clearRetainingCapacity();
+        }
 
         // prepare our stuff
         self.camera.sensors.items[sensor].recordPrepareForCapture(&self.vc, self.commands.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
@@ -213,6 +313,13 @@ pub const HdMoonshine = struct {
         return self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch unreachable; // TODO: error handling
     }
 
+    pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat3x4) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        self.instance_transform_updates.put(self.allocator.allocator(), handle, new_transform) catch unreachable; // TODO: error handling
+        self.camera.clearAllSensors();
+    }
+
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {
         self.mutex.lock();
         defer self.mutex.unlock();
@@ -244,6 +351,7 @@ pub const HdMoonshine = struct {
         for (self.output_buffers.items) |output_buffer| {
             output_buffer.destroy(&self.vc);
         }
+        self.instance_transform_updates.deinit(self.allocator.allocator());
         self.output_buffers.deinit(self.allocator.allocator());
         self.pipeline.destroy(&self.vc);
         self.world.destroy(&self.vc, self.allocator.allocator());
