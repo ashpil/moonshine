@@ -209,6 +209,7 @@ pub const HdMoonshine = struct {
             .visible = true,
             .geometries = geometries[0..geometry_count],
         };
+        self.camera.clearAllSensors();
         self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch return false;
         return true;
     }
@@ -237,9 +238,7 @@ pub const HdMoonshine = struct {
 
         // technically only need to clear sensors associated with this lens
         // but no easy mechanism to do this currently
-        for (self.camera.sensors.items) |*sensor| {
-            sensor.clear();
-        }
+        self.camera.clearAllSensors();
     }
 
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
