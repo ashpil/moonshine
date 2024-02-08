@@ -8,8 +8,6 @@
 #include <pxr/imaging/hd/instancer.h>
 #include <pxr/base/gf/matrix4f.h>
 
-#include <iostream>
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 HdMoonshineMesh::HdMoonshineMesh(SdfPath const& id) : HdMesh(id) {}
@@ -28,7 +26,7 @@ void HdMoonshineMesh::_InitRepr(TfToken const& reprToken, HdDirtyBits* dirtyBits
 
 void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
     if (initialized_) {
-        std::cerr << "* (multithreaded) Mesh id=" << GetId() << " already initialized!" << std::endl;
+        TF_CODING_ERROR("%s already initialized; update not supported!", GetId().GetText());
         return;
     }
 

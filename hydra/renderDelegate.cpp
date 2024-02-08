@@ -5,8 +5,6 @@
 #include "camera.hpp"
 #include "instancer.hpp"
 
-#include <iostream>
-
 PXR_NAMESPACE_OPEN_SCOPE
 
 const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_RPRIM_TYPES = {
@@ -65,7 +63,7 @@ HdRprim* HdMoonshineRenderDelegate::CreateRprim(TfToken const& typeId, SdfPath c
     if (typeId == HdPrimTypeTokens->mesh) {
         return new HdMoonshineMesh(rprimId);
     } else {
-        std::cerr << "Unknown Rprim type=" << typeId.GetText() << " id=" << rprimId.GetText() << std::endl;
+        TF_CODING_ERROR("Unknown Rprim type %s", typeId.GetText());
         return nullptr;
     }
 }
@@ -76,7 +74,7 @@ HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath c
     if (typeId == HdPrimTypeTokens->camera) {
         return new HdMoonshineCamera(sprimId);
     } else {
-        std::cerr << "Unknown Sprim type=" << typeId.GetText() << " id=" << sprimId.GetText() << std::endl;
+        TF_CODING_ERROR("Unknown Sprim type %s", typeId.GetText());
         return nullptr;
     }
 }
@@ -85,7 +83,7 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
     if (typeId == HdPrimTypeTokens->camera) {
         return new HdMoonshineCamera(SdfPath::EmptyPath());
     } else {
-        std::cerr << "Unknown Sprim type=" << typeId.GetText() << std::endl;
+        TF_CODING_ERROR("Unknown fallback Sprim type %s", typeId.GetText());
         return nullptr;
     }
 }
@@ -96,7 +94,7 @@ HdBprim* HdMoonshineRenderDelegate::CreateBprim(TfToken const& typeId, SdfPath c
     if (typeId == HdPrimTypeTokens->renderBuffer) {
         return new HdMoonshineRenderBuffer(bprimId, this);
     } else {
-        std::cerr << "Unknown Bprim type=" << typeId.GetText() << std::endl;
+        TF_CODING_ERROR("Unknown Bprim type %s", typeId.GetText());
         return nullptr;
     }
 }
@@ -105,7 +103,7 @@ HdBprim* HdMoonshineRenderDelegate::CreateFallbackBprim(TfToken const& typeId) {
     if (typeId == HdPrimTypeTokens->renderBuffer) {
         return new HdMoonshineRenderBuffer(SdfPath::EmptyPath(), this);
     } else {
-        std::cerr << "Unknown Bprim type=" << typeId.GetText() << std::endl;
+        TF_CODING_ERROR("Unknown fallback Bprim type %s", typeId.GetText());
         return nullptr;
     }
 }
