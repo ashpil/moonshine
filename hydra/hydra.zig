@@ -201,7 +201,7 @@ pub const HdMoonshine = struct {
         }) catch unreachable; // TODO: error handling
     }
 
-    pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize) bool {
+    pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize) Accel.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();
         const instance = Accel.Instance {
@@ -210,8 +210,7 @@ pub const HdMoonshine = struct {
             .geometries = geometries[0..geometry_count],
         };
         self.camera.clearAllSensors();
-        self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch return false;
-        return true;
+        return self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {

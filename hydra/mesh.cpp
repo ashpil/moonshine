@@ -74,7 +74,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
                     .y = F32x4 { .x = transform[0][1], .y = transform[1][1], .z = transform[2][1], .w = transform[3][1] },
                     .z = F32x4 { .x = transform[0][2], .y = transform[1][2], .z = transform[2][2], .w = transform[3][2] },
                 };
-                HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1);
+                instances_.push_back(HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1));
             } else {
                 HdInstancer *instancer = renderIndex.GetInstancer(instancerId);
                 VtMatrix4dArray transforms = static_cast<HdMoonshineInstancer*>(instancer)->ComputeInstanceTransforms(id);
@@ -86,7 +86,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
                         .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                         .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
                     };
-                    HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1);
+                    instances_.push_back(HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1));
                 }
             }
         }

@@ -12,6 +12,7 @@ typedef uint32_t ImageHandle;
 typedef uint32_t MaterialHandle;
 typedef uint32_t SensorHandle;
 typedef uint32_t LensHandle;
+typedef uint32_t InstanceHandle;
 
 typedef struct F32x2 {
     float x, y;
@@ -62,7 +63,7 @@ extern "C" ImageHandle HdMoonshineCreateSolidTexture1(HdMoonshine*, float, const
 extern "C" ImageHandle HdMoonshineCreateSolidTexture2(HdMoonshine*, F32x2, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture3(HdMoonshine*, F32x3, const char*);
 extern "C" MaterialHandle HdMoonshineCreateMaterialLambert(HdMoonshine*, ImageHandle, ImageHandle, ImageHandle);
-extern "C" bool HdMoonshineCreateInstance(HdMoonshine*, Mat3x4, const Geometry*, size_t);
+extern "C" InstanceHandle HdMoonshineCreateInstance(HdMoonshine*, Mat3x4, const Geometry*, size_t);
 extern "C" SensorHandle HdMoonshineCreateSensor(HdMoonshine*, Extent2D);
 extern "C" float* HdMoonshineGetSensorData(const HdMoonshine*, SensorHandle);
 extern "C" LensHandle HdMoonshineCreateLens(HdMoonshine*, Lens);

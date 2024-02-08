@@ -216,7 +216,8 @@ fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
 // accel must not be in use
 // alias table currently unimplemented
-pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance: Instance) !void {
+pub const Handle = u32;
+pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, instance: Instance) !Handle {
     std.debug.assert(self.geometry_count + instance.geometries.len <= max_geometries);
     std.debug.assert(self.instance_count < max_instances);
 
@@ -330,6 +331,8 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAl
         .primitive_offset = 0,
         .transform_offset = 0,
     })});
+
+    return self.instance_count - 1;
 }
 
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection

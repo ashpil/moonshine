@@ -285,7 +285,7 @@ test "white sphere on white background is white" {
             }
         });
 
-        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
+        _ = try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .geometries = &[1]Accel.Geometry {
@@ -376,7 +376,7 @@ test "inside illuminating sphere is white" {
             }
         });
 
-        try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
+        _ = try world.accel.uploadInstance(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, world.meshes, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .geometries = &[1]Accel.Geometry {
