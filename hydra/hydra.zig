@@ -83,7 +83,7 @@ pub const HdMoonshine = struct {
         self.background.addDefaultBackground(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands) catch return null;
 
         self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.materials.textures.descriptor_layout, .{
-            .samples_per_run = 1,
+            .samples_per_run = samples_per_run,
             .max_bounces = 1024,
             .env_samples_per_bounce = 0,
             .mesh_samples_per_bounce = 0,
