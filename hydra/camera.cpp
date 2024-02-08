@@ -7,21 +7,23 @@
 #include <pxr/imaging/hd/renderIndex.h>
 #include <pxr/imaging/hd/sceneDelegate.h>
 
-HdMoonshineCamera::HdMoonshineCamera(PXR_NS::SdfPath const& id) : PXR_NS::HdCamera(id) {}
+PXR_NAMESPACE_OPEN_SCOPE
 
-PXR_NS::HdDirtyBits HdMoonshineCamera::GetInitialDirtyBitsMask() const {
-    return PXR_NS::HdChangeTracker::DirtyTransform;
+HdMoonshineCamera::HdMoonshineCamera(SdfPath const& id) : HdCamera(id) {}
+
+HdDirtyBits HdMoonshineCamera::GetInitialDirtyBitsMask() const {
+    return HdChangeTracker::DirtyTransform;
 }
 
-void HdMoonshineCamera::Sync(PXR_NS::HdSceneDelegate* sceneDelegate, PXR_NS::HdRenderParam* renderParam, PXR_NS::HdDirtyBits* dirtyBits) {
-    PXR_NS::HdCamera::Sync(sceneDelegate, renderParam, dirtyBits);
-    PXR_NS::HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
+void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) {
+    HdCamera::Sync(sceneDelegate, renderParam, dirtyBits);
+    HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
     HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
 
-    PXR_NS::GfMatrix4f transform = PXR_NS::GfMatrix4f(GetTransform());
-    PXR_NS::GfVec3f origin = transform.Transform(PXR_NS::GfVec3f(0.0, 0.0, 0.0));
-    PXR_NS::GfVec3f forward = transform.TransformDir(PXR_NS::GfVec3f(0.0, 0.0, -1.0));
-    PXR_NS::GfVec3f up = transform.TransformDir(PXR_NS::GfVec3f(0.0, 1.0, 0.0));
+    GfMatrix4f transform = GfMatrix4f(GetTransform());
+    GfVec3f origin = transform.Transform(GfVec3f(0.0, 0.0, 0.0));
+    GfVec3f forward = transform.TransformDir(GfVec3f(0.0, 0.0, -1.0));
+    GfVec3f up = transform.TransformDir(GfVec3f(0.0, 1.0, 0.0));
 
     forward.Normalize();
     up.Normalize();
@@ -40,6 +42,7 @@ void HdMoonshineCamera::Sync(PXR_NS::HdSceneDelegate* sceneDelegate, PXR_NS::HdR
     } else {
         HdMoonshineSetLens(renderDelegate->_moonshine, _handle, lens);
     }
-    *dirtyBits = PXR_NS::HdChangeTracker::Clean;
+    *dirtyBits = HdChangeTracker::Clean;
 }
 
+PXR_NAMESPACE_CLOSE_SCOPE

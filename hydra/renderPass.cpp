@@ -8,14 +8,16 @@
 #include <pxr/imaging/hd/renderPassState.h>
 #include <pxr/imaging/hd/tokens.h>
 
-HdMoonshineRenderPass::HdMoonshineRenderPass(PXR_NS::HdRenderIndex *index, PXR_NS::HdRprimCollection const &collection) : HdRenderPass(index, collection) {}
+PXR_NAMESPACE_OPEN_SCOPE
+
+HdMoonshineRenderPass::HdMoonshineRenderPass(HdRenderIndex *index, HdRprimCollection const &collection) : HdRenderPass(index, collection) {}
 
 HdMoonshineRenderPass::~HdMoonshineRenderPass() {}
 
-void HdMoonshineRenderPass::_Execute(PXR_NS::HdRenderPassStateSharedPtr const& renderPassState, PXR_NS::TfTokenVector const& renderTags) {
+void HdMoonshineRenderPass::_Execute(HdRenderPassStateSharedPtr const& renderPassState, TfTokenVector const& renderTags) {
     for (const auto aov : renderPassState->GetAovBindings()) {
-        if (aov.aovName == PXR_NS::HdAovTokens->color) {
-            PXR_NS::HdRenderIndex* renderIndex = GetRenderIndex();
+        if (aov.aovName == HdAovTokens->color) {
+            HdRenderIndex* renderIndex = GetRenderIndex();
             HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex->GetRenderDelegate());
             const HdMoonshineCamera* camera = static_cast<const HdMoonshineCamera*>(renderPassState->GetCamera());
 
@@ -24,3 +26,5 @@ void HdMoonshineRenderPass::_Execute(PXR_NS::HdRenderPassStateSharedPtr const& r
         }
     }
 }
+
+PXR_NAMESPACE_CLOSE_SCOPE

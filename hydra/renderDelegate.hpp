@@ -7,52 +7,54 @@
 
 #include "moonshine.h"
 
-class HdMoonshineRenderDelegate final : public PXR_NS::HdRenderDelegate 
+PXR_NAMESPACE_OPEN_SCOPE
+
+class HdMoonshineRenderDelegate final : public HdRenderDelegate
 {
 public:
     HdMoonshineRenderDelegate();
-    HdMoonshineRenderDelegate(PXR_NS::HdRenderSettingsMap const& settingsMap);
+    HdMoonshineRenderDelegate(HdRenderSettingsMap const& settingsMap);
     ~HdMoonshineRenderDelegate();
 
-    const PXR_NS::TfTokenVector &GetSupportedRprimTypes() const override;
-    const PXR_NS::TfTokenVector &GetSupportedSprimTypes() const override;
-    const PXR_NS::TfTokenVector &GetSupportedBprimTypes() const override;
+    const TfTokenVector &GetSupportedRprimTypes() const override;
+    const TfTokenVector &GetSupportedSprimTypes() const override;
+    const TfTokenVector &GetSupportedBprimTypes() const override;
 
-    PXR_NS::HdResourceRegistrySharedPtr GetResourceRegistry() const override;
+    HdResourceRegistrySharedPtr GetResourceRegistry() const override;
 
-    PXR_NS::HdRenderPassSharedPtr CreateRenderPass(PXR_NS::HdRenderIndex *index, PXR_NS::HdRprimCollection const& collection) override;
+    HdRenderPassSharedPtr CreateRenderPass(HdRenderIndex *index, HdRprimCollection const& collection) override;
 
-    PXR_NS::HdInstancer *CreateInstancer(PXR_NS::HdSceneDelegate *delegate, PXR_NS::SdfPath const& id) override;
-    void DestroyInstancer(PXR_NS::HdInstancer *instancer) override;
+    HdInstancer *CreateInstancer(HdSceneDelegate *delegate, SdfPath const& id) override;
+    void DestroyInstancer(HdInstancer *instancer) override;
 
-    PXR_NS::HdRprim *CreateRprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& rprimId) override;
-    void DestroyRprim(PXR_NS::HdRprim *rPrim) override;
+    HdRprim *CreateRprim(TfToken const& typeId, SdfPath const& rprimId) override;
+    void DestroyRprim(HdRprim *rPrim) override;
 
-    PXR_NS::HdSprim *CreateSprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& sprimId) override;
-    PXR_NS::HdSprim *CreateFallbackSprim(PXR_NS::TfToken const& typeId) override;
-    void DestroySprim(PXR_NS::HdSprim *sprim) override;
+    HdSprim *CreateSprim(TfToken const& typeId, SdfPath const& sprimId) override;
+    HdSprim *CreateFallbackSprim(TfToken const& typeId) override;
+    void DestroySprim(HdSprim *sprim) override;
 
-    PXR_NS::HdBprim *CreateBprim(PXR_NS::TfToken const& typeId, PXR_NS::SdfPath const& bprimId) override;
-    PXR_NS::HdBprim *CreateFallbackBprim(PXR_NS::TfToken const& typeId) override;
-    void DestroyBprim(PXR_NS::HdBprim *bprim) override;
+    HdBprim *CreateBprim(TfToken const& typeId, SdfPath const& bprimId) override;
+    HdBprim *CreateFallbackBprim(TfToken const& typeId) override;
+    void DestroyBprim(HdBprim *bprim) override;
 
-    void CommitResources(PXR_NS::HdChangeTracker *tracker) override;
+    void CommitResources(HdChangeTracker *tracker) override;
 
-    PXR_NS::HdRenderParam *GetRenderParam() const override;
+    HdRenderParam *GetRenderParam() const override;
 
-    PXR_NS::HdAovDescriptor GetDefaultAovDescriptor(PXR_NS::TfToken const& name) const override;
+    HdAovDescriptor GetDefaultAovDescriptor(TfToken const& name) const override;
     HdMoonshine* _moonshine;
 private:
-    static const PXR_NS::TfTokenVector SUPPORTED_RPRIM_TYPES;
-    static const PXR_NS::TfTokenVector SUPPORTED_SPRIM_TYPES;
-    static const PXR_NS::TfTokenVector SUPPORTED_BPRIM_TYPES;
+    static const TfTokenVector SUPPORTED_RPRIM_TYPES;
+    static const TfTokenVector SUPPORTED_SPRIM_TYPES;
+    static const TfTokenVector SUPPORTED_BPRIM_TYPES;
 
     void _Initialize();
 
-    PXR_NS::HdResourceRegistrySharedPtr _resourceRegistry;
+    HdResourceRegistrySharedPtr _resourceRegistry;
 
     HdMoonshineRenderDelegate(const HdMoonshineRenderDelegate &) = delete;
     HdMoonshineRenderDelegate &operator =(const HdMoonshineRenderDelegate &) = delete;
 };
 
-
+PXR_NAMESPACE_CLOSE_SCOPE

@@ -3,19 +3,21 @@
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/mesh.h"
 
-class HdMoonshineMesh final : public PXR_NS::HdMesh {
+PXR_NAMESPACE_OPEN_SCOPE
+
+class HdMoonshineMesh final : public HdMesh {
 public:
-    HdMoonshineMesh(PXR_NS::SdfPath const& id);
+    HdMoonshineMesh(SdfPath const& id);
     ~HdMoonshineMesh() override = default;
 
-    PXR_NS::HdDirtyBits GetInitialDirtyBitsMask() const override;
+    HdDirtyBits GetInitialDirtyBitsMask() const override;
 
-    void Sync(PXR_NS::HdSceneDelegate* sceneDelegate, PXR_NS::HdRenderParam* renderParam, PXR_NS::HdDirtyBits* dirtyBits, PXR_NS::TfToken const &reprToken) override;
+    void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits, TfToken const &reprToken) override;
 
 protected:
-    void _InitRepr(PXR_NS::TfToken const &reprToken, PXR_NS::HdDirtyBits *dirtyBits) override;
+    void _InitRepr(TfToken const &reprToken, HdDirtyBits *dirtyBits) override;
 
-    PXR_NS::HdDirtyBits _PropagateDirtyBits(PXR_NS::HdDirtyBits bits) const override;
+    HdDirtyBits _PropagateDirtyBits(HdDirtyBits bits) const override;
 
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
@@ -23,3 +25,4 @@ private:
     bool initialized_ = false; // don't allow updating for now, only initialization
 };
 
+PXR_NAMESPACE_CLOSE_SCOPE

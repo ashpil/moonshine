@@ -2,16 +2,20 @@
 
 #include "pxr/imaging/hd/rendererPlugin.h"
 
-class HdMoonshinePlugin final : public PXR_NS::HdRendererPlugin 
+PXR_NAMESPACE_OPEN_SCOPE
+
+class HdMoonshinePlugin final : public HdRendererPlugin
 {
 public:
     HdMoonshinePlugin() = default;
     ~HdMoonshinePlugin() = default;
-    PXR_NS::HdRenderDelegate* CreateRenderDelegate() override;
-    PXR_NS::HdRenderDelegate* CreateRenderDelegate(PXR_NS::HdRenderSettingsMap const& settingsMap) override;
-    void DeleteRenderDelegate(PXR_NS::HdRenderDelegate *renderDelegate) override;
+    HdRenderDelegate* CreateRenderDelegate() override;
+    HdRenderDelegate* CreateRenderDelegate(HdRenderSettingsMap const& settingsMap) override;
+    void DeleteRenderDelegate(HdRenderDelegate *renderDelegate) override;
     bool IsSupported(bool gpuEnabled) const override;
 private:
     HdMoonshinePlugin(const HdMoonshinePlugin&) = delete;
     HdMoonshinePlugin &operator =(const HdMoonshinePlugin&) = delete;
 };
+
+PXR_NAMESPACE_CLOSE_SCOPE

@@ -9,13 +9,15 @@
 
 #include <cstdint>
 
-HdMoonshineRenderBuffer::HdMoonshineRenderBuffer(PXR_NS::SdfPath const& id, HdMoonshineRenderDelegate* renderDelegate) : PXR_NS::HdRenderBuffer(id), _renderDelegate(renderDelegate) {}
+PXR_NAMESPACE_OPEN_SCOPE
+
+HdMoonshineRenderBuffer::HdMoonshineRenderBuffer(SdfPath const& id, HdMoonshineRenderDelegate* renderDelegate) : HdRenderBuffer(id), _renderDelegate(renderDelegate) {}
 
 HdMoonshineRenderBuffer::~HdMoonshineRenderBuffer() = default;
 
 void HdMoonshineRenderBuffer::_Deallocate() {} // TODO
 
-bool HdMoonshineRenderBuffer::Allocate(PXR_NS::GfVec3i const& dimensions, PXR_NS::HdFormat format, bool multiSampled)
+bool HdMoonshineRenderBuffer::Allocate(GfVec3i const& dimensions, HdFormat format, bool multiSampled)
 {
     _width = dimensions[0];
     _height = dimensions[1];
@@ -27,3 +29,5 @@ bool HdMoonshineRenderBuffer::Allocate(PXR_NS::GfVec3i const& dimensions, PXR_NS
 }
 
 void HdMoonshineRenderBuffer::Resolve() {}
+
+PXR_NAMESPACE_CLOSE_SCOPE
