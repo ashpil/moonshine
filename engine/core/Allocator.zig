@@ -93,6 +93,10 @@ pub fn DeviceBuffer(comptime T: type) type {
         pub fn is_null(self: BufferSelf) bool {
             return self.handle == .null_handle;
         }
+
+        pub fn sizeInBytes(self: BufferSelf) usize {
+            return self.data.len * @sizeOf(T);
+        }
     };
 }
 
@@ -168,6 +172,10 @@ pub fn HostBuffer(comptime T: type) type {
                 .memory = self.memory,
                 .data = @as([*]u8, @ptrCast(self.data))[0..self.data.len * @sizeOf(T)],
             };
+        }
+
+        pub fn sizeInBytes(self: BufferSelf) usize {
+            return self.data.len * @sizeOf(T);
         }
     };
 }

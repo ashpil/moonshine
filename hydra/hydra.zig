@@ -110,8 +110,12 @@ pub const HdMoonshine = struct {
         // update instance transforms
         {   
             if (self.need_instance_update) {
-                self.commands.recordUploadBuffer(vk.AccelerationStructureInstanceKHR, &self.vc, self.world.accel.instances_device, self.world.accel.instances_host);
-                self.commands.recordUploadBuffer(Mat3x4, &self.vc, self.world.accel.world_to_instance_device, self.world.accel.world_to_instance_host);
+                var actual_size_instances = self.world.accel.instances_host;
+                actual_size_instances.data.len = self.world.accel.instance_count;
+                var actual_size_world_to_instance = self.world.accel.world_to_instance_host;
+                actual_size_world_to_instance.data.len = self.world.accel.instance_count;
+                self.commands.recordUploadBuffer(vk.AccelerationStructureInstanceKHR, &self.vc, self.world.accel.instances_device, actual_size_instances);
+                self.commands.recordUploadBuffer(Mat3x4, &self.vc, self.world.accel.world_to_instance_device, actual_size_world_to_instance);
 
                 const update_barriers = [_]vk.BufferMemoryBarrier2 {
                     .{
