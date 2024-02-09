@@ -53,7 +53,9 @@ pub const HdMoonshine = struct {
     // i view async zig as a prerequisite to cleaning up the resource system
     mutex: std.Thread.Mutex,
 
-    instance_transform_updates: std.AutoArrayHashMapUnmanaged(Accel.Handle, Mat3x4),
+    // only keep a single bit for deciding if we should update all --
+    // could technically be more granular
+    need_instance_update: bool,
 
     const samples_per_run = 1;
 
@@ -95,7 +97,7 @@ pub const HdMoonshine = struct {
 
         self.output_buffers = .{};
         self.mutex = .{};
-        self.instance_transform_updates = .{};
+        self.need_instance_update = false;
 
         return self;
     }
@@ -106,19 +108,11 @@ pub const HdMoonshine = struct {
         self.commands.startRecording(&self.vc) catch return false;
 
         // update instance transforms
-        {
-            var transform_iterator = self.instance_transform_updates.iterator();
-            while (transform_iterator.next()) |pair| {
-                const instance_idx = pair.key_ptr.*;
-                const transform = pair.value_ptr.*;
-                const offset = @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_idx + @offsetOf(vk.AccelerationStructureInstanceKHR, "transform");
-                const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
-                const size = @sizeOf(vk.TransformMatrixKHR);
-                self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.accel.instances_device.handle, offset, size, &transform);
-                self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.accel.world_to_instance.handle, offset_inverse, size, &transform.inverse_affine());
-            }
+        {   
+            if (self.need_instance_update) {
+                self.commands.recordUploadBuffer(vk.AccelerationStructureInstanceKHR, &self.vc, self.world.accel.instances_device, self.world.accel.instances_host);
+                self.commands.recordUploadBuffer(Mat3x4, &self.vc, self.world.accel.world_to_instance_device, self.world.accel.world_to_instance_host);
 
-            if (self.instance_transform_updates.count() != 0) {
                 const update_barriers = [_]vk.BufferMemoryBarrier2 {
                     .{
                         .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
@@ -138,7 +132,7 @@ pub const HdMoonshine = struct {
                         .dst_access_mask = .{ .shader_storage_read_bit = true },
                         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                        .buffer = self.world.accel.world_to_instance.handle,
+                        .buffer = self.world.accel.world_to_instance_device.handle,
                         .offset = 0,
                         .size = vk.WHOLE_SIZE,
                     },
@@ -162,7 +156,7 @@ pub const HdMoonshine = struct {
                 };
 
                 var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-                    .@"type" = .top_level_khr,
+                    .type = .top_level_khr,
                     .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
                     .mode = .update_khr,
                     .src_acceleration_structure = self.world.accel.tlas_handle,
@@ -199,7 +193,7 @@ pub const HdMoonshine = struct {
                 });
             }
 
-            self.instance_transform_updates.clearRetainingCapacity();
+            self.need_instance_update = false;
         }
 
         // prepare our stuff
@@ -313,10 +307,21 @@ pub const HdMoonshine = struct {
         return self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch unreachable; // TODO: error handling
     }
 
+    // this lies to you -- really just makes instance invisible
+    // TODO: proper destruction
+    pub export fn HdMoonshineDestroyInstance(self: *HdMoonshine, handle: Accel.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        self.world.accel.instances_host.data[handle].instance_custom_index_and_mask.mask = 0x00;
+        self.need_instance_update = true;
+        self.camera.clearAllSensors();
+    }
+
     pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat3x4) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        self.instance_transform_updates.put(self.allocator.allocator(), handle, new_transform) catch unreachable; // TODO: error handling
+        self.world.accel.instances_host.data[handle].transform = @bitCast(new_transform);
+        self.need_instance_update = true;
         self.camera.clearAllSensors();
     }
 
@@ -351,7 +356,6 @@ pub const HdMoonshine = struct {
         for (self.output_buffers.items) |output_buffer| {
             output_buffer.destroy(&self.vc);
         }
-        self.instance_transform_updates.deinit(self.allocator.allocator());
         self.output_buffers.deinit(self.allocator.allocator());
         self.pipeline.destroy(&self.vc);
         self.world.destroy(&self.vc, self.allocator.allocator());

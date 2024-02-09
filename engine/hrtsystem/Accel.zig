@@ -59,13 +59,15 @@ blases: BottomLevelAccels = .{},
 
 instance_count: u32 = 0,
 instances_device: VkAllocator.DeviceBuffer(vk.AccelerationStructureInstanceKHR) = .{},
+instances_host: VkAllocator.HostBuffer(vk.AccelerationStructureInstanceKHR) = .{},
 instances_address: vk.DeviceAddress = 0,
 
 // keep track of inverse transform -- non-inverse we can get from instances_device
 // transforms provided by shader only in hit/intersection shaders but we need them
 // in raygen
 // ray queries provide them in any shader which would be a benefit of using them
-world_to_instance: VkAllocator.DeviceBuffer(Mat3x4) = .{},
+world_to_instance_device: VkAllocator.DeviceBuffer(Mat3x4) = .{},
+world_to_instance_host: VkAllocator.HostBuffer(Mat3x4) = .{},
 
 // flat jagged array for geometries --
 // use instanceCustomIndex + GeometryID() here to get geometry
@@ -241,6 +243,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAl
     {
         if (self.instances_device.is_null()) {
             self.instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, max_instances, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true });
+            self.instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, max_instances, .{ .transfer_src_bit = true });
             try vk_helpers.setDebugName(vc, self.instances_device.handle, "instances");
             self.instances_address = self.instances_device.getAddress(vc);
         }
@@ -263,27 +266,32 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAl
             }),
         };
 
-        try commands.startRecording(vc);
-        commands.recordUpdateBuffer(vk.AccelerationStructureInstanceKHR, vc, self.instances_device, &.{ vk_instance }, self.instance_count);
-        try commands.submitAndIdleUntilDone(vc);
+        self.instances_host.data[self.instance_count] = vk_instance;
 
-        self.instance_count += 1;
+        try commands.startRecording(vc);
+        commands.recordUpdateBuffer(vk.AccelerationStructureInstanceKHR, vc, self.instances_device, &.{ vk_instance }, self.instance_count); // TODO: can copy
+        try commands.submitAndIdleUntilDone(vc);
     }
 
     // upload world_to_instance matrix
     {
-        if (self.world_to_instance.is_null()) {
-            self.world_to_instance = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, max_instances, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        if (self.world_to_instance_device.is_null()) {
+            self.world_to_instance_device = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, max_instances, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+            self.world_to_instance_host = try vk_allocator.createHostBuffer(vc, Mat3x4, max_instances, .{ .transfer_src_bit = true });
         }
 
+        self.world_to_instance_host.data[self.instance_count] = instance.transform.inverse_affine();
+
         try commands.startRecording(vc);
-        commands.recordUpdateBuffer(Mat3x4, vc, self.world_to_instance, &.{ instance.transform.inverse_affine() }, self.instance_count - 1);
+        commands.recordUpdateBuffer(Mat3x4, vc, self.world_to_instance_device, &.{ instance.transform.inverse_affine() }, self.instance_count);
         try commands.submitAndIdleUntilDone(vc);
     }
 
+    self.instance_count += 1;
+
     // update TLAS
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-        .@"type" = .top_level_khr,
+        .type = .top_level_khr,
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
@@ -326,13 +334,13 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAl
     self.tlas_update_scratch_address = self.tlas_update_scratch_buffer.getAddress(vc);
 
     try commands.createAccelStructs(vc, &.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ @ptrCast(&vk.AccelerationStructureBuildRangeInfoKHR {
-        .primitive_count = self.instance_count,
+        .primitive_count = @intCast(self.instance_count),
         .first_vertex = 0,
         .primitive_offset = 0,
         .transform_offset = 0,
     })});
 
-    return self.instance_count - 1;
+    return @intCast(self.instance_count - 1);
 }
 
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
@@ -409,15 +417,13 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     // create instance
     const instance_count: u32 = @intCast(instances.len);
+    const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
     const instances_device = blk: {
         var instances_buffer_flags = vk.BufferUsageFlags { .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true };
         if (inspection) instances_buffer_flags = instances_buffer_flags.merge(.{ .transfer_src_bit = true });
         const instances_device = try vk_allocator.createDeviceBuffer(vc, allocator, vk.AccelerationStructureInstanceKHR, instance_count, instances_buffer_flags);
         errdefer instances_device.destroy(vc);
         try vk_helpers.setDebugName(vc, instances_device.handle, "instances");
-
-        const instances_host = try vk_allocator.createHostBuffer(vc, vk.AccelerationStructureInstanceKHR, instance_count, .{ .transfer_src_bit = true });
-        defer instances_host.destroy(vc);
 
         var custom_index: u24 = 0;
         for (instances_host.data, instances) |*instance_host, instance| {
@@ -452,25 +458,28 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
 
     const instances_address = instances_device.getAddress(vc);
 
-    const world_to_instance = blk: {
+    const world_to_instance_host = try vk_allocator.createHostBuffer(vc, Mat3x4, instance_count, .{ .transfer_src_bit = true });
+    const world_to_instance_device = blk: {
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, Mat3x4, instance_count, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
-        const inverses = try allocator.alloc(Mat3x4, instance_count);
-        defer allocator.free(inverses);
-        for (instances, inverses) |instance, *inverse| {
+        for (instances, world_to_instance_host.data) |instance, *inverse| {
             inverse.* = instance.transform.inverse_affine();
         }
 
-        if (instance_count != 0) try commands.uploadData(Mat3x4, vc, vk_allocator, buffer, inverses);
+        if (instance_count != 0) {
+            try commands.startRecording(vc);
+            commands.recordUploadBuffer(Mat3x4, vc, buffer, world_to_instance_host);
+            try commands.submitAndIdleUntilDone(vc);
+        }
 
         break :blk buffer;
     };
-    errdefer world_to_instance.destroy(vc);
+    errdefer world_to_instance_device.destroy(vc);
 
     // create TLAS
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-        .@"type" = .top_level_khr,
+        .type = .top_level_khr,
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
@@ -571,11 +580,12 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: s
     return Self {
         .blases = blases,
 
-        .instance_count = instance_count,
         .instances_device = instances_device,
+        .instances_host = instances_host,
         .instances_address = instances_address,
 
-        .world_to_instance = world_to_instance,
+        .world_to_instance_device = world_to_instance_device,
+        .world_to_instance_host = world_to_instance_host,
 
         .tlas_handle = geometry_info.dst_acceleration_structure,
         .tlas_buffer = tlas_buffer,
@@ -597,7 +607,7 @@ pub fn recordUpdateSingleTransform(self: *Self, vc: *const VulkanContext, comman
     const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
     const size = @sizeOf(vk.TransformMatrixKHR);
     vc.device.cmdUpdateBuffer(command_buffer, self.instances_device.handle, offset, size, &new_transform);
-    vc.device.cmdUpdateBuffer(command_buffer, self.world_to_instance.handle, offset_inverse, size, &new_transform.inverse_affine());
+    vc.device.cmdUpdateBuffer(command_buffer, self.world_to_instance_device.handle, offset_inverse, size, &new_transform.inverse_affine());
     const barriers = [_]vk.BufferMemoryBarrier2 {
         .{
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
@@ -617,7 +627,7 @@ pub fn recordUpdateSingleTransform(self: *Self, vc: *const VulkanContext, comman
             .dst_access_mask = .{ .shader_storage_read_bit = true },
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .buffer = self.world_to_instance.handle,
+            .buffer = self.world_to_instance_device.handle,
             .offset = offset_inverse,
             .size = size,
         },
@@ -669,7 +679,7 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
     };
 
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-        .@"type" = .top_level_khr,
+        .type = .top_level_khr,
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .update_khr,
         .src_acceleration_structure = self.tlas_handle,
@@ -708,7 +718,9 @@ pub fn recordRebuild(self: *Self, vc: *const VulkanContext, command_buffer: vk.C
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.instances_device.destroy(vc);
-    self.world_to_instance.destroy(vc);
+    self.instances_host.destroy(vc);
+    self.world_to_instance_device.destroy(vc);
+    self.world_to_instance_host.destroy(vc);
 
     self.geometries.destroy(vc);
 

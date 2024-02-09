@@ -17,8 +17,7 @@ HdDirtyBits HdMoonshineCamera::GetInitialDirtyBitsMask() const {
 
 void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) {
     HdCamera::Sync(sceneDelegate, renderParam, dirtyBits);
-    HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
-    HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
+    HdMoonshine* msne = static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine;
 
     GfMatrix4f transform = GfMatrix4f(GetTransform());
     GfVec3f origin = transform.Transform(GfVec3f(0.0, 0.0, 0.0));
@@ -38,9 +37,9 @@ void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* rend
     };
 
     if (_handle == -1) {
-        _handle = HdMoonshineCreateLens(renderDelegate->_moonshine, lens);
+        _handle = HdMoonshineCreateLens(msne, lens);
     } else {
-        HdMoonshineSetLens(renderDelegate->_moonshine, _handle, lens);
+        HdMoonshineSetLens(msne, _handle, lens);
     }
     *dirtyBits = HdChangeTracker::Clean;
 }

@@ -19,6 +19,7 @@ public:
 
     void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits, TfToken const &reprToken) override;
 
+    void Finalize(HdRenderParam *renderParam) override;
 protected:
     void _InitRepr(TfToken const &reprToken, HdDirtyBits *dirtyBits) override;
 

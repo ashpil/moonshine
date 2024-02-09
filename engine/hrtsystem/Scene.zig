@@ -65,7 +65,7 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) Standard
     return engine.hrtsystem.pipeline.StandardPipeline.PushDescriptorData {
         .tlas = self.world.accel.tlas_handle,
         .instances = self.world.accel.instances_device.handle,
-        .world_to_instances = self.world.accel.world_to_instance.handle,
+        .world_to_instances = self.world.accel.world_to_instance_device.handle,
         .emitter_alias_table = self.world.accel.alias_table.handle,
         .meshes = self.world.meshes.addresses_buffer.handle,
         .geometries = self.world.accel.geometries.handle,

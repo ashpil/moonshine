@@ -5,7 +5,10 @@
 #include "pxr/imaging/hd/resourceRegistry.h"
 #include "pxr/base/tf/staticTokens.h"
 
+#include "renderParam.hpp"
+
 #include "moonshine.h"
+#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -52,6 +55,7 @@ private:
     void _Initialize();
 
     HdResourceRegistrySharedPtr _resourceRegistry;
+    std::unique_ptr<HdMoonshineRenderParam> _renderParam;
 
     HdMoonshineRenderDelegate(const HdMoonshineRenderDelegate &) = delete;
     HdMoonshineRenderDelegate &operator =(const HdMoonshineRenderDelegate &) = delete;

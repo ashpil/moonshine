@@ -28,7 +28,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
     SdfPath const& id = GetId();
 
     HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
-    HdMoonshineRenderDelegate* renderDelegate = static_cast<HdMoonshineRenderDelegate*>(renderIndex.GetRenderDelegate());
+    HdMoonshine* msne = static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine;
 
     bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
@@ -70,12 +70,12 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
 
             const auto points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
 
-            const MeshHandle mesh = HdMoonshineCreateMesh(renderDelegate->_moonshine, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+            const MeshHandle mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
 
-            const ImageHandle emissive = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "emissive");
-            const ImageHandle normal = HdMoonshineCreateSolidTexture2(renderDelegate->_moonshine, F32x2 { .x = 0.5f, .y = 0.5f }, "normal");
-            const ImageHandle color = HdMoonshineCreateSolidTexture3(renderDelegate->_moonshine, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "color");
-            const MaterialHandle material = HdMoonshineCreateMaterialLambert(renderDelegate->_moonshine, normal, emissive, color);
+            const ImageHandle emissive = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "emissive");
+            const ImageHandle normal = HdMoonshineCreateSolidTexture2(msne, F32x2 { .x = 0.5f, .y = 0.5f }, "normal");
+            const ImageHandle color = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "color");
+            const MaterialHandle material = HdMoonshineCreateMaterialLambert(msne, normal, emissive, color);
 
             const Geometry geometry = Geometry {
                 .mesh = mesh,
@@ -90,7 +90,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
                     .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                     .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
                 };
-                instances_.push_back(HdMoonshineCreateInstance(renderDelegate->_moonshine, matrix, &geometry, 1));
+                instances_.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1));
             }
             *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
         }
@@ -102,13 +102,19 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
                 .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                 .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
             };
-            HdMoonshineSetInstanceTransform(renderDelegate->_moonshine, instances_[i], matrix);
+            HdMoonshineSetInstanceTransform(msne, instances_[i], matrix);
         }
     }
 
     initialized_ = true;
     if (!HdChangeTracker::IsClean(*dirtyBits)) {
         TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), GetId().GetText());
+    }
+}
+
+void HdMoonshineMesh::Finalize(HdRenderParam *renderParam) {
+    for (const InstanceHandle instance : instances_) {
+        HdMoonshineDestroyInstance(static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine, instance);
     }
 }
 

@@ -4,6 +4,7 @@
 #include "mesh.hpp"
 #include "camera.hpp"
 #include "instancer.hpp"
+#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -30,6 +31,7 @@ HdMoonshineRenderDelegate::HdMoonshineRenderDelegate(HdRenderSettingsMap const& 
 void HdMoonshineRenderDelegate::_Initialize() {
     _moonshine = HdMoonshineCreate();
     _resourceRegistry = std::make_shared<HdResourceRegistry>();
+    _renderParam = std::make_unique<HdMoonshineRenderParam>(_moonshine);
 }
 
 HdMoonshineRenderDelegate::~HdMoonshineRenderDelegate() {
@@ -68,7 +70,9 @@ HdRprim* HdMoonshineRenderDelegate::CreateRprim(TfToken const& typeId, SdfPath c
     }
 }
 
-void HdMoonshineRenderDelegate::DestroyRprim(HdRprim *rPrim) {}
+void HdMoonshineRenderDelegate::DestroyRprim(HdRprim *rPrim) {
+    delete rPrim;
+}
 
 HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath const& sprimId) {
     if (typeId == HdPrimTypeTokens->camera) {
@@ -88,7 +92,9 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
     }
 }
 
-void HdMoonshineRenderDelegate::DestroySprim(HdSprim *sPrim) {}
+void HdMoonshineRenderDelegate::DestroySprim(HdSprim *sPrim) {
+    delete sPrim;
+}
 
 HdBprim* HdMoonshineRenderDelegate::CreateBprim(TfToken const& typeId, SdfPath const& bprimId) {
     if (typeId == HdPrimTypeTokens->renderBuffer) {
@@ -109,6 +115,7 @@ HdBprim* HdMoonshineRenderDelegate::CreateFallbackBprim(TfToken const& typeId) {
 }
 
 void HdMoonshineRenderDelegate::DestroyBprim(HdBprim *bPrim) {
+    delete bPrim;
 }
 
 HdInstancer* HdMoonshineRenderDelegate::CreateInstancer(HdSceneDelegate *delegate, SdfPath const& id) {
@@ -120,7 +127,7 @@ void HdMoonshineRenderDelegate::DestroyInstancer(HdInstancer *instancer) {
 }
 
 HdRenderParam* HdMoonshineRenderDelegate::GetRenderParam() const {
-    return nullptr;
+    return _renderParam.get();
 }
 
 HdAovDescriptor HdMoonshineRenderDelegate::GetDefaultAovDescriptor(TfToken const& name) const {
