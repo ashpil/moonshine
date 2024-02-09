@@ -85,8 +85,8 @@ alias_table: VkAllocator.DeviceBuffer(AliasTableT.TableEntry) = .{}, // to sampl
 
 const Self = @This();
 
-const max_instances = 512; // TODO: resizable buffers
-const max_geometries = 512; // TODO: resizable buffers
+const max_instances = 4096; // TODO: resizable buffers
+const max_geometries = 4096; // TODO: resizable buffers
 
 // lots of temp memory allocations here
 fn makeBlases(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, mesh_manager: MeshManager, geometries: []const []const Geometry, blases: *BottomLevelAccels) !void {

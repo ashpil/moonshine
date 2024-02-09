@@ -63,7 +63,7 @@ addresses_buffer: VkAllocator.DeviceBuffer(MeshAddresses) = .{},
 
 const Self = @This();
 
-const max_meshes = 512; // TODO: resizable buffers
+const max_meshes = 4096; // TODO: resizable buffers
 
 pub const Handle = u32;
 

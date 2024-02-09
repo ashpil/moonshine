@@ -28,9 +28,8 @@ protected:
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
 private:
-    bool _initialized = false;
-
     GfMatrix4f _transform{1.0f};
+    MeshHandle _mesh;
 
     // these two have same len
     std::vector<InstanceHandle> _instances = {};
