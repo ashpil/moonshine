@@ -24,11 +24,12 @@ HdDirtyBits HdMoonshineMesh::_PropagateDirtyBits(HdDirtyBits bits) const {
 
 void HdMoonshineMesh::_InitRepr(TfToken const& reprToken, HdDirtyBits* dirtyBits) {}
 
-void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
+void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
     SdfPath const& id = GetId();
 
     HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
-    HdMoonshine* msne = static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine;
+    HdMoonshineRenderParam* renderParam = static_cast<HdMoonshineRenderParam*>(hdRenderParam);
+    HdMoonshine* msne = renderParam->_moonshine;
 
     bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
@@ -72,14 +73,9 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* render
 
             const MeshHandle mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
 
-            const ImageHandle emissive = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "emissive");
-            const ImageHandle normal = HdMoonshineCreateSolidTexture2(msne, F32x2 { .x = 0.5f, .y = 0.5f }, "normal");
-            const ImageHandle color = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "color");
-            const MaterialHandle material = HdMoonshineCreateMaterialLambert(msne, normal, emissive, color);
-
             const Geometry geometry = Geometry {
                 .mesh = mesh,
-                .material = material,
+                .material = renderParam->_material,
                 .sampled = false,
             };
 
