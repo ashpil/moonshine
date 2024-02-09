@@ -28,13 +28,13 @@ protected:
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
 private:
-    bool initialized_ = false;
+    bool _initialized = false;
 
-    GfMatrix4f transform_{1.0f};
+    GfMatrix4f _transform{1.0f};
 
     // these two have same len
-    std::vector<InstanceHandle> instances_ = {};
-    std::vector<GfMatrix4f> instances_transforms_ = {};
+    std::vector<InstanceHandle> _instances = {};
+    std::vector<GfMatrix4f> _instancesTransforms = {};
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

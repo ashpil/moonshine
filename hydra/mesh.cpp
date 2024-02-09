@@ -34,7 +34,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
     bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
     if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
-        transform_ = GfMatrix4f(sceneDelegate->GetTransform(id));
+        _transform = GfMatrix4f(sceneDelegate->GetTransform(id));
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyTransform;
     }
 
@@ -43,25 +43,25 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
     HdInstancer::_SyncInstancerAndParents(renderIndex, instancerId);
 
     if (HdChangeTracker::IsInstancerDirty(*dirtyBits, id)) {
-        const size_t old_len = instances_transforms_.size();
-        instances_transforms_.clear();
+        const size_t old_len = _instancesTransforms.size();
+        _instancesTransforms.clear();
         if (instancerId.IsEmpty()) {
-            instances_transforms_.push_back(GfMatrix4f(1.0));
+            _instancesTransforms.push_back(GfMatrix4f(1.0));
         } else {
             HdInstancer *instancer = renderIndex.GetInstancer(instancerId);
             VtMatrix4dArray instanceTransforms = static_cast<HdMoonshineInstancer*>(instancer)->ComputeInstanceTransforms(id);
             for (size_t i = 0; i < instanceTransforms.size(); i++) {
-                instances_transforms_.push_back(GfMatrix4f(instanceTransforms[i]));
+                _instancesTransforms.push_back(GfMatrix4f(instanceTransforms[i]));
             }
         }
-        const size_t new_len = instances_transforms_.size();
-        if (initialized_ && old_len != new_len) {
+        const size_t new_len = _instancesTransforms.size();
+        if (_initialized && old_len != new_len) {
             TF_CODING_ERROR("%s changed instance count; not supported!", GetId().GetText());
         }
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyInstancer;
     }
 
-    if (!initialized_) {
+    if (!_initialized) {
         if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
             const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
             HdMeshUtil meshUtil(&topology,id);
@@ -79,37 +79,37 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
                 .sampled = false,
             };
 
-            for (size_t i = 0; i < instances_transforms_.size(); i++) {
-                GfMatrix4f instanceTransform = transform_ * instances_transforms_[i];
+            for (size_t i = 0; i < _instancesTransforms.size(); i++) {
+                GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
                 const Mat3x4 matrix = Mat3x4 {
                     .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
                     .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                     .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
                 };
-                instances_.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1));
+                _instances.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1));
             }
             *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
         }
     } else if (transform_changed) {
-        for (size_t i = 0; i < instances_transforms_.size(); i++) {
-            GfMatrix4f instanceTransform = transform_ * instances_transforms_[i];
+        for (size_t i = 0; i < _instancesTransforms.size(); i++) {
+            GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
             const Mat3x4 matrix = Mat3x4 {
                 .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
                 .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                 .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
             };
-            HdMoonshineSetInstanceTransform(msne, instances_[i], matrix);
+            HdMoonshineSetInstanceTransform(msne, _instances[i], matrix);
         }
     }
 
-    initialized_ = true;
+    _initialized = true;
     if (!HdChangeTracker::IsClean(*dirtyBits)) {
         TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), GetId().GetText());
     }
 }
 
 void HdMoonshineMesh::Finalize(HdRenderParam *renderParam) {
-    for (const InstanceHandle instance : instances_) {
+    for (const InstanceHandle instance : _instances) {
         HdMoonshineDestroyInstance(static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine, instance);
     }
 }
