@@ -7,6 +7,7 @@
 #include <pxr/imaging/hd/meshUtil.h>
 #include <pxr/imaging/hd/instancer.h>
 #include <pxr/base/gf/matrix4f.h>
+#include <pxr/imaging/hd/extComputationUtils.h>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -30,6 +31,41 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
     HdRenderIndex& renderIndex = sceneDelegate->GetRenderIndex();
     HdMoonshineRenderParam* renderParam = static_cast<HdMoonshineRenderParam*>(hdRenderParam);
     HdMoonshine* msne = renderParam->_moonshine;
+
+    bool mesh_changed = HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points);
+
+    if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
+        VtVec3fArray points;
+
+        // try to find fancy points (e.g., animated ones)
+        for (size_t i = 0; i < HdInterpolationCount; i++) {
+            HdInterpolation interp = static_cast<HdInterpolation>(i);
+            HdExtComputationPrimvarDescriptorVector compPrimvars = sceneDelegate->GetExtComputationPrimvarDescriptors(id,interp);
+
+            for (auto const& pv: compPrimvars) {
+                if (pv.name == HdTokens->points) {
+                    HdExtComputationUtils::ValueStore valueStore = HdExtComputationUtils::GetComputedPrimvarValues(compPrimvars, sceneDelegate);
+                    points = valueStore.find(pv.name)->second.Get<VtVec3fArray>();
+                }
+            }
+        }
+
+        // no fancy points -- just use basic ones
+        if (points.size() == 0) {
+            points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
+        }
+
+        const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
+        HdMeshUtil meshUtil(&topology,id);
+        VtIntArray primitiveParams;
+        VtVec3iArray indices;
+        meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
+        
+        // TODO: destroy mesh
+        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+
+        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
+    }
 
     bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
@@ -59,23 +95,6 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         const size_t new_len = _instancesTransforms.size();
         bool instancer_count_changed = old_len != new_len;
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyInstancer;
-    }
-
-    bool mesh_changed = HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points);
-
-    if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
-        const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
-        HdMeshUtil meshUtil(&topology,id);
-        VtIntArray primitiveParams;
-        VtVec3iArray indices;
-        meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
-
-        const auto points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
-
-        // TODO: destroy mesh
-        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
-
-        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
     }
 
     const Geometry geometry = Geometry {
