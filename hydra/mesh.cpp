@@ -3,6 +3,7 @@
 #include "mesh.hpp"
 #include "renderDelegate.hpp"
 #include "instancer.hpp"
+#include "material.hpp"
 
 #include <pxr/imaging/hd/meshUtil.h>
 #include <pxr/imaging/hd/instancer.h>
@@ -11,12 +12,15 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
-HdMoonshineMesh::HdMoonshineMesh(SdfPath const& id) : HdMesh(id) {}
+HdMoonshineMesh::HdMoonshineMesh(SdfPath const& id, const HdMoonshineRenderParam& renderParam) : HdMesh(id) {
+    _material = renderParam._defaultMaterial;
+}
 
 HdDirtyBits HdMoonshineMesh::GetInitialDirtyBitsMask() const {
     return HdChangeTracker::DirtyPoints
         | HdChangeTracker::DirtyTransform
-        | HdChangeTracker::DirtyInstancer;
+        | HdChangeTracker::DirtyInstancer
+        | HdChangeTracker::DirtyMaterialId;
 }
 
 HdDirtyBits HdMoonshineMesh::_PropagateDirtyBits(HdDirtyBits bits) const {
@@ -67,6 +71,16 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
     }
 
+    // TODO: what is hydra SetMaterialId for
+    bool material_changed = *dirtyBits & HdChangeTracker::DirtyMaterialId;
+    if (*dirtyBits & HdChangeTracker::DirtyMaterialId) {
+        const SdfPath& materialId = sceneDelegate->GetMaterialId(id);
+        HdMoonshineMaterial* material = static_cast<HdMoonshineMaterial*>(renderIndex.GetSprim(HdPrimTypeTokens->material, materialId));
+        _material = material->_handle;
+
+        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyMaterialId;
+    }
+
     bool transform_changed = HdChangeTracker::IsTransformDirty(*dirtyBits, id) || HdChangeTracker::IsInstancerDirty(*dirtyBits, id);
 
     if (HdChangeTracker::IsTransformDirty(*dirtyBits, id)) {
@@ -99,12 +113,13 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
 
     const Geometry geometry = Geometry {
         .mesh = _mesh,
-        .material = renderParam->_material,
+        .material = _material,
         .sampled = false,
     };
 
-    if (mesh_changed || instancer_count_changed) {
-        // need to delete all
+    // TODO: don't actually need to recreate everything on just a material change
+    bool need_to_recreate = mesh_changed || instancer_count_changed || material_changed;
+    if (need_to_recreate) {
         for (const InstanceHandle instance : _instances) {
             HdMoonshineDestroyInstance(static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine, instance);
         }
@@ -132,7 +147,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
     }
 
     if (!HdChangeTracker::IsClean(*dirtyBits)) {
-        TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), GetId().GetText());
+        TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), id.GetText());
     }
 }
 

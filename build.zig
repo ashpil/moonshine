@@ -122,6 +122,7 @@ pub fn build(b: *std.Build) !void {
                 "hydra/mesh.cpp",
                 "hydra/camera.cpp",
                 "hydra/instancer.cpp",
+                "hydra/material.cpp",
             },
         });
         lib.linkLibrary(zig_lib);
@@ -133,6 +134,7 @@ pub fn build(b: *std.Build) !void {
         // link against usd produced libraries
         lib.addLibraryPath(.{ .path = b.pathJoin(&.{ usd_built_dir, "lib/" }) });
         lib.linkSystemLibrary("usd_hd");
+        lib.linkSystemLibrary("usd_sdr");
         
         // include headers necessary for usd
         lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });

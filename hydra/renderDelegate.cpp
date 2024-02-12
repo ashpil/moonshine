@@ -8,6 +8,7 @@
 #include "mesh.hpp"
 #include "camera.hpp"
 #include "instancer.hpp"
+#include "material.hpp"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -18,6 +19,7 @@ const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_RPRIM_TYPES = {
 const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_SPRIM_TYPES = {
     HdPrimTypeTokens->camera,
     HdPrimTypeTokens->extComputation,
+    HdPrimTypeTokens->material,
 };
 
 const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_BPRIM_TYPES = {
@@ -67,7 +69,7 @@ HdRenderPassSharedPtr HdMoonshineRenderDelegate::CreateRenderPass(HdRenderIndex 
 
 HdRprim* HdMoonshineRenderDelegate::CreateRprim(TfToken const& typeId, SdfPath const& rprimId) {
     if (typeId == HdPrimTypeTokens->mesh) {
-        return new HdMoonshineMesh(rprimId);
+        return new HdMoonshineMesh(rprimId, *_renderParam);
     } else {
         TF_CODING_ERROR("Unknown Rprim type %s", typeId.GetText());
         return nullptr;
@@ -83,6 +85,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath c
         return new HdMoonshineCamera(sprimId);
     } else if (typeId == HdPrimTypeTokens->extComputation) {
         return new HdExtComputation(sprimId);
+    } else if (typeId == HdPrimTypeTokens->material) {
+        return new HdMoonshineMaterial(sprimId, *_renderParam);
     } else {
         TF_CODING_ERROR("Unknown Sprim type %s", typeId.GetText());
         return nullptr;
@@ -94,6 +98,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
         return new HdMoonshineCamera(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->extComputation) {
         return new HdExtComputation(SdfPath::EmptyPath());
+    } else if (typeId == HdPrimTypeTokens->material) {
+        return new HdMoonshineMaterial(SdfPath::EmptyPath(), *_renderParam);
     } else {
         TF_CODING_ERROR("Unknown fallback Sprim type %s", typeId.GetText());
         return nullptr;

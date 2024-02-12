@@ -1,14 +1,15 @@
 #pragma once
 
-#include "pxr/pxr.h"
-#include "pxr/imaging/hd/renderDelegate.h"
-#include "pxr/imaging/hd/resourceRegistry.h"
-#include "pxr/base/tf/staticTokens.h"
+#include <memory>
+
+#include <pxr/pxr.h>
+#include <pxr/imaging/hd/renderDelegate.h>
+#include <pxr/imaging/hd/resourceRegistry.h>
+#include <pxr/base/tf/staticTokens.h>
 
 #include "renderParam.hpp"
 
 #include "moonshine.h"
-#include <memory>
 
 PXR_NAMESPACE_OPEN_SCOPE
 
