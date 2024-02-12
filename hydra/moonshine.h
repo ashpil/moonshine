@@ -54,6 +54,15 @@ typedef struct Lens {
     float focus_distance;
 } Lens;
 
+typedef struct Material {
+    ImageHandle normal;
+    ImageHandle emissive;
+    ImageHandle color;
+    ImageHandle metalness;
+    ImageHandle roughness;
+    float ior;
+} Material;
+
 typedef struct HdMoonshine HdMoonshine;
 extern "C" HdMoonshine* HdMoonshineCreate(void);
 extern "C" void HdMoonshineDestroy(HdMoonshine*);
@@ -62,7 +71,13 @@ extern "C" MeshHandle HdMoonshineCreateMesh(HdMoonshine*, const F32x3*, const F3
 extern "C" ImageHandle HdMoonshineCreateSolidTexture1(HdMoonshine*, float, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture2(HdMoonshine*, F32x2, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture3(HdMoonshine*, F32x3, const char*);
-extern "C" MaterialHandle HdMoonshineCreateMaterialLambert(HdMoonshine*, ImageHandle, ImageHandle, ImageHandle);
+extern "C" MaterialHandle HdMoonshineCreateMaterial(HdMoonshine*, Material);
+extern "C" void HdMoonshineSetMaterialNormal(HdMoonshine*, MaterialHandle, ImageHandle);
+extern "C" void HdMoonshineSetMaterialEmissive(HdMoonshine*, MaterialHandle, ImageHandle);
+extern "C" void HdMoonshineSetMaterialColor(HdMoonshine*, MaterialHandle, ImageHandle);
+extern "C" void HdMoonshineSetMaterialMetalness(HdMoonshine*, MaterialHandle, ImageHandle);
+extern "C" void HdMoonshineSetMaterialRoughness(HdMoonshine*, MaterialHandle, ImageHandle);
+extern "C" void HdMoonshineSetMaterialIOR(HdMoonshine*, MaterialHandle, float);
 extern "C" InstanceHandle HdMoonshineCreateInstance(HdMoonshine*, Mat3x4, const Geometry*, size_t, bool);
 extern "C" void HdMoonshineDestroyInstance(HdMoonshine*, InstanceHandle);
 extern "C" void HdMoonshineSetInstanceTransform(HdMoonshine*, InstanceHandle, Mat3x4);

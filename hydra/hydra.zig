@@ -33,6 +33,12 @@ comptime {
     _ = HdMoonshine;
 }
 
+pub const Material = extern struct {
+    normal: TextureManager.Handle,
+    emissive: TextureManager.Handle,
+    standard_pbr: MaterialManager.StandardPBR,
+};
+
 pub const HdMoonshine = struct {
     allocator: Allocator,
     vk_allocator: VkAllocator,
@@ -49,13 +55,22 @@ pub const HdMoonshine = struct {
 
     // as a temporary hack, while the resource system is not yet streamlined,
     // force it to all be singlethreaded
-    //
-    // i view async zig as a prerequisite to cleaning up the resource system
     mutex: std.Thread.Mutex,
+
+    material_updates: std.AutoArrayHashMapUnmanaged(MaterialManager.Handle, MaterialUpdate),
 
     // only keep a single bit for deciding if we should update all --
     // could technically be more granular
     need_instance_update: bool,
+
+    const MaterialUpdate = struct {
+        normal: ?TextureManager.Handle = null,
+        emissive: ?TextureManager.Handle = null,
+        color: ?TextureManager.Handle = null,
+        metalness: ?TextureManager.Handle = null,
+        roughness: ?TextureManager.Handle = null,
+        ior: ?f32 = null,
+    };
 
     const samples_per_run = 1;
 
@@ -97,6 +112,7 @@ pub const HdMoonshine = struct {
 
         self.output_buffers = .{};
         self.mutex = .{};
+        self.material_updates = .{};
         self.need_instance_update = false;
 
         return self;
@@ -109,6 +125,79 @@ pub const HdMoonshine = struct {
 
         // update instance transforms
         {   
+            if (self.material_updates.count() != 0) {
+                var iter = self.material_updates.iterator();
+                while (iter.next()) |update| {
+                    // since only standard pbr materials are supported 
+                    // the material index and variant index should be identical
+                    const index = update.key_ptr.*;
+
+                    // TODO: can merge some of these cmdUpdateBuffers sometimes
+                    if (update.value_ptr.normal) |normal| {
+                        const offset = index * @sizeOf(MaterialManager.Material) + @offsetOf(MaterialManager.Material, "normal");
+                        const bytes = std.mem.asBytes(&normal);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
+                    }
+                    if (update.value_ptr.emissive) |emissive| {
+                        const offset = index * @sizeOf(MaterialManager.Material) + @offsetOf(MaterialManager.Material, "emissive");
+                        const bytes = std.mem.asBytes(&emissive);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
+                    }
+                    if (update.value_ptr.color) |color| {
+                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "color");
+                        const bytes = std.mem.asBytes(&color);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                    }
+                    if (update.value_ptr.metalness) |metalness| {
+                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "metalness");
+                        const bytes = std.mem.asBytes(&metalness);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                    }
+                    if (update.value_ptr.roughness) |roughness| {
+                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "roughness");
+                        const bytes = std.mem.asBytes(&roughness);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                    }
+                    if (update.value_ptr.ior) |ior| {
+                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "ior");
+                        const bytes = std.mem.asBytes(&ior);
+                        self.vc.device.cmdUpdateBuffer(self.commands.buffer, self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                    }
+                }
+
+                // could be more granular with this and instance updates below
+                const update_barriers = [_]vk.BufferMemoryBarrier2 {
+                    .{
+                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_access_mask = .{ .transfer_write_bit = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .shader_storage_read_bit = true },
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .buffer = self.world.materials.materials.handle,
+                        .offset = 0,
+                        .size = vk.WHOLE_SIZE,
+                    },
+                    .{
+                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_access_mask = .{ .transfer_write_bit = true },
+                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_access_mask = .{ .shader_storage_read_bit = true },
+                        .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                        .buffer = self.world.materials.variant_buffers.standard_pbr.buffer.handle,
+                        .offset = 0,
+                        .size = vk.WHOLE_SIZE,
+                    },
+                };
+                self.vc.device.cmdPipelineBarrier2(self.commands.buffer, &vk.DependencyInfo {
+                    .buffer_memory_barrier_count = update_barriers.len,
+                    .p_buffer_memory_barriers = &update_barriers,
+                });
+
+                self.material_updates.clearRetainingCapacity();
+            }
+
             if (self.need_instance_update) {
                 var actual_size_instances = self.world.accel.instances_host;
                 actual_size_instances.data.len = self.world.accel.instance_count;
@@ -119,7 +208,7 @@ pub const HdMoonshine = struct {
 
                 const update_barriers = [_]vk.BufferMemoryBarrier2 {
                     .{
-                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_stage_mask = .{ .copy_bit = true },
                         .src_access_mask = .{ .transfer_write_bit = true },
                         .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
                         .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
@@ -130,7 +219,7 @@ pub const HdMoonshine = struct {
                         .size = vk.WHOLE_SIZE,
                     },
                     .{
-                        .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                        .src_stage_mask = .{ .copy_bit = true },
                         .src_access_mask = .{ .transfer_write_bit = true },
                         .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
                         .dst_access_mask = .{ .shader_storage_read_bit = true },
@@ -285,18 +374,64 @@ pub const HdMoonshine = struct {
         }, std.mem.span(name)) catch unreachable; // TODO: error handling
     }
 
-    pub export fn HdMoonshineCreateMaterialLambert(self: *HdMoonshine, normal: TextureManager.Handle, emissive: TextureManager.Handle, color: TextureManager.Handle) MaterialManager.Handle {
+    pub export fn HdMoonshineCreateMaterial(self: *HdMoonshine, material: Material) MaterialManager.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();
         return self.world.materials.upload(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, MaterialManager.MaterialInfo {
-            .normal = normal,
-            .emissive = emissive,
+            .normal = material.normal,
+            .emissive = material.emissive,
             .variant = MaterialManager.MaterialVariant {
-                .lambert = MaterialManager.Lambert {
-                    .color = color,
-                },
+                .standard_pbr = material.standard_pbr,
             },
         }) catch unreachable; // TODO: error handling
+    }
+
+    pub export fn HdMoonshineSetMaterialNormal(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.normal = image;
+    }
+
+    pub export fn HdMoonshineSetMaterialEmissive(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.emissive = image;
+    }
+
+    pub export fn HdMoonshineSetMaterialColor(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.color = image;
+    }
+
+    pub export fn HdMoonshineSetMaterialMetalness(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.metalness = image;
+    }
+
+    pub export fn HdMoonshineSetMaterialRoughness(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.roughness = image;
+    }
+
+    pub export fn HdMoonshineSetMaterialIOR(self: *HdMoonshine, material: MaterialManager.Handle, ior: f32) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+        if (!result.found_existing) result.value_ptr.* = .{};
+        result.value_ptr.ior = ior;
     }
 
     pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize, visible: bool) Accel.Handle {
@@ -359,6 +494,7 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
+        self.material_updates.deinit(self.allocator.allocator());
         for (self.output_buffers.items) |output_buffer| {
             output_buffer.destroy(&self.vc);
         }
