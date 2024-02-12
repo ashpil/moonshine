@@ -299,12 +299,12 @@ pub const HdMoonshine = struct {
         }) catch unreachable; // TODO: error handling
     }
 
-    pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize) Accel.Handle {
+    pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, geometries: [*]const Accel.Geometry, geometry_count: usize, visible: bool) Accel.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();
         const instance = Accel.Instance {
             .transform = transform,
-            .visible = true,
+            .visible = visible,
             .geometries = geometries[0..geometry_count],
         };
         self.camera.clearAllSensors();

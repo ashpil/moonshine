@@ -77,6 +77,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         _UpdateVisibility(sceneDelegate, dirtyBits);
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyVisibility;
     }
+    bool new_visibility = IsVisible();
 
     // TODO: what is hydra SetMaterialId for
     bool material_changed = *dirtyBits & HdChangeTracker::DirtyMaterialId;
@@ -142,7 +143,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
                 .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                 .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
             };
-            _instances.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1));
+            _instances.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1, new_visibility));
         }
     } else {
         if (transform_changed) {
@@ -157,7 +158,6 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
             }
         }
 
-        bool new_visibility = IsVisible();
         if (old_visibility != new_visibility) {
             for (const auto instance : _instances) {
                 HdMoonshineSetInstanceVisibility(msne, instance, new_visibility);
