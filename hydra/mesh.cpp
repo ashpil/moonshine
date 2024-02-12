@@ -20,6 +20,7 @@ HdDirtyBits HdMoonshineMesh::GetInitialDirtyBitsMask() const {
     return HdChangeTracker::DirtyPoints
         | HdChangeTracker::DirtyTransform
         | HdChangeTracker::DirtyInstancer
+        | HdChangeTracker::DirtyVisibility
         | HdChangeTracker::DirtyMaterialId;
 }
 
@@ -71,13 +72,22 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
     }
 
+    bool old_visibility = IsVisible();
+    if (HdChangeTracker::IsVisibilityDirty(*dirtyBits, id)) {
+        _UpdateVisibility(sceneDelegate, dirtyBits);
+        *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyVisibility;
+    }
+
     // TODO: what is hydra SetMaterialId for
     bool material_changed = *dirtyBits & HdChangeTracker::DirtyMaterialId;
     if (*dirtyBits & HdChangeTracker::DirtyMaterialId) {
         const SdfPath& materialId = sceneDelegate->GetMaterialId(id);
-        HdMoonshineMaterial* material = static_cast<HdMoonshineMaterial*>(renderIndex.GetSprim(HdPrimTypeTokens->material, materialId));
-        _material = material->_handle;
-
+        if (materialId.IsEmpty()) {
+            _material = renderParam->_defaultMaterial;
+        } else {
+            HdMoonshineMaterial* material = static_cast<HdMoonshineMaterial*>(renderIndex.GetSprim(HdPrimTypeTokens->material, materialId));
+            _material = material->_handle;
+        }
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyMaterialId;
     }
 
@@ -111,12 +121,6 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyInstancer;
     }
 
-    const Geometry geometry = Geometry {
-        .mesh = _mesh,
-        .material = _material,
-        .sampled = false,
-    };
-
     // TODO: don't actually need to recreate everything on just a material change
     bool need_to_recreate = mesh_changed || instancer_count_changed || material_changed;
     if (need_to_recreate) {
@@ -125,6 +129,12 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         }
         _instances.clear();
 
+        // TODO: initial visibility
+        const Geometry geometry = Geometry {
+            .mesh = _mesh,
+            .material = _material,
+            .sampled = false,
+        };
         for (size_t i = 0; i < _instancesTransforms.size(); i++) {
             GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
             const Mat3x4 matrix = Mat3x4 {
@@ -134,15 +144,24 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
             };
             _instances.push_back(HdMoonshineCreateInstance(msne, matrix, &geometry, 1));
         }
-    } else if (transform_changed) {
-        for (size_t i = 0; i < _instancesTransforms.size(); i++) {
-            GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
-            const Mat3x4 matrix = Mat3x4 {
-                .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
-                .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
-                .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
-            };
-            HdMoonshineSetInstanceTransform(msne, _instances[i], matrix);
+    } else {
+        if (transform_changed) {
+            for (size_t i = 0; i < _instancesTransforms.size(); i++) {
+                GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
+                const Mat3x4 matrix = Mat3x4 {
+                    .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
+                    .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
+                    .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
+                };
+                HdMoonshineSetInstanceTransform(msne, _instances[i], matrix);
+            }
+        }
+
+        bool new_visibility = IsVisible();
+        if (old_visibility != new_visibility) {
+            for (const auto instance : _instances) {
+                HdMoonshineSetInstanceVisibility(msne, instance, new_visibility);
+            }
         }
     }
 

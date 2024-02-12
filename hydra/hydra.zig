@@ -311,12 +311,14 @@ pub const HdMoonshine = struct {
         return self.world.accel.uploadInstance(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.meshes, instance) catch unreachable; // TODO: error handling
     }
 
-    // this lies to you -- really just makes instance invisible
-    // TODO: proper destruction
     pub export fn HdMoonshineDestroyInstance(self: *HdMoonshine, handle: Accel.Handle) void {
+        HdMoonshineSetInstanceVisibility(self, handle, false); // sike. TODO: proper destruction
+    }
+
+    pub export fn HdMoonshineSetInstanceVisibility(self: *HdMoonshine, handle: Accel.Handle, visible: bool) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        self.world.accel.instances_host.data[handle].instance_custom_index_and_mask.mask = 0x00;
+        self.world.accel.instances_host.data[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
         self.need_instance_update = true;
         self.camera.clearAllSensors();
     }
