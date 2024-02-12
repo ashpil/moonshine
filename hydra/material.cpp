@@ -11,6 +11,11 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(_tokens,
     (UsdPreviewSurface)
     (diffuseColor)
+    (emissiveColor)
+    (normal)
+    (roughness)
+    (metallic)
+    (ior)
 );
 
 HdMoonshineMaterial::HdMoonshineMaterial(const SdfPath& id, const HdMoonshineRenderParam& renderParam) : HdMaterial(id) {
@@ -29,6 +34,37 @@ HdMoonshineMaterial::~HdMoonshineMaterial() {}
 
 HdDirtyBits HdMoonshineMaterial::GetInitialDirtyBitsMask() const {
     return DirtyBits::DirtyParams;
+}
+
+void SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfToken name, VtValue value, std::string const& debug_name) {
+    if (name == _tokens->diffuseColor) {
+        GfVec3f color = value.Get<GfVec3f>();
+        ImageHandle texture = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = color[0], .y = color[1], .z = color[2] }, (debug_name + " diffuseColor").c_str());
+        HdMoonshineSetMaterialColor(msne, handle, texture);
+    } else if (name == _tokens->emissiveColor) {
+        GfVec3f color = value.Get<GfVec3f>();
+        ImageHandle texture = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = color[0], .y = color[1], .z = color[2] }, (debug_name + " emissiveColor").c_str());
+        HdMoonshineSetMaterialEmissive(msne, handle, texture);
+    } else if (name == _tokens->normal) {
+        GfVec3f normal = value.Get<GfVec3f>();
+        // need to encode as F32x2 as that's what moonshine expects
+        float x = normal[2] * normal[2] + normal[1] * normal[1] - 1.0f;
+        float y = normal[2] * normal[2] + normal[0] * normal[0] - 1.0f;
+        ImageHandle texture = HdMoonshineCreateSolidTexture2(msne, F32x2 { .x = x, .y = y }, (debug_name + " normal").c_str());
+        HdMoonshineSetMaterialEmissive(msne, handle, texture);
+    } else if (name == _tokens->roughness) {
+        float roughness = value.Get<float>();
+        ImageHandle texture = HdMoonshineCreateSolidTexture1(msne, roughness, (debug_name + " roughness").c_str());
+        HdMoonshineSetMaterialRoughness(msne, handle, texture);
+    } else if (name == _tokens->metallic) {
+        float metallic = value.Get<float>();
+        ImageHandle texture = HdMoonshineCreateSolidTexture1(msne, metallic, (debug_name + " metallic").c_str());
+        HdMoonshineSetMaterialMetalness(msne, handle, texture);
+    } else if (name == _tokens->ior) {
+        float ior = value.Get<float>();
+        HdMoonshineSetMaterialIOR(msne, handle, ior);
+    }
+    // others intentionally ignored as moonshine does not currently support them
 }
 
 void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits)
@@ -79,18 +115,15 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
                 HdMaterialNode2 const& upstreamNode = upIt->second;
                 SdrShaderNodeConstPtr upstreamSdr = shaderReg.GetShaderNodeByIdentifier(upstreamNode.nodeTypeId);
 
-                TF_CODING_ERROR("%s unhandled connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                // TODO: textures
+                // TF_CODING_ERROR("%s unhandled connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
             } else if (paramIt != node.parameters.end()) {
                 VtValue value = paramIt->second;
-                if (inputName == _tokens->diffuseColor) {
-                    GfVec3f color = value.Get<GfVec3f>();
-                    ImageHandle color_tex = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = color[0], .y = color[1], .z = color[2] }, "color");
-                    HdMoonshineSetMaterialColor(msne, _handle, color_tex);
-                } else {
-                    TF_CODING_ERROR("%s unhandled parameter %s: %s", id.GetText(), inputName.GetText(), value.GetTypeName().c_str());
-                }
+                SetTextureBasedOnValueAndName(msne, _handle, inputName, value, id.GetString() + " parameter");
             } else {
-                TF_CODING_ERROR("%s unhandled default %s", id.GetText(), inputName.GetText());
+                SdrShaderPropertyConstPtr const& input = sdrNode->GetShaderInput(inputName);
+                VtValue value = input->GetDefaultValue();
+                SetTextureBasedOnValueAndName(msne, _handle, inputName, value, id.GetString() + " default");
             }
         }
 

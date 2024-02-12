@@ -86,8 +86,11 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         if (materialId.IsEmpty()) {
             _material = renderParam->_defaultMaterial;
         } else {
-            HdMoonshineMaterial* material = static_cast<HdMoonshineMaterial*>(renderIndex.GetSprim(HdPrimTypeTokens->material, materialId));
-            _material = material->_handle;
+            HdSprim* sprim = renderIndex.GetSprim(HdPrimTypeTokens->material, materialId);
+            if (sprim) {
+                HdMoonshineMaterial* material = static_cast<HdMoonshineMaterial*>(sprim);
+                _material = material->_handle;
+            }
         }
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyMaterialId;
     }
