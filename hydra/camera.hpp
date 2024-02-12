@@ -12,8 +12,6 @@ public:
     HdMoonshineCamera(SdfPath const& id);
     ~HdMoonshineCamera() override = default;
 
-    HdDirtyBits GetInitialDirtyBitsMask() const override;
-
     void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) override;
 
     LensHandle _handle = -1;

@@ -11,10 +11,6 @@ PXR_NAMESPACE_OPEN_SCOPE
 
 HdMoonshineCamera::HdMoonshineCamera(SdfPath const& id) : HdCamera(id) {}
 
-HdDirtyBits HdMoonshineCamera::GetInitialDirtyBitsMask() const {
-    return HdChangeTracker::DirtyTransform;
-}
-
 void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) {
     HdCamera::Sync(sceneDelegate, renderParam, dirtyBits);
     HdMoonshine* msne = static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine;
@@ -41,7 +37,6 @@ void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* rend
     } else {
         HdMoonshineSetLens(msne, _handle, lens);
     }
-    *dirtyBits = HdChangeTracker::Clean;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE
