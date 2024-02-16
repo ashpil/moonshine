@@ -195,7 +195,8 @@ pub fn main() !void {
             if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
-                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, pipeline_opts, &destruction_queue)) {
+                if (pipeline.recreate(&context, &vk_allocator, allocator, &commands, pipeline_opts)) |old_pipeline| {
+                    try destruction_queue.add(allocator, old_pipeline);
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
                     rebuild_error = false;

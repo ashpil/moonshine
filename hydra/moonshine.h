@@ -67,6 +67,7 @@ typedef struct HdMoonshine HdMoonshine;
 extern "C" HdMoonshine* HdMoonshineCreate(void);
 extern "C" void HdMoonshineDestroy(HdMoonshine*);
 extern "C" bool HdMoonshineRender(HdMoonshine*, SensorHandle, LensHandle);
+extern "C" bool HdMoonshineRebuildPipeline(HdMoonshine*);
 extern "C" MeshHandle HdMoonshineCreateMesh(HdMoonshine*, const F32x3*, const F32x3*, const F32x2*, size_t, const U32x3*, size_t);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture1(HdMoonshine*, float, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture2(HdMoonshine*, F32x2, const char*);

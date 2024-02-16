@@ -253,7 +253,8 @@ pub fn Pipeline(
             };
         }
 
-        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants, destruction_queue: *DestructionQueue) !void {
+        // returns old handle which must be cleaned up
+        pub fn recreate(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, cmd: *Commands, constants: SpecConstants) !vk.Pipeline {
             const module = try createShaderModule(vc, "hrtsystem/" ++ shader_name ++ ".hlsl", allocator, .ray_tracing);
             defer vc.device.destroyShaderModule(module, null);
 
@@ -309,14 +310,13 @@ pub fn Pipeline(
                 .base_pipeline_handle = .null_handle,
                 .base_pipeline_index = -1,
             };
-            var handle: vk.Pipeline = undefined;
-            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast(&create_info), null, @ptrCast(&handle));
-            errdefer vc.device.destroyPipeline(handle, null);
-            try destruction_queue.add(allocator, self.handle);
+            const old_handle = self.handle;
+            _ = try vc.device.createRayTracingPipelinesKHR(.null_handle, .null_handle, 1, @ptrCast(&create_info), null, @ptrCast(&self.handle));
+            errdefer vc.device.destroyPipeline(self.handle, null);
 
-            try self.sbt.recreate(vc, vk_allocator, handle, cmd);
+            try self.sbt.recreate(vc, vk_allocator, self.handle, cmd);
 
-            self.handle = handle;
+            return old_handle;
         }
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {

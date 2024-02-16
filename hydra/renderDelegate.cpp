@@ -12,6 +12,10 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+TF_DEFINE_PRIVATE_TOKENS(_tokens,
+    (rebuildPipeline)
+);
+
 const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_RPRIM_TYPES = {
     HdPrimTypeTokens->mesh,
 };
@@ -32,6 +36,21 @@ HdMoonshineRenderDelegate::HdMoonshineRenderDelegate() : HdRenderDelegate() {
 
 HdMoonshineRenderDelegate::HdMoonshineRenderDelegate(HdRenderSettingsMap const& settingsMap) : HdRenderDelegate(settingsMap) {
     _Initialize();
+}
+
+HdCommandDescriptors HdMoonshineRenderDelegate::GetCommandDescriptors() const {
+    HdCommandDescriptor commandDesc(_tokens->rebuildPipeline, "Rebuild pipeline", {});
+    return { commandDesc };
+}
+
+bool HdMoonshineRenderDelegate::InvokeCommand(const TfToken &command, const HdCommandArgs &args) {
+    if (command == _tokens->rebuildPipeline) {
+        HdMoonshineRebuildPipeline(_moonshine);
+        return true;
+    } else {
+        TF_CODING_ERROR("Unknown command %s!", command.GetText());
+        return false;
+    }
 }
 
 void HdMoonshineRenderDelegate::_Initialize() {

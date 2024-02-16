@@ -338,6 +338,21 @@ pub const HdMoonshine = struct {
         return true;
     }
 
+    pub export fn HdMoonshineRebuildPipeline(self: *HdMoonshine) bool {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const old_pipeline = self.pipeline.recreate(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, .{
+            .samples_per_run = samples_per_run,
+            .max_bounces = 1024,
+            .env_samples_per_bounce = 0,
+            .mesh_samples_per_bounce = 0,
+            .flip_image = false,
+        }) catch return false;
+        self.vc.device.destroyPipeline(old_pipeline, null);
+        self.camera.clearAllSensors();
+        return true;
+    }
+
     pub export fn HdMoonshineCreateMesh(self: *HdMoonshine, positions: [*]const F32x3, maybe_normals: ?[*]const F32x3, maybe_texcoords: ?[*]const F32x2, vertex_count: usize, indices: [*]const U32x3, index_count: usize) MeshManager.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();

@@ -20,6 +20,10 @@ public:
     HdMoonshineRenderDelegate(HdRenderSettingsMap const& settingsMap);
     ~HdMoonshineRenderDelegate();
 
+    HdCommandDescriptors GetCommandDescriptors() const override;
+
+    bool InvokeCommand(const TfToken &command, const HdCommandArgs &args) override;
+
     const TfTokenVector &GetSupportedRprimTypes() const override;
     const TfTokenVector &GetSupportedSprimTypes() const override;
     const TfTokenVector &GetSupportedBprimTypes() const override;

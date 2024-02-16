@@ -92,6 +92,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
+        engine_options.shader_source = .load;
         const engine = makeEngineModule(b, vk, engine_options);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
