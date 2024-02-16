@@ -133,7 +133,6 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         }
         _instances.clear();
 
-        // TODO: initial visibility
         const Geometry geometry = Geometry {
             .mesh = _mesh,
             .material = _material,
