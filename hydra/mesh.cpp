@@ -124,11 +124,6 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
                     }
                 }
             }
-
-            // moonshine expects flipped y
-            for (size_t i = 0; i < texcoords.size(); i++) {
-                texcoords[i][1] = 1.0f - texcoords[i][1];
-            }
         }
         
         // TODO: destroy mesh

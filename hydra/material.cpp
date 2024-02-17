@@ -1,6 +1,11 @@
+#include <cstdint>
+#include <memory>
+#include <optional>
 #include <pxr/usd/sdr/shaderNode.h>
 #include <pxr/usd/sdr/shaderProperty.h>
 #include <pxr/usd/sdr/registry.h>
+
+#include <pxr/imaging/hio/image.h>
 
 #include "material.hpp"
 
@@ -67,8 +72,65 @@ void SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfT
     // others intentionally ignored as moonshine does not currently support them
 }
 
-void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits)
-{
+std::optional<TextureFormat> usdFormatToMsneFormat(HioFormat format) {
+    if (format == HioFormatFloat16Vec3) {
+        return TextureFormat::f16x4;
+    } else if (format == HioFormatUNorm8Vec4srgb) {
+        return TextureFormat::u8x4_srgb;
+    } else {
+        return std::nullopt;
+    }
+}
+
+void rgbToRgba(std::unique_ptr<uint8_t[]>& data, size_t pixel_count, size_t src_bytes_per_pixel, size_t dst_bytes_per_pixel) {
+    for (size_t i = pixel_count - 1; i-- > 0;) {
+        for (size_t j = 0; j < src_bytes_per_pixel; j++) {
+            data[dst_bytes_per_pixel * i + j] = data[src_bytes_per_pixel * i + j];
+        }
+    }
+}
+
+std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value) {
+    HioImage::StorageSpec spec;
+    std::unique_ptr<uint8_t[]> data;
+    if (value.IsHolding<SdfAssetPath>()) {
+        auto image = HioImage::OpenForReading(value.Get<SdfAssetPath>().GetResolvedPath());
+        spec.width  = image->GetWidth();
+        spec.height = image->GetHeight();
+        spec.format = image->GetFormat();
+        spec.flipped = true; // moonshine expects flipped UVs which is equivalent to flipping here
+        size_t imageSize = spec.width * spec.height * image->GetBytesPerPixel();
+        // moonshine does not support RGB formats so possibly allocate enough space to
+        // convert to RBGA in place
+        if (imageSize % 3 == 0) {
+            imageSize = (imageSize / 3) * 4;
+        }
+        data = std::make_unique<uint8_t[]>(imageSize);
+        spec.data = data.get();
+        image->Read(spec);
+
+        // possibly pad to RGBA
+        if (image->GetBytesPerPixel() % 3 == 0) {
+            rgbToRgba(data, spec.width * spec.height, image->GetBytesPerPixel(), (image->GetBytesPerPixel() / 3) * 4);
+        }
+    } else {
+        TF_CODING_ERROR("unknown value type %s", value.GetTypeName().c_str());
+        return std::nullopt;
+    }
+
+    std::optional<TextureFormat> format = usdFormatToMsneFormat(spec.format);
+    if (!format) {
+        TF_CODING_ERROR("unknown format");
+        return std::nullopt;
+    }
+    Extent2D extent = Extent2D {
+        .width = static_cast<uint32_t>(spec.width),
+        .height = static_cast<uint32_t>(spec.height),
+    };
+    return HdMoonshineCreateRawTexture(msne, data.get(), extent, format.value(), "texture"); // TODO: name
+}
+
+void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits) {
     SdfPath const& id = GetId();
 
     HdMoonshineRenderParam* renderParam = static_cast<HdMoonshineRenderParam*>(hdRenderParam);
@@ -115,8 +177,21 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
                 HdMaterialNode2 const& upstreamNode = upIt->second;
                 SdrShaderNodeConstPtr upstreamSdr = shaderReg.GetShaderNodeByIdentifier(upstreamNode.nodeTypeId);
 
-                // TODO: textures
-                // TF_CODING_ERROR("%s unhandled connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                TfToken sdrRole(upstreamSdr->GetRole());
+                if (sdrRole == SdrNodeRole->Texture) {
+                    TfToken fileProperty = upstreamSdr->GetAssetIdentifierInputNames()[0];
+                    VtValue value = upstreamNode.parameters.find(fileProperty)->second;
+                    std::optional<ImageHandle> texture = makeTexture(msne, value);
+                    if (!texture) {
+                        TF_CODING_ERROR("%s can't parse texture %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                        continue;
+                    }
+                    if (inputName == _tokens->diffuseColor) {
+                        HdMoonshineSetMaterialColor(msne, _handle, texture.value());
+                    }
+                } else {
+                    TF_CODING_ERROR("%s unhandled connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                }
             } else if (paramIt != node.parameters.end()) {
                 VtValue value = paramIt->second;
                 SetTextureBasedOnValueAndName(msne, _handle, inputName, value, id.GetString() + " parameter");

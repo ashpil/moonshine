@@ -63,6 +63,11 @@ typedef struct Material {
     float ior;
 } Material;
 
+typedef enum TextureFormat {
+    f16x4,
+    u8x4_srgb,
+} TextureFormat;
+
 typedef struct HdMoonshine HdMoonshine;
 extern "C" HdMoonshine* HdMoonshineCreate(void);
 extern "C" void HdMoonshineDestroy(HdMoonshine*);
@@ -72,6 +77,7 @@ extern "C" MeshHandle HdMoonshineCreateMesh(HdMoonshine*, const F32x3*, const F3
 extern "C" ImageHandle HdMoonshineCreateSolidTexture1(HdMoonshine*, float, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture2(HdMoonshine*, F32x2, const char*);
 extern "C" ImageHandle HdMoonshineCreateSolidTexture3(HdMoonshine*, F32x3, const char*);
+extern "C" ImageHandle HdMoonshineCreateRawTexture(HdMoonshine*, uint8_t*, Extent2D, TextureFormat, const char*);
 extern "C" MaterialHandle HdMoonshineCreateMaterial(HdMoonshine*, Material);
 extern "C" void HdMoonshineSetMaterialNormal(HdMoonshine*, MaterialHandle, ImageHandle);
 extern "C" void HdMoonshineSetMaterialEmissive(HdMoonshine*, MaterialHandle, ImageHandle);

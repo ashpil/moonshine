@@ -136,6 +136,7 @@ pub fn build(b: *std.Build) !void {
         lib.addLibraryPath(.{ .path = b.pathJoin(&.{ usd_built_dir, "lib/" }) });
         lib.linkSystemLibrary("usd_hd");
         lib.linkSystemLibrary("usd_sdr");
+        lib.linkSystemLibrary("usd_hio");
         
         // include headers necessary for usd
         lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });

@@ -411,6 +411,19 @@ pub const HdMoonshine = struct {
         }, std.mem.span(name)) catch unreachable; // TODO: error handling
     }
 
+    pub export fn HdMoonshineCreateRawTexture(self: *HdMoonshine, data: [*]u8, extent: vk.Extent2D, format: TextureFormat, name: [*:0]const u8) TextureManager.Handle {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        const bytes = std.mem.sliceAsBytes(data[0..extent.width * extent.height * format.pixelSizeInBytes()]);
+        return self.world.materials.textures.upload(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, TextureManager.Source {
+            .raw = TextureManager.Source.Raw {
+                .bytes = bytes,
+                .extent = extent,
+                .format = format.toVk(),
+            },
+        }, std.mem.span(name)) catch unreachable; // TODO: error handling
+    }
+
     pub export fn HdMoonshineCreateMaterial(self: *HdMoonshine, material: Material) MaterialManager.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();
