@@ -119,8 +119,15 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
                         VtValue res;
                         meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), HdTypeFloatVec2, &res);
                         texcoords = res.Get<VtVec2fArray>();
+                    } else if (interpolation == HdInterpolationVertex) {
+                        VtVec2fArray indexedTexcoords = boxedTexcoords.Get<VtVec2fArray>();
+                        for (const auto index : indices) {
+                            texcoords.push_back(indexedTexcoords[index[0]]);
+                            texcoords.push_back(indexedTexcoords[index[1]]);
+                            texcoords.push_back(indexedTexcoords[index[2]]);
+                        }
                     } else {
-                        TF_CODING_ERROR("Mesh %s has unknown texture coordinate interpolation!", id.GetText());
+                        TF_CODING_ERROR("Mesh %s has unknown texture coordinate interpolation %s!", id.GetText(), TfEnum::GetDisplayName(interpolation).c_str());
                     }
                 }
             }
