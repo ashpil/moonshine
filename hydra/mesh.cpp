@@ -9,8 +9,17 @@
 #include <pxr/imaging/hd/instancer.h>
 #include <pxr/base/gf/matrix4f.h>
 #include <pxr/imaging/hd/extComputationUtils.h>
+#include <pxr/base/gf/vec2f.h>
+#include <pxr/imaging/hd/vtBufferSource.h>
+
+#include <optional>
 
 PXR_NAMESPACE_OPEN_SCOPE
+
+TF_DEFINE_PRIVATE_TOKENS(_tokens,
+    (st)
+    (st0)
+);
 
 HdMoonshineMesh::HdMoonshineMesh(SdfPath const& id, const HdMoonshineRenderParam& renderParam) : HdMesh(id) {
     _material = renderParam._defaultMaterial;
@@ -30,6 +39,24 @@ HdDirtyBits HdMoonshineMesh::_PropagateDirtyBits(HdDirtyBits bits) const {
 
 void HdMoonshineMesh::_InitRepr(TfToken const& reprToken, HdDirtyBits* dirtyBits) {}
 
+std::optional<HdInterpolation> HdMoonshineMesh::FindPrimvarInterpolation(HdSceneDelegate* sceneDelegate, TfToken name) const {
+    for (size_t i = 0; i < HdInterpolationCount; i++) {
+        HdInterpolation interpolation = static_cast<HdInterpolation>(i);
+
+        const auto& primvarDescs = GetPrimvarDescriptors(sceneDelegate, interpolation);
+
+        for (const HdPrimvarDescriptor& primvar : primvarDescs)
+        {
+            if (primvar.name == name)
+            {
+                return interpolation;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
 void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
     SdfPath const& id = GetId();
 
@@ -40,12 +67,18 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
     bool mesh_changed = HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points);
 
     if (HdChangeTracker::IsPrimvarDirty(*dirtyBits, id, HdTokens->points)) {
+        const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
+        HdMeshUtil meshUtil(&topology,id);
+        VtIntArray primitiveParams;
+        VtVec3iArray indices;
+        meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
+
         VtVec3fArray points;
 
         // try to find fancy points (e.g., animated ones)
         for (size_t i = 0; i < HdInterpolationCount; i++) {
             HdInterpolation interp = static_cast<HdInterpolation>(i);
-            HdExtComputationPrimvarDescriptorVector compPrimvars = sceneDelegate->GetExtComputationPrimvarDescriptors(id,interp);
+            HdExtComputationPrimvarDescriptorVector compPrimvars = sceneDelegate->GetExtComputationPrimvarDescriptors(id, interp);
 
             for (auto const& pv: compPrimvars) {
                 if (pv.name == HdTokens->points) {
@@ -60,14 +93,46 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
             points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
         }
 
-        const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
-        HdMeshUtil meshUtil(&topology,id);
-        VtIntArray primitiveParams;
-        VtVec3iArray indices;
-        meshUtil.ComputeTriangleIndices(&indices, &primitiveParams);
+        VtVec2fArray texcoords;
+        {
+            // there's some way to infer this properly but this works most of the time
+            const TfToken maybeTexcoordNames[] = {
+                _tokens->st,
+                _tokens->st0,
+            };
+            TfToken texcoordName;
+            for (const TfToken& name : maybeTexcoordNames)
+            {
+                if (FindPrimvarInterpolation(sceneDelegate, name))
+                {
+                    texcoordName = name;
+                    break;
+                }
+            }
+
+            if (!texcoordName.IsEmpty()) {
+                VtValue boxedTexcoords = sceneDelegate->Get(id, texcoordName);
+                if (boxedTexcoords.IsHolding<VtVec2fArray>()) {
+                    HdInterpolation interpolation = FindPrimvarInterpolation(sceneDelegate, texcoordName).value();
+                    if (interpolation == HdInterpolationFaceVarying) {
+                        HdVtBufferSource buffer(texcoordName, boxedTexcoords);
+                        VtValue res;
+                        meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), HdTypeFloatVec2, &res);
+                        texcoords = res.Get<VtVec2fArray>();
+                    } else {
+                        TF_CODING_ERROR("Mesh %s has unknown texture coordinate interpolation!", id.GetText());
+                    }
+                }
+            }
+
+            // moonshine expects flipped y
+            for (size_t i = 0; i < texcoords.size(); i++) {
+                texcoords[i][1] = 1.0f - texcoords[i][1];
+            }
+        }
         
         // TODO: destroy mesh
-        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, nullptr, points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, reinterpret_cast<const F32x2*>(texcoords.cdata()), points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
 
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
     }

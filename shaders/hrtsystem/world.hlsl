@@ -55,6 +55,8 @@ struct World {
 
     StructuredBuffer<MaterialVariantData> materials;
 
+    bool indexed_attributes;
+
     Geometry getGeometry(uint instanceID, uint geometryIndex) {
         return geometries[NonUniformResourceIndex(instanceID + geometryIndex)];
     }
@@ -124,12 +126,14 @@ struct MeshAttributes {
         float3 p2 = loadPosition(mesh.positionAddress, ind.z);
         attrs.position = interpolate(barycentrics, p0, p1, p2);
 
+        uint3 attr_ind = world.indexed_attributes ? ind : float3(primitiveIndex * 3 + 0, primitiveIndex * 3 + 1, primitiveIndex * 3 + 2);
+
         // texcoords optional
         float2 t0, t1, t2;
         if (mesh.texcoordAddress != 0) {
-            t0 = loadTexcoord(mesh.texcoordAddress, ind.x);
-            t1 = loadTexcoord(mesh.texcoordAddress, ind.y);
-            t2 = loadTexcoord(mesh.texcoordAddress, ind.z);
+            t0 = loadTexcoord(mesh.texcoordAddress, attr_ind.x);
+            t1 = loadTexcoord(mesh.texcoordAddress, attr_ind.y);
+            t2 = loadTexcoord(mesh.texcoordAddress, attr_ind.z);
         } else {
             // textures should be constant in this case
             t0 = float2(0, 0);
@@ -144,9 +148,9 @@ struct MeshAttributes {
 
         // normals optional
         if (mesh.normalAddress != 0) {
-            float3 n0 = loadNormal(mesh.normalAddress, ind.x);
-            float3 n1 = loadNormal(mesh.normalAddress, ind.y);
-            float3 n2 = loadNormal(mesh.normalAddress, ind.z);
+            float3 n0 = loadNormal(mesh.normalAddress, attr_ind.x);
+            float3 n1 = loadNormal(mesh.normalAddress, attr_ind.y);
+            float3 n2 = loadNormal(mesh.normalAddress, attr_ind.z);
             attrs.frame = attrs.triangleFrame;
             attrs.frame.n = normalize(interpolate(barycentrics, n0, n1, n2));
             attrs.frame.reorthogonalize();

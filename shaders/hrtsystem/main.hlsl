@@ -40,9 +40,10 @@ struct PushConsts {
 // SPECIALIZATION CONSTANTS
 [[vk::constant_id(0)]] const uint samples_per_run = 1;
 [[vk::constant_id(1)]] const uint max_bounces = 4;
-[[vk::constant_id(2)]] const uint env_samples_per_bounce = 1;     // how many times the environment map should be sampled per bounce for light
-[[vk::constant_id(3)]] const uint mesh_samples_per_bounce = 1;    // how many times emissive meshes should be sampled per bounce for light
+[[vk::constant_id(2)]] const uint env_samples_per_bounce = 1;   // how many times the environment map should be sampled per bounce for light
+[[vk::constant_id(3)]] const uint mesh_samples_per_bounce = 1;  // how many times emissive meshes should be sampled per bounce for light
 [[vk::constant_id(4)]] const bool flip_image = true;
+[[vk::constant_id(5)]] const bool indexed_attributes = true;    // whether non-position vertex attributes are indexed
 
 // https://www.nu42.com/2015/03/how-you-average-numbers.html
 void storeColor(float3 sampledColor) {
@@ -59,7 +60,7 @@ void storeColor(float3 sampledColor) {
 float2 dispatchUV(float2 rand) {
     float2 randomCenter = float2(0.5, 0.5) + 0.5 * squareToGaussian(rand);
     float2 uv = (float2(DispatchRaysIndex().xy) + randomCenter) / float2(DispatchRaysDimensions().xy);
-    if (flip_image) uv.y = -(uv.y - 1);
+    if (flip_image) uv.y = 1.0f - uv.y;
     return uv;
 }
 
@@ -73,6 +74,7 @@ void raygen() {
     world.meshes = dMeshes;
     world.geometries = dGeometries;
     world.materials = dMaterials;
+    world.indexed_attributes = indexed_attributes;
 
     Scene scene;
     scene.tlas = dTLAS;

@@ -30,6 +30,8 @@ protected:
     HdMoonshineMesh(const HdMoonshineMesh&) = delete;
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
 private:
+    std::optional<HdInterpolation> FindPrimvarInterpolation(HdSceneDelegate* sceneDelegate, TfToken name) const;
+    
     GfMatrix4f _transform{1.0f};
     MeshHandle _mesh;
     MaterialHandle _material;

@@ -471,6 +471,7 @@ pub const StandardPipeline = Pipeline(
         env_samples_per_bounce: u32 = 1,
         mesh_samples_per_bounce: u32 = 1,
         flip_image: bool align(@alignOf(vk.Bool32)) = true,
+        indexed_attributes: bool align(@alignOf(vk.Bool32)) = true,
     },
     extern struct {
         lens: Camera.Lens,

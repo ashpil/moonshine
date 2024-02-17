@@ -22,6 +22,7 @@ const Pipeline = hrtsystem.pipeline.StandardPipeline;
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
+const F32x4 = vector.Vec4(f32);
 const U32x3 = vector.Vec3(u32);
 const Mat3x4 = vector.Mat3x4(f32);
 
@@ -37,6 +38,25 @@ pub const Material = extern struct {
     normal: TextureManager.Handle,
     emissive: TextureManager.Handle,
     standard_pbr: MaterialManager.StandardPBR,
+};
+
+pub const TextureFormat = enum(c_int) {
+    f16x4,
+    u8x4_srgb,
+
+    fn toVk(self: TextureFormat) vk.Format {
+        switch (self) {
+            .f16x4 => return .r16g16b16a16_sfloat,
+            .u8x4_srgb => return .r8g8b8a8_srgb,
+        }
+    }
+
+    fn pixelSizeInBytes(self: TextureFormat) usize {
+        switch (self) {
+            .f16x4 => return @sizeOf(f16) * 4,
+            .u8x4_srgb => return @sizeOf(u8) * 4,
+        }
+    }
 };
 
 pub const HdMoonshine = struct {
@@ -107,6 +127,7 @@ pub const HdMoonshine = struct {
             .env_samples_per_bounce = 0,
             .mesh_samples_per_bounce = 0,
             .flip_image = false,
+            .indexed_attributes = false,
         }, .{ self.background.sampler }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
@@ -347,19 +368,20 @@ pub const HdMoonshine = struct {
             .env_samples_per_bounce = 0,
             .mesh_samples_per_bounce = 0,
             .flip_image = false,
+            .indexed_attributes = false,
         }) catch return false;
         self.vc.device.destroyPipeline(old_pipeline, null);
         self.camera.clearAllSensors();
         return true;
     }
 
-    pub export fn HdMoonshineCreateMesh(self: *HdMoonshine, positions: [*]const F32x3, maybe_normals: ?[*]const F32x3, maybe_texcoords: ?[*]const F32x2, vertex_count: usize, indices: [*]const U32x3, index_count: usize) MeshManager.Handle {
+    pub export fn HdMoonshineCreateMesh(self: *HdMoonshine, positions: [*]const F32x3, maybe_normals: ?[*]const F32x3, maybe_texcoords: ?[*]const F32x2, position_count: usize, indices: [*]const U32x3, index_count: usize) MeshManager.Handle {
         self.mutex.lock();
         defer self.mutex.unlock();
         const mesh = MeshManager.Mesh {
-            .positions = positions[0..vertex_count],
-            .normals = if (maybe_normals) |normals| normals[0..vertex_count] else null,
-            .texcoords = if (maybe_texcoords) |texcoords| texcoords[0..vertex_count] else null,
+            .positions = positions[0..position_count],
+            .normals = if (maybe_normals) |normals| normals[0..index_count * 3] else null,
+            .texcoords = if (maybe_texcoords) |texcoords| texcoords[0..index_count * 3] else null,
             .indices = indices[0..index_count],
         };
         return self.world.meshes.upload(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, mesh) catch unreachable; // TODO: error handling
