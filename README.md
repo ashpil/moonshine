@@ -11,13 +11,14 @@
 ### Features
 * Binaries
     * offline -- a headless offline renderer
-    * online -- a real-time windowed renderer, interactive features WIP
+    * online -- a real-time windowed renderer
+    * hydra -- a hydra render delegate
 * Light Transport
-    * Global Illumination
+    * Full path tracing
     * Direct light sampling with multiple importance sampling for all lights and materials
 * Lights
     * 360° environment maps
-    * Emissive meshes 
+    * Emissive meshes
 * Materials
     * Standard PBR with metallic + roughness
     * Mirror
@@ -31,59 +32,43 @@
   * For Linux (Ubuntu, similar on others):
       * For Wayland: `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
       * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
-  * Should work on Windows without more dependencies
+  * Should work on Windows without additional dependencies
 #### Run
 * A GPU supporting Vulkan ray tracing
 
-
 ### // TODO
-* Feature
-  * Bloom
-  * Tonemapping
-  * HDR display
-  * More camera models
+* Tonemapping
+* HDR display
+* Cameras
+  * Projection
     * Orthographic
-  * Materials
-    * Metal
-    * Rough metal
-    * Rough glass
-    * Plastic
-    * Rough plastic
-    * Mix
-    * Layer
-  * Lights
-    * Experiment with sampling triangle via solid angle after selecting it via area
-    * Experiment with unifying sampling mesh lights and environment map
-* Code
-  * Make sure we have all necessary `errdefer`s
-  * Proper memory allocation interface
-  * Reduce unnecessary copying
-
-### Current jankiness
-* Asset system
-  * Currently, one can either construct a scene manually with code or very inefficiently import glb
-  * Ideal would be to have custom scene description format that can be quickly deserialzed
-    * An Blender export addon for this format, so other formats don't need to be supported in engine directly
-    * I think this custom format would make destinctions between scene stuff and staging stuff. It would only contain actual information about the world, but not stuff like camera position, that would be separate
-* Light system
-  * Currently, only support skybox and mesh lights, which I think makes sense
-    * Both explicitly sampled using the alias method built on CPU
-  * But we'd like to have more dynamic meshes, which means we should mesh sampling build sampling stuff on GPU
-    * Not sure about proper route -- build inversion sampler on GPU in compute?
-* Memory management
-  * A lot of unncessary copying in scene construction at the moment
-    * Filesystem to RAM
-    * RAM to staging buffer
-    * Staging buffer to GPU
-  * Ideally this can be vastly minimized, depending on hardware
-    * At most should be doing filesystem to staging buffer to GPU
-    * On some machines, can do filesystem to GPU directly
-* Destruction queue needs work
-* Resource uploading
-  * Need some sort of way to efficently and ergonomically do resource transfers
-* Dynamic resource management
-  * most resources have some sort of hardcoded limit, and pre-allocate memory up to it
-  * would be better to instead only allocate as much as needed and resize on demand
+    * Arbitrary distortion
+  * Bloom
+  * Glare
+* Materials
+  * Metal
+  * Transmissive with roughness
+  * Mix
+  * Layer
+* Volumetric
+* Spectral
+* Lights
+  * Experiment with sampling triangle via solid angle after selecting it via area
+  * Experiment with unifying sampling mesh lights and environment map
+  * Build sampling data structures on GPU
+* Testing
+  * Proper statistical tests GPU sampling routines
+  * Proper statistical tests to make sure images have expected mean/variance
+  * Should ensure validation layers are clean during tests
+* Resource management
+  * Make sure we have all necessary `errdefers`
+  * Delayed-destruction resources should be attached to command buffer
+  * GPU resource arrays should be resizable
+  * Need some sort of way to do async resource creation (transfers, processing)
+* Use physical (with correct scales) units
+* Integrators
+  * ReSTIR DI
+  * ReSTIR PT
 
 ### Some notes about conventions
 * `+z` is up
