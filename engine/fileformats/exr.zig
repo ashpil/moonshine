@@ -213,6 +213,7 @@ pub const helpers = struct {
             var width: c_int = undefined;
             var height: c_int = undefined;
             try loadEXRFromMemory(&out_rgba, &width, &height, file_content.ptr, file_content.len);
+            defer std.c.free(out_rgba);
             const malloc_slice = Rgba2D {
                 .ptr = @ptrCast(out_rgba),
                 .extent = vk.Extent2D {
@@ -224,7 +225,6 @@ pub const helpers = struct {
                 .ptr = (try allocator.dupe([4]f32, malloc_slice.asSlice())).ptr, // copy into zig allocator
                 .extent = malloc_slice.extent,
             };
-            std.heap.c_allocator.free(malloc_slice.asSlice());
             return out;
         }
     };
