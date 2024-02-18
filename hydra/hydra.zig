@@ -94,6 +94,16 @@ pub const HdMoonshine = struct {
 
     const samples_per_run = 1;
 
+    const pipeline_settings = Pipeline.SpecConstants {
+        .samples_per_run = samples_per_run,
+        .max_bounces = 1024,
+        .env_samples_per_bounce = 0,
+        .mesh_samples_per_bounce = 0,
+        .flip_image = false,
+        .indexed_attributes = false,
+        .two_component_normal_texture = false,
+    };
+
     pub export fn HdMoonshineCreate() ?*HdMoonshine {
         var allocator = Allocator {};
         errdefer _ = allocator.deinit();
@@ -121,14 +131,7 @@ pub const HdMoonshine = struct {
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         self.background.addDefaultBackground(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands) catch return null;
 
-        self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.materials.textures.descriptor_layout, .{
-            .samples_per_run = samples_per_run,
-            .max_bounces = 1024,
-            .env_samples_per_bounce = 0,
-            .mesh_samples_per_bounce = 0,
-            .flip_image = false,
-            .indexed_attributes = false,
-        }, .{ self.background.sampler }) catch return null;
+        self.pipeline = Pipeline.create(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, self.world.materials.textures.descriptor_layout, pipeline_settings, .{ self.background.sampler }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
         self.output_buffers = .{};
@@ -362,14 +365,7 @@ pub const HdMoonshine = struct {
     pub export fn HdMoonshineRebuildPipeline(self: *HdMoonshine) bool {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const old_pipeline = self.pipeline.recreate(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, .{
-            .samples_per_run = samples_per_run,
-            .max_bounces = 1024,
-            .env_samples_per_bounce = 0,
-            .mesh_samples_per_bounce = 0,
-            .flip_image = false,
-            .indexed_attributes = false,
-        }) catch return false;
+        const old_pipeline = self.pipeline.recreate(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands, pipeline_settings) catch return false;
         self.vc.device.destroyPipeline(old_pipeline, null);
         self.camera.clearAllSensors();
         return true;

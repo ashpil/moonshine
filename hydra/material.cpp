@@ -21,12 +21,13 @@ TF_DEFINE_PRIVATE_TOKENS(_tokens,
     (roughness)
     (metallic)
     (ior)
+    (useSpecularWorkflow)
 );
 
 HdMoonshineMaterial::HdMoonshineMaterial(const SdfPath& id, const HdMoonshineRenderParam& renderParam) : HdMaterial(id) {
     // create a handle now so it is valid for the lifetime of the object and can be used whenever
     _handle = HdMoonshineCreateMaterial(renderParam._moonshine, Material {
-        .normal = renderParam._grey2,
+        .normal = renderParam._up,
         .emissive = renderParam._black3,
         .color = renderParam._grey3,
         .metalness = renderParam._black1,
@@ -41,41 +42,12 @@ HdDirtyBits HdMoonshineMaterial::GetInitialDirtyBitsMask() const {
     return DirtyBits::DirtyParams;
 }
 
-void SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfToken name, VtValue value, std::string const& debug_name) {
-    if (name == _tokens->diffuseColor) {
-        GfVec3f color = value.Get<GfVec3f>();
-        ImageHandle texture = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = color[0], .y = color[1], .z = color[2] }, (debug_name + " diffuseColor").c_str());
-        HdMoonshineSetMaterialColor(msne, handle, texture);
-    } else if (name == _tokens->emissiveColor) {
-        GfVec3f color = value.Get<GfVec3f>();
-        ImageHandle texture = HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = color[0], .y = color[1], .z = color[2] }, (debug_name + " emissiveColor").c_str());
-        HdMoonshineSetMaterialEmissive(msne, handle, texture);
-    } else if (name == _tokens->normal) {
-        GfVec3f normal = value.Get<GfVec3f>();
-        // need to encode as F32x2 as that's what moonshine expects
-        float x = normal[2] * normal[2] + normal[1] * normal[1] - 1.0f;
-        float y = normal[2] * normal[2] + normal[0] * normal[0] - 1.0f;
-        ImageHandle texture = HdMoonshineCreateSolidTexture2(msne, F32x2 { .x = x, .y = y }, (debug_name + " normal").c_str());
-        HdMoonshineSetMaterialEmissive(msne, handle, texture);
-    } else if (name == _tokens->roughness) {
-        float roughness = value.Get<float>();
-        ImageHandle texture = HdMoonshineCreateSolidTexture1(msne, roughness, (debug_name + " roughness").c_str());
-        HdMoonshineSetMaterialRoughness(msne, handle, texture);
-    } else if (name == _tokens->metallic) {
-        float metallic = value.Get<float>();
-        ImageHandle texture = HdMoonshineCreateSolidTexture1(msne, metallic, (debug_name + " metallic").c_str());
-        HdMoonshineSetMaterialMetalness(msne, handle, texture);
-    } else if (name == _tokens->ior) {
-        float ior = value.Get<float>();
-        HdMoonshineSetMaterialIOR(msne, handle, ior);
-    }
-    // others intentionally ignored as moonshine does not currently support them
-}
-
 std::optional<TextureFormat> usdFormatToMsneFormat(HioFormat format) {
     if (format == HioFormatFloat16Vec3) {
         return TextureFormat::f16x4;
     } else if (format == HioFormatUNorm8Vec4srgb) {
+        return TextureFormat::u8x4_srgb;
+    } else if (format == HioFormatUNorm8Vec3srgb) {
         return TextureFormat::u8x4_srgb;
     } else {
         return std::nullopt;
@@ -90,11 +62,16 @@ void rgbToRgba(std::unique_ptr<uint8_t[]>& data, size_t pixel_count, size_t src_
     }
 }
 
-std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value) {
-    HioImage::StorageSpec spec;
-    std::unique_ptr<uint8_t[]> data;
+std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::string const& debug_name) {
     if (value.IsHolding<SdfAssetPath>()) {
         auto image = HioImage::OpenForReading(value.Get<SdfAssetPath>().GetResolvedPath());
+        std::optional<TextureFormat> format = usdFormatToMsneFormat(image->GetFormat());
+        if (!format) {
+            TF_CODING_ERROR("unknown format %u", image->GetFormat());
+            return std::nullopt;
+        }
+
+        HioImage::StorageSpec spec;
         spec.width  = image->GetWidth();
         spec.height = image->GetHeight();
         spec.format = image->GetFormat();
@@ -105,7 +82,7 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value) {
         if (imageSize % 3 == 0) {
             imageSize = (imageSize / 3) * 4;
         }
-        data = std::make_unique<uint8_t[]>(imageSize);
+        std::unique_ptr<uint8_t[]> data = std::make_unique<uint8_t[]>(imageSize);
         spec.data = data.get();
         image->Read(spec);
 
@@ -113,21 +90,56 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value) {
         if (image->GetBytesPerPixel() % 3 == 0) {
             rgbToRgba(data, spec.width * spec.height, image->GetBytesPerPixel(), (image->GetBytesPerPixel() / 3) * 4);
         }
+
+        Extent2D extent = Extent2D {
+            .width = static_cast<uint32_t>(spec.width),
+            .height = static_cast<uint32_t>(spec.height),
+        };
+        return HdMoonshineCreateRawTexture(msne, data.get(), extent, format.value(), (debug_name + " texture").c_str());
+    } else if (value.IsHolding<GfVec3f>()) {
+        GfVec3f vec = value.Get<GfVec3f>();
+        return HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = vec[0], .y = vec[1], .z = vec[2] }, (debug_name + " f32x3").c_str());
+    } else if (value.IsHolding<float>()) {
+        float val = value.Get<float>();
+        return HdMoonshineCreateSolidTexture1(msne, val, (debug_name + " float").c_str());
     } else {
         TF_CODING_ERROR("unknown value type %s", value.GetTypeName().c_str());
         return std::nullopt;
     }
+}
 
-    std::optional<TextureFormat> format = usdFormatToMsneFormat(spec.format);
-    if (!format) {
-        TF_CODING_ERROR("unknown format");
-        return std::nullopt;
+bool SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfToken name, VtValue value, std::string const& debug_name) {
+    if (name == _tokens->ior) {
+        float ior = value.Get<float>();
+        HdMoonshineSetMaterialIOR(msne, handle, ior);
+        return true;
+    } else {
+        // silently fail on unsupported
+        if (name == _tokens->useSpecularWorkflow) {
+            return true;
+        }
+
+        std::optional<ImageHandle> maybe_texture = makeTexture(msne, value, debug_name + " " + name.GetString());
+        if (!maybe_texture) {
+            TF_CODING_ERROR("could not parse texture %s", (debug_name + " " + name.GetString()).c_str());
+            return false;
+        }
+        ImageHandle texture = maybe_texture.value();
+
+        if (name == _tokens->diffuseColor) {
+            HdMoonshineSetMaterialColor(msne, handle, texture);
+        } else if (name == _tokens->emissiveColor) {
+            HdMoonshineSetMaterialEmissive(msne, handle, texture);
+        } else if (name == _tokens->normal) {
+            HdMoonshineSetMaterialNormal(msne, handle, texture);
+        } else if (name == _tokens->roughness) {
+            HdMoonshineSetMaterialRoughness(msne, handle, texture);
+        } else if (name == _tokens->metallic) {
+            HdMoonshineSetMaterialMetalness(msne, handle, texture);
+        }
+
+        return true;
     }
-    Extent2D extent = Extent2D {
-        .width = static_cast<uint32_t>(spec.width),
-        .height = static_cast<uint32_t>(spec.height),
-    };
-    return HdMoonshineCreateRawTexture(msne, data.get(), extent, format.value(), "texture"); // TODO: name
 }
 
 void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits) {
@@ -181,16 +193,9 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
                 if (sdrRole == SdrNodeRole->Texture) {
                     TfToken fileProperty = upstreamSdr->GetAssetIdentifierInputNames()[0];
                     VtValue value = upstreamNode.parameters.find(fileProperty)->second;
-                    std::optional<ImageHandle> texture = makeTexture(msne, value);
-                    if (!texture) {
-                        TF_CODING_ERROR("%s can't parse texture %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
-                        continue;
-                    }
-                    if (inputName == _tokens->diffuseColor) {
-                        HdMoonshineSetMaterialColor(msne, _handle, texture.value());
-                    }
+                    SetTextureBasedOnValueAndName(msne, _handle, inputName, value, id.GetString());
                 } else {
-                    TF_CODING_ERROR("%s unhandled connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                    TF_CODING_ERROR("%s unknown connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
                 }
             } else if (paramIt != node.parameters.end()) {
                 VtValue value = paramIt->second;

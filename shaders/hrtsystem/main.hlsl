@@ -44,6 +44,7 @@ struct PushConsts {
 [[vk::constant_id(3)]] const uint mesh_samples_per_bounce = 1;  // how many times emissive meshes should be sampled per bounce for light
 [[vk::constant_id(4)]] const bool flip_image = true;
 [[vk::constant_id(5)]] const bool indexed_attributes = true;    // whether non-position vertex attributes are indexed
+[[vk::constant_id(6)]] const bool two_component_normal_texture = true;  // whether normal textures are two or three component vectors
 
 // https://www.nu42.com/2015/03/how-you-average-numbers.html
 void storeColor(float3 sampledColor) {
@@ -75,6 +76,7 @@ void raygen() {
     world.geometries = dGeometries;
     world.materials = dMaterials;
     world.indexed_attributes = indexed_attributes;
+    world.two_component_normal_texture = two_component_normal_texture;
 
     Scene scene;
     scene.tlas = dTLAS;
