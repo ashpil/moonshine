@@ -249,7 +249,7 @@ pub fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Ignore;
     child.stderr_behavior = .Pipe;
-    child.env_map = self.env_map;
+    child.env_map = &self.graph.env_map;
 
     try child.spawn();
 
