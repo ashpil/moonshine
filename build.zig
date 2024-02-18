@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vk, engine_options);
+        const engine = makeEngineModule(b, vk, engine_options, target);
 
         const tests = b.addTest(.{
             .name = "tests",
@@ -48,7 +48,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source = .load; // for hot shader reload
-        const engine = makeEngineModule(b, vk, engine_options);
+        const engine = makeEngineModule(b, vk, engine_options, target);
         const exe = b.addExecutable(.{
             .name = "online",
             .root_source_file = .{ .path = "online/main.zig" },
@@ -72,7 +72,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vk, engine_options);
+        const engine = makeEngineModule(b, vk, engine_options, target);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_source_file = .{ .path = "offline/main.zig" },
@@ -93,7 +93,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source = .load;
-        const engine = makeEngineModule(b, vk, engine_options);
+        const engine = makeEngineModule(b, vk, engine_options, target);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
@@ -311,7 +311,7 @@ pub const EngineOptions = struct {
     }
 };
 
-fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions) *std.Build.Module {
+fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions, target: std.Build.ResolvedTarget) *std.Build.Module {
     const zgltf = b.createModule(.{ .root_source_file = .{ .path = "deps/zgltf/src/main.zig" } });
     const zigimg = b.createModule(.{ .root_source_file = .{ .path = "deps/zigimg/zigimg.zig" } });
 
@@ -319,7 +319,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
     const build_options = b.addOptions();
     build_options.addOption(bool, "vk_validation", options.vk_validation);
     build_options.addOption(bool, "vk_metrics", options.vk_metrics);
-    build_options.addOption(ShaderSource, "shader_source", options.shader_source);
+    build_options.addOption(ShaderSource, "shader_source", if (target.result.os.tag == .linux) options.shader_source else .embed); // hot reload currently only supported on linux
     build_options.addOption([]const []const u8, "rt_shader_compile_cmd", options.rt_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
     build_options.addOption([]const []const u8, "compute_shader_compile_cmd", options.compute_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
     build_options.addOption(bool, "window", options.window);
