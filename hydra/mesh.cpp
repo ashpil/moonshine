@@ -19,6 +19,7 @@ PXR_NAMESPACE_OPEN_SCOPE
 TF_DEFINE_PRIVATE_TOKENS(_tokens,
     (st)
     (st0)
+    (normals)
 );
 
 HdMoonshineMesh::HdMoonshineMesh(SdfPath const& id, const HdMoonshineRenderParam& renderParam) : HdMesh(id) {
@@ -55,6 +56,37 @@ std::optional<HdInterpolation> HdMoonshineMesh::FindPrimvarInterpolation(HdScene
     }
 
     return std::nullopt;
+}
+
+template<typename T>
+VtArray<T> HdMoonshineMesh::ComputePrimvar(HdSceneDelegate* sceneDelegate, VtVec3iArray const& indices, TfToken primvarName) const {
+    VtArray<T> primvar;
+    VtValue boxedPrimvar = sceneDelegate->Get(GetId(), primvarName);
+    if (boxedPrimvar.IsHolding<VtArray<T>>()) {
+        std::optional<HdInterpolation> maybe_interpolation = FindPrimvarInterpolation(sceneDelegate, primvarName);
+        if (!maybe_interpolation) return primvar;
+        HdInterpolation interpolation = maybe_interpolation.value();
+        if (interpolation == HdInterpolationFaceVarying) {
+            const HdMeshTopology& topology = GetMeshTopology(sceneDelegate);
+            HdMeshUtil meshUtil(&topology, GetId());
+
+            HdVtBufferSource buffer(primvarName, boxedPrimvar);
+            VtValue res;
+            meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), HdTypeFloatVec2, &res);
+            primvar = res.Get<VtArray<T>>();
+        } else if (interpolation == HdInterpolationVertex) {
+            VtArray<T> indexedPrimvar = boxedPrimvar.Get<VtArray<T>>();
+            for (const auto index : indices) {
+                primvar.push_back(indexedPrimvar[index[0]]);
+                primvar.push_back(indexedPrimvar[index[1]]);
+                primvar.push_back(indexedPrimvar[index[2]]);
+            }
+        } else {
+            TF_CODING_ERROR("Mesh %s has unknown %s primvar interpolation %s!", GetId().GetText(), primvarName.GetText(), TfEnum::GetDisplayName(interpolation).c_str());
+        }
+    }
+
+    return primvar;
 }
 
 void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits, TfToken const& reprToken) {
@@ -111,30 +143,14 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
             }
 
             if (!texcoordName.IsEmpty()) {
-                VtValue boxedTexcoords = sceneDelegate->Get(id, texcoordName);
-                if (boxedTexcoords.IsHolding<VtVec2fArray>()) {
-                    HdInterpolation interpolation = FindPrimvarInterpolation(sceneDelegate, texcoordName).value();
-                    if (interpolation == HdInterpolationFaceVarying) {
-                        HdVtBufferSource buffer(texcoordName, boxedTexcoords);
-                        VtValue res;
-                        meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), HdTypeFloatVec2, &res);
-                        texcoords = res.Get<VtVec2fArray>();
-                    } else if (interpolation == HdInterpolationVertex) {
-                        VtVec2fArray indexedTexcoords = boxedTexcoords.Get<VtVec2fArray>();
-                        for (const auto index : indices) {
-                            texcoords.push_back(indexedTexcoords[index[0]]);
-                            texcoords.push_back(indexedTexcoords[index[1]]);
-                            texcoords.push_back(indexedTexcoords[index[2]]);
-                        }
-                    } else {
-                        TF_CODING_ERROR("Mesh %s has unknown texture coordinate interpolation %s!", id.GetText(), TfEnum::GetDisplayName(interpolation).c_str());
-                    }
-                }
+                texcoords = ComputePrimvar<GfVec2f>(sceneDelegate, indices, texcoordName);
             }
         }
+
+        VtVec3fArray normals = ComputePrimvar<GfVec3f>(sceneDelegate, indices, _tokens->normals);
         
         // TODO: destroy mesh
-        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()), nullptr, reinterpret_cast<const F32x2*>(texcoords.cdata()), points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
+        _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()),  reinterpret_cast<const F32x3*>(normals.cdata()), reinterpret_cast<const F32x2*>(texcoords.cdata()), points.size(), reinterpret_cast<const U32x3*>(indices.cdata()), indices.size());
 
         *dirtyBits = *dirtyBits & ~HdChangeTracker::DirtyPoints;
     }

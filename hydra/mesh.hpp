@@ -31,6 +31,9 @@ protected:
     HdMoonshineMesh &operator =(const HdMoonshineMesh&) = delete;
 private:
     std::optional<HdInterpolation> FindPrimvarInterpolation(HdSceneDelegate* sceneDelegate, TfToken name) const;
+
+    template<typename T>
+    VtArray<T> ComputePrimvar(HdSceneDelegate* sceneDelegate, VtVec3iArray const& indices, TfToken primvarName) const;
     
     GfMatrix4f _transform{1.0f};
     MeshHandle _mesh;
