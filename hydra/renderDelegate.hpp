@@ -5,7 +5,6 @@
 #include <pxr/pxr.h>
 #include <pxr/imaging/hd/renderDelegate.h>
 #include <pxr/imaging/hd/resourceRegistry.h>
-#include <pxr/base/tf/staticTokens.h>
 
 #include "renderParam.hpp"
 

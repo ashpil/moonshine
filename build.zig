@@ -92,7 +92,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        engine_options.shader_source = .load;
+        engine_options.shader_source = .embed;
         const engine = makeEngineModule(b, vk, engine_options, target);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
@@ -129,17 +129,23 @@ pub fn build(b: *std.Build) !void {
         lib.linkLibrary(zig_lib);
 
         // options
-        const usd_built_dir = b.option([]const u8, "usd-install-path", "Where your USD SDK is installed.") orelse "../USD";
-        const usd_compiler: enum { gcc, clang } = .gcc; // assumes stdlib matches compiler
+        const usd_dir = b.option([]const u8, "usd-path", "Where your USD SDK is installed.") orelse "../USD";
+        const tbb_dir = b.option([]const u8, "tbb-path", "Where your TBB is installed.");
+        const usd_monolithic = b.option(bool, "usd-monolithic", "Whether USD was built monolithically.") orelse false;
 
         // link against usd produced libraries
-        lib.addLibraryPath(.{ .path = b.pathJoin(&.{ usd_built_dir, "lib/" }) });
-        lib.linkSystemLibrary("usd_hd");
-        lib.linkSystemLibrary("usd_sdr");
-        lib.linkSystemLibrary("usd_hio");
+        lib.addLibraryPath(.{ .path = b.pathJoin(&.{ usd_dir, "lib/" }) });
+        if (usd_monolithic) {
+            lib.linkSystemLibrary("usd_ms");
+        } else {
+            lib.linkSystemLibrary("usd_hd");
+            lib.linkSystemLibrary("usd_sdr");
+            lib.linkSystemLibrary("usd_hio");
+        }
         
         // include headers necessary for usd
-        lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ usd_built_dir, "include/" }) });
+        lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ usd_dir, "include/" }) });
+        if (tbb_dir) |dir| lib.addSystemIncludePath(.{ .path = b.pathJoin(&.{ dir, "include/" }) });
         lib.defineCMacro("TBB_USE_DEBUG", "0"); // not sure why we need this
 
         // might need python headers if USD built with python support
@@ -149,34 +155,28 @@ pub fn build(b: *std.Build) !void {
             while (iter.next()) |include_dir| lib.addSystemIncludePath(.{ .path = include_dir[2..] });
         }
 
-        // deal with the fact that USD may not have been compiled with clang 
+        // deal with the fact that USD is not (supposed to be) compiled with clang
         // make nicer once https://github.com/ziglang/zig/issues/3936
-        switch (usd_compiler) {
-            .gcc => {
-                // configure necessary gnu macros
-                lib.defineCMacro("ARCH_HAS_GNU_STL_EXTENSIONS", null);
+        {
+            // configure necessary gnu macros
+            lib.defineCMacro("ARCH_HAS_GNU_STL_EXTENSIONS", null);
 
-                // link against stdlibc++
-                lib.addObjectFile(.{ .path = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
+            // link against stdlibc++
+            lib.addObjectFile(.{ .path = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
 
-                // need stdlibc++ include directories
-                // i've had to do some arcane magic to figure out what to do here,
-                // and i'm not even convinced it'll work on any system other than mine
-                var first = true;
-                var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
-                while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
-                    if (first) {
-                        lib.addIncludePath(.{ .path = include_dir[1..] });
-                    } else {
-                        lib.addSystemIncludePath(.{ .path = include_dir[1..] });
-                    }
-                    first = false;
-                };
-            },
-            .clang => {
-                // untested
-                lib.linkLibCpp();
-            }
+            // need stdlibc++ include directories
+            // i've had to do some arcane magic to figure out what to do here,
+            // and i'm not even convinced it'll work on any system other than mine
+            var first = true;
+            var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
+            while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
+                if (first) {
+                    lib.addIncludePath(.{ .path = include_dir[1..] });
+                } else {
+                    lib.addSystemIncludePath(.{ .path = include_dir[1..] });
+                }
+                first = false;
+            };
         }
 
         const step = b.step("hydra", "Build hydra delegate");
