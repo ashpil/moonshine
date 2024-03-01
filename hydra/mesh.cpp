@@ -59,6 +59,17 @@ std::optional<HdInterpolation> HdMoonshineMesh::FindPrimvarInterpolation(HdScene
 }
 
 template<typename T>
+constexpr HdType typeToHdType() {
+    if (std::is_same_v<T, GfVec2f>) {
+        return HdTypeFloatVec2;
+    } else if (std::is_same_v<T, GfVec3f>) {
+        return HdTypeFloatVec3;
+    } else {
+        TF_FATAL_ERROR("unknown type");
+    }
+}
+
+template<typename T>
 VtArray<T> HdMoonshineMesh::ComputePrimvar(HdSceneDelegate* sceneDelegate, VtVec3iArray const& indices, TfToken primvarName) const {
     VtArray<T> primvar;
     VtValue boxedPrimvar = sceneDelegate->Get(GetId(), primvarName);
@@ -72,7 +83,7 @@ VtArray<T> HdMoonshineMesh::ComputePrimvar(HdSceneDelegate* sceneDelegate, VtVec
 
             HdVtBufferSource buffer(primvarName, boxedPrimvar);
             VtValue res;
-            meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), HdTypeFloatVec2, &res);
+            meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), typeToHdType<T>(), &res);
             primvar = res.Get<VtArray<T>>();
         } else if (interpolation == HdInterpolationVertex) {
             VtArray<T> indexedPrimvar = boxedPrimvar.Get<VtArray<T>>();
