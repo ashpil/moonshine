@@ -136,6 +136,11 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
             points = sceneDelegate->Get(id, HdTokens->points).Get<VtVec3fArray>();
         }
 
+        if (points.size() == 0) {
+            TF_CODING_ERROR("don't know what to do with empty mesh %s", id.GetText());
+            return;
+        }
+
         VtVec2fArray texcoords;
         {
             // there's some way to infer this properly but this works most of the time
