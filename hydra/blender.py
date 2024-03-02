@@ -13,6 +13,10 @@ class MoonshineRenderEngine(bpy.types.HydraRenderEngine):
 
     bl_delegate_id = 'HdMoonshinePlugin'
 
+    def view_draw(self, context, depsgraph):
+        super().view_draw(context, depsgraph)
+        self.tag_redraw() # hack for accumulating samples; TODO: figure out how cycles does this
+
 register, unregister = bpy.utils.register_classes_factory((
     MoonshineRenderEngine,
 ))
