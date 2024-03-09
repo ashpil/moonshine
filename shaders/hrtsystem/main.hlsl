@@ -3,12 +3,6 @@
 #include "scene.hlsl"
 #include "integrator.hlsl"
 
-// set 0 - textures
-// set 1 - scene
-// set 2 - background
-// set 3 - output
-// TODO: should be 0 for textures and 1 for everything else
-
 // I use the `d` prefix to indicate a descriptor variable
 // because as a functional programmer impure functions scare me
 
