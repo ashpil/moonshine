@@ -47,8 +47,7 @@ struct EnvMap : Light {
     }
 
     float sample2D(inout float2 uv, out uint2 result) {
-        uint2 size;
-        texture.GetDimensions(size.x, size.y);
+        uint2 size = textureDimensions(texture);
 
         float pdf_y = sampleAlias<float, AliasEntry<float> >(marginalAlias, size.y, 0, uv.y, result.y);
         float pdf_x = sampleAlias<float, AliasEntry<float> >(conditionalAlias, size.x, result.y * size.x, uv.x, result.x);
@@ -57,8 +56,7 @@ struct EnvMap : Light {
     }
 
     LightSample sample(RaytracingAccelerationStructure accel, float3 positionWs, float3 normalWs, float2 rand) {
-        uint2 size;
-        texture.GetDimensions(size.x, size.y);
+        uint2 size = textureDimensions(texture);
 
         uint2 discreteuv;
         float pdf2d = sample2D(rand, discreteuv);
@@ -86,8 +84,7 @@ struct EnvMap : Light {
         float2 phiTheta = cartesianToSpherical(dirWs);
         float2 uv = phiTheta / float2(2 * PI, PI);
 
-        uint2 size;
-        texture.GetDimensions(size.x, size.y);
+        uint2 size = textureDimensions(texture);
         uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
         float pdf2d = marginalAlias[coords.y].data * conditionalAlias[coords.y * size.x + coords.x].data * float(size.x * size.y);
         float sinTheta = sin(phiTheta.y);
