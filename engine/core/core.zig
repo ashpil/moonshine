@@ -7,5 +7,6 @@ pub const Sensor = @import("./Sensor.zig");
 pub const SyncCopier = @import("./SyncCopier.zig");
 
 pub const descriptor = @import("./descriptor.zig");
+pub const pipeline = @import("./pipeline.zig");
 
 pub const vk_helpers = @import("./vk_helpers.zig");

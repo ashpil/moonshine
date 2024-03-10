@@ -201,6 +201,8 @@ const device_commands = vk.DeviceCommandFlags {
     .destroyQueryPool = true,
     .cmdCopyImageToBuffer = true,
     .cmdUpdateBuffer = true,
+    .createComputePipelines = true,
+    .cmdDispatch = true,
 };
 
 const validation_device_commands = if (validate) vk.DeviceCommandFlags {
