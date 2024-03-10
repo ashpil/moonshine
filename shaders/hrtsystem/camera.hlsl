@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../utils/random.hlsl"
+#include "../utils/mappings.hlsl"
 #include "../utils/helpers.hlsl"
 
 struct Camera {
@@ -28,7 +28,7 @@ struct Camera {
 
         float3 lower_left_corner = origin - (horizontal / 2.0f) - (vertical / 2.0f) - (w * focus_distance);
 
-        float2 sampled_rand = squareToUniformDiskConcentric(rand.xy);
+        float2 sampled_rand = squareToUniformDiskConcentric(rand);
         float2 rd = aperture * sampled_rand / 2.0f;
         float3 defocusOffset = u * rd.x + v * rd.y;
         

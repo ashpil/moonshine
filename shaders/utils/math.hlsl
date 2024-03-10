@@ -5,20 +5,6 @@ static const float EPSILON = 0.000000119;
 static const float INFINITY = 1000000000000; // pranked
 static const uint MAX_UINT = 0xFFFFFFFF;
 static const float AIR_IOR = 1.000277;
-static const float ONE_MINUS_EPSILON = 0x1.fffffep-1;
-
-float3 sphericalToCartesian(float sinTheta, float cosTheta, float phi) {
-    return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-}
-
-// (phi, theta) -- ([0, 2pi], [0, pi])
-// assumes vector normalized
-float2 cartesianToSpherical(float3 v) {
-    float p = atan2(v.y, v.x);
-    float phi = (p < 0) ? (p + 2 * PI) : p;
-    float theta = acos(v.z);
-    return float2(phi, theta);
-}
 
 float3 vectorToColor(float3 v) {
     return (v + 1.0) / 2.0;

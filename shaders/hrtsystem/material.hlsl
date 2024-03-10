@@ -4,6 +4,7 @@
 [[vk::binding(1, 0)]] SamplerState dTextureSampler;
 
 #include "../utils/math.hlsl"
+#include "../utils/mappings.hlsl"
 #include "world.hlsl"
 
 // all code below expects stuff to be in the reflection frame
