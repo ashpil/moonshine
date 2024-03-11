@@ -34,29 +34,31 @@ interface Light {
 struct EnvMap : Light {
     Texture2D<float3> texture;
     SamplerState sampler;
-    StructuredBuffer<AliasEntry<float> > marginalAlias;
-    StructuredBuffer<AliasEntry<float> > conditionalAlias;
+    StructuredBuffer<AliasEntry<float> > aliasTable;
 
-    static EnvMap create(Texture2D<float3> texture, SamplerState sampler, StructuredBuffer<AliasEntry<float> > marginalAlias, StructuredBuffer<AliasEntry<float> > conditionalAlias) {
+    static EnvMap create(Texture2D<float3> texture, SamplerState sampler, StructuredBuffer<AliasEntry<float> > aliasTable) {
         EnvMap map;
         map.texture = texture;
         map.sampler = sampler;
-        map.marginalAlias = marginalAlias;
-        map.conditionalAlias = conditionalAlias;
+        map.aliasTable = aliasTable;
         return map;
     }
 
     float sample2D(inout float2 uv, out uint2 result) {
-        uint size = bufferDimensions(marginalAlias);
+        uint sizeSquared = bufferDimensions(aliasTable);
+        uint size = sqrt(sizeSquared);
 
-        float pdf_y = sampleAlias<float, AliasEntry<float> >(marginalAlias, size, 0, uv.y, result.y);
-        float pdf_x = sampleAlias<float, AliasEntry<float> >(conditionalAlias, size, result.y * size, uv.x, result.x);
+        uint flat_idx;
+        float pdf = sampleAlias<float, AliasEntry<float> >(aliasTable, sizeSquared, 0, uv.x, flat_idx);
+        result.x = flat_idx % size;
+        result.y = flat_idx / size;
 
-        return pdf_x * pdf_y * float(size * size);
+        return pdf * float(sizeSquared);
     }
 
     LightSample sample(RaytracingAccelerationStructure accel, float3 positionWs, float3 normalWs, float2 rand) {
-        uint size = bufferDimensions(marginalAlias);
+        uint sizeSquared = bufferDimensions(aliasTable);
+        uint size = sqrt(sizeSquared);
 
         uint2 discreteuv;
         float pdf2d = sample2D(rand, discreteuv);
@@ -76,11 +78,14 @@ struct EnvMap : Light {
 
     // pdf is with respect to solid angle (no trace)
     LightEval eval(float3 dirWs) {
-        float2 uv = squareToEqualAreaSphereInverse(dirWs);
+        uint sizeSquared = bufferDimensions(aliasTable);
+        uint size = sqrt(sizeSquared);
 
-        uint size = bufferDimensions(marginalAlias);
+        float2 uv = squareToEqualAreaSphereInverse(dirWs);
+        
         uint2 coords = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
-        float pdf2d = marginalAlias[coords.y].data * conditionalAlias[coords.y * size + coords.x].data * float(size * size);
+        uint flat_idx = coords.y * size + coords.x;
+        float pdf2d = aliasTable[flat_idx].data * float(sizeSquared);
 
         LightEval l;
         l.pdf = pdf2d / (4.0 * PI);

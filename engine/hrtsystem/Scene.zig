@@ -71,8 +71,7 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) Standard
         .geometries = self.world.accel.geometries.handle,
         .material_values = self.world.materials.materials.handle,
         .background_image = self.background.data.items[background].image.view,
-        .background_marginal_alias = self.background.data.items[background].marginal.handle,
-        .background_conditional_alias = self.background.data.items[background].conditional.handle,
+        .background_alias_table = self.background.data.items[background].alias_table.handle,
         .output_image = self.camera.sensors.items[sensor].image.view,
     };
 }

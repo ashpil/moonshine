@@ -387,13 +387,7 @@ pub const StandardPipeline = Pipeline(
             .stage_flags = .{ .raygen_bit_khr = true },
         },
         .{
-            .name = "background_marginal_alias",
-            .descriptor_type = .storage_buffer,
-            .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true },
-        },
-        .{
-            .name = "background_conditional_alias",
+            .name = "background_alias_table",
             .descriptor_type = .storage_buffer,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },

@@ -12,8 +12,7 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
 data: std.ArrayListUnmanaged(struct {
-    marginal: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
-    conditional: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
+    alias_table: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
     image: Image,
 }),
 sampler: vk.Sampler,
@@ -285,56 +284,28 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     };
     defer allocator.free(luminance_image);
 
-    // marginal weights to select a row
-    const marginal_weights = try allocator.alloc(f32, equal_area_image.extent.height);
-    defer allocator.free(marginal_weights);
-
-    // conditional weights to select within the column
-    const conditional = blk: {
+    const alias_table = blk: {
         const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, equal_area_image.extent.height * equal_area_image.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
-        const flat_entries = try allocator.alloc(AliasTable.TableEntry, equal_area_image.extent.height * equal_area_image.extent.width);
-        defer allocator.free(flat_entries);
-
-        for (0..equal_area_image.extent.height) |row_idx| {
-            const row = luminance_image[row_idx * equal_area_image.extent.width..(row_idx + 1) * equal_area_image.extent.width];
-            const table = try AliasTable.create(allocator, row);
-            defer allocator.free(table.entries);
-            marginal_weights[row_idx] = table.sum;
-            @memcpy(flat_entries[row_idx * equal_area_image.extent.width..(row_idx + 1) * equal_area_image.extent.width], table.entries);
-        }
-
-        try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, flat_entries);
-
-        break :blk buffer;
-    };
-    errdefer conditional.destroy(vc);
-
-    const marginal = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, equal_area_image.extent.height, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const table = try AliasTable.create(allocator, marginal_weights);
+        const table = try AliasTable.create(allocator, luminance_image);
         defer allocator.free(table.entries);
 
         try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, table.entries);
 
         break :blk buffer;
     };
-    errdefer marginal.destroy(vc);
+    errdefer alias_table.destroy(vc);
 
     try self.data.append(allocator, .{
         .image = equal_area_image_gpu,
-        .marginal = marginal,
-        .conditional = conditional,
+        .alias_table = alias_table,
     });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.data.items) |data| {
-        data.marginal.destroy(vc);
-        data.conditional.destroy(vc);
+        data.alias_table.destroy(vc);
         data.image.destroy(vc);
     }
     self.data.deinit(allocator);

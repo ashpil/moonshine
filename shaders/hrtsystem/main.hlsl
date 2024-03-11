@@ -18,11 +18,10 @@
 // BACKGROUND
 [[vk::combinedImageSampler]] [[vk::binding(7, 1)]] Texture2D<float3> dBackgroundTexture;
 [[vk::combinedImageSampler]] [[vk::binding(7, 1)]] SamplerState dBackgroundSampler;
-[[vk::binding(8, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundMarginalAlias; // size: dBackgroundTexture.height
-[[vk::binding(9, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundConditionalAlias; // size: dBackgroundTexture.height * dBackgroundTexture.width
+[[vk::binding(8, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundAliasTable;
 
 // OUTPUT
-[[vk::binding(10, 1)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(9, 1)]] RWTexture2D<float4> dOutputImage;
 
 // PUSH CONSTANTS
 struct PushConsts {
@@ -75,7 +74,7 @@ void raygen() {
     Scene scene;
     scene.tlas = dTLAS;
     scene.world = world;
-    scene.envMap = EnvMap::create(dBackgroundTexture, dBackgroundSampler, dBackgroundMarginalAlias, dBackgroundConditionalAlias);
+    scene.envMap = EnvMap::create(dBackgroundTexture, dBackgroundSampler, dBackgroundAliasTable);
     scene.meshLights = MeshLights::create(dEmitterAliasTable, world);
 
     // the result that we write to our buffer
