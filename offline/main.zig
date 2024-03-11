@@ -161,6 +161,7 @@ pub fn main() !void {
                     },
                 });
             }
+            scene.camera.sensors.items[0].sample_count += 1;
         }
 
         // copy our stuff
