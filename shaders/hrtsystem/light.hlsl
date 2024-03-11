@@ -34,8 +34,8 @@ interface Light {
 struct EnvMap : Light {
     Texture2D<float3> texture;
     SamplerState sampler;
-    StructuredBuffer<AliasEntry<float> > marginalAlias; // size: texture.height
-    StructuredBuffer<AliasEntry<float> > conditionalAlias; // size: texture.height * texture.width
+    StructuredBuffer<AliasEntry<float> > marginalAlias;
+    StructuredBuffer<AliasEntry<float> > conditionalAlias;
 
     static EnvMap create(Texture2D<float3> texture, SamplerState sampler, StructuredBuffer<AliasEntry<float> > marginalAlias, StructuredBuffer<AliasEntry<float> > conditionalAlias) {
         EnvMap map;
@@ -47,30 +47,25 @@ struct EnvMap : Light {
     }
 
     float sample2D(inout float2 uv, out uint2 result) {
-        uint2 size = textureDimensions(texture);
+        uint size = bufferDimensions(marginalAlias);
 
-        float pdf_y = sampleAlias<float, AliasEntry<float> >(marginalAlias, size.y, 0, uv.y, result.y);
-        float pdf_x = sampleAlias<float, AliasEntry<float> >(conditionalAlias, size.x, result.y * size.x, uv.x, result.x);
+        float pdf_y = sampleAlias<float, AliasEntry<float> >(marginalAlias, size, 0, uv.y, result.y);
+        float pdf_x = sampleAlias<float, AliasEntry<float> >(conditionalAlias, size, result.y * size, uv.x, result.x);
 
-        return pdf_x * pdf_y * float(size.x * size.y);
+        return pdf_x * pdf_y * float(size * size);
     }
 
     LightSample sample(RaytracingAccelerationStructure accel, float3 positionWs, float3 normalWs, float2 rand) {
-        uint2 size = textureDimensions(texture);
+        uint size = bufferDimensions(marginalAlias);
 
         uint2 discreteuv;
         float pdf2d = sample2D(rand, discreteuv);
-        float2 uv = (float2(discreteuv) + rand) / size;
-
-        float phi = uv.x * 2.0 * PI;
-        float theta = uv.y * PI;
-
-        float sinTheta = sin(theta);
+        float2 uv = (float2(discreteuv) + rand) / float2(size, size);
 
         LightSample lightSample;
-        lightSample.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
+        lightSample.pdf = pdf2d / (4.0 * PI);
+        lightSample.dirWs = squareToEqualAreaSphere(uv);
         lightSample.radiance = texture[discreteuv];
-        lightSample.dirWs = sphericalToCartesian(sinTheta, cos(theta), phi);
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(accel, offsetAlongNormal(positionWs, faceForward(normalWs, lightSample.dirWs)), lightSample.dirWs, INFINITY)) {
             lightSample.pdf = 0.0;
@@ -81,23 +76,20 @@ struct EnvMap : Light {
 
     // pdf is with respect to solid angle (no trace)
     LightEval eval(float3 dirWs) {
-        float2 phiTheta = cartesianToSpherical(dirWs);
-        float2 uv = phiTheta / float2(2 * PI, PI);
+        float2 uv = squareToEqualAreaSphereInverse(dirWs);
 
-        uint2 size = textureDimensions(texture);
-        uint2 coords = clamp(uint2(uv * size), uint2(0, 0), size);
-        float pdf2d = marginalAlias[coords.y].data * conditionalAlias[coords.y * size.x + coords.x].data * float(size.x * size.y);
-        float sinTheta = sin(phiTheta.y);
+        uint size = bufferDimensions(marginalAlias);
+        uint2 coords = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
+        float pdf2d = marginalAlias[coords.y].data * conditionalAlias[coords.y * size + coords.x].data * float(size * size);
 
         LightEval l;
-        l.pdf = sinTheta != 0.0 ? pdf2d / (2.0 * PI * PI * sinTheta) : 0.0;
+        l.pdf = pdf2d / (4.0 * PI);
         l.radiance = texture[coords];
         return l;
     }
 
     float3 incomingRadiance(float3 dirWs) {
-        float2 phiTheta = cartesianToSpherical(dirWs);
-        float2 uv = phiTheta / float2(2 * PI, PI);
+        float2 uv = squareToEqualAreaSphereInverse(dirWs);
         return texture.SampleLevel(sampler, uv, 0);
     }
 };

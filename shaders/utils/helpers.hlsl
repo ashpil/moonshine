@@ -11,3 +11,11 @@ uint2 textureDimensions(RWTexture2D<T> texture) {
     texture.GetDimensions(dimensions.x, dimensions.y);
     return dimensions;
 }
+
+template<typename T>
+uint bufferDimensions(StructuredBuffer<T> buffer) {
+    uint size;
+    uint stride;
+    buffer.GetDimensions(size, stride);
+    return size;
+}

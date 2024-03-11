@@ -127,7 +127,7 @@ pub const HdMoonshine = struct {
         self.camera = Camera {};
         errdefer self.camera.destroy(&self.vc, self.allocator.allocator());
 
-        self.background = Background.create(&self.vc) catch return null;
+        self.background = Background.create(&self.vc, self.allocator.allocator()) catch return null;
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         self.background.addDefaultBackground(&self.vc, &self.vk_allocator, self.allocator.allocator(), &self.commands) catch return null;
 

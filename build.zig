@@ -369,6 +369,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
 
     const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
     compute_shader_comp.step.name = "Compile compute shaders";
+    compute_shader_comp.add("@\"utils/equirectangular_to_equal_area.hlsl\"", "shaders/utils/equirectangular_to_equal_area.hlsl", .{});
 
     imports.appendSlice(&.{
         .{

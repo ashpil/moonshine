@@ -309,7 +309,7 @@ test "white sphere on white background is white" {
     });
     _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
 
-    var background = try Background.create(&tc.vc);
+    var background = try Background.create(&tc.vc, allocator);
     var white = [4]f32 {1, 1, 1, 1};
     const image = Rgba2D {
         .ptr = @ptrCast(&white),
@@ -330,7 +330,7 @@ test "white sphere on white background is white" {
     var pipeline = try Pipeline.create(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, scene.world.materials.textures.descriptor_layout, .{
         .samples_per_run = 512,
         .max_bounces = 1024,
-        .env_samples_per_bounce = 0, // TODO: test with env sampling once that works well with small env maps
+        .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 0,
     }, .{ scene.background.sampler });
     defer pipeline.destroy(&tc.vc);
@@ -340,6 +340,25 @@ test "white sphere on white background is white" {
     for (tc.output_buffer.data) |pixel| {
         for (pixel[0..3]) |component| {
             if (!std.math.approxEqAbs(f32, component, 1.0, 0.00001)) return error.NonWhitePixel;
+        }
+    }
+
+    // do that again but with env sampling
+    const other_pipeline = try pipeline.recreate(&tc.vc, &tc.vk_allocator, allocator, &tc.commands, .{
+        .samples_per_run = 512,
+        .max_bounces = 1024,
+        .env_samples_per_bounce = 1,
+        .mesh_samples_per_bounce = 0,
+    });
+    defer tc.vc.device.destroyPipeline(other_pipeline, null);
+
+    try tc.renderToOutput(&pipeline, &scene);
+
+    // MIS is expected to increase variance where one sampling strategy is much better than the other
+    // so I'm fairly confident this test is expected to have fairly high error bounds
+    for (tc.output_buffer.data) |pixel| {
+        for (pixel[0..3]) |component| {
+            if (!std.math.approxEqAbs(f32, component, 1.0, 0.1)) return error.NonWhitePixel;
         }
     }
 }
@@ -400,7 +419,7 @@ test "inside illuminating sphere is white" {
     });
     _ = try camera.appendSensor(&tc.vc, &tc.vk_allocator, allocator, extent);
 
-    var background = try Background.create(&tc.vc);
+    var background = try Background.create(&tc.vc, allocator);
     var black = [4]f32 {0, 0, 0, 1};
     const image = Rgba2D {
         .ptr = @ptrCast(&black),

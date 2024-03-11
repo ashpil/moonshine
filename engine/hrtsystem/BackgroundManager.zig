@@ -17,18 +17,40 @@ data: std.ArrayListUnmanaged(struct {
     image: Image,
 }),
 sampler: vk.Sampler,
+preprocess_pipeline: PreprocessPipeline,
 
 const Self = @This();
 
-pub fn create(vc: *const VulkanContext) !Self {
+fn luminance(rgb: [3]f32) f32 {
+    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
+}
+
+const PreprocessPipeline = engine.core.pipeline.Pipeline("utils/equirectangular_to_equal_area.hlsl", struct {}, struct {},
+&.{
+    .{
+        .name = "src_texture",
+        .descriptor_type = .combined_image_sampler,
+        .descriptor_count = 1,
+        .stage_flags = .{ .compute_bit = true },
+    },
+    .{
+        .name = "dst_image",
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .compute_bit = true },
+    },
+});
+
+
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     const sampler = try vc.device.createSampler(&.{
         .flags = .{},
-        .mag_filter = .nearest,
-        .min_filter = .nearest,
+        .mag_filter = .linear,
+        .min_filter = .linear,
         .mipmap_mode = .nearest,
-        .address_mode_u = .repeat,
-        .address_mode_v = .repeat,
-        .address_mode_w = .repeat,
+        .address_mode_u = .mirrored_repeat,
+        .address_mode_v = .mirrored_repeat,
+        .address_mode_w = .mirrored_repeat,
         .mip_lod_bias = 0.0,
         .anisotropy_enable = vk.FALSE,
         .max_anisotropy = 0.0,
@@ -39,10 +61,15 @@ pub fn create(vc: *const VulkanContext) !Self {
         .border_color = .float_opaque_white,
         .unnormalized_coordinates = vk.FALSE,
     }, null);
+    errdefer vc.device.destroySampler(sampler, null);
+
+    var preprocess_pipeline = try PreprocessPipeline.create(vc, allocator, .{}, .{ sampler });
+    errdefer preprocess_pipeline.destroy(vc);
 
     return Self {
         .data = .{},
         .sampler = sampler,
+        .preprocess_pipeline = preprocess_pipeline,
     };
 }
 
@@ -55,53 +82,227 @@ pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator:
             .height = 1,
         }
     };
-    try self.addBackground(vc, vk_allocator, allocator, commands, rgba, "default");
+    try self.addBackground(vc, vk_allocator, allocator, commands, rgba, "default white");
 }
 
-fn luminance(rgb: [3]f32) f32 {
-    return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
-}
+// this should probably be a parameter, or should infer proper value for this
+// if equirectangular env is smaller than this, equal_area_map_size will be
+// the size of the smaller equirectangular height (width should be greater)
+const maximum_equal_area_map_size = 1024;
 
-// a lot of unnecessary copying if this ever needs to be optimized
+// color_image should be equirectangular, which is converted to equal area.
+//
+// in "Parameterization-Independent Importance Sampling of Environment Maps",
+// the author retains the original environment map for illumination,
+// only using equal area for importance sampling.
+// I tried that here but it seems to produce noisier results for e.g., sunny skies
+// compared to just keeping everything in the same parameterization.
 pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAllocator, allocator: std.mem.Allocator, commands: *Commands, color_image: Rgba2D, name: []const u8) !void {
     const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{ name });
     defer allocator.free(texture_name);
 
-    const image = try Image.create(vc, vk_allocator, color_image.extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
-    errdefer image.destroy(vc);
+    const equirectangular_extent = color_image.extent;
+    const equirectangular_image = try Image.create(vc, vk_allocator, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
+    defer equirectangular_image.destroy(vc);
 
-    try commands.uploadDataToImage(vc, vk_allocator, image.handle, std.mem.sliceAsBytes(color_image.asSlice()), color_image.extent, .shader_read_only_optimal);
+    const equirectangular_image_host = try vk_allocator.createHostBuffer(vc, [4]f32, @intCast(color_image.asSlice().len), .{ .transfer_src_bit = true });
+    defer equirectangular_image_host.destroy(vc);
+    @memcpy(equirectangular_image_host.data, color_image.asSlice());
+
+    const equal_area_map_size: u32 = @min(color_image.extent.height, maximum_equal_area_map_size);
+    const equal_area_image_buffer = try vk_allocator.createHostBuffer(vc, [4]f32, equal_area_map_size * equal_area_map_size, .{ .transfer_dst_bit = true });
+    const equal_area_image = Rgba2D { .ptr = equal_area_image_buffer.data.ptr, .extent = .{ .width = equal_area_map_size, .height = equal_area_map_size } };
+    defer equal_area_image_buffer.destroy(vc);
+
+    const equal_area_image_gpu = try Image.create(vc, vk_allocator, equal_area_image.extent, .{ .storage_bit = true, .transfer_src_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
+    errdefer equal_area_image_gpu.destroy(vc);
+
+    try commands.startRecording(vc);
+
+    // copy equirectangular image to device
+    vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 2,
+        .p_image_memory_barriers = &[2]vk.ImageMemoryBarrier2 {
+            .{
+                .dst_stage_mask = .{ .copy_bit = true },
+                .dst_access_mask = .{ .transfer_write_bit = true },
+                .old_layout = .undefined,
+                .new_layout = .transfer_dst_optimal,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = equirectangular_image.handle,
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            },
+            .{
+                .dst_stage_mask = .{ .compute_shader_bit = true },
+                .dst_access_mask = .{ .shader_write_bit = true },
+                .old_layout = .undefined,
+                .new_layout = .general,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = equal_area_image_gpu.handle,
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            },
+        },
+    });
+    vc.device.cmdCopyBufferToImage(commands.buffer, equirectangular_image_host.handle, equirectangular_image.handle, .transfer_dst_optimal, 1, @ptrCast(&vk.BufferImageCopy {
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_subresource = .{
+            .aspect_mask = .{ .color_bit = true },
+            .mip_level = 0,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        .image_offset = .{
+            .x = 0,
+            .y = 0,
+            .z = 0,
+        },
+        .image_extent = .{
+            .width = equirectangular_extent.width,
+            .height = equirectangular_extent.height,
+            .depth = 1,
+        },
+    }));
+
+    vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 1,
+        .p_image_memory_barriers = &[1]vk.ImageMemoryBarrier2 {
+            .{
+                .src_stage_mask = .{ .copy_bit = true },
+                .src_access_mask = .{ .transfer_write_bit = true },
+                .dst_stage_mask = .{ .compute_shader_bit = true },
+                .dst_access_mask = .{ .shader_read_bit = true },
+                .old_layout = .transfer_dst_optimal,
+                .new_layout = .shader_read_only_optimal,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = equirectangular_image.handle,
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = 0,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            },
+        },
+    });
+
+    // do conversion
+    self.preprocess_pipeline.recordBindPipeline(vc, commands.buffer);
+    self.preprocess_pipeline.recordPushDescriptors(vc, commands.buffer, .{
+        .src_texture = equirectangular_image.view,
+        .dst_image = equal_area_image_gpu.view,
+    });
+    self.preprocess_pipeline.recordDispatch(vc, commands.buffer, .{ .width = equal_area_map_size, .height = equal_area_map_size, .depth = 1 });
+
+    // copy equal_area image to host
+    vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 1,
+        .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {
+            .src_stage_mask = .{ .compute_shader_bit = true },
+            .src_access_mask = .{ .shader_read_bit = true },
+            .dst_stage_mask = .{ .copy_bit = true },
+            .dst_access_mask = .{ .transfer_read_bit = true },
+            .old_layout = .general,
+            .new_layout = .transfer_src_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = equal_area_image_gpu.handle,
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = vk.REMAINING_ARRAY_LAYERS,
+            },
+        }),
+    });
+    vc.device.cmdCopyImageToBuffer(commands.buffer, equal_area_image_gpu.handle, .transfer_src_optimal, equal_area_image_buffer.handle, 1, @ptrCast(&vk.BufferImageCopy {
+        .buffer_offset = 0,
+        .buffer_row_length = 0,
+        .buffer_image_height = 0,
+        .image_subresource = .{
+            .aspect_mask = .{ .color_bit = true },
+            .mip_level = 0,
+            .base_array_layer = 0,
+            .layer_count = 1,
+        },
+        .image_offset = .{
+            .x = 0,
+            .y = 0,
+            .z = 0,
+        },
+        .image_extent = .{
+            .width = equal_area_image.extent.width,
+            .height = equal_area_image.extent.height,
+            .depth = 1,
+        },
+    }));
+    vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+        .image_memory_barrier_count = 1,
+        .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {
+            .src_stage_mask = .{ .copy_bit = true },
+            .src_access_mask = .{ .transfer_read_bit = true },
+            .old_layout = .transfer_src_optimal,
+            .new_layout = .shader_read_only_optimal,
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .image = equal_area_image_gpu.handle,
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = vk.REMAINING_ARRAY_LAYERS,
+            },
+        }),
+    });
+    try commands.submitAndIdleUntilDone(vc);
 
     // compute grayscale luminance image to use as our sampling weights
     const luminance_image = blk: {
-        const buffer = try allocator.alloc(f32, color_image.extent.height * color_image.extent.width);
-        for (color_image.asSlice(), 0..) |rgba, i| {
-            const row_idx = i / color_image.extent.width;
-            const sin_theta = std.math.sin(std.math.pi * (@as(f32, @floatFromInt(row_idx)) + 0.5) / @as(f32, @floatFromInt(color_image.extent.height)));
-            buffer[i] = luminance(rgba[0..3].*) * sin_theta;
+        const buffer = try allocator.alloc(f32, equal_area_image.extent.height * equal_area_image.extent.width);
+        for (buffer, equal_area_image.asSlice()) |*weight, rgba| {
+            weight.* = luminance(rgba[0..3].*);
         }
         break :blk buffer;
     };
     defer allocator.free(luminance_image);
 
     // marginal weights to select a row
-    const marginal_weights = try allocator.alloc(f32, color_image.extent.height);
+    const marginal_weights = try allocator.alloc(f32, equal_area_image.extent.height);
     defer allocator.free(marginal_weights);
 
     // conditional weights to select within the column
     const conditional = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, color_image.extent.height * color_image.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, equal_area_image.extent.height * equal_area_image.extent.width, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
-        const flat_entries = try allocator.alloc(AliasTable.TableEntry, color_image.extent.height * color_image.extent.width);
+        const flat_entries = try allocator.alloc(AliasTable.TableEntry, equal_area_image.extent.height * equal_area_image.extent.width);
         defer allocator.free(flat_entries);
 
-        for (0..color_image.extent.height) |row_idx| {
-            const row = luminance_image[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width];
+        for (0..equal_area_image.extent.height) |row_idx| {
+            const row = luminance_image[row_idx * equal_area_image.extent.width..(row_idx + 1) * equal_area_image.extent.width];
             const table = try AliasTable.create(allocator, row);
             defer allocator.free(table.entries);
             marginal_weights[row_idx] = table.sum;
-            @memcpy(flat_entries[row_idx * color_image.extent.width..(row_idx + 1) * color_image.extent.width], table.entries);
+            @memcpy(flat_entries[row_idx * equal_area_image.extent.width..(row_idx + 1) * equal_area_image.extent.width], table.entries);
         }
 
         try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, flat_entries);
@@ -111,7 +312,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     errdefer conditional.destroy(vc);
 
     const marginal = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, color_image.extent.height, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
+        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, equal_area_image.extent.height, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
         errdefer buffer.destroy(vc);
 
         const table = try AliasTable.create(allocator, marginal_weights);
@@ -124,7 +325,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     errdefer marginal.destroy(vc);
 
     try self.data.append(allocator, .{
-        .image = image,
+        .image = equal_area_image_gpu,
         .marginal = marginal,
         .conditional = conditional,
     });
@@ -137,5 +338,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         data.image.destroy(vc);
     }
     self.data.deinit(allocator);
+    self.preprocess_pipeline.destroy(vc);
     vc.device.destroySampler(self.sampler, null);
 }

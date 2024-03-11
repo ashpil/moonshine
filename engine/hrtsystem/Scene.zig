@@ -46,7 +46,7 @@ pub fn fromGlbExr(vc: *const VulkanContext, vk_allocator: *VkAllocator, allocato
     var world = try World.fromGlb(vc, vk_allocator, allocator, commands, gltf, inspection);
     errdefer world.destroy(vc, allocator);
 
-    var background = try Background.create(vc);
+    var background = try Background.create(vc, allocator);
     errdefer background.destroy(vc, allocator);
     {
         const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
