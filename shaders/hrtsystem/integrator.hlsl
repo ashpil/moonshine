@@ -123,6 +123,17 @@ struct PathTracingIntegrator : Integrator {
                 }
             }
 
+            // possibly terminate if reached max bounce cutoff or lose at russian roulette
+            // this needs to be before NEE below otherwise MIS would need to be adjusted
+            if (bounceCount >= max_bounces + 1) {
+                return accumulatedColor;
+            } else if (bounceCount > 3) {
+                // russian roulette
+                float pSurvive = min(0.95, luminance(throughput));
+                if (rng.getFloat() > pSurvive) return accumulatedColor;
+                throughput /= pSurvive;
+            }
+
             bool isCurrentMaterialDelta = material.isDelta();
 
             if (!isCurrentMaterialDelta) {
@@ -137,16 +148,6 @@ struct PathTracingIntegrator : Integrator {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
                     accumulatedColor += throughput * estimateDirectMISLight(scene.tlas, shadingFrame, scene.meshLights, material, outgoingDirSs, attrs.position, attrs.triangleFrame.n, rand, mesh_samples_per_bounce) / mesh_samples_per_bounce;
                 }
-            }
-
-            // possibly terminate if reached max bounce cutoff or lose at russian roulette
-            if (bounceCount >= max_bounces) {
-                return accumulatedColor;
-            } else if (bounceCount > 3) {
-                // russian roulette
-                float pSurvive = min(0.95, luminance(throughput));
-                if (rng.getFloat() > pSurvive) return accumulatedColor;
-                throughput /= pSurvive;
             }
 
             // sample direction for next bounce
