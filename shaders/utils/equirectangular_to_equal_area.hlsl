@@ -6,7 +6,7 @@
 
 [[vk::binding(1, 0)]] RWTexture2D<float4> dstImage;
 
-[numthreads(1, 1, 1)]
+[numthreads(8, 8, 1)]
 void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const uint2 pixelIndex = dispatchXYZ.xy;
 	const uint2 dstImageSize = textureDimensions(dstImage);

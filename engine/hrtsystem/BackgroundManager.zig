@@ -208,7 +208,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
         .src_texture = equirectangular_image.view,
         .dst_image = equal_area_image_gpu.view,
     });
-    self.preprocess_pipeline.recordDispatch(vc, commands.buffer, .{ .width = equal_area_map_size, .height = equal_area_map_size, .depth = 1 });
+    self.preprocess_pipeline.recordDispatch(vc, commands.buffer, .{ .width = 128, .height = 128, .depth = 1 });
 
     // copy equal_area image to host
     vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
