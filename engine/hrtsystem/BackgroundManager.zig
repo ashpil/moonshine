@@ -85,9 +85,11 @@ pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, vk_allocator:
 }
 
 // this should probably be a parameter, or should infer proper value for this
-// if equirectangular env is smaller than this, equal_area_map_size will be
-// the size of the smaller equirectangular height (width should be greater)
+//
+// the equal area map size will be the biggest power of two smaller than
+// or equal to the equirectangular height, clamped to maximum_equal_area_map_size
 const maximum_equal_area_map_size = 1024;
+const shader_local_size = 8; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
 
 // color_image should be equirectangular, which is converted to equal area.
 //
@@ -108,7 +110,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     defer equirectangular_image_host.destroy(vc);
     @memcpy(equirectangular_image_host.data, color_image.asSlice());
 
-    const equal_area_map_size: u32 = @min(color_image.extent.height, maximum_equal_area_map_size);
+    const equal_area_map_size: u32 = @min(std.math.floorPowerOfTwo(u32, color_image.extent.height), maximum_equal_area_map_size);
     const equal_area_image_buffer = try vk_allocator.createHostBuffer(vc, [4]f32, equal_area_map_size * equal_area_map_size, .{ .transfer_dst_bit = true });
     const equal_area_image = Rgba2D { .ptr = equal_area_image_buffer.data.ptr, .extent = .{ .width = equal_area_map_size, .height = equal_area_map_size } };
     defer equal_area_image_buffer.destroy(vc);
@@ -208,7 +210,8 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
         .src_texture = equirectangular_image.view,
         .dst_image = equal_area_image_gpu.view,
     });
-    self.preprocess_pipeline.recordDispatch(vc, commands.buffer, .{ .width = 128, .height = 128, .depth = 1 });
+    const dispatch_size = if (equal_area_map_size > shader_local_size) @divExact(equal_area_map_size, shader_local_size) else 1;
+    self.preprocess_pipeline.recordDispatch(vc, commands.buffer, .{ .width = dispatch_size, .height = dispatch_size, .depth = 1 });
 
     // copy equal_area image to host
     vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
