@@ -11,6 +11,8 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const uint2 pixelIndex = dispatchXYZ.xy;
 	const uint2 dstImageSize = textureDimensions(dstImage);
 
+	if (any(pixelIndex >= dstImageSize)) return;
+
 	float3 color = float3(0.0, 0.0, 0.0);
 	const uint samples_per_dim = 3;
 	for (uint i = 0; i < samples_per_dim; i++) {
