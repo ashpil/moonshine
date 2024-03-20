@@ -103,7 +103,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     defer allocator.free(texture_name);
 
     const equirectangular_extent = color_image.extent;
-    const equirectangular_image = try Image.create(vc, vk_allocator, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
+    const equirectangular_image = try Image.create(vc, vk_allocator, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
     defer equirectangular_image.destroy(vc);
 
     const equirectangular_image_host = try vk_allocator.createHostBuffer(vc, [4]f32, @intCast(color_image.asSlice().len), .{ .transfer_src_bit = true });
@@ -115,7 +115,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     const equal_area_image = Rgba2D { .ptr = equal_area_image_buffer.data.ptr, .extent = .{ .width = equal_area_map_size, .height = equal_area_map_size } };
     defer equal_area_image_buffer.destroy(vc);
 
-    const equal_area_image_gpu = try Image.create(vc, vk_allocator, equal_area_image.extent, .{ .storage_bit = true, .transfer_src_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, texture_name);
+    const equal_area_image_gpu = try Image.create(vc, vk_allocator, equal_area_image.extent, .{ .storage_bit = true, .transfer_src_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
     errdefer equal_area_image_gpu.destroy(vc);
 
     try commands.startRecording(vc);

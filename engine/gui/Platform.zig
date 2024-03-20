@@ -210,7 +210,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        const image = try Image.create(vc, vk_allocator, tex_data[1], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r8_unorm, "imgui font");
+        const image = try Image.create(vc, vk_allocator, tex_data[1], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r8_unorm, false, "imgui font");
         errdefer image.destroy(vc);
 
         try commands.uploadDataToImage(vc, vk_allocator, image.handle, tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)], tex_data[1], .shader_read_only_optimal);

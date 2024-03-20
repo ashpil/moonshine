@@ -13,7 +13,7 @@ handle: vk.Image,
 view: vk.ImageView,
 memory: vk.DeviceMemory,
 
-pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, name: [:0]const u8) !Self {
+pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, with_mips: bool, name: [:0]const u8) !Self {
     const extent = vk.Extent3D {
         .width = size.width,
         .height = size.height,
@@ -24,7 +24,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Ext
         .image_type = if (extent.height == 1 and extent.width != 1) .@"1d" else .@"2d",
         .format = format,
         .extent = extent,
-        .mip_levels = 1,
+        .mip_levels = if (with_mips) std.math.log2(@max(extent.width, extent.height, extent.depth)) + 1 else 1,
         .array_layers = 1,
         .samples = .{ .@"1_bit" = true },
         .tiling = .optimal,
@@ -63,7 +63,7 @@ pub fn create(vc: *const VulkanContext, vk_allocator: *VkAllocator, size: vk.Ext
         .subresource_range = .{
             .aspect_mask = .{ .color_bit = true },
             .base_mip_level = 0,
-            .level_count = 1,
+            .level_count = vk.REMAINING_MIP_LEVELS,
             .base_array_layer = 0,
             .layer_count = vk.REMAINING_ARRAY_LAYERS,
         },

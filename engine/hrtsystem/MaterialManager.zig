@@ -387,7 +387,7 @@ pub const TextureManager = struct {
                 format = .r32_sfloat;
             },
         }
-        const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, name);
+        const image = try Image.create(vc, vk_allocator, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, false, name);
         try self.data.append(allocator, image);
 
         try commands.uploadDataToImage(vc, vk_allocator, image.handle, bytes, extent, .shader_read_only_optimal);
