@@ -362,6 +362,8 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
             "shaders/hrtsystem/light.hlsl",
             "shaders/hrtsystem/material.hlsl",
             "shaders/hrtsystem/reflection_frame.hlsl",
+            "shaders/utils/mappings.hlsl",
+            "shaders/utils/helpers.hlsl",
             "shaders/utils/random.hlsl",
             "shaders/utils/math.hlsl",
         }
@@ -369,7 +371,19 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
 
     const compute_shader_comp = vkgen.ShaderCompileStep.create(b, &compute_shader_compile_cmd, "-Fo");
     compute_shader_comp.step.name = "Compile compute shaders";
-    compute_shader_comp.add("@\"utils/equirectangular_to_equal_area.hlsl\"", "shaders/utils/equirectangular_to_equal_area.hlsl", .{});
+    compute_shader_comp.add("@\"background/equirectangular_to_equal_area.hlsl\"", "shaders/background/equirectangular_to_equal_area.hlsl", .{
+        .watched_files = &.{
+            "shaders/utils/mappings.hlsl",
+            "shaders/utils/helpers.hlsl",
+            "shaders/utils/math.hlsl",
+        },
+    });
+    compute_shader_comp.add("@\"background/luminance.hlsl\"", "shaders/background/luminance.hlsl", .{
+        .watched_files = &.{
+            "shaders/utils/math.hlsl",
+            "shaders/utils/helpers.hlsl",
+        },
+    });
 
     imports.appendSlice(&.{
         .{

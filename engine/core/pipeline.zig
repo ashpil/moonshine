@@ -64,9 +64,8 @@ pub fn CreatePushDescriptorDataType(comptime bindings: []const descriptor.Descri
         const InnerType = switch (binding.descriptor_type) {
             .storage_buffer => vk.Buffer,
             .acceleration_structure_khr => vk.AccelerationStructureKHR,
-            .storage_image => vk.ImageView,
-            .combined_image_sampler => vk.ImageView,
-            else => unreachable, // TODO
+            .storage_image, .combined_image_sampler, .sampled_image => vk.ImageView,
+            else => @compileError("unknown descriptor type " ++ @tagName(binding.descriptor_type)), // TODO
         };
         field.* = std.builtin.Type.StructField {
             .name = binding.name,
@@ -101,7 +100,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(comptime bindings: []const des
                 .dst_binding = i,
                 .dst_array_element = 0,
                 .descriptor_count = 1,
-                .descriptor_type = .storage_buffer,
+                .descriptor_type = binding.descriptor_type,
                 .p_image_info = undefined,
                 .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
                     .buffer = @field(data, binding.name),
@@ -115,7 +114,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(comptime bindings: []const des
                 .dst_binding = i,
                 .dst_array_element = 0,
                 .descriptor_count = 1,
-                .descriptor_type = .acceleration_structure_khr,
+                .descriptor_type = binding.descriptor_type,
                 .p_image_info = undefined,
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
@@ -129,7 +128,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(comptime bindings: []const des
                 .dst_binding = i,
                 .dst_array_element = 0,
                 .descriptor_count = 1,
-                .descriptor_type = .storage_image,
+                .descriptor_type = binding.descriptor_type,
                 .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                     .sampler = .null_handle,
                     .image_view = @field(data, binding.name),
@@ -138,12 +137,12 @@ pub inline fn pushDescriptorDataToWriteDescriptor(comptime bindings: []const des
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
             },
-            .combined_image_sampler => vk.WriteDescriptorSet {
+            .combined_image_sampler, .sampled_image => vk.WriteDescriptorSet {
                 .dst_set = undefined,
                 .dst_binding = i,
                 .dst_array_element = 0,
                 .descriptor_count = 1,
-                .descriptor_type = .combined_image_sampler,
+                .descriptor_type = binding.descriptor_type,
                 .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
                     .sampler = .null_handle,
                     .image_view = @field(data, binding.name),
@@ -152,7 +151,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(comptime bindings: []const des
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
             },
-            else => unreachable, // TODO
+            else => @compileError("unknown descriptor type " ++ @tagName(binding.descriptor_type)), // TODO
         };
     }
 
