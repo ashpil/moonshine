@@ -79,7 +79,7 @@ pub fn CreatePushDescriptorDataType(comptime bindings: []const descriptor.Descri
     const info = std.builtin.Type {
         .Struct = std.builtin.Type.Struct {
             .fields = &fields,
-            .layout = .Auto,
+            .layout = .auto,
             .decls = &.{},
             .is_tuple = false,
         },

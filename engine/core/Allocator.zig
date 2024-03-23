@@ -73,7 +73,7 @@ fn createRawBuffer(self: *Self, vc: *const VulkanContext, size: vk.DeviceSize, u
 
 pub fn DeviceBuffer(comptime T: type) type {
     const type_info = @typeInfo(T);
-    if (type_info == .Struct and type_info.Struct.layout == .Auto) @compileError("Struct layout of " ++ @typeName(T) ++ " must be specified explicitly, but is not");
+    if (type_info == .Struct and type_info.Struct.layout == .auto) @compileError("Struct layout of " ++ @typeName(T) ++ " must be specified explicitly, but is not");
     return struct {
         handle: vk.Buffer = .null_handle,
 
