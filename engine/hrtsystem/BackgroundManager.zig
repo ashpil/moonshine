@@ -12,12 +12,13 @@ const AliasTable = @import("./alias_table.zig").NormalizedAliasTable;
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
 data: std.ArrayListUnmanaged(struct {
-    alias_table: VkAllocator.DeviceBuffer(AliasTable.TableEntry),
-    image: Image,
+    luminance_image: Image,
+    rgb_image: Image,
 }),
 sampler: vk.Sampler,
 equirectangular_to_equal_area_pipeline: EquirectangularToEqualAreaPipeline,
 luminance_pipeline: LuminancePipeline,
+fold_pipeline: FoldPipeline,
 
 const Self = @This();
 
@@ -57,6 +58,22 @@ const LuminancePipeline = engine.core.pipeline.Pipeline("background/luminance.hl
     },
 });
 
+const FoldPipeline = engine.core.pipeline.Pipeline("background/fold.hlsl", struct {}, struct {},
+&.{
+    .{
+        .name = "src_mip",
+        .descriptor_type = .sampled_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .compute_bit = true },
+    },
+    .{
+        .name = "dst_mip",
+        .descriptor_type = .storage_image,
+        .descriptor_count = 1,
+        .stage_flags = .{ .compute_bit = true },
+    },
+});
+
 pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     const sampler = try vc.device.createSampler(&.{
         .flags = .{},
@@ -84,11 +101,15 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     var luminance_pipeline = try LuminancePipeline.create(vc, allocator, .{}, .{});
     errdefer luminance_pipeline.destroy(vc);
 
+    var fold_pipeline = try FoldPipeline.create(vc, allocator, .{}, .{});
+    errdefer fold_pipeline.destroy(vc);
+
     return Self {
         .data = .{},
         .sampler = sampler,
         .equirectangular_to_equal_area_pipeline = equirectangular_to_equal_area_pipeline,
         .luminance_pipeline = luminance_pipeline,
+        .fold_pipeline = fold_pipeline,
     };
 }
 
@@ -133,13 +154,37 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     const equal_area_map_size: u32 = @min(std.math.floorPowerOfTwo(u32, color_image.extent.height), maximum_equal_area_map_size);
     const equal_area_extent = vk.Extent2D { .width = equal_area_map_size, .height = equal_area_map_size };
 
-    const equal_area_image = try Image.create(vc, vk_allocator, equal_area_extent, .{ .storage_bit = true, .transfer_src_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
+    const equal_area_image = try Image.create(vc, vk_allocator, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
     errdefer equal_area_image.destroy(vc);
 
-    const luminance_image_gpu = try Image.create(vc, vk_allocator, equal_area_extent, .{ .transfer_src_bit = true, .storage_bit = true }, .r32_sfloat, false, texture_name);
-    defer luminance_image_gpu.destroy(vc);
-    const luminance_image_host = try vk_allocator.createHostBuffer(vc, f32, equal_area_map_size * equal_area_map_size, .{ .transfer_dst_bit = true });
-    defer luminance_image_host.destroy(vc);
+    const luminance_image = try Image.create(vc, vk_allocator, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32_sfloat, true, texture_name);
+    errdefer luminance_image.destroy(vc);
+
+    const actual_mip_count = std.math.log2(equal_area_map_size) + 1;
+    const maximum_mip_count = comptime std.math.log2(maximum_equal_area_map_size) + 1;
+    var luminance_mips_views = std.BoundedArray(vk.ImageView, maximum_mip_count) {};
+    defer for (luminance_mips_views.slice()) |view| vc.device.destroyImageView(view, null);
+    for (0..actual_mip_count) |level_index| {
+        try luminance_mips_views.append(try vc.device.createImageView(&vk.ImageViewCreateInfo {
+            .flags = .{},
+            .image = luminance_image.handle,
+            .view_type = vk.ImageViewType.@"2d",
+            .format = .r32_sfloat,
+            .components = .{
+                .r = .identity,
+                .g = .identity,
+                .b = .identity,
+                .a = .identity,
+            },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = @intCast(level_index),
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = vk.REMAINING_ARRAY_LAYERS,
+            },
+        }, null));
+    }
 
     try commands.startRecording(vc);
 
@@ -186,11 +231,11 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
                 .new_layout = .general,
                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = luminance_image_gpu.handle,
+                .image = luminance_image.handle,
                 .subresource_range = .{
                     .aspect_mask = .{ .color_bit = true },
                     .base_mip_level = 0,
-                    .level_count = 1,
+                    .level_count = vk.REMAINING_MIP_LEVELS,
                     .base_array_layer = 0,
                     .layer_count = vk.REMAINING_ARRAY_LAYERS,
                 },
@@ -279,81 +324,83 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, vk_allocator: *VkAll
     self.luminance_pipeline.recordBindPipeline(vc, commands.buffer);
     self.luminance_pipeline.recordPushDescriptors(vc, commands.buffer, .{
         .src_color_image = equal_area_image.view,
-        .dst_luminance_image = luminance_image_gpu.view,
+        .dst_luminance_image = luminance_image.view,
     });
     self.luminance_pipeline.recordDispatch(vc, commands.buffer, .{ .width = dispatch_size, .height = dispatch_size, .depth = 1 });
 
-    // copy luminance image to host
+    self.fold_pipeline.recordBindPipeline(vc, commands.buffer);
+    for (1..luminance_mips_views.len) |dst_mip_level| {
+        vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
+            .image_memory_barrier_count = 1,
+            .p_image_memory_barriers = &[1]vk.ImageMemoryBarrier2 {
+                .{
+                    .src_stage_mask = .{ .compute_shader_bit = true },
+                    .src_access_mask = .{ .shader_write_bit = true },
+                    .dst_stage_mask = .{ .compute_shader_bit = true },
+                    .dst_access_mask = .{ .shader_read_bit = true },
+                    .old_layout = .general,
+                    .new_layout = .shader_read_only_optimal,
+                    .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                    .image = luminance_image.handle,
+                    .subresource_range = .{
+                        .aspect_mask = .{ .color_bit = true },
+                        .base_mip_level = @intCast(dst_mip_level - 1),
+                        .level_count = 1,
+                        .base_array_layer = 0,
+                        .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                    },
+                }
+            },
+        });
+        self.fold_pipeline.recordPushDescriptors(vc, commands.buffer, .{
+            .src_mip = luminance_mips_views.get(dst_mip_level - 1),
+            .dst_mip = luminance_mips_views.get(dst_mip_level),
+        });
+        const dst_mip_size = std.math.pow(u32, 2, @intCast(luminance_mips_views.len - dst_mip_level));
+        const mip_dispatch_size = if (dst_mip_size > shader_local_size) @divExact(dst_mip_size, shader_local_size) else 1;
+        self.fold_pipeline.recordDispatch(vc, commands.buffer, .{ .width = mip_dispatch_size, .height = mip_dispatch_size, .depth = 1 });
+    }
     vc.device.cmdPipelineBarrier2(commands.buffer, &vk.DependencyInfo {
         .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = @ptrCast(&vk.ImageMemoryBarrier2 {
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = .{ .shader_write_bit = true },
-            .dst_stage_mask = .{ .copy_bit = true },
-            .dst_access_mask = .{ .transfer_read_bit = true },
-            .old_layout = .general,
-            .new_layout = .transfer_src_optimal,
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = luminance_image_gpu.handle,
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        }),
+        .p_image_memory_barriers = &[1]vk.ImageMemoryBarrier2 {
+            .{
+                .src_stage_mask = .{ .compute_shader_bit = true },
+                .src_access_mask = .{ .shader_write_bit = true },
+                .dst_stage_mask = .{ .compute_shader_bit = true },
+                .dst_access_mask = .{ .shader_read_bit = true },
+                .old_layout = .general,
+                .new_layout = .shader_read_only_optimal,
+                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+                .image = luminance_image.handle,
+                .subresource_range = .{
+                    .aspect_mask = .{ .color_bit = true },
+                    .base_mip_level = luminance_mips_views.len - 1,
+                    .level_count = 1,
+                    .base_array_layer = 0,
+                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
+                },
+            }
+        },
     });
-    vc.device.cmdCopyImageToBuffer(commands.buffer, luminance_image_gpu.handle, .transfer_src_optimal, luminance_image_host.handle, 1, @ptrCast(&vk.BufferImageCopy {
-        .buffer_offset = 0,
-        .buffer_row_length = 0,
-        .buffer_image_height = 0,
-        .image_subresource = .{
-            .aspect_mask = .{ .color_bit = true },
-            .mip_level = 0,
-            .base_array_layer = 0,
-            .layer_count = 1,
-        },
-        .image_offset = .{
-            .x = 0,
-            .y = 0,
-            .z = 0,
-        },
-        .image_extent = .{
-            .width = equal_area_map_size,
-            .height = equal_area_map_size,
-            .depth = 1,
-        },
-    }));
+
     try commands.submitAndIdleUntilDone(vc);
 
-    const alias_table = blk: {
-        const buffer = try vk_allocator.createDeviceBuffer(vc, allocator, AliasTable.TableEntry, equal_area_map_size * equal_area_map_size, .{ .storage_buffer_bit = true, .transfer_dst_bit = true });
-        errdefer buffer.destroy(vc);
-
-        const table = try AliasTable.create(allocator, luminance_image_host.data);
-        defer allocator.free(table.entries);
-
-        try commands.uploadData(AliasTable.TableEntry, vc, vk_allocator, buffer, table.entries);
-
-        break :blk buffer;
-    };
-    errdefer alias_table.destroy(vc);
-
     try self.data.append(allocator, .{
-        .image = equal_area_image,
-        .alias_table = alias_table,
+        .rgb_image = equal_area_image,
+        .luminance_image = luminance_image,
     });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.data.items) |data| {
-        data.alias_table.destroy(vc);
-        data.image.destroy(vc);
+        data.rgb_image.destroy(vc);
+        data.luminance_image.destroy(vc);
     }
     self.data.deinit(allocator);
     self.equirectangular_to_equal_area_pipeline.destroy(vc);
     self.luminance_pipeline.destroy(vc);
+    self.fold_pipeline.destroy(vc);
     vc.device.destroySampler(self.sampler, null);
 }

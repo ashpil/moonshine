@@ -32,42 +32,45 @@ interface Light {
 };
 
 struct EnvMap : Light {
-    Texture2D<float3> texture;
+    Texture2D<float3> rgbTexture;
     SamplerState sampler;
-    StructuredBuffer<AliasEntry<float> > aliasTable;
+    Texture2D<float> luminanceTexture;
 
-    static EnvMap create(Texture2D<float3> texture, SamplerState sampler, StructuredBuffer<AliasEntry<float> > aliasTable) {
+    static EnvMap create(Texture2D<float3> rgbTexture, SamplerState sampler, Texture2D<float> luminanceTexture) {
         EnvMap map;
-        map.texture = texture;
+        map.rgbTexture = rgbTexture;
         map.sampler = sampler;
-        map.aliasTable = aliasTable;
+        map.luminanceTexture = luminanceTexture;
         return map;
     }
 
-    float sample2D(inout float2 uv, out uint2 result) {
-        uint sizeSquared = bufferDimensions(aliasTable);
-        uint size = sqrt(sizeSquared);
-
-        uint flat_idx;
-        float pdf = sampleAlias<float, AliasEntry<float> >(aliasTable, sizeSquared, 0, uv.x, flat_idx);
-        result.x = flat_idx % size;
-        result.y = flat_idx / size;
-
-        return pdf * float(sizeSquared);
-    }
-
     LightSample sample(RaytracingAccelerationStructure accel, float3 positionWs, float3 normalWs, float2 rand) {
-        uint sizeSquared = bufferDimensions(aliasTable);
-        uint size = sqrt(sizeSquared);
+        const uint size = textureDimensions(luminanceTexture).x;
+        const uint mipCount = log2(size) + 1;
 
-        uint2 discreteuv;
-        float pdf2d = sample2D(rand, discreteuv);
-        float2 uv = (float2(discreteuv) + rand) / float2(size, size);
+        uint2 idx = uint2(0, 0);
+        for (uint level = mipCount; level-- > 0;) {
+            idx *= 2;
+            const float2 probs_x = float2(
+                luminanceTexture.Load(uint3(idx + uint2(0, 0), level)) + luminanceTexture.Load(uint3(idx + uint2(0, 1), level)),
+                luminanceTexture.Load(uint3(idx + uint2(1, 0), level)) + luminanceTexture.Load(uint3(idx + uint2(1, 1), level))
+            );
+            idx.x += coinFlipRemap(probs_x.y / (probs_x.x + probs_x.y), rand.x);
+            const float2 probs_y = float2(
+                luminanceTexture.Load(uint3(idx + uint2(0, 0), level)),
+                luminanceTexture.Load(uint3(idx + uint2(0, 1), level))
+            );
+            idx.y += coinFlipRemap(probs_y.y / (probs_y.x + probs_y.y), rand.y);
+        }
+        const float integral = luminanceTexture.Load(uint3(0, 0, mipCount - 1));
+
+        const float discretePdf = luminanceTexture[idx] * float(size * size) / integral;
+        const float2 uv = (float2(idx) + rand) / float2(size, size);
 
         LightSample lightSample;
-        lightSample.pdf = pdf2d / (4.0 * PI);
+        lightSample.pdf = discretePdf / (4.0 * PI);
         lightSample.dirWs = squareToEqualAreaSphere(uv);
-        lightSample.radiance = texture[discreteuv];
+        lightSample.radiance = rgbTexture[idx];
 
         if (lightSample.pdf > 0.0 && ShadowIntersection::hit(accel, offsetAlongNormal(positionWs, faceForward(normalWs, lightSample.dirWs)), lightSample.dirWs, INFINITY)) {
             lightSample.pdf = 0.0;
@@ -78,24 +81,24 @@ struct EnvMap : Light {
 
     // pdf is with respect to solid angle (no trace)
     LightEval eval(float3 dirWs) {
-        uint sizeSquared = bufferDimensions(aliasTable);
-        uint size = sqrt(sizeSquared);
+        const uint size = textureDimensions(luminanceTexture).x;
+        const uint mipCount = log2(size) + 1;
 
-        float2 uv = squareToEqualAreaSphereInverse(dirWs);
-        
-        uint2 coords = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
-        uint flat_idx = coords.y * size + coords.x;
-        float pdf2d = aliasTable[flat_idx].data * float(sizeSquared);
+        const float2 uv = squareToEqualAreaSphereInverse(dirWs);
+
+        const float integral = luminanceTexture.Load(uint3(0, 0, mipCount - 1));
+        const uint2 idx = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
+        const float discretePdf = luminanceTexture[idx] * float(size * size) / integral;
 
         LightEval l;
-        l.pdf = pdf2d / (4.0 * PI);
-        l.radiance = texture[coords];
+        l.pdf = discretePdf / (4.0 * PI);
+        l.radiance = rgbTexture[idx];
         return l;
     }
 
     float3 incomingRadiance(float3 dirWs) {
         float2 uv = squareToEqualAreaSphereInverse(dirWs);
-        return texture.SampleLevel(sampler, uv, 0);
+        return rgbTexture.SampleLevel(sampler, uv, 0);
     }
 };
 

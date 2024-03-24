@@ -381,14 +381,14 @@ pub const StandardPipeline = Pipeline(
             .binding_flags = .{ .partially_bound_bit = true },
         },
         .{
-            .name = "background_image",
+            .name = "background_rgb_image",
             .descriptor_type = .combined_image_sampler,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },
         .{
-            .name = "background_alias_table",
-            .descriptor_type = .storage_buffer,
+            .name = "background_luminance_image",
+            .descriptor_type = .sampled_image,
             .descriptor_count = 1,
             .stage_flags = .{ .raygen_bit_khr = true },
         },

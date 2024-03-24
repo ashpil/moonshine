@@ -384,6 +384,11 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
             "shaders/utils/helpers.hlsl",
         },
     });
+    compute_shader_comp.add("@\"background/fold.hlsl\"", "shaders/background/fold.hlsl", .{
+        .watched_files = &.{
+            "shaders/utils/helpers.hlsl",
+        },
+    });
 
     imports.appendSlice(&.{
         .{

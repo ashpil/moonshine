@@ -70,8 +70,8 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) Standard
         .meshes = self.world.meshes.addresses_buffer.handle,
         .geometries = self.world.accel.geometries.handle,
         .material_values = self.world.materials.materials.handle,
-        .background_image = self.background.data.items[background].image.view,
-        .background_alias_table = self.background.data.items[background].alias_table.handle,
+        .background_rgb_image = self.background.data.items[background].rgb_image.view,
+        .background_luminance_image = self.background.data.items[background].luminance_image.view,
         .output_image = self.camera.sensors.items[sensor].image.view,
     };
 }

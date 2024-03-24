@@ -16,9 +16,9 @@
 [[vk::binding(6, 1)]] StructuredBuffer<MaterialVariantData> dMaterials;
 
 // BACKGROUND
-[[vk::combinedImageSampler]] [[vk::binding(7, 1)]] Texture2D<float3> dBackgroundTexture;
+[[vk::combinedImageSampler]] [[vk::binding(7, 1)]] Texture2D<float3> dBackgroundRgbTexture;
 [[vk::combinedImageSampler]] [[vk::binding(7, 1)]] SamplerState dBackgroundSampler;
-[[vk::binding(8, 1)]] StructuredBuffer<AliasEntry<float> > dBackgroundAliasTable;
+[[vk::binding(8, 1)]] Texture2D<float> dBackgroundLuminanceTexture;
 
 // OUTPUT
 [[vk::binding(9, 1)]] RWTexture2D<float4> dOutputImage;
@@ -74,7 +74,7 @@ void raygen() {
     Scene scene;
     scene.tlas = dTLAS;
     scene.world = world;
-    scene.envMap = EnvMap::create(dBackgroundTexture, dBackgroundSampler, dBackgroundAliasTable);
+    scene.envMap = EnvMap::create(dBackgroundRgbTexture, dBackgroundSampler, dBackgroundLuminanceTexture);
     scene.meshLights = MeshLights::create(dEmitterAliasTable, world);
 
     // the result that we write to our buffer
