@@ -216,7 +216,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} constant roughness {}", .{ gltf_material.name, gltf_material.metallic_roughness.roughness_factor });
             defer allocator.free(debug_name_roughness);
             const roughness = try encoder.uploadAllocator().create(f32);
-            roughness.* = gltf_material.metallic_roughness.metallic_factor;
+            roughness.* = gltf_material.metallic_roughness.roughness_factor;
             standard_pbr.roughness = try textures.upload(vc, f32, allocator, encoder, encoder.upload_allocator.getBufferSlice(roughness), vk.Extent2D { .width = 1, .height = 1 }, debug_name_roughness);
 
             material.bsdf = .{ .standard_pbr = standard_pbr };
