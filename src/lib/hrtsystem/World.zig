@@ -253,12 +253,17 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     for (gltf.data.nodes.items) |node| {
         if (node.mesh) |model_idx| {
             const mesh = gltf.data.meshes.items[model_idx];
-            const geometries = try allocator.alloc(Geometry, mesh.primitives.items.len);
-            for (mesh.primitives.items, geometries) |primitive, *geometry| {
-                geometry.* = Geometry {
+            var geometries = std.ArrayList(Geometry).init(allocator);
+            try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
+            for (mesh.primitives.items) |primitive| {
+                const material = primitive.material orelse materials.material_count - 1;
+                // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
+                // and ignoring them is a better approximation than making them exist but be opaque
+                if (gltf.data.materials.items[material].alpha_mode != .@"opaque") continue;
+                geometries.appendAssumeCapacity(Geometry {
                     .mesh = @intCast(objects.items.len),
-                    .material = @intCast(primitive.material orelse materials.material_count - 1),
-                };
+                    .material = @intCast(material),
+                });
                 // get indices
                 const indices = if (primitive.indices) |indices_index| blk2: {
                     const accessor = gltf.data.accessors.items[indices_index];
@@ -357,6 +362,11 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 });
             }
 
+            if (geometries.items.len == 0) {
+                geometries.deinit();
+                continue;
+            }
+
             const mat = Gltf.getGlobalTransform(&gltf.data, node);
             // convert to Z-up
             try instances.append(Instance {
@@ -365,7 +375,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                 ),
-                .geometries = geometries,
+                .geometries = try geometries.toOwnedSlice(),
             });
         }
     }
