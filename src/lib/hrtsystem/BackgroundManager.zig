@@ -104,22 +104,27 @@ const shader_local_size = 8; // must be kept in sync with shader -- looks like H
 // I tried that here but it seems to produce noisier results for e.g., sunny skies
 // compared to just keeping everything in the same parameterization.
 pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, color_image: Rgba2D, name: []const u8) !void {
-    const texture_name = try std.fmt.allocPrintZ(allocator, "background {s}", .{ name });
-    defer allocator.free(texture_name);
-
     const equirectangular_extent = color_image.extent;
-    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
+
+    const texture_name_equirectangular = try std.fmt.allocPrintZ(allocator, "background {s} equirectangular", .{ name });
+    defer allocator.free(texture_name_equirectangular);
+    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name_equirectangular);
     try encoder.attachResource(equirectangular_image);
 
-    const equirectangular_image_host = try encoder.uploadAllocator().dupe([4]f32, color_image.asSlice());
+    const equirectangular_image_host = try encoder.uploadAllocator().alignedAlloc([4]f32, engine.core.vk_helpers.texelBlockSize(.r32g32b32a32_sfloat), color_image.asSlice().len);
+    @memcpy(equirectangular_image_host, color_image.asSlice());
 
     const equal_area_map_size: u32 = @min(std.math.ceilPowerOfTwoAssert(u32, color_image.extent.width), maximum_equal_area_map_size);
     const equal_area_extent = vk.Extent2D { .width = equal_area_map_size, .height = equal_area_map_size };
 
-    const equal_area_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name);
+    const texture_name_equal_area = try std.fmt.allocPrintZ(allocator, "background {s} equal area", .{ name });
+    defer allocator.free(texture_name_equal_area);
+    const equal_area_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name_equal_area);
     errdefer equal_area_image.destroy(vc);
 
-    const luminance_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32_sfloat, true, texture_name);
+    const texture_name_luminance = try std.fmt.allocPrintZ(allocator, "background {s} luminance", .{ name });
+    defer allocator.free(texture_name_luminance);
+    const luminance_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32_sfloat, true, texture_name_luminance);
     errdefer luminance_image.destroy(vc);
 
     const actual_mip_count = std.math.log2(equal_area_map_size) + 1;
