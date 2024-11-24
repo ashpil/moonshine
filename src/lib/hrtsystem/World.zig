@@ -317,6 +317,9 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                                 gltf.getDataFromBufferView(f32, &positions, accessor, buffer);
                             },
                             .texcoord => |accessor_index| {
+                                // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
+                                // so ignore any after the first
+                                if (texcoords.items.len != 0) continue;
                                 const accessor = gltf.data.accessors.items[accessor_index];
                                 const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
                                 gltf.getDataFromBufferView(f32, &texcoords, accessor, buffer);
