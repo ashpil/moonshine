@@ -261,6 +261,19 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
 
                     break :blk2 switch (accessor.component_type) {
+                        .unsigned_byte => blk3: {
+                            var indices = std.ArrayList(u8).init(allocator);
+                            defer indices.deinit();
+
+                            gltf.getDataFromBufferView(u8, &indices, accessor, buffer);
+
+                            // convert to U32x3
+                            const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
+                            for (actual_indices, 0..) |*index, i| {
+                                index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                            }
+                            break :blk3 actual_indices;
+                        },
                         .unsigned_short => blk3: {
                             var indices = std.ArrayList(u16).init(allocator);
                             defer indices.deinit();
