@@ -150,7 +150,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 
-        // this gives us rgb --> only need r (metallic) and g (roughness) channels
+        // this gives us rgb --> only need g (roughness) and b (metalness) channels
         // theoretically gltf spec claims these values should already be linear
         const img, const width, const height = try loadImage(allocator, image, gltf_directory);
         defer allocator.free(img);
@@ -158,7 +158,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         const metalness = try encoder.uploadAllocator().alloc(u8, img.len);
         const roughness = try encoder.uploadAllocator().alloc(u8, img.len);
         for (metalness, roughness, img) |*dst1, *dst2, src| {
-            dst1.* = src.x;
+            dst1.* = src.z;
             dst2.* = src.y;
         }
         const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} metalness", .{ gltf_material.name });
