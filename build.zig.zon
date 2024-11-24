@@ -31,9 +31,9 @@
             .url = "https://github.com/kooparse/zgltf/archive/36f4f23950cd24e5d50d2b4d078427e475a7a97d.tar.gz",
             .hash = "122010e9def709e671fc90b8b4342567a18bbe3a794988ba8b7cc5ab7e3699fd0674",
         },
-        .zigimg = .{
-            .url = "https://github.com/zigimg/zigimg/archive/5b5d718159c6ec223a54c9bb960690576e5df9c2.tar.gz",
-            .hash = "122040d9cc905342547e1e9da227a7f16fae5e7ae23134cb62aaef64c5b2c4f58828",
+        .wuffs = .{
+            .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
+            .hash = "12206bf55111ad97343300f10dc376cc89c36993c5f7564c6948eaaf4514b060dbb0",
         },
     },
     .paths = .{

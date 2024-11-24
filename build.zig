@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) !void {
     const glfw = try makeGlfwLibrary(b, target);
     const cimgui = makeCImguiLibrary(b, target, glfw);
     const tinyexr = makeTinyExrLibrary(b, target);
+    const wuffs = makeWuffsLibrary(b, target);
     const default_engine_options = EngineOptions.fromCli(b);
 
     var compiles = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
@@ -62,6 +63,8 @@ pub fn build(b: *std.Build) !void {
         tinyexr.add(engine);
         cimgui.add(&exe.root_module);
         cimgui.add(engine);
+        wuffs.add(&exe.root_module);
+        wuffs.add(engine);
 
         break :blk exe;
     });
@@ -82,6 +85,8 @@ pub fn build(b: *std.Build) !void {
         exe.root_module.addImport("engine", engine);
         tinyexr.add(&exe.root_module);
         tinyexr.add(engine);
+        wuffs.add(&exe.root_module);
+        wuffs.add(engine);
 
         break :blk exe;
     });
@@ -303,7 +308,6 @@ pub const EngineOptions = struct {
 
 fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions, target: std.Build.ResolvedTarget) *std.Build.Module {
     const zgltf = b.dependency("zgltf", .{}).module("zgltf");
-    const zigimg = b.dependency("zigimg", .{}).module("zigimg");
 
     // actual engine
     const build_options = b.addOptions();
@@ -326,10 +330,6 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         .{
             .name = "zgltf",
             .module = zgltf,
-        },
-        .{
-            .name = "zigimg",
-            .module = zigimg,
         },
         .{
             .name = "build_options",
@@ -441,6 +441,31 @@ fn makeTinyExrLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary 
 
     return CLibrary {
         .include_path = tinyexr.path(""),
+        .library = lib,
+    };
+}
+
+fn makeWuffsLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
+    const base = b.dependency("wuffs", .{});
+
+    const lib = b.addStaticLibrary(.{
+        .name = "wuffs",
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    lib.linkLibC();
+    lib.addCSourceFiles(.{
+        .root = base.path(""),
+        .files = &.{
+            "release/c/wuffs-v0.4.c",
+        },
+        .flags = &.{
+            "-DWUFFS_IMPLEMENTATION",
+        }
+    });
+
+    return CLibrary {
+        .include_path = base.path("release/c/"),
         .library = lib,
     };
 }

@@ -6,7 +6,6 @@
 const std = @import("std");
 const vk = @import("vulkan");
 const Gltf = @import("zgltf");
-const zigimg = @import("zigimg");
 
 const engine = @import("../engine.zig");
 const core = engine.core;
@@ -28,6 +27,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 const U8x2 = vector.Vec2(u8);
+const U8x3 = vector.Vec3(u8);
 const U8x4 = vector.Vec4(u8);
 
 pub const Material = MaterialManager.Material;
@@ -44,16 +44,18 @@ constant_specta: ConstantSpectra,
 
 const Self = @This();
 
-fn loadImage(allocator: std.mem.Allocator, image: Gltf.Image, gltf_directory: ?[]const u8) !zigimg.Image {
-    if (image.data) |data| {
-        return try zigimg.Image.fromMemory(allocator, data);
-    } else if (image.uri) |uri| {
+fn loadImage(allocator: std.mem.Allocator, image: Gltf.Image, gltf_directory: ?[]const u8) !std.meta.Tuple(&.{[]const U8x3, u32, u32}) {
+    const buffer, const free = if (image.data) |data| .{data, false} else if (image.uri) |uri| blk: {
         const filepath = if (gltf_directory) |dir| try std.fs.path.join(allocator, &.{ dir, uri }) else uri;
         defer if (gltf_directory != null) allocator.free(filepath);
-        return try zigimg.Image.fromFilePath(allocator, filepath);
-    } else {
-        return error.EmptyImage;
-    }
+        const buffer = try std.fs.cwd().readFileAlloc(allocator, filepath, std.math.maxInt(usize));
+        break :blk .{buffer, true};
+    } else return error.EmptyImage;
+    defer if (free) allocator.free(buffer);
+
+    const img, const width, const height = try engine.fileformats.wuffs.load(allocator, buffer);
+    const img_u8x3 = @as([*]const U8x3, @ptrCast(img.ptr))[0..img.len / 3];
+    return .{ img_u8x3, width, height };
 }
 
 // TODO: consider just uploading all textures upfront rather than as part of this function
@@ -66,17 +68,16 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
             // this gives us rgb --> need to convert to rg
             // theoretically gltf spec claims these values should already be linear
-            var img = try loadImage(allocator, image, gltf_directory);
-            std.debug.assert(img.pixels == .rgb24);
-            defer img.deinit();
+            const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+            defer allocator.free(img);
 
-            const rg = try encoder.uploadAllocator().alloc(U8x2, img.pixels.len());
-            for (img.pixels.rgb24, 0..) |pixel, i| {
-                rg[i] = U8x2.new(pixel.r, pixel.g);
+            const rg = try encoder.uploadAllocator().alloc(U8x2, img.len);
+            for (rg, img) |*dst, src| {
+                dst.* = U8x2.new(src.x, src.y);
             }
             const debug_name = try std.fmt.allocPrintZ(allocator, "{s} normal", .{ gltf_material.name });
             defer allocator.free(debug_name);
-            break :normal try textures.upload(vc, U8x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = @intCast(img.width), .height = @intCast(img.height) }, debug_name);
+            break :normal try textures.upload(vc, U8x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else normal: {
             const rg: *F32x2 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
             rg.* = Material.default_normal;
@@ -86,24 +87,17 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         material.emissive = if (gltf_material.emissive_texture) |texture| emissive: {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 
-            var img = try loadImage(allocator, image, gltf_directory);
-            defer img.deinit();
+            const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+            defer allocator.free(img);
 
-            // image may be rgba32 or rgb24
-            const rgba = try encoder.uploadAllocator().alloc(U8x4, img.pixels.len());
-            if (img.pixels == .rgb24) {
-                for (img.pixels.rgb24, rgba) |src_pixel, *dst_pixel| {
-                    dst_pixel.* = U8x4.new(src_pixel.r, src_pixel.g, src_pixel.b, std.math.maxInt(u8));
-                }
-            } else {
-                for (img.pixels.rgba32, rgba) |src_pixel, *dst_pixel| {
-                    dst_pixel.* = U8x4.new(src_pixel.r, src_pixel.g, src_pixel.b, src_pixel.a);
-                }
+            const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
+            for (rgba, img) |*dst, src| {
+                dst.* = U8x4.new(src.x, src.y, src.z, 0);
             }
 
             const debug_name = try std.fmt.allocPrintZ(allocator, "{s} emissive", .{ gltf_material.name });
             defer allocator.free(debug_name);
-            break :emissive try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = @intCast(img.width), .height = @intCast(img.height) }, debug_name);
+            break :emissive try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else emissive: {
             const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
             constant.* = F32x4.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2], std.math.nan(f32)).mul_scalar(gltf_material.emissive_strength);
@@ -135,24 +129,16 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 
-        var img = try loadImage(allocator, image, gltf_directory);
-        defer img.deinit();
-
-        // image may be rgba32 or rgb24
-        const rgba = try encoder.uploadAllocator().alloc(U8x4, img.pixels.len());
-        if (img.pixels == .rgb24) {
-            for (img.pixels.rgb24, rgba) |src_pixel, *dst_pixel| {
-                dst_pixel.* = U8x4.new(src_pixel.r, src_pixel.g, src_pixel.b, std.math.maxInt(u8));
-            }
-        } else {
-            for (img.pixels.rgba32, rgba) |src_pixel, *dst_pixel| {
-                dst_pixel.* = U8x4.new(src_pixel.r, src_pixel.g, src_pixel.b, src_pixel.a);
-            }
+        const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+        defer allocator.free(img);
+        const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
+        for (rgba, img) |*dst, src| {
+            dst.* = U8x4.new(src.x, src.y, src.z, 0);
         }
 
         const debug_name = try std.fmt.allocPrintZ(allocator, "{s} color", .{ gltf_material.name });
         defer allocator.free(debug_name);
-        break :blk try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = @intCast(img.width), .height = @intCast(img.height) }, debug_name);
+        break :blk try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
     } else blk: {
         const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
         constant.* = F32x4.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2], std.math.nan(f32));
@@ -166,32 +152,21 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
         // this gives us rgb --> only need r (metallic) and g (roughness) channels
         // theoretically gltf spec claims these values should already be linear
-        var img = try loadImage(allocator, image, gltf_directory);
-        defer img.deinit();
+        const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+        defer allocator.free(img);
 
-        const metalness = try encoder.uploadAllocator().alloc(u8, img.pixels.len());
-        const roughness = try encoder.uploadAllocator().alloc(u8, img.pixels.len());
-        switch (img.pixels) {
-            .rgb24 => |rgb| {
-                for (rgb, metalness, roughness) |pixel, *r, *g| {
-                    r.* = pixel.r;
-                    g.* = pixel.g;
-                }
-            },
-            .rgba32 => |rgba| {
-                for (rgba, metalness, roughness) |pixel, *r, *g| {
-                    r.* = pixel.r;
-                    g.* = pixel.g;
-                }
-            },
-            else => unreachable, // TODO
+        const metalness = try encoder.uploadAllocator().alloc(u8, img.len);
+        const roughness = try encoder.uploadAllocator().alloc(u8, img.len);
+        for (metalness, roughness, img) |*dst1, *dst2, src| {
+            dst1.* = src.x;
+            dst2.* = src.y;
         }
         const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} metalness", .{ gltf_material.name });
         defer allocator.free(debug_name_metalness);
-        standard_pbr.metalness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(metalness), vk.Extent2D { .width = @intCast(img.width), .height = @intCast(img.height) }, debug_name_metalness);
+        standard_pbr.metalness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(metalness), vk.Extent2D { .width = width, .height = height }, debug_name_metalness);
         const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} roughness", .{ gltf_material.name });
         defer allocator.free(debug_name_roughness);
-        standard_pbr.roughness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(roughness), vk.Extent2D { .width = @intCast(img.width), .height = @intCast(img.height) }, debug_name_roughness);
+        standard_pbr.roughness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(roughness), vk.Extent2D { .width = width, .height = height }, debug_name_roughness);
         material.bsdf = .{ .standard_pbr = standard_pbr };
         return material;
     } else {

@@ -16,6 +16,8 @@ pub usingnamespace @cImport({
     if (options.hrtsystem) {
         @cInclude("tinyexr.h");
     }
+
+    @cInclude("wuffs-v0.4.c");
 });
 
 const c = @This();
