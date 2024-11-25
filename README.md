@@ -55,9 +55,8 @@
   * Should ensure validation layers are clean during tests
 * Resource management
   * Make sure we have all necessary `errdefers`
-  * Delayed-destruction resources should be attached to command buffer
   * GPU resource arrays should be resizable
-  * Need some sort of way to do async resource creation (transfers, processing)
+  * Need some sort of way to do async/parallel resource creation (transfers, processing)
 * Use physical (with correct scales) units
 * Integrators
   * ReSTIR
