@@ -256,10 +256,12 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             var geometries = std.ArrayList(Geometry).init(allocator);
             try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
             for (mesh.primitives.items) |primitive| {
-                const material = primitive.material orelse materials.material_count - 1;
-                // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
-                // and ignoring them is a better approximation than making them exist but be opaque
-                if (gltf.data.materials.items[material].alpha_mode != .@"opaque") continue;
+                const material = if (primitive.material) |material| blk: {
+                    // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
+                    // and ignoring them is a better approximation than making them exist but be opaque
+                    if (gltf.data.materials.items[material].alpha_mode != .@"opaque") continue;
+                    break :blk material;
+                } else (materials.material_count - 1);
                 geometries.appendAssumeCapacity(Geometry {
                     .mesh = @intCast(objects.items.len),
                     .material = @intCast(material),
