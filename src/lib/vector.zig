@@ -17,8 +17,14 @@ pub fn Vec2(comptime T: type) type {
         x: T,
         y: T,
 
+        pub const ComponentType = T;
+
         pub const element_count = 2;
-        pub const Inner = T;
+
+        pub const zero = Self.new(0, 0);
+
+        pub const e_0 = Self.new(1, 0);
+        pub const e_1 = Self.new(0, 1);
 
         const Self = @This();
 
@@ -85,8 +91,11 @@ pub fn Vec3(comptime T: type) type {
 
         const Self = @This();
 
+        pub const ComponentType = T;
+
         pub const element_count = 3;
-        pub const Inner = T;
+
+        pub const zero = Self.new(0, 0, 0);
 
         pub const e_0 = Self.new(1, 0, 0);
         pub const e_1 = Self.new(0, 1, 0);
@@ -166,8 +175,11 @@ pub fn Vec4(comptime T: type) type {
 
         const Self = @This();
 
+        pub const ComponentType = T;
+
         pub const element_count = 4;
-        pub const Inner = T;
+
+        pub const zero = Self.new(0, 0, 0, 0);
 
         pub const e_0 = Self.new(1, 0, 0, 0);
         pub const e_1 = Self.new(0, 1, 0, 0);

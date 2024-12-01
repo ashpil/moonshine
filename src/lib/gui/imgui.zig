@@ -100,13 +100,13 @@ pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
     return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
 }
 
-pub fn dragVector(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.Inner, max: T.Inner) bool {
-    const data_type = switch (T.Inner) {
+pub fn dragVector(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.ComponentType, max: T.ComponentType) bool {
+    const data_type = switch (T.ComponentType) {
         u32 => c.ImGuiDataType_U32,
         f32 => c.ImGuiDataType_Float,
         else => unreachable, // TODO
     };
-    const format = switch (T.Inner) {
+    const format = switch (T.ComponentType) {
         u32 => "%d",
         f32 => "%.2f",
         else => unreachable, // TODO
