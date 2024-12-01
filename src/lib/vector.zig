@@ -1,4 +1,3 @@
-// TODO: should this be replaced by/use @Vector?
 // TODO: make sure everything here is consistent in naming/structure
 // TODO: the column/row major conventions here are a little messy
 
@@ -9,11 +8,6 @@ fn checkValidVecT(comptime T: type) void {
     if (!(@typeInfo(T) == .float or @typeInfo(T) == .int)) {
         @compileError("You dum dum, you can't do addition over " ++ @typeName(T) ++ "!");
     }
-}
-
-fn intToT(comptime T: type, comptime int: comptime_int) T {
-    if (@typeInfo(T) == .float) return @floatFromInt(int);
-    return @intCast(int);
 }
 
 pub fn Vec2(comptime T: type) type {
@@ -91,15 +85,12 @@ pub fn Vec3(comptime T: type) type {
 
         const Self = @This();
 
-        const zero = intToT(T, 0);
-        const one = intToT(T, 1);
-
         pub const element_count = 3;
         pub const Inner = T;
 
-        pub const e_0 = Self.new(one, zero, zero);
-        pub const e_1 = Self.new(zero, one, zero);
-        pub const e_2 = Self.new(zero, zero, one);
+        pub const e_0 = Self.new(1, 0, 0);
+        pub const e_1 = Self.new(0, 1, 0);
+        pub const e_2 = Self.new(0, 0, 1);
 
         pub fn new(x: T, y: T, z: T) Self {
             return Self { .x = x, .y = y, .z = z };
@@ -175,16 +166,13 @@ pub fn Vec4(comptime T: type) type {
 
         const Self = @This();
 
-        const zero = intToT(T, 0);
-        const one = intToT(T, 1);
-
         pub const element_count = 4;
         pub const Inner = T;
 
-        pub const e_0 = Self.new(one, zero, zero, zero);
-        pub const e_1 = Self.new(zero, one, zero, zero);
-        pub const e_2 = Self.new(zero, zero, one, zero);
-        pub const e_3 = Self.new(zero, zero, zero, one);
+        pub const e_0 = Self.new(1, 0, 0, 0);
+        pub const e_1 = Self.new(0, 1, 0, 0);
+        pub const e_2 = Self.new(0, 0, 1, 0);
+        pub const e_3 = Self.new(0, 0, 0, 1);
 
         pub fn new(x: T, y: T, z: T, w: T) Self {
             return Self { .x = x, .y = y, .z = z, .w = w };
@@ -410,12 +398,10 @@ pub fn Mat4(comptime T: type) type {
             const s = up.cross(f).unit();
             const u = f.cross(s);
 
-            const zero = intToT(T, 0);
-
-            const x = Vec4T.new(s.x, u.x, f.x, zero);
-            const y = Vec4T.new(s.y, u.y, f.y, zero);
-            const z = Vec4T.new(s.z, u.z, f.z, zero);
-            const w = Vec4T.new(-s.dot(eye), -u.dot(eye), -f.dot(eye), intToT(T, 1));
+            const x = Vec4T.new(s.x, u.x, f.x, 0);
+            const y = Vec4T.new(s.y, u.y, f.y, 0);
+            const z = Vec4T.new(s.z, u.z, f.z, 0);
+            const w = Vec4T.new(-s.dot(eye), -u.dot(eye), -f.dot(eye), 1);
 
             return Self.new(x, y, z, w);
         }
