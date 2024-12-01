@@ -1,5 +1,4 @@
-// TODO: make sure everything here is consistent in naming/structure
-// TODO: the column/row major conventions here are a little messy
+// all matrices are row-major
 
 const std = @import("std");
 const math = std.math;
@@ -304,8 +303,8 @@ pub fn Mat3x4(comptime T: type) type {
         pub usingnamespace if (@typeInfo(T) != .float) struct {} else struct {
             // https://math.stackexchange.com/a/152686
             pub fn inverse_affine(self: Self) Self {
-                const p = Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate()).transpose();
-                const v = Vec3T.new(self.x.w, self.y.w, self.z.w);
+                const p = self.truncate();
+                const v = self.extract_translation();
 
                 const inv_p = p.inverse();
                 const neg_inv_p_v = inv_p.mul_scalar(-1).mul_vec(v);
@@ -317,57 +316,6 @@ pub fn Mat3x4(comptime T: type) type {
                 );
             }
         };
-
-    };
-}
-
-pub fn Mat4(comptime T: type) type {
-    checkValidVecT(T);
-
-    const Vec4T = Vec4(T);
-    const Vec3T = Vec3(T);
-
-    return extern struct {
-        x: Vec4T,
-        y: Vec4T,
-        z: Vec4T,
-        w: Vec4T,
-
-        const Self = @This();
-
-        pub const identity = Self.new(Vec4T.e_0, Vec4T.e_1, Vec4T.e_2, Vec4T.e_3);
-
-        pub fn new(x: Vec4T, y: Vec4T, z: Vec4T, w: Vec4T) Self {
-            return Self { .x = x, .y = y, .z = z, .w = w };
-        }
-
-        pub fn mul_point(self: Self, v: Vec3T) Vec3T {
-            var res = self.x.mul_scalar(v.x);
-            res = self.y.mul_scalar(v.y).add(res);
-            res = self.z.mul_scalar(v.z).add(res);
-            res = self.w.add(res);
-            return Vec3T.new(res.x, res.y, res.z);
-        }
-
-        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
-            var res = self.x.mul_scalar(v.x);
-            res = self.y.mul_scalar(v.y).add(res);
-            res = self.z.mul_scalar(v.z).add(res);
-            return Vec3T.new(res.x, res.y, res.z);
-        }
-
-        pub fn lookAt(eye: Vec3T, target: Vec3T, up: Vec3T) Self {
-            const f = eye.sub(target).unit();
-            const s = up.cross(f).unit();
-            const u = f.cross(s);
-
-            const x = Vec4T.new(s.x, u.x, f.x, 0);
-            const y = Vec4T.new(s.y, u.y, f.y, 0);
-            const z = Vec4T.new(s.z, u.z, f.z, 0);
-            const w = Vec4T.new(-s.dot(eye), -u.dot(eye), -f.dot(eye), 1);
-
-            return Self.new(x, y, z, w);
-        }
     };
 }
 
@@ -390,10 +338,11 @@ pub fn Mat3(comptime T: type) type {
         }
 
         pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
-            var res = self.x.mul_scalar(v.x);
-            res = self.y.mul_scalar(v.y).add(res);
-            res = self.z.mul_scalar(v.z).add(res);
-            return res;
+            return Vec3T.new(
+                self.x.dot(v),
+                self.y.dot(v),
+                self.z.dot(v),
+            );
         }
 
         pub fn mul_scalar(self: Self, scalar: T) Self {
@@ -422,7 +371,7 @@ pub fn Mat3(comptime T: type) type {
                 const v1 = self.y.cross(self.z).mul_scalar(1 / det);
                 const v2 = self.z.cross(self.x).mul_scalar(1 / det);
                 const v3 = self.x.cross(self.y).mul_scalar(1 / det);
-                return Self.new(v1, v2, v3).transpose();
+                return Self.new(v1, v2, v3);
             }
         };
     };
