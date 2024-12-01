@@ -376,7 +376,7 @@ pub fn main() !void {
             );
             if (imgui.isMouseDragging(.right)) {
                 window.setCursorMode(.disabled);
-                const delta = F32x2.new(0.5, 0.5).add(imgui.getMouseDragDelta(.right).div(window_size));
+                const delta = F32x2.new(0.5, 0.5).add(imgui.getMouseDragDelta(.right).component_div(window_size));
                 imgui.resetMouseDragDelta(.right);
                 if (!std.meta.eql(delta, F32x2.new(0.5, 0.5))) {
                     const aspect = window_size.x / window_size.y;
@@ -386,7 +386,7 @@ pub fn main() !void {
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
-                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().div(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
+                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().component_div(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
                     const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().x), .y = @intFromFloat(imgui.getMousePos().y), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;

@@ -35,15 +35,15 @@ pub fn Vec2(comptime T: type) type {
             return Self.new(self.x * scalar, self.y * scalar);
         }
 
-        pub fn mul(self: Self, other: Self) Self {
-            return Self.new(self.x * other.x, self.y * other.y);
-        }
-
         pub fn div_scalar(self: Self, scalar: T) Self {
             return Self.new(self.x / scalar, self.y / scalar);
         }
 
-        pub fn div(self: Self, other: Self) Self {
+        pub fn component_mul(self: Self, other: Self) Self {
+            return Self.new(self.x * other.x, self.y * other.y);
+        }
+
+        pub fn component_div(self: Self, other: Self) Self {
             return Self.new(self.x / other.x, self.y / other.y);
         }
 
@@ -108,15 +108,15 @@ pub fn Vec3(comptime T: type) type {
             return Self.new(self.x * scalar, self.y * scalar, self.z * scalar);
         }
 
-        pub fn mul(self: Self, other: Self) Self {
-            return Self.new(self.x * other.x, self.y * other.y, self.z * other.z);
-        }
-
         pub fn div_scalar(self: Self, scalar: T) Self {
             return Self.new(self.x / scalar, self.y / scalar, self.z / scalar);
         }
 
-        pub fn div(self: Self, other: Self) Self {
+        pub fn component_mul(self: Self, other: Self) Self {
+            return Self.new(self.x * other.x, self.y * other.y, self.z * other.z);
+        }
+
+        pub fn component_div(self: Self, other: Self) Self {
             return Self.new(self.x / other.x, self.y / other.y, self.z / other.z);
         }
 
