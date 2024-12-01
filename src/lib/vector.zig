@@ -212,31 +212,11 @@ pub fn Vec4(comptime T: type) type {
     };
 }
 
-pub fn Mat4x3(comptime T: type) type {
-    checkValidVecT(T);
-
-    const Vec3T = Vec3(T);
-
-    return extern struct {
-        x: Vec3T,
-        y: Vec3T,
-        z: Vec3T,
-        w: Vec3T,
-
-        const Self = @This();
-
-        pub fn new(x: Vec3T, y: Vec3T, z: Vec3T, w: Vec3T) Self {
-            return Self { .x = x, .y = y, .z = z, .w = w };
-        }
-    };
-}
-
 pub fn Mat3x4(comptime T: type) type {
     checkValidVecT(T);
 
     const Vec4T = Vec4(T);
     const Vec3T = Vec3(T);
-    const Mat4x3T = Mat4x3(T);
     const Mat3T = Mat3(T);
 
     return extern struct {
@@ -258,15 +238,6 @@ pub fn Mat3x4(comptime T: type) type {
                 .y = Vec3T.e_1.extend(v.y),
                 .z = Vec3T.e_2.extend(v.z),
             };
-        }
-
-        pub fn transpose(self: Self) Mat4x3T {
-            return Mat4x3T.new(
-                Vec3T.new(self.x.x, self.y.x, self.z.x),
-                Vec3T.new(self.x.y, self.y.y, self.z.y),
-                Vec3T.new(self.x.z, self.y.z, self.z.z),
-                Vec3T.new(self.x.w, self.y.w, self.z.w),
-            );
         }
 
         pub fn mul_point(self: Self, v: Vec3T) Vec3T {
@@ -319,26 +290,6 @@ pub fn Mat3x4(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) != .float) struct {} else struct {
-            pub fn from_rotation(axis: Vec3T, angle: f32) Self {
-                const sin = math.sin(angle);
-                const cos = math.cos(angle);
-
-                const axissin = axis.mul_scalar(sin);
-                const axis2 = axis.mul(axis);
-
-                const omc = 1.0 - cos;
-
-                const xyomc = axis.x * axis.y * omc;
-                const xzomc = axis.x * axis.z * omc;
-                const yzomc = axis.y * axis.z * omc;
-
-                return Self.new(
-                    Vec4T.new(axis2.x * omc + cos, xyomc + axissin.z, xzomc - axissin.y, 0.0),
-                    Vec4T.new(xyomc - axissin.z, axis2.y * omc + cos, yzomc + axissin.x, 0.0),
-                    Vec4T.new(xzomc + axissin.y, yzomc - axissin.x, axis2.z * omc + cos, 0.0),
-                );
-            }
-
             // https://math.stackexchange.com/a/152686
             pub fn inverse_affine(self: Self) Self {
                 const p = Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate()).transpose();
@@ -405,55 +356,6 @@ pub fn Mat4(comptime T: type) type {
 
             return Self.new(x, y, z, w);
         }
-
-        pub usingnamespace if (@typeInfo(T) != .float) struct {} else struct {
-            pub fn fromAxisAngle(axis: Vec3T, radians: T) Self {
-                const axis_sin = axis.mul_scalar(math.sin(radians));
-                const cos = math.cos(radians);
-                const axis_sq = axis.mul(axis);
-                const omc = 1.0 - cos;
-                const xyomc = axis.x * axis.y * omc;
-                const xzomc = axis.x * axis.z * omc;
-                const yzomc = axis.y * axis.z * omc;
-
-                const x = Vec4T.new(
-                    axis_sq.x * omc + cos,
-                    xyomc + axis_sin.z,
-                    xzomc - axis_sin.y,
-                    0.0
-                );
-                const y = Vec4T.new(
-                    xyomc - axis_sin.z,
-                    axis_sq.y * omc + cos,
-                    yzomc + axis_sin.x,
-                    0.0
-                );
-                const z = Vec4T.new(
-                    xzomc + axis_sin.y,
-                    yzomc - axis_sin.x,
-                    axis_sq.z * omc + cos,
-                    0.0
-                );
-
-                return Self.new(x, y, z, Vec4T.e_3);
-            }
-
-            pub fn perspective(vfov: T, aspect_ratio: T, near: T, far: T) Self {
-                const vfov_2 = vfov / 2.0;
-                const sin = math.sin(vfov_2);
-                const cos = math.cos(vfov_2);
-                const h = cos / sin;
-                const t = h / aspect_ratio;
-                const r = far / (near - far);
-
-                const x = Vec4T.new(t, 0.0, 0.0, 0.0);
-                const y = Vec4T.new(0.0, -h, 0.0, 0.0);
-                const z = Vec4T.new(0.0, 0.0, r, -1.0);
-                const w = Vec4T.new(0.0, 0.0, r * near, 0.0);
-
-                return Self.new(x, y, z, w);
-            }
-        };
     };
 }
 
