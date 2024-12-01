@@ -63,12 +63,12 @@ pub const Lens = extern struct {
         const viewport_height = 2 * h * self.focus_distance;
         const viewport_width = aspect * viewport_height;
 
-        const horizontal = u.mul_scalar(viewport_width);
-        const vertical = v.mul_scalar(viewport_height);
+        const horizontal = u.scale(viewport_width);
+        const vertical = v.scale(viewport_height);
 
-        const lower_left_corner = self.origin.sub(horizontal.div_scalar(2)).sub(vertical.div_scalar(2)).add(w.mul_scalar(self.focus_distance));
+        const lower_left_corner = self.origin.sub(horizontal.scale(1.0 / 2.0)).sub(vertical.scale(1.0 / 2.0)).add(w.scale(self.focus_distance));
 
-        return (lower_left_corner.add(horizontal.mul_scalar(uv.x)).add(vertical.mul_scalar(uv.y)).sub(self.origin)).unit();
+        return (lower_left_corner.add(horizontal.scale(uv.x)).add(vertical.scale(uv.y)).sub(self.origin)).unit();
     }
 };
 

@@ -400,10 +400,10 @@ pub fn main() !void {
 
             const speed = imgui.getIO().DeltaTime;
 
-            if (imgui.isKeyDown(.w)) new_lens.origin = new_lens.origin.add(new_lens.forward.mul_scalar(speed * 30));
-            if (imgui.isKeyDown(.s)) new_lens.origin = new_lens.origin.sub(new_lens.forward.mul_scalar(speed * 30));
-            if (imgui.isKeyDown(.a)) new_lens.origin = new_lens.origin.add(side.mul_scalar(speed * 30));
-            if (imgui.isKeyDown(.d)) new_lens.origin = new_lens.origin.sub(side.mul_scalar(speed * 30));
+            if (imgui.isKeyDown(.w)) new_lens.origin = new_lens.origin.add(new_lens.forward.scale(speed * 30));
+            if (imgui.isKeyDown(.s)) new_lens.origin = new_lens.origin.sub(new_lens.forward.scale(speed * 30));
+            if (imgui.isKeyDown(.a)) new_lens.origin = new_lens.origin.add(side.scale(speed * 30));
+            if (imgui.isKeyDown(.d)) new_lens.origin = new_lens.origin.sub(side.scale(speed * 30));
             if (imgui.isKeyDown(.f) and new_lens.aperture > 0.0) new_lens.aperture -= speed / 10;
             if (imgui.isKeyDown(.r)) new_lens.aperture += speed / 10;
             if (imgui.isKeyDown(.q)) new_lens.focus_distance -= speed * 10;

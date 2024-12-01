@@ -170,7 +170,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
             }  else {
                 const point1 = self.positions.items[index1];
                 const point2 = self.positions.items[index2];
-                const midpoint = point1.add(point2).div_scalar(2.0);
+                const midpoint = point1.add(point2).scale(1.0 / 2.0);
                 try self.positions.append(self.allocator, midpoint);
 
                 const new_index: u32 = @intCast(self.positions.items.len - 1);

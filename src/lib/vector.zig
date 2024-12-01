@@ -31,12 +31,8 @@ pub fn Vec2(comptime T: type) type {
             return Self { .x = x, .y = y };
         }
 
-        pub fn mul_scalar(self: Self, scalar: T) Self {
+        pub fn scale(self: Self, scalar: T) Self {
             return Self.new(self.x * scalar, self.y * scalar);
-        }
-
-        pub fn div_scalar(self: Self, scalar: T) Self {
-            return Self.new(self.x / scalar, self.y / scalar);
         }
 
         pub fn component_mul(self: Self, other: Self) Self {
@@ -48,7 +44,7 @@ pub fn Vec2(comptime T: type) type {
         }
 
         pub fn dot(self: Self, other: Self) T {
-            return self.x * other.x + self.y * other.y;
+            return self.component_mul(other).sum();
         }
 
         pub fn sub(self: Self, other: Self) Self {
@@ -59,12 +55,8 @@ pub fn Vec2(comptime T: type) type {
             return Self.new(self.x + other.x, self.y + other.y);
         }
 
-        pub fn unit(self: Self) Self {
-            return self.div_scalar(self.length());
-        }
-
-        pub fn length(self: Self) T {
-            return math.sqrt(self.dot(self));
+        pub fn sum(self: Self) T {
+            return self.x + self.y;
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -74,6 +66,16 @@ pub fn Vec2(comptime T: type) type {
             try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
             try writer.writeAll(" }");
         }
+
+        pub usingnamespace if (@typeInfo(T) == .float) struct {
+            pub fn norm_l2(self: Self) T {
+                return math.sqrt(self.dot(self));
+            }
+
+            pub fn unit(self: Self) Self {
+                return self.scale(1 / self.norm_l2());
+            }
+        } else struct {};
     };
 
 }
@@ -104,12 +106,8 @@ pub fn Vec3(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z };
         }
 
-        pub fn mul_scalar(self: Self, scalar: T) Self {
+        pub fn scale(self: Self, scalar: T) Self {
             return Self.new(self.x * scalar, self.y * scalar, self.z * scalar);
-        }
-
-        pub fn div_scalar(self: Self, scalar: T) Self {
-            return Self.new(self.x / scalar, self.y / scalar, self.z / scalar);
         }
 
         pub fn component_mul(self: Self, other: Self) Self {
@@ -121,7 +119,7 @@ pub fn Vec3(comptime T: type) type {
         }
 
         pub fn dot(self: Self, other: Self) T {
-            return self.x * other.x + self.y * other.y + self.z * other.z;
+            return self.component_mul(other).sum();
         }
 
         pub fn cross(self: Self, other: Self) Self {
@@ -139,12 +137,8 @@ pub fn Vec3(comptime T: type) type {
             return Self.new(self.x + other.x, self.y + other.y, self.z + other.z);
         }
 
-        pub fn unit(self: Self) Self {
-            return self.div_scalar(self.length());
-        }
-
-        pub fn length(self: Self) T {
-            return math.sqrt(self.dot(self));
+        pub fn sum(self: Self) T {
+            return self.x + self.y + self.z;
         }
 
         pub fn extend(self: Self, w: T) Vec4T {
@@ -160,6 +154,16 @@ pub fn Vec3(comptime T: type) type {
             try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
             try writer.writeAll(" }");
         }
+
+        pub usingnamespace if (@typeInfo(T) == .float) struct {
+            pub fn norm_l2(self: Self) T {
+                return math.sqrt(self.dot(self));
+            }
+
+            pub fn unit(self: Self) Self {
+                return self.scale(1 / self.norm_l2());
+            }
+        } else struct {};
     };
 }
 
@@ -189,8 +193,20 @@ pub fn Vec4(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z, .w = w };
         }
 
+        pub fn scale(self: Self, scalar: T) Self {
+            return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
+        }
+
+        pub fn component_mul(self: Self, other: Self) Self {
+            return Self.new(self.x * other.x, self.y * other.y, self.z * other.z, self.w * other.w);
+        }
+
+        pub fn component_div(self: Self, other: Self) Self {
+            return Self.new(self.x / other.x, self.y / other.y, self.z / other.z, self.w / other.w);
+        }
+
         pub fn dot(self: Self, other: Self) T {
-            return self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w;
+            return self.component_mul(other).sum();
         }
 
         pub fn sum(self: Self) T {
@@ -201,8 +217,8 @@ pub fn Vec4(comptime T: type) type {
             return Vec3(T).new(self.x, self.y, self.z);
         }
 
-        pub fn mul_scalar(self: Self, scalar: T) Self {
-            return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
+        pub fn sub(self: Self, other: Self) Self {
+            return Self.new(self.x - other.x, self.y - other.y, self.z - other.z, self.w - other.w);
         }
 
         pub fn add(self: Self, other: Self) Self {
@@ -220,6 +236,16 @@ pub fn Vec4(comptime T: type) type {
             try std.fmt.formatType(self.w, fmt, options, writer, std.fmt.default_max_depth);
             try writer.writeAll(" }");
         }
+
+        pub usingnamespace if (@typeInfo(T) == .float) struct {
+            pub fn norm_l2(self: Self) T {
+                return math.sqrt(self.dot(self));
+            }
+
+            pub fn unit(self: Self) Self {
+                return self.scale(1 / self.norm_l2());
+            }
+        } else struct {};
     };
 }
 
@@ -300,14 +326,14 @@ pub fn Mat3x4(comptime T: type) type {
             try writer.writeAll(" }");
         }
 
-        pub usingnamespace if (@typeInfo(T) != .float) struct {} else struct {
+        pub usingnamespace if (@typeInfo(T) == .float) struct {
             // https://math.stackexchange.com/a/152686
             pub fn inverse_affine(self: Self) Self {
                 const p = self.truncate();
                 const v = self.extract_translation();
 
                 const inv_p = p.inverse();
-                const neg_inv_p_v = inv_p.mul_scalar(-1).mul_vec(v);
+                const neg_inv_p_v = inv_p.scale(-1).mul_vec(v);
 
                 return Self.new(
                     Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
@@ -315,7 +341,7 @@ pub fn Mat3x4(comptime T: type) type {
                     Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.z),
                 );
             }
-        };
+        } else struct {};
     };
 }
 
@@ -345,10 +371,10 @@ pub fn Mat3(comptime T: type) type {
             );
         }
 
-        pub fn mul_scalar(self: Self, scalar: T) Self {
-            const x = self.x.mul_scalar(scalar);
-            const y = self.y.mul_scalar(scalar);
-            const z = self.z.mul_scalar(scalar);
+        pub fn scale(self: Self, scalar: T) Self {
+            const x = self.x.scale(scalar);
+            const y = self.y.scale(scalar);
+            const z = self.z.scale(scalar);
             return Self.new(x, y, z);
         }
 
@@ -364,16 +390,16 @@ pub fn Mat3(comptime T: type) type {
             );
         }
 
-        pub usingnamespace if (@typeInfo(T) != .float) struct {} else struct {
+        pub usingnamespace if (@typeInfo(T) == .float) struct {
             pub fn inverse(self: Self) Self {
                 const det = self.determinant();
                 std.debug.assert(det != 0);
-                const v1 = self.y.cross(self.z).mul_scalar(1 / det);
-                const v2 = self.z.cross(self.x).mul_scalar(1 / det);
-                const v3 = self.x.cross(self.y).mul_scalar(1 / det);
+                const v1 = self.y.cross(self.z).scale(1 / det);
+                const v2 = self.z.cross(self.x).scale(1 / det);
+                const v3 = self.x.cross(self.y).scale(1 / det);
                 return Self.new(v1, v2, v3);
             }
-        };
+        } else struct {};
     };
 }
 
