@@ -375,8 +375,8 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
 
     // upload world_to_instance matrix
     {
-        self.world_to_instance_host.slice[self.instance_count] = instance.transform.inverse_affine();
-        self.world_to_instance_device.updateFrom(encoder, self.instance_count, &.{ instance.transform.inverse_affine() }); // TODO: can copy
+        self.world_to_instance_host.slice[self.instance_count] = instance.transform.inverseAffine();
+        self.world_to_instance_device.updateFrom(encoder, self.instance_count, &.{ instance.transform.inverseAffine() }); // TODO: can copy
     }
 
     self.instance_count += 1;
@@ -567,7 +567,7 @@ pub fn recordUpdateSingleTransform(self: *Self, command_buffer: VulkanContext.Co
     const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
     const size = @sizeOf(vk.TransformMatrixKHR);
     command_buffer.updateBuffer(self.instances_device.handle, offset, size, &new_transform);
-    command_buffer.updateBuffer(self.world_to_instance_device.handle, offset_inverse, size, &new_transform.inverse_affine());
+    command_buffer.updateBuffer(self.world_to_instance_device.handle, offset_inverse, size, &new_transform.inverseAffine());
     const barriers = [_]vk.BufferMemoryBarrier2 {
         .{
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason

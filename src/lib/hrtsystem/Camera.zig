@@ -44,9 +44,9 @@ pub const Lens = extern struct {
         ) };
 
         return Lens {
-            .origin = transform.mul_point(F32x3.new(0.0, 0.0, 0.0)),
-            .forward = transform.mul_vec(F32x3.new(0.0, 0.0, -1.0)).unit(),
-            .up = transform.mul_vec(F32x3.new(0.0, 1.0, 0.0)).unit(),
+            .origin = transform.mulPoint(F32x3.new(0.0, 0.0, 0.0)),
+            .forward = transform.mulVector(F32x3.new(0.0, 0.0, -1.0)).unit(),
+            .up = transform.mulVector(F32x3.new(0.0, 1.0, 0.0)).unit(),
             .vfov = yfov,
             .aperture = 0.0,
             .focus_distance = 1.0,

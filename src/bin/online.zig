@@ -356,10 +356,10 @@ pub fn main() !void {
                 }
                 imgui.separatorText("transform");
                 const old_transform: Mat3x4 = @bitCast(instance.transform);
-                var translation = old_transform.extract_translation();
+                var translation = old_transform.extractTranslation();
                 imgui.pushItemWidth(imgui.getFontSize() * -6);
                 if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
-                    scene.world.accel.recordUpdateSingleTransform(frame_encoder.buffer, object.instance_index, old_transform.with_translation(translation));
+                    scene.world.accel.recordUpdateSingleTransform(frame_encoder.buffer, object.instance_index, old_transform.withTranslation(translation));
                     try scene.world.accel.recordRebuild(frame_encoder.buffer);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
@@ -376,7 +376,7 @@ pub fn main() !void {
             );
             if (imgui.isMouseDragging(.right)) {
                 window.setCursorMode(.disabled);
-                const delta = F32x2.new(0.5, 0.5).add(imgui.getMouseDragDelta(.right).component_div(window_size));
+                const delta = F32x2.new(0.5, 0.5).add(imgui.getMouseDragDelta(.right).componentDiv(window_size));
                 imgui.resetMouseDragDelta(.right);
                 if (!std.meta.eql(delta, F32x2.new(0.5, 0.5))) {
                     const aspect = window_size.x / window_size.y;
@@ -386,7 +386,7 @@ pub fn main() !void {
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
-                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().component_div(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
+                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().componentDiv(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
                     const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().x), .y = @intFromFloat(imgui.getMousePos().y), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;

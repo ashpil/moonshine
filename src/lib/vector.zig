@@ -35,16 +35,16 @@ pub fn Vec2(comptime T: type) type {
             return Self.new(self.x * scalar, self.y * scalar);
         }
 
-        pub fn component_mul(self: Self, other: Self) Self {
+        pub fn componentMul(self: Self, other: Self) Self {
             return Self.new(self.x * other.x, self.y * other.y);
         }
 
-        pub fn component_div(self: Self, other: Self) Self {
+        pub fn componentDiv(self: Self, other: Self) Self {
             return Self.new(self.x / other.x, self.y / other.y);
         }
 
         pub fn dot(self: Self, other: Self) T {
-            return self.component_mul(other).sum();
+            return self.componentMul(other).sum();
         }
 
         pub fn sub(self: Self, other: Self) Self {
@@ -68,12 +68,12 @@ pub fn Vec2(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn norm_l2(self: Self) T {
+            pub fn normL2(self: Self) T {
                 return math.sqrt(self.dot(self));
             }
 
             pub fn unit(self: Self) Self {
-                return self.scale(1 / self.norm_l2());
+                return self.scale(1 / self.normL2());
             }
         } else struct {};
     };
@@ -110,16 +110,16 @@ pub fn Vec3(comptime T: type) type {
             return Self.new(self.x * scalar, self.y * scalar, self.z * scalar);
         }
 
-        pub fn component_mul(self: Self, other: Self) Self {
+        pub fn componentMul(self: Self, other: Self) Self {
             return Self.new(self.x * other.x, self.y * other.y, self.z * other.z);
         }
 
-        pub fn component_div(self: Self, other: Self) Self {
+        pub fn componentDiv(self: Self, other: Self) Self {
             return Self.new(self.x / other.x, self.y / other.y, self.z / other.z);
         }
 
         pub fn dot(self: Self, other: Self) T {
-            return self.component_mul(other).sum();
+            return self.componentMul(other).sum();
         }
 
         pub fn cross(self: Self, other: Self) Self {
@@ -156,12 +156,12 @@ pub fn Vec3(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn norm_l2(self: Self) T {
+            pub fn normL2(self: Self) T {
                 return math.sqrt(self.dot(self));
             }
 
             pub fn unit(self: Self) Self {
-                return self.scale(1 / self.norm_l2());
+                return self.scale(1 / self.normL2());
             }
         } else struct {};
     };
@@ -197,16 +197,16 @@ pub fn Vec4(comptime T: type) type {
             return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
         }
 
-        pub fn component_mul(self: Self, other: Self) Self {
+        pub fn componentMul(self: Self, other: Self) Self {
             return Self.new(self.x * other.x, self.y * other.y, self.z * other.z, self.w * other.w);
         }
 
-        pub fn component_div(self: Self, other: Self) Self {
+        pub fn componentDiv(self: Self, other: Self) Self {
             return Self.new(self.x / other.x, self.y / other.y, self.z / other.z, self.w / other.w);
         }
 
         pub fn dot(self: Self, other: Self) T {
-            return self.component_mul(other).sum();
+            return self.componentMul(other).sum();
         }
 
         pub fn sum(self: Self) T {
@@ -238,12 +238,12 @@ pub fn Vec4(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn norm_l2(self: Self) T {
+            pub fn normL2(self: Self) T {
                 return math.sqrt(self.dot(self));
             }
 
             pub fn unit(self: Self) Self {
-                return self.scale(1 / self.norm_l2());
+                return self.scale(1 / self.normL2());
             }
         } else struct {};
     };
@@ -269,7 +269,7 @@ pub fn Mat3x4(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z };
         }
 
-        pub fn from_translation(v: Vec3T) Self {
+        pub fn fromTranslation(v: Vec3T) Self {
             return Self {
                 .x = Vec3T.e_0.extend(v.x),
                 .y = Vec3T.e_1.extend(v.y),
@@ -277,14 +277,14 @@ pub fn Mat3x4(comptime T: type) type {
             };
         }
 
-        pub fn mul_point(self: Self, v: Vec3T) Vec3T {
+        pub fn mulPoint(self: Self, v: Vec3T) Vec3T {
             const x = self.x.dot(v.extend(1.0));
             const y = self.y.dot(v.extend(1.0));
             const z = self.z.dot(v.extend(1.0));
             return Vec3T.new(x, y, z);
         }
 
-        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
+        pub fn mulVector(self: Self, v: Vec3T) Vec3T {
             const x = self.x.dot(v.extend(0.0));
             const y = self.y.dot(v.extend(0.0));
             const z = self.z.dot(v.extend(0.0));
@@ -300,7 +300,7 @@ pub fn Mat3x4(comptime T: type) type {
             );
         }
 
-        pub fn extract_translation(self: Self) Vec3T {
+        pub fn extractTranslation(self: Self) Vec3T {
             return Vec3T.new(self.x.w, self.y.w, self.z.w);
         }
 
@@ -308,7 +308,7 @@ pub fn Mat3x4(comptime T: type) type {
             return Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate());
         }
 
-        pub fn with_translation(self: Self, v: Vec3T) Self {
+        pub fn withTranslation(self: Self, v: Vec3T) Self {
             var self_mut = self;
             self_mut.x.w = v.x;
             self_mut.y.w = v.y;
@@ -328,12 +328,12 @@ pub fn Mat3x4(comptime T: type) type {
 
         pub usingnamespace if (@typeInfo(T) == .float) struct {
             // https://math.stackexchange.com/a/152686
-            pub fn inverse_affine(self: Self) Self {
+            pub fn inverseAffine(self: Self) Self {
                 const p = self.truncate();
-                const v = self.extract_translation();
+                const v = self.extractTranslation();
 
                 const inv_p = p.inverse();
-                const neg_inv_p_v = inv_p.scale(-1).mul_vec(v);
+                const neg_inv_p_v = inv_p.scale(-1).mulVector(v);
 
                 return Self.new(
                     Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
@@ -363,7 +363,7 @@ pub fn Mat3(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z };
         }
 
-        pub fn mul_vec(self: Self, v: Vec3T) Vec3T {
+        pub fn mulVector(self: Self, v: Vec3T) Vec3T {
             return Vec3T.new(
                 self.x.dot(v),
                 self.y.dot(v),
