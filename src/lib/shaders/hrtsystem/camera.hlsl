@@ -51,7 +51,8 @@ struct Camera {
         const float3 w = forward;
         const float3 u = normalize(cross(up, w));
         const float3 v = cross(u, w);
-        const float4x3 toWorld = {w, u, v, origin};
+        const float4x3 toWorldTransposed = {w, u, v, origin};
+        const float3x4 toWorld = transpose(toWorldTransposed);
 
         return rayCameraSpace.transformed(toWorld);
     }

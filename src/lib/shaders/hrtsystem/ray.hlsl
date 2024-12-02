@@ -14,10 +14,10 @@ struct Ray {
         return desc;
     }
 
-    Ray transformed(float4x3 mat) {
+    Ray transformed(float3x4 mat) {
         Ray ray;
-        ray.origin = mul(float4(origin, 1.0), mat);
-        ray.direction = normalize(mul(float4(direction, 0.0), mat));
+        ray.origin = mul(mat, float4(origin, 1.0));
+        ray.direction = normalize(mul(mat, float4(direction, 0.0)));
         ray.pdf = pdf;
         return ray;
     }
