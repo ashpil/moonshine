@@ -300,11 +300,15 @@ pub fn Mat3x4(comptime T: type) type {
         }
 
         pub fn mul(self: Self, other: Self) Self {
-            const transposed = other.transpose();
+            const transposed_x = Vec3T.new(other.x.x, other.y.x, other.z.x).extend(0);
+            const transposed_y = Vec3T.new(other.x.y, other.y.y, other.z.y).extend(0);
+            const transposed_z = Vec3T.new(other.x.z, other.y.z, other.z.z).extend(0);
+            const transposed_w = Vec3T.new(other.x.w, other.y.w, other.z.w).extend(1);
+
             return Self.new(
-                Vec4T.new(self.x.dot(transposed.x.extend(0.0)), self.x.dot(transposed.y.extend(0.0)), self.x.dot(transposed.z.extend(0.0)), self.x.dot(transposed.w.extend(1.0))),
-                Vec4T.new(self.y.dot(transposed.x.extend(0.0)), self.y.dot(transposed.y.extend(0.0)), self.y.dot(transposed.z.extend(0.0)), self.y.dot(transposed.w.extend(1.0))),
-                Vec4T.new(self.z.dot(transposed.x.extend(0.0)), self.z.dot(transposed.y.extend(0.0)), self.z.dot(transposed.z.extend(0.0)), self.z.dot(transposed.w.extend(1.0))),
+                Vec4T.new(self.x.dot(transposed_x), self.x.dot(transposed_y), self.x.dot(transposed_z), self.x.dot(transposed_w)),
+                Vec4T.new(self.y.dot(transposed_x), self.y.dot(transposed_y), self.y.dot(transposed_z), self.y.dot(transposed_w)),
+                Vec4T.new(self.z.dot(transposed_x), self.z.dot(transposed_y), self.z.dot(transposed_z), self.z.dot(transposed_w)),
             );
         }
 
