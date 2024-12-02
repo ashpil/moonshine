@@ -23,6 +23,10 @@ pub fn create(vc: *const VulkanContext, extent: vk.Extent2D, name: [:0]const u8)
     };
 }
 
+pub fn aspectRatio(self: Self) f32 {
+    return @as(f32, @floatFromInt(self.extent.width)) / @as(f32, @floatFromInt(self.extent.height));
+}
+
 // intended to be used in a loop, e.g
 //
 // while rendering:

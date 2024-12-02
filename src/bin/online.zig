@@ -137,7 +137,7 @@ const Integrator = struct {
 
                 // push some stuff
                 integrator.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(active_sensor, 0));
-                integrator.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
+                integrator.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.lenses.items[0], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
 
                 // trace some stuff
                 integrator.recordTraceRays(encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
@@ -386,7 +386,7 @@ pub fn main() !void {
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
-                    current_clicked_object = try object_picker.getClickedObject(&context, imgui.getMousePos().div(window_size), scene.camera, scene.world.accel.tlas_handle, scene.camera.sensors.items[active_sensor]);
+                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().div(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
                     const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().x), .y = @intFromFloat(imgui.getMousePos().y), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;

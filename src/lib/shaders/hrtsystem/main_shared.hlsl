@@ -58,8 +58,7 @@ void integrate(Integrator integrator) {
     // set up initial ray
     const float2 jitter = float2(rng.getFloat(), rng.getFloat());
     const float2 imageUV = (imageCoords + jitter) / imageSize;
-    const float aspect = float(imageSize.x) / float(imageSize.y);
-    const Ray initialRay = pushConsts.camera.generateRay(aspect, imageUV, float2(rng.getFloat(), rng.getFloat()));
+    const Ray initialRay = pushConsts.camera.generateRay(imageUV, float2(rng.getFloat(), rng.getFloat()));
 
     // trace the ray
     WavelengthSample w = WavelengthSample::sampleVisible(rng.getFloat());

@@ -27,9 +27,7 @@ void raygen() {
     // make camera have perfect focus
     camera.focusDistance = 1.0f;
     camera.aperture = 0.0f;
-    const uint2 sensorSize = textureDimensions(dOutputImage);
-    const float aspect = float(sensorSize.x) / float(sensorSize.y);
-    Ray ray = pushConsts.camera.generateRay(aspect, pushConsts.coords, float2(0, 0));
+    Ray ray = pushConsts.camera.generateRay(pushConsts.coords, float2(0, 0));
 
     Payload payload;
     TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(), payload);

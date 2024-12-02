@@ -63,7 +63,7 @@ const TestingContext = struct {
 
         for (0..spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = scene.camera.lenses.items[0], .sample_count = scene.camera.sensors.items[0].sample_count });
+            pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = scene.camera.lenses.items[0], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace our stuff
             pipeline.recordTraceRays(self.encoder.buffer, scene.camera.sensors.items[0].extent);

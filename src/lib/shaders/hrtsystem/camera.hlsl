@@ -43,8 +43,9 @@ struct Camera {
     float vfov;
     float aperture;
     float focusDistance;
+    float aspect;
 
-    Ray generateRay(const float aspect, const float2 uv, const float2 rand) {
+    Ray generateRay(const float2 uv, const float2 rand) {
         const ThinLens thinLens = {vfov, aspect, aperture, focusDistance};
         const Ray rayCameraSpace = thinLens.generateRay(rand, uv);
 

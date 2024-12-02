@@ -73,7 +73,7 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, transfer_e
     };
 }
 
-pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords: F32x2, camera: Camera, accel: vk.AccelerationStructureKHR, sensor: Sensor) !?ClickedObject {
+pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.AccelerationStructureKHR, normalized_coords: F32x2, lens: Camera.Lens, sensor: Sensor) !?ClickedObject {
     // begin
     try self.encoder.begin();
 
@@ -85,7 +85,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, normalized_coords
         .click_data = self.buffer.handle,
     });
 
-    self.pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = camera.lenses.items[0], .click_position = normalized_coords });
+    self.pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = lens, .aspect_ratio = sensor.aspectRatio(), .click_position = normalized_coords });
 
     // trace rays
     self.pipeline.recordTraceRays(self.encoder.buffer, vk.Extent2D { .width = 1, .height = 1 });

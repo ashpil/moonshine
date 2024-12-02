@@ -256,6 +256,7 @@ pub const ObjectPickPipeline = Pipeline(.{
     .shader_path = "hrtsystem/input.hlsl",
     .PushConstants = extern struct {
         lens: Camera.Lens,
+        aspect_ratio: f32,
         click_position: F32x2,
     },
     .PushSetBindings = struct {
@@ -295,6 +296,7 @@ pub const PathTracing = Pipeline(.{
     },
     .PushConstants = extern struct {
         lens: Camera.Lens,
+        aspect_ratio: f32,
         sample_count: u32,
     },
     .additional_descriptor_layout_count = 2,
@@ -316,6 +318,7 @@ pub const DirectLighting = Pipeline(.{
     },
     .PushConstants = extern struct {
         lens: Camera.Lens,
+        aspect_ratio: f32,
         sample_count: u32,
     },
     .additional_descriptor_layout_count = 2,
