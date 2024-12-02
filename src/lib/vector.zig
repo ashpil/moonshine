@@ -269,6 +269,14 @@ pub fn Mat3x4(comptime T: type) type {
             return Self { .x = x, .y = y, .z = z };
         }
 
+        pub fn fromColumns(x: Vec3T, y: Vec3T, z: Vec3T, w: Vec3T) Self {
+            return Self.new(
+                Vec4T.new(x.x, y.x, z.x, w.x),
+                Vec4T.new(x.y, y.y, z.y, w.y),
+                Vec4T.new(x.z, y.z, z.z, w.z),
+            );
+        }
+
         pub fn fromTranslation(v: Vec3T) Self {
             return Self {
                 .x = Vec3T.e_0.extend(v.x),
