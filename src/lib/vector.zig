@@ -12,6 +12,8 @@ fn checkValidVecT(comptime T: type) void {
 pub fn Vec2(comptime T: type) type {
     checkValidVecT(T);
 
+    const Vec3T = Vec3(T);
+
     return extern struct {
         x: T,
         y: T,
@@ -57,6 +59,10 @@ pub fn Vec2(comptime T: type) type {
 
         pub fn sum(self: Self) T {
             return self.x + self.y;
+        }
+
+        pub fn extend(self: Self, z: T) Vec3T {
+            return Vec3T.new(self.x, self.y, z);
         }
 
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -328,6 +334,14 @@ pub fn Mat3x4(comptime T: type) type {
             return self_mut;
         }
 
+        pub fn fromTransformTranslation(transform: Mat3T, translation: Vec3T) Self {
+            return Self.new(
+                transform.x.extend(translation.x),
+                transform.y.extend(translation.y),
+                transform.z.extend(translation.z),
+            );
+        }
+
         pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
             try writer.writeAll("{ ");
             try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
@@ -380,6 +394,15 @@ pub fn Mat3(comptime T: type) type {
                 self.x.dot(v),
                 self.y.dot(v),
                 self.z.dot(v),
+            );
+        }
+
+        pub fn mul(self: Self, other: Self) Self {
+            const transposed = other.transpose();
+            return Self.new(
+                Vec3T.new(self.x.dot(transposed.x), self.x.dot(transposed.y), self.x.dot(transposed.z)),
+                Vec3T.new(self.y.dot(transposed.x), self.y.dot(transposed.y), self.y.dot(transposed.z)),
+                Vec3T.new(self.z.dot(transposed.x), self.z.dot(transposed.y), self.z.dot(transposed.z)),
             );
         }
 
