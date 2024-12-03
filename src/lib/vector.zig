@@ -429,10 +429,10 @@ pub fn Mat3(comptime T: type) type {
             pub fn inverse(self: Self) Self {
                 const det = self.determinant();
                 std.debug.assert(det != 0);
-                const v1 = self.y.cross(self.z).scale(1 / det);
-                const v2 = self.z.cross(self.x).scale(1 / det);
-                const v3 = self.x.cross(self.y).scale(1 / det);
-                return Self.new(v1, v2, v3);
+                const v1 = self.y.cross(self.z);
+                const v2 = self.z.cross(self.x);
+                const v3 = self.x.cross(self.y);
+                return Self.new(v1, v2, v3).scale(1 / det);
             }
 
             pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
