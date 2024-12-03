@@ -411,7 +411,17 @@ pub fn Mat3(comptime T: type) type {
                 const v3 = self.x.cross(self.y).scale(1 / det);
                 return Self.new(v1, v2, v3);
             }
+
+            pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
+                const sin, const cos = .{ math.sin(angle), math.cos(angle) };
+                const x, const y, const z = .{ axis.x, axis.y, axis.z };
+
+                return Self.new(
+                    Vec3T.new((1 - cos) * x * x + cos, (1 - cos) * x * y - sin * z, (1 - cos) * x * z + sin * y),
+                    Vec3T.new((1 - cos) * x * y + sin * z, (1 - cos) * y * y + cos, (1 - cos) * y * z - sin * x),
+                    Vec3T.new((1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos),
+                );
+            }
         } else struct {};
     };
 }
-
