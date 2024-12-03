@@ -128,15 +128,31 @@ pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T,
     return c.igInputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
 }
 
-pub fn combo(comptime T: type, label: [*:0]const u8, data: *T) bool {
+pub fn beginCombo(label: [*:0]const u8, preview_value: [*:0]const u8) bool {
+    return c.igBeginCombo(label, preview_value, 0);
+}
+
+pub fn endCombo() void {
+    c.igEndCombo();
+}
+
+pub fn selectable(label: [*:0]const u8, selected: bool) bool {
+    return c.igSelectable_Bool(label, selected, 0, c.ImVec2{ .x = 0, .y = 0 });
+}
+
+pub fn setItemDefaultFocus() void {
+    c.igSetItemDefaultFocus();
+}
+
+pub fn enumCombo(comptime T: type, label: [*:0]const u8, data: *T) bool {
     const before = data.*;
-    if (c.igBeginCombo(label, @tagName(data.*), 0)) {
+    if (beginCombo(label, @tagName(data.*))) {
         inline for (@typeInfo(T).@"enum".fields) |field| {
             const selected = data.* == @as(T, @enumFromInt(field.value));
-            if (c.igSelectable_Bool(field.name, selected, 0, c.ImVec2{ .x = 0, .y = 0 })) data.* = @enumFromInt(field.value);
-            if (selected) c.igSetItemDefaultFocus();
+            if (selectable(field.name, selected)) data.* = @enumFromInt(field.value);
+            if (selected) setItemDefaultFocus();
         }
-        c.igEndCombo();
+        endCombo();
     }
     return before != data.*;
 }

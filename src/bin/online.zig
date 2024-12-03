@@ -126,7 +126,7 @@ const Integrator = struct {
         return out;
     }
 
-    pub fn integrate(self: Integrator, scene: Scene, encoder: *Encoder, active_sensor: u32) void {
+    pub fn integrate(self: Integrator, scene: Scene, encoder: *Encoder, active_camera: u32, active_sensor: u32) void {
         inline for (@typeInfo(Variants).@"struct".fields) |field| {
             if (std.mem.eql(u8, field.name, @tagName(self.active))) {
                 const integrator = @field(self.variants, field.name).pipeline;
@@ -137,7 +137,7 @@ const Integrator = struct {
 
                 // push some stuff
                 integrator.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(active_sensor, 0));
-                integrator.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.lenses.items[0], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
+                integrator.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.lenses.items[active_camera], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
 
                 // trace some stuff
                 integrator.recordTraceRays(encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
@@ -218,6 +218,7 @@ pub fn main() !void {
 
     // random state we need for gui
     var active_sensor: u32 = 0;
+    var active_camera: u32 = 0;
     var max_sample_count: u32 = 0; // unlimited
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
@@ -260,9 +261,23 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Camera")) {
             imgui.pushItemWidth(imgui.getFontSize() * -7.5);
-            var changed = imgui.sliderAngle("Vertical FOV", &scene.camera.lenses.items[0].vfov, 1, 179);
-            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.lenses.items[0].focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.lenses.items[0].aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            var changed = blk: {
+                var fmt_buf: [20]u8 = undefined;
+                const before = active_camera;
+                // TODO: cameras should have names (or really need a broader refactor)
+                if (imgui.beginCombo("Active Camera", try std.fmt.bufPrintZ(&fmt_buf, "{}", .{ active_camera }))) {
+                    for (0..scene.camera.lenses.items.len) |camera| {
+                        const selected = active_camera == camera;
+                        if (imgui.selectable(try std.fmt.bufPrintZ(&fmt_buf, "{}", .{ camera }), selected)) active_camera = @intCast(camera);
+                        if (selected) imgui.setItemDefaultFocus();
+                    }
+                    imgui.endCombo();
+                }
+                break :blk before != active_camera;
+            };
+            changed = imgui.sliderAngle("Vertical FOV", &scene.camera.lenses.items[active_camera].vfov, 1, 179) or changed;
+            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.lenses.items[active_camera].focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.lenses.items[active_camera].aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
             if (changed) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
@@ -270,7 +285,7 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Integrator")) {
             imgui.pushItemWidth(imgui.getFontSize() * -14.2);
-            if (imgui.combo(Integrator.Type, "Type", &integrator.active)) {
+            if (imgui.enumCombo(Integrator.Type, "Type", &integrator.active)) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
             integrator.exposeToImgui();
@@ -377,13 +392,13 @@ pub fn main() !void {
                     const left_right = Mat3.fromAxisAngle(F32x3.new(0, 0, 1), delta.x);
                     const up_down = Mat3.fromAxisAngle(F32x3.new(0, -1, 0), delta.y);
                     const rotation = up_down.mul(left_right);
-                    scene.camera.lenses.items[0].transform = scene.camera.lenses.items[0].transform.mul(Mat3x4.fromTransformTranslation(rotation, F32x3.zero));
+                    scene.camera.lenses.items[active_camera].transform = scene.camera.lenses.items[active_camera].transform.mul(Mat3x4.fromTransformTranslation(rotation, F32x3.zero));
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
-                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().componentDiv(window_size), scene.camera.lenses.items[0], scene.camera.sensors.items[active_sensor]);
+                    current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().componentDiv(window_size), scene.camera.lenses.items[active_camera], scene.camera.sensors.items[active_sensor]);
                     const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().x), .y = @intFromFloat(imgui.getMousePos().y), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;
@@ -391,8 +406,8 @@ pub fn main() !void {
             }
         }
         if (!imgui.getIO().WantCaptureKeyboard) {
-            const old_lens = scene.camera.lenses.items[0];
-            var new_lens = scene.camera.lenses.items[0];
+            const old_lens = scene.camera.lenses.items[active_camera];
+            var new_lens = scene.camera.lenses.items[active_camera];
 
             const left = old_lens.transform.mulVector(F32x3.new(0, -1, 0));
             const forward = old_lens.transform.mulVector(F32x3.new(1, 0, 0));
@@ -410,7 +425,7 @@ pub fn main() !void {
             if (imgui.isKeyDown(.e)) new_lens.focus_distance += speed * 10;
 
             if (!std.meta.eql(new_lens, old_lens)) {
-                scene.camera.lenses.items[0] = new_lens;
+                scene.camera.lenses.items[active_camera] = new_lens;
                 scene.camera.sensors.items[active_sensor].clear();
             }
         }
@@ -418,7 +433,7 @@ pub fn main() !void {
         if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
             scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
-            integrator.integrate(scene, frame_encoder, active_sensor);
+            integrator.integrate(scene, frame_encoder, active_camera, active_sensor);
             scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 
