@@ -14,6 +14,12 @@ const Camera = @import("./Camera.zig");
 
 const exr = engine.fileformats.exr;
 
+const vector = @import("../vector.zig");
+const F32x3 = vector.Vec3(f32);
+const F32x4 = vector.Vec4(f32);
+const Mat3x4 = vector.Mat3x4(f32);
+const Mat3 = vector.Mat3(f32);
+
 const Self = @This();
 
 world: World,
@@ -38,11 +44,53 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     defer allocator.free(buffer);
     try gltf.parse(buffer);
 
-    const camera_create_info = try Camera.Lens.fromGltf(gltf);
     var camera = Camera {};
     errdefer camera.destroy(vc, allocator);
-    _ = try camera.appendLens(allocator, camera_create_info);
     _ = try camera.appendSensor(vc, allocator, extent);
+
+    {
+        const to_gltf = Mat3x4.fromTransformTranslation(Mat3.new(
+            F32x3.new( 0, 1, 0),
+            F32x3.new( 0, 0,-1),
+            F32x3.new(-1, 0, 0),
+        ), F32x3.zero);
+
+        for (gltf.data.nodes.items) |node| {
+            if (node.camera) |camera_idx| {
+                const camera_type = gltf.data.cameras.items[camera_idx].type;
+                if (camera_type == .orthographic) continue;
+                const yfov = camera_type.perspective.yfov;
+                const mat = Gltf.getGlobalTransform(&gltf.data, node);
+                // convert to Z-up
+                const transform = Mat3x4.new(
+                    F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+                    F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+                );
+                _ = try camera.appendLens(allocator, Camera.Lens {
+                    .transform = transform.mul(to_gltf),
+                    .vfov = yfov,
+                    .aperture = 0.0,
+                    .focus_distance = 1.0,
+                });
+            }
+        }
+
+        // add default camera if none loaded
+        if (camera.lenses.items.len == 0) {
+            const transform = Mat3x4.new(
+                F32x4.new(1, 0, 0, 0),
+                F32x4.new(0, 0, 1, 5), // looking at origin
+                F32x4.new(0, 1, 0, 0),
+            );
+            _ = try camera.appendLens(allocator, Camera.Lens {
+                .transform = transform.mul(to_gltf),
+                .vfov = std.math.pi / 6.0,
+                .aperture = 0.0,
+                .focus_distance = 1.0,
+            });
+        }
+    }
 
     var world = try World.fromGltf(vc, allocator, encoder, gltf, std.fs.path.dirname(gltf_filepath));
     errdefer world.destroy(vc, allocator);

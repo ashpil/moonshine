@@ -9,52 +9,13 @@ const Encoder = core.Encoder;
 
 const Sensor = core.Sensor;
 
-const vector = @import("../vector.zig");
-const F32x2 = vector.Vec2(f32);
-const F32x3 = vector.Vec3(f32);
-const F32x4 = vector.Vec4(f32);
-const Mat3x4 = vector.Mat3x4(f32);
-const Mat3 = vector.Mat3(f32);
+const Mat3x4 = engine.vector.Mat3x4(f32);
 
 pub const Lens = extern struct {
     transform: Mat3x4,
     vfov: f32, // radians
     aperture: f32,
     focus_distance: f32,
-
-    pub fn fromGltf(gltf: Gltf) !Lens {
-        // just use first camera found in nodes, if none found, use an arbitrary default
-        const yfov, const transform = for (gltf.data.nodes.items) |node| {
-            if (node.camera) |camera| {
-                const yfov = gltf.data.cameras.items[camera].type.perspective.yfov;
-                const mat = Gltf.getGlobalTransform(&gltf.data, node);
-                // convert to Z-up
-                const transform = Mat3x4.new(
-                    F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                    F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-                );
-                break .{ yfov, transform };
-            }
-        } else .{ std.math.pi / 6.0, Mat3x4.new(
-            F32x4.new(1, 0, 0, 0),
-            F32x4.new(0, 0, 1, 5), // looking at origin
-            F32x4.new(0, 1, 0, 0),
-        ) };
-
-        const to_gltf = Mat3x4.fromTransformTranslation(Mat3.new(
-            F32x3.new( 0, 1, 0),
-            F32x3.new( 0, 0,-1),
-            F32x3.new(-1, 0, 0),
-        ), F32x3.zero);
-
-        return Lens {
-            .transform = transform.mul(to_gltf),
-            .vfov = yfov,
-            .aperture = 0.0,
-            .focus_distance = 1.0,
-        };
-    }
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .{},
