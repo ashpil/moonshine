@@ -37,9 +37,7 @@ struct ThinLens {
 };
 
 struct Camera {
-    float3 origin;
-    float3 forward;
-    float3 up;
+    row_major float3x4 toWorld;
     float vfov;
     float aperture;
     float focusDistance;
@@ -48,12 +46,6 @@ struct Camera {
     Ray generateRay(const float2 uv, const float2 rand) {
         const ThinLens thinLens = {vfov, aspect, aperture, focusDistance};
         const Ray rayCameraSpace = thinLens.generateRay(rand, uv);
-
-        const float3 w = forward;
-        const float3 u = normalize(cross(up, w));
-        const float3 v = cross(u, w);
-        const float4x3 toWorldTransposed = {w, u, v, origin};
-        const float3x4 toWorld = transpose(toWorldTransposed);
 
         return rayCameraSpace.transformed(toWorld);
     }

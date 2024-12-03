@@ -25,6 +25,7 @@ const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
 const Mat3x4 = vector.Mat3x4(f32);
+const Mat3 = vector.Mat3(f32);
 
 const vk_helpers = engine.core.vk_helpers;
 
@@ -329,9 +330,7 @@ test "white sphere on white background is white" {
 
     var camera = Camera {};
     _ = try camera.appendLens(allocator, Camera.Lens {
-        .origin = F32x3.new(-3, 0, 0),
-        .forward = F32x3.new(1, 0, 0),
-        .up = F32x3.new(0, 0, 1),
+        .transform = Mat3x4.fromTransformTranslation(Mat3.identity, F32x3.new(-3, 0, 0)),
         .vfov = std.math.pi / 4.0,
         .aperture = 0,
         .focus_distance = 1,
@@ -431,9 +430,7 @@ test "inside illuminating sphere is white" {
 
     var camera = Camera {};
     _ = try camera.appendLens(allocator, Camera.Lens {
-        .origin = F32x3.new(0, 0, 0),
-        .forward = F32x3.new(1, 0, 0),
-        .up = F32x3.new(0, 0, 1),
+        .transform = Mat3x4.identity,
         .vfov = std.math.pi / 3.0,
         .aperture = 0,
         .focus_distance = 1,

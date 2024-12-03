@@ -29,7 +29,7 @@ const vector = engine.vector;
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
-const Mat4 = vector.Mat4(f32);
+const Mat3 = vector.Mat3(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
 const vk = @import("vulkan");
@@ -263,12 +263,7 @@ pub fn main() !void {
             var changed = imgui.sliderAngle("Vertical FOV", &scene.camera.lenses.items[0].vfov, 1, 179);
             changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.lenses.items[0].focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
             changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.lenses.items[0].aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Origin", &scene.camera.lenses.items[0].origin, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x3, "Forward", &scene.camera.lenses.items[0].forward, 0.1, -1.0, 1.0) or changed;
-            changed = imgui.dragVector(F32x3, "Up", &scene.camera.lenses.items[0].up, 0.1, -1.0, 1.0) or changed;
             if (changed) {
-                scene.camera.lenses.items[0].forward = scene.camera.lenses.items[0].forward.unit();
-                scene.camera.lenses.items[0].up = scene.camera.lenses.items[0].up.unit();
                 scene.camera.sensors.items[active_sensor].clear();
             }
             imgui.popItemWidth();
@@ -376,11 +371,13 @@ pub fn main() !void {
             );
             if (imgui.isMouseDragging(.right)) {
                 window.setCursorMode(.disabled);
-                const delta = F32x2.new(0.5, 0.5).add(imgui.getMouseDragDelta(.right).componentDiv(window_size));
+                const delta = imgui.getMouseDragDelta(.right).componentDiv(window_size);
                 imgui.resetMouseDragDelta(.right);
-                if (!std.meta.eql(delta, F32x2.new(0.5, 0.5))) {
-                    const aspect = window_size.x / window_size.y;
-                    scene.camera.lenses.items[0].forward = scene.camera.lenses.items[0].directionFromUv(F32x2.new(delta.x, delta.y), aspect);
+                if (!std.meta.eql(delta, F32x2.new(0.0, 0.0))) {
+                    const left_right = Mat3.fromAxisAngle(F32x3.new(0, 0, 1), delta.x);
+                    const up_down = Mat3.fromAxisAngle(F32x3.new(0, -1, 0), delta.y);
+                    const rotation = up_down.mul(left_right);
+                    scene.camera.lenses.items[0].transform = scene.camera.lenses.items[0].transform.mul(Mat3x4.fromTransformTranslation(rotation, F32x3.zero));
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else {
@@ -395,15 +392,18 @@ pub fn main() !void {
         }
         if (!imgui.getIO().WantCaptureKeyboard) {
             const old_lens = scene.camera.lenses.items[0];
-            const side = old_lens.forward.cross(old_lens.up).unit();
             var new_lens = scene.camera.lenses.items[0];
+
+            const left = old_lens.transform.mulVector(F32x3.new(0, -1, 0));
+            const forward = old_lens.transform.mulVector(F32x3.new(1, 0, 0));
+            const origin = old_lens.transform.extractTranslation();
 
             const speed = imgui.getIO().DeltaTime;
 
-            if (imgui.isKeyDown(.w)) new_lens.origin = new_lens.origin.add(new_lens.forward.scale(speed * 30));
-            if (imgui.isKeyDown(.s)) new_lens.origin = new_lens.origin.sub(new_lens.forward.scale(speed * 30));
-            if (imgui.isKeyDown(.a)) new_lens.origin = new_lens.origin.add(side.scale(speed * 30));
-            if (imgui.isKeyDown(.d)) new_lens.origin = new_lens.origin.sub(side.scale(speed * 30));
+            if (imgui.isKeyDown(.w)) new_lens.transform = new_lens.transform.withTranslation(origin.add(forward.scale(speed * 30)));
+            if (imgui.isKeyDown(.s)) new_lens.transform = new_lens.transform.withTranslation(origin.sub(forward.scale(speed * 30)));
+            if (imgui.isKeyDown(.a)) new_lens.transform = new_lens.transform.withTranslation(origin.add(left.scale(speed * 30)));
+            if (imgui.isKeyDown(.d)) new_lens.transform = new_lens.transform.withTranslation(origin.sub(left.scale(speed * 30)));
             if (imgui.isKeyDown(.f) and new_lens.aperture > 0.0) new_lens.aperture -= speed / 10;
             if (imgui.isKeyDown(.r)) new_lens.aperture += speed / 10;
             if (imgui.isKeyDown(.q)) new_lens.focus_distance -= speed * 10;

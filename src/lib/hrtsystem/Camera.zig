@@ -16,9 +16,7 @@ const F32x4 = vector.Vec4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
 
 pub const Lens = extern struct {
-    origin: F32x3,
-    forward: F32x3,
-    up: F32x3,
+    transform: Mat3x4,
     vfov: f32, // radians
     aperture: f32,
     focus_distance: f32,
@@ -43,32 +41,17 @@ pub const Lens = extern struct {
             F32x4.new(0, 1, 0, 0),
         ) };
 
+        const w = transform.mulVector(F32x3.new(0.0, 0.0, -1.0)).unit();
+        const u = transform.mulVector(F32x3.new(0.0, 1.0, 0.0)).unit().cross(w).unit();
+        const v = u.cross(w);
+        const origin = transform.mulPoint(F32x3.new(0.0, 0.0, 0.0));
+
         return Lens {
-            .origin = transform.mulPoint(F32x3.new(0.0, 0.0, 0.0)),
-            .forward = transform.mulVector(F32x3.new(0.0, 0.0, -1.0)).unit(),
-            .up = transform.mulVector(F32x3.new(0.0, 1.0, 0.0)).unit(),
+            .transform = Mat3x4.fromColumns(w, u, v, origin),
             .vfov = yfov,
             .aperture = 0.0,
             .focus_distance = 1.0,
         };
-    }
-
-    // should correspond to GPU-side generateRay
-    pub fn directionFromUv(self: Lens, uv: F32x2, aspect: f32) F32x3 {
-        const w = self.forward;
-        const u = self.up.cross(w).unit();
-        const v = u.cross(w);
-
-        const h = std.math.tan(self.vfov / 2);
-        const viewport_height = 2 * h * self.focus_distance;
-        const viewport_width = aspect * viewport_height;
-
-        const horizontal = u.scale(viewport_width);
-        const vertical = v.scale(viewport_height);
-
-        const lower_left_corner = self.origin.sub(horizontal.scale(1.0 / 2.0)).sub(vertical.scale(1.0 / 2.0)).add(w.scale(self.focus_distance));
-
-        return (lower_left_corner.add(horizontal.scale(uv.x)).add(vertical.scale(uv.y)).sub(self.origin)).unit();
     }
 };
 
