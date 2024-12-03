@@ -14,6 +14,7 @@ const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
 const Mat3x4 = vector.Mat3x4(f32);
+const Mat3 = vector.Mat3(f32);
 
 pub const Lens = extern struct {
     transform: Mat3x4,
@@ -41,13 +42,14 @@ pub const Lens = extern struct {
             F32x4.new(0, 1, 0, 0),
         ) };
 
-        const w = transform.mulVector(F32x3.new(0.0, 0.0, -1.0)).unit();
-        const u = transform.mulVector(F32x3.new(0.0, 1.0, 0.0)).unit().cross(w).unit();
-        const v = u.cross(w);
-        const origin = transform.mulPoint(F32x3.new(0.0, 0.0, 0.0));
+        const to_gltf = Mat3x4.fromTransformTranslation(Mat3.new(
+            F32x3.new( 0, 1, 0),
+            F32x3.new( 0, 0,-1),
+            F32x3.new(-1, 0, 0),
+        ), F32x3.zero);
 
         return Lens {
-            .transform = Mat3x4.fromColumns(w, u, v, origin),
+            .transform = transform.mul(to_gltf),
             .vfov = yfov,
             .aperture = 0.0,
             .focus_distance = 1.0,
