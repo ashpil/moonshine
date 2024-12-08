@@ -51,8 +51,8 @@ pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Al
 }
 
 pub const CameraHandle = u32;
-pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, lens: Camera, name: [:0]const u8) !CameraHandle {
-    try self.cameras.append(allocator, .{name, lens});
+pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, camera: Camera, name: [:0]const u8) !CameraHandle {
+    try self.cameras.append(allocator, .{name, camera});
     return @intCast(self.cameras.items.len - 1);
 }
 
