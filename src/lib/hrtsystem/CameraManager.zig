@@ -11,11 +11,15 @@ const Sensor = engine.hrtsystem.Sensor;
 
 const Mat3x4 = engine.vector.Mat3x4(f32);
 
-pub const Camera = extern struct {
-    transform: Mat3x4,
+pub const ThinLens = extern struct {
     vfov: f32, // radians
     aperture: f32,
     focus_distance: f32,
+};
+
+pub const Camera = extern struct {
+    transform: Mat3x4,
+    thin_lens: ThinLens,
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .{},

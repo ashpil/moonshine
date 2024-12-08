@@ -331,9 +331,11 @@ test "white sphere on white background is white" {
     var camera = Camera {};
     _ = try camera.appendCamera(allocator, Camera.Camera {
         .transform = Mat3x4.fromTransformTranslation(Mat3.identity, F32x3.new(-3, 0, 0)),
-        .vfov = std.math.pi / 4.0,
-        .aperture = 0,
-        .focus_distance = 1,
+        .thin_lens = Camera.ThinLens {
+            .vfov = std.math.pi / 4.0,
+            .aperture = 0,
+            .focus_distance = 1,
+        },
     });
     _ = try camera.appendSensor(&tc.vc, allocator, extent);
 
@@ -431,9 +433,11 @@ test "inside illuminating sphere is white" {
     var camera = Camera {};
     _ = try camera.appendCamera(allocator, Camera.Camera {
         .transform = Mat3x4.identity,
-        .vfov = std.math.pi / 3.0,
-        .aperture = 0,
-        .focus_distance = 1,
+        .thin_lens = Camera.ThinLens {
+            .vfov = std.math.pi / 3.0,
+            .aperture = 0,
+            .focus_distance = 1,
+        },
     });
     _ = try camera.appendSensor(&tc.vc, allocator, extent);
 

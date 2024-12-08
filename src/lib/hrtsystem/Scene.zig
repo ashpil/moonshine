@@ -69,9 +69,11 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                 );
                 _ = try camera.appendCamera(allocator, Camera.Camera {
                     .transform = transform.mul(to_gltf),
-                    .vfov = yfov,
-                    .aperture = 0.0,
-                    .focus_distance = 1.0,
+                    .thin_lens = Camera.ThinLens {
+                        .vfov = yfov,
+                        .aperture = 0.0,
+                        .focus_distance = 1.0,
+                    },
                 });
             }
         }
@@ -85,9 +87,11 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
             );
             _ = try camera.appendCamera(allocator, Camera.Camera {
                 .transform = transform.mul(to_gltf),
-                .vfov = std.math.pi / 6.0,
-                .aperture = 0.0,
-                .focus_distance = 1.0,
+                .thin_lens = Camera.ThinLens {
+                    .vfov = std.math.pi / 6.0,
+                    .aperture = 0.0,
+                    .focus_distance = 1.0,
+                },
             });
         }
     }

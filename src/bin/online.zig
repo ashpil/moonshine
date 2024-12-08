@@ -275,9 +275,9 @@ pub fn main() !void {
                 }
                 break :blk before != active_camera;
             };
-            changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera].vfov, 1, 179) or changed;
-            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera].focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera].aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera].thin_lens.vfov, 1, 179) or changed;
+            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera].thin_lens.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera].thin_lens.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
             if (changed) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
@@ -419,10 +419,10 @@ pub fn main() !void {
             if (imgui.isKeyDown(.s)) new_lens.transform = new_lens.transform.withTranslation(origin.sub(forward.scale(speed * 30)));
             if (imgui.isKeyDown(.a)) new_lens.transform = new_lens.transform.withTranslation(origin.add(left.scale(speed * 30)));
             if (imgui.isKeyDown(.d)) new_lens.transform = new_lens.transform.withTranslation(origin.sub(left.scale(speed * 30)));
-            if (imgui.isKeyDown(.f) and new_lens.aperture > 0.0) new_lens.aperture -= speed / 10;
-            if (imgui.isKeyDown(.r)) new_lens.aperture += speed / 10;
-            if (imgui.isKeyDown(.q)) new_lens.focus_distance -= speed * 10;
-            if (imgui.isKeyDown(.e)) new_lens.focus_distance += speed * 10;
+            if (imgui.isKeyDown(.f) and new_lens.thin_lens.aperture > 0.0) new_lens.thin_lens.aperture -= speed / 10;
+            if (imgui.isKeyDown(.r)) new_lens.thin_lens.aperture += speed / 10;
+            if (imgui.isKeyDown(.q)) new_lens.thin_lens.focus_distance -= speed * 10;
+            if (imgui.isKeyDown(.e)) new_lens.thin_lens.focus_distance += speed * 10;
 
             if (!std.meta.eql(new_lens, old_lens)) {
                 scene.camera.cameras.items[active_camera] = new_lens;
