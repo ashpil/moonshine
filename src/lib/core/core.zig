@@ -2,7 +2,6 @@ pub const VulkanContext = @import("./VulkanContext.zig");
 pub const Encoder = @import("./Encoder.zig");
 pub const DestructionQueue = @import("./DestructionQueue.zig");
 pub const Image = @import("./Image.zig");
-pub const Sensor = @import("./Sensor.zig");
 pub const SyncCopier = @import("./SyncCopier.zig");
 
 pub const mem = @import("./mem.zig");

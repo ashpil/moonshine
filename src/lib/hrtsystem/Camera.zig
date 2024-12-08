@@ -7,7 +7,7 @@ const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 
-const Sensor = core.Sensor;
+const Sensor = engine.hrtsystem.Sensor;
 
 const Mat3x4 = engine.vector.Mat3x4(f32);
 

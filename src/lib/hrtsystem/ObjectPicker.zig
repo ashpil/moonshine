@@ -9,7 +9,7 @@ const Encoder = core.Encoder;
 
 const hrtsystem = engine.hrtsystem;
 const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
-const Sensor = core.Sensor;
+const Sensor = hrtsystem.Sensor;
 const Camera = hrtsystem.Camera;
 
 const F32x2 = @import("../vector.zig").Vec2(f32);
