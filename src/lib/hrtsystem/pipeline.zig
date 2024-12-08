@@ -9,7 +9,7 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const descriptor = core.descriptor;
 
-const Camera = @import("./Camera.zig");
+const Camera = @import("./CameraManager.zig");
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);

@@ -13,7 +13,7 @@ const MeshManager = engine.hrtsystem.MeshManager;
 const MaterialManager = engine.hrtsystem.MaterialManager;
 const TextureManager = MaterialManager.TextureManager;
 const Accel = engine.hrtsystem.Accel;
-const Camera = engine.hrtsystem.Camera;
+const Camera = engine.hrtsystem.CameraManager;
 const Background = engine.hrtsystem.BackgroundManager;
 
 const exr = engine.fileformats.exr;

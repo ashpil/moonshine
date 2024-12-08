@@ -11,7 +11,7 @@ const SyncCopier = core.SyncCopier;
 const TextureManager = core.Images.TextureManager;
 
 const hrtsystem = engine.hrtsystem;
-const Camera = hrtsystem.Camera;
+const Camera = hrtsystem.CameraManager;
 const Accel = hrtsystem.Accel;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;

@@ -1,5 +1,5 @@
 pub const Accel = @import("Accel.zig");
-pub const Camera = @import("Camera.zig");
+pub const CameraManager = @import("CameraManager.zig");
 pub const MeshManager = @import("MeshManager.zig");
 pub const MaterialManager = @import("MaterialManager.zig");
 pub const BackgroundManager = @import("BackgroundManager.zig");

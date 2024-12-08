@@ -10,7 +10,7 @@ const Encoder = core.Encoder;
 
 const Background = @import("./BackgroundManager.zig");
 const World = @import("./World.zig");
-const Camera = @import("./Camera.zig");
+const Camera = @import("./CameraManager.zig");
 
 const exr = engine.fileformats.exr;
 
