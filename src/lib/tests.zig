@@ -64,7 +64,7 @@ const TestingContext = struct {
 
         for (0..spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = scene.camera.cameras.items[0], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
+            pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace our stuff
             pipeline.recordTraceRays(self.encoder.buffer, scene.camera.sensors.items[0].extent);
@@ -335,7 +335,7 @@ test "white sphere on white background is white" {
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 4.0,
         },
-    });
+    }, try allocator.dupeZ(u8, ""));
     _ = try camera.appendSensor(&tc.vc, allocator, extent);
 
     var background = try Background.create(&tc.vc, allocator);
@@ -436,7 +436,7 @@ test "inside illuminating sphere is white" {
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 3.0,
         },
-    });
+    }, try allocator.dupeZ(u8, ""));
     _ = try camera.appendSensor(&tc.vc, allocator, extent);
 
     var background = try Background.create(&tc.vc, allocator);

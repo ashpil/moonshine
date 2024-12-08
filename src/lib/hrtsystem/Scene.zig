@@ -57,7 +57,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
 
         for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera_idx| {
-                const camera_type = gltf.data.cameras.items[camera_idx].type;
+                const gltf_camera = gltf.data.cameras.items[camera_idx];
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
                 // convert to Z-up
                 const transform = Mat3x4.new(
@@ -67,17 +67,17 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                 );
                 _ = try camera.appendCamera(allocator, Camera.Camera {
                     .transform = transform.mul(to_gltf),
-                    .model = switch (camera_type) {
+                    .model = switch (gltf_camera.type) {
                         .perspective => .thin_lens,
                         .orthographic => .orthographic,
                     },
                     .thin_lens = Camera.ThinLens {
-                        .vfov = if (camera_type == .perspective) camera_type.perspective.yfov else std.math.pi / 4.0,
+                        .vfov = if (gltf_camera.type == .perspective) gltf_camera.type.perspective.yfov else std.math.pi / 4.0,
                     },
                     .orthographic = Camera.Orthographic {
-                        .vscale = if (camera_type == .orthographic) camera_type.orthographic.ymag else 1,
+                        .vscale = if (gltf_camera.type == .orthographic) gltf_camera.type.orthographic.ymag else 1,
                     },
-                });
+                }, try allocator.dupeZ(u8, gltf_camera.name));
             }
         }
 
@@ -90,7 +90,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
             );
             _ = try camera.appendCamera(allocator, Camera.Camera {
                 .transform = transform.mul(to_gltf),
-            });
+            }, try allocator.dupeZ(u8, "default"));
         }
     }
 

@@ -129,7 +129,7 @@ pub fn main() !void {
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.cameras.items[0], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
+            pipeline.recordPushConstants(encoder.buffer, .{ .lens = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
 
             // trace our stuff
             pipeline.recordTraceRays(encoder.buffer, scene.camera.sensors.items[0].extent);

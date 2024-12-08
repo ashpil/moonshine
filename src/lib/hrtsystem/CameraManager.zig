@@ -37,7 +37,7 @@ pub const Camera = extern struct {
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .{},
-cameras: std.ArrayListUnmanaged(Camera) = .{},
+cameras: std.ArrayListUnmanaged(std.meta.Tuple(&.{[:0]const u8, Camera })) = .{},
 
 const Self = @This();
 
@@ -51,8 +51,8 @@ pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Al
 }
 
 pub const CameraHandle = u32;
-pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, lens: Camera) !CameraHandle {
-    try self.cameras.append(allocator, lens);
+pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, lens: Camera, name: [:0]const u8) !CameraHandle {
+    try self.cameras.append(allocator, .{name, lens});
     return @intCast(self.cameras.items.len - 1);
 }
 
@@ -65,6 +65,9 @@ pub fn clearAllSensors(self: *Self) void {
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.sensors.items) |*sensor| {
         sensor.destroy(vc);
+    }
+    for (self.cameras.items) |*camera| {
+        allocator.free(camera[0]);
     }
     self.sensors.deinit(allocator);
     self.cameras.deinit(allocator);
