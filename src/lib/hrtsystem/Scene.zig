@@ -58,8 +58,6 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera_idx| {
                 const camera_type = gltf.data.cameras.items[camera_idx].type;
-                if (camera_type == .orthographic) continue;
-                const yfov = camera_type.perspective.yfov;
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
                 // convert to Z-up
                 const transform = Mat3x4.new(
@@ -69,10 +67,15 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                 );
                 _ = try camera.appendCamera(allocator, Camera.Camera {
                     .transform = transform.mul(to_gltf),
+                    .model = switch (camera_type) {
+                        .perspective => .thin_lens,
+                        .orthographic => .orthographic,
+                    },
                     .thin_lens = Camera.ThinLens {
-                        .vfov = yfov,
-                        .aperture = 0.0,
-                        .focus_distance = 1.0,
+                        .vfov = if (camera_type == .perspective) camera_type.perspective.yfov else std.math.pi / 4.0,
+                    },
+                    .orthographic = Camera.Orthographic {
+                        .vscale = if (camera_type == .orthographic) camera_type.orthographic.ymag else 1,
                     },
                 });
             }
@@ -87,11 +90,6 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
             );
             _ = try camera.appendCamera(allocator, Camera.Camera {
                 .transform = transform.mul(to_gltf),
-                .thin_lens = Camera.ThinLens {
-                    .vfov = std.math.pi / 6.0,
-                    .aperture = 0.0,
-                    .focus_distance = 1.0,
-                },
             });
         }
     }

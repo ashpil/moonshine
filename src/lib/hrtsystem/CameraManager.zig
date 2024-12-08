@@ -11,15 +11,29 @@ const Sensor = engine.hrtsystem.Sensor;
 
 const Mat3x4 = engine.vector.Mat3x4(f32);
 
-pub const ThinLens = extern struct {
-    vfov: f32, // radians
-    aperture: f32,
-    focus_distance: f32,
+pub const Model = enum(u32) {
+    thin_lens,
+    orthographic,
 };
 
+pub const ThinLens = extern struct {
+    vfov: f32 = std.math.pi / 4.0,
+    aperture: f32 = 0,
+    focus_distance: f32 = 1,
+};
+
+pub const Orthographic = extern struct {
+    vscale: f32 = 1,
+};
+
+// store camera models as a struct rather than a tagged union because:
+// 1. this way in interactive modes states of non-selected is saved
+// 2. can pass to spirv directly
 pub const Camera = extern struct {
-    transform: Mat3x4,
-    thin_lens: ThinLens,
+    transform: Mat3x4 = Mat3x4.identity,
+    model: Model = .thin_lens,
+    thin_lens: ThinLens = .{},
+    orthographic: Orthographic = .{},
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .{},

@@ -9,6 +9,11 @@
 // * right along +Y
 // * up along +Z
 
+enum class CameraModel : uint {
+    ThinLens,
+    Orthographic,
+};
+
 struct ThinLens {
     float vfov;
     float aperture;
@@ -32,16 +37,39 @@ struct ThinLens {
     }
 };
 
+struct Orthographic {
+    float vscale;
+
+    Ray generateRay(const float2 uv) {
+        const float2 halfViewport = vscale;
+
+        Ray ray;
+        ray.origin = float3(0.0, uv * halfViewport);
+        ray.direction = float3(1, 0, 0);
+        ray.pdf = 1.#INF;
+
+        return ray;
+    }
+};
+
 struct Camera {
     row_major float3x4 toWorld;
+    CameraModel model;
     ThinLens thinLens;
+    Orthographic orthographic;
     float aspect;
 
     Ray generateRay(const float2 uv, const float2 rand) {
         const float2 uvScaled = (uv * 2 - 1) * float2(aspect, 1);
         const Ray rayCameraSpace = thinLens.generateRay(rand, uvScaled);
-
-        return rayCameraSpace.transformed(toWorld);
+        switch (model) {
+            case CameraModel::ThinLens: {
+                return thinLens.generateRay(rand, uvScaled).transformed(toWorld);
+            }
+            case CameraModel::Orthographic: {
+                return orthographic.generateRay(uvScaled).transformed(toWorld);
+            }
+        }
     }
 };
 

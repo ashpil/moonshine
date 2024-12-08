@@ -275,9 +275,17 @@ pub fn main() !void {
                 }
                 break :blk before != active_camera;
             };
-            changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera].thin_lens.vfov, 1, 179) or changed;
-            changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera].thin_lens.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera].thin_lens.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+            changed = imgui.enumCombo(Camera.Model, "Camera Model", &scene.camera.cameras.items[active_camera].model) or changed;
+            switch (scene.camera.cameras.items[active_camera].model) {
+                .thin_lens => {
+                    changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera].thin_lens.vfov, 1, 179) or changed;
+                    changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera].thin_lens.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera].thin_lens.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+                },
+                .orthographic => {
+                    changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
+                },
+            }
             if (changed) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
