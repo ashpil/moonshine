@@ -11,9 +11,9 @@
 
 struct ThinLens {
     float vfov;
-    float aspect;
     float aperture;
     float focusDistance;
+    float aspect;
 
     Ray generateRay(const float2 rand, const float2 uv) {
         const float2 uvNDC = uv * 2 - 1;
@@ -38,13 +38,9 @@ struct ThinLens {
 
 struct Camera {
     row_major float3x4 toWorld;
-    float vfov;
-    float aperture;
-    float focusDistance;
-    float aspect;
+    ThinLens thinLens;
 
     Ray generateRay(const float2 uv, const float2 rand) {
-        const ThinLens thinLens = {vfov, aspect, aperture, focusDistance};
         const Ray rayCameraSpace = thinLens.generateRay(rand, uv);
 
         return rayCameraSpace.transformed(toWorld);

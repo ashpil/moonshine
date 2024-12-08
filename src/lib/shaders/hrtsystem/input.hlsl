@@ -25,8 +25,8 @@ struct PushConsts {
 void raygen() {
     Camera camera = pushConsts.camera;
     // make camera have perfect focus
-    camera.focusDistance = 1.0f;
-    camera.aperture = 0.0f;
+    camera.thinLens.focusDistance = 1.0f;
+    camera.thinLens.aperture = 0.0f;
     Ray ray = pushConsts.camera.generateRay(pushConsts.coords, float2(0, 0));
 
     Payload payload;
