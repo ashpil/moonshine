@@ -220,6 +220,7 @@ pub fn main() !void {
     var active_sensor: u32 = 0;
     var active_camera: u32 = 0;
     var max_sample_count: u32 = 0; // unlimited
+    var navigation_speed: f32 = 10;
     var rebuild_label_buffer: [20]u8 = undefined;
     var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
     var rebuild_error = false;
@@ -410,28 +411,24 @@ pub fn main() !void {
                     has_clicked = true;
                 }
             }
+            navigation_speed *= std.math.pow(f32, 1.1, imgui.getIO().MouseWheel);
         }
         if (!imgui.getIO().WantCaptureKeyboard) {
-            const old_camera = scene.camera.cameras.items[active_camera][1];
-            var new_camera = scene.camera.cameras.items[active_camera][1];
+            var transform = scene.camera.cameras.items[active_camera][1].transform;
 
-            const left = old_camera.transform.mulVector(F32x3.new(0, -1, 0));
-            const forward = old_camera.transform.mulVector(F32x3.new(1, 0, 0));
-            const origin = old_camera.transform.extractTranslation();
+            const left = transform.mulVector(F32x3.new(0, -1, 0));
+            const forward = transform.mulVector(F32x3.new(1, 0, 0));
+            const origin = transform.extractTranslation();
 
             const speed = imgui.getIO().DeltaTime;
 
-            if (imgui.isKeyDown(.w)) new_camera.transform = new_camera.transform.withTranslation(origin.add(forward.scale(speed * 30)));
-            if (imgui.isKeyDown(.s)) new_camera.transform = new_camera.transform.withTranslation(origin.sub(forward.scale(speed * 30)));
-            if (imgui.isKeyDown(.a)) new_camera.transform = new_camera.transform.withTranslation(origin.add(left.scale(speed * 30)));
-            if (imgui.isKeyDown(.d)) new_camera.transform = new_camera.transform.withTranslation(origin.sub(left.scale(speed * 30)));
-            if (imgui.isKeyDown(.f) and new_camera.thin_lens.aperture > 0.0) new_camera.thin_lens.aperture -= speed / 10;
-            if (imgui.isKeyDown(.r)) new_camera.thin_lens.aperture += speed / 10;
-            if (imgui.isKeyDown(.q)) new_camera.thin_lens.focus_distance -= speed * 10;
-            if (imgui.isKeyDown(.e)) new_camera.thin_lens.focus_distance += speed * 10;
+            if (imgui.isKeyDown(.w)) transform = transform.withTranslation(origin.add(forward.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.s)) transform = transform.withTranslation(origin.sub(forward.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.a)) transform = transform.withTranslation(origin.add(left.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.d)) transform = transform.withTranslation(origin.sub(left.scale(speed * navigation_speed)));
 
-            if (!std.meta.eql(new_camera, old_camera)) {
-                scene.camera.cameras.items[active_camera][1] = new_camera;
+            if (!std.meta.eql(transform, scene.camera.cameras.items[active_camera][1].transform)) {
+                scene.camera.cameras.items[active_camera][1].transform = transform;
                 scene.camera.sensors.items[active_sensor].clear();
             }
         }
