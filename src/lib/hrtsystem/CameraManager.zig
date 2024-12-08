@@ -11,7 +11,7 @@ const Sensor = engine.hrtsystem.Sensor;
 
 const Mat3x4 = engine.vector.Mat3x4(f32);
 
-pub const Lens = extern struct {
+pub const Camera = extern struct {
     transform: Mat3x4,
     vfov: f32, // radians
     aperture: f32,
@@ -19,7 +19,7 @@ pub const Lens = extern struct {
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .{},
-lenses: std.ArrayListUnmanaged(Lens) = .{},
+cameras: std.ArrayListUnmanaged(Camera) = .{},
 
 const Self = @This();
 
@@ -32,10 +32,10 @@ pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Al
     return @intCast(self.sensors.items.len - 1);
 }
 
-pub const LensHandle = u32;
-pub fn appendLens(self: *Self, allocator: std.mem.Allocator, lens: Lens) !LensHandle {
-    try self.lenses.append(allocator, lens);
-    return @intCast(self.lenses.items.len - 1);
+pub const CameraHandle = u32;
+pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, lens: Camera) !CameraHandle {
+    try self.cameras.append(allocator, lens);
+    return @intCast(self.cameras.items.len - 1);
 }
 
 pub fn clearAllSensors(self: *Self) void {
@@ -49,5 +49,5 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
         sensor.destroy(vc);
     }
     self.sensors.deinit(allocator);
-    self.lenses.deinit(allocator);
+    self.cameras.deinit(allocator);
 }

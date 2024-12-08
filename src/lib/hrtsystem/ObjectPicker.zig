@@ -73,7 +73,7 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, transfer_e
     };
 }
 
-pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.AccelerationStructureKHR, normalized_coords: F32x2, lens: Camera.Lens, sensor: Sensor) !?ClickedObject {
+pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.AccelerationStructureKHR, normalized_coords: F32x2, lens: Camera.Camera, sensor: Sensor) !?ClickedObject {
     // begin
     try self.encoder.begin();
 

@@ -67,7 +67,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                     F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                 );
-                _ = try camera.appendLens(allocator, Camera.Lens {
+                _ = try camera.appendCamera(allocator, Camera.Camera {
                     .transform = transform.mul(to_gltf),
                     .vfov = yfov,
                     .aperture = 0.0,
@@ -77,13 +77,13 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         }
 
         // add default camera if none loaded
-        if (camera.lenses.items.len == 0) {
+        if (camera.cameras.items.len == 0) {
             const transform = Mat3x4.new(
                 F32x4.new(1, 0, 0, 0),
                 F32x4.new(0, 0, 1, 5), // looking at origin
                 F32x4.new(0, 1, 0, 0),
             );
-            _ = try camera.appendLens(allocator, Camera.Lens {
+            _ = try camera.appendCamera(allocator, Camera.Camera {
                 .transform = transform.mul(to_gltf),
                 .vfov = std.math.pi / 6.0,
                 .aperture = 0.0,

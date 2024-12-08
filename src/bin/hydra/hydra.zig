@@ -151,7 +151,7 @@ pub const HdMoonshine = struct {
         return self;
     }
 
-    pub export fn HdMoonshineRender(self: *HdMoonshine, sensor: Camera.SensorHandle, lens: Camera.LensHandle) bool {
+    pub export fn HdMoonshineRender(self: *HdMoonshine, sensor: Camera.SensorHandle, lens: Camera.CameraHandle) bool {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.encoder.begin() catch return false;
@@ -347,7 +347,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordPushDescriptors(self.encoder.buffer, (Scene { .background = self.background, .camera = self.camera, .world = self.world }).pushDescriptors(sensor, 0));
 
         // push our stuff
-        self.pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = self.camera.lenses.items[lens], .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(), .sample_count = self.camera.sensors.items[sensor].sample_count });
+        self.pipeline.recordPushConstants(self.encoder.buffer, .{ .lens = self.camera.cameras.items[lens], .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(), .sample_count = self.camera.sensors.items[sensor].sample_count });
 
         // trace our stuff
         self.pipeline.recordTraceRays(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
@@ -547,16 +547,16 @@ pub const HdMoonshine = struct {
         return self.output_buffers.items[sensor].slice.ptr;
     }
 
-    pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Lens) Camera.LensHandle {
+    pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Camera) Camera.CameraHandle {
         self.mutex.lock();
         defer self.mutex.unlock();
-        return self.camera.appendLens(self.allocator.allocator(), info) catch unreachable; // TODO: error handling
+        return self.camera.appendCamera(self.allocator.allocator(), info) catch unreachable; // TODO: error handling
     }
 
-    pub export fn HdMoonshineSetLens(self: *HdMoonshine, handle: Camera.LensHandle, info: Camera.Lens) void {
+    pub export fn HdMoonshineSetLens(self: *HdMoonshine, handle: Camera.CameraHandle, info: Camera.Camera) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        self.camera.lenses.items[handle] = info;
+        self.camera.cameras.items[handle] = info;
 
         // technically only need to clear sensors associated with this lens
         // but no easy mechanism to do this currently
