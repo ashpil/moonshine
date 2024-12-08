@@ -13,16 +13,12 @@ struct ThinLens {
     float vfov;
     float aperture;
     float focusDistance;
-    float aspect;
 
+    // uv is [-aspectRatio, aspectRatio], [-1, 1]
     Ray generateRay(const float2 rand, const float2 uv) {
-        const float2 uvNDC = uv * 2 - 1;
+        const float2 halfViewport = tan(vfov / 2);
 
-        const float halfViewportHeight = tan(vfov / 2);
-        const float halfViewportWidth = aspect * halfViewportHeight;
-        const float2 halfViewport = float2(halfViewportWidth, halfViewportHeight);
-
-        const float3 directionCameraSpaceUnorm = float3(1.0, uvNDC * halfViewport);
+        const float3 directionCameraSpaceUnorm = float3(1.0, uv * halfViewport);
 
         const float2 lens = aperture * squareToUniformDiskConcentric(rand) / 2.0;
         const float3 focus = focusDistance * directionCameraSpaceUnorm;
@@ -39,9 +35,11 @@ struct ThinLens {
 struct Camera {
     row_major float3x4 toWorld;
     ThinLens thinLens;
+    float aspect;
 
     Ray generateRay(const float2 uv, const float2 rand) {
-        const Ray rayCameraSpace = thinLens.generateRay(rand, uv);
+        const float2 uvScaled = (uv * 2 - 1) * float2(aspect, 1);
+        const Ray rayCameraSpace = thinLens.generateRay(rand, uvScaled);
 
         return rayCameraSpace.transformed(toWorld);
     }
