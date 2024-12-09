@@ -37,7 +37,6 @@
 
 ### // TODO
 * Cameras
-  * Orthographic
   * Fisheye
   * Lens System
 * Materials
