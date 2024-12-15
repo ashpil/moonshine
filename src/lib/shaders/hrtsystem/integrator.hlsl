@@ -143,7 +143,7 @@ struct PathTracingIntegrator : Integrator {
             // terminate if lost at russian roulette
             {
                 const float pSurvive = (path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
-                if (rng.getFloat() > pSurvive) return path.radiance;
+                if (rng.getFloat() < (1 - pSurvive)) return path.radiance;
                 path.throughput /= pSurvive;
             }
         }
