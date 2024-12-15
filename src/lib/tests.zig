@@ -357,7 +357,6 @@ test "white sphere on white background is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .max_bounces = 1024,
         .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 0,
     }, .{ scene.background.sampler });
@@ -370,7 +369,6 @@ test "white sphere on white background is white" {
     // do that again but with env sampling
     try tc.encoder.begin();
     const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
-        .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 0,
     });
@@ -458,7 +456,6 @@ test "inside illuminating sphere is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .max_bounces = 1024,
         .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 0,
     }, .{ scene.background.sampler });
@@ -472,7 +469,6 @@ test "inside illuminating sphere is white" {
     try tc.encoder.begin();
     // do that again but with mesh sampling
     const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
-        .max_bounces = 1024,
         .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 1,
     });

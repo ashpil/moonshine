@@ -109,7 +109,6 @@ pub const HdMoonshine = struct {
     };
 
     const pipeline_settings = Pipeline.SpecConstants {
-        .max_bounces = 1024,
         .env_samples_per_bounce = 0,
         .mesh_samples_per_bounce = 1,
     };

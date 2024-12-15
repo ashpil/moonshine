@@ -82,13 +82,13 @@ interface Integrator {
 };
 
 struct PathTracingIntegrator : Integrator {
-    uint maxBounces;
+    uint russianRouletteDepth;
     uint envSamplesPerBounce;
     uint meshSamplesPerBounce;
 
-    static PathTracingIntegrator create(uint maxBounces, uint envSamplesPerBounce, uint meshSamplesPerBounce) {
+    static PathTracingIntegrator create(uint russianRouletteDepth, uint envSamplesPerBounce, uint meshSamplesPerBounce) {
         PathTracingIntegrator integrator;
-        integrator.maxBounces = maxBounces;
+        integrator.russianRouletteDepth = russianRouletteDepth;
         integrator.envSamplesPerBounce = envSamplesPerBounce;
         integrator.meshSamplesPerBounce = meshSamplesPerBounce;
         return integrator;
@@ -115,10 +115,9 @@ struct PathTracingIntegrator : Integrator {
                 path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
             }
 
-            // possibly terminate if reached max bounce cutoff or lose at russian roulette
-            // max bounce cutoff needs to be before NEE below, and after light contribution above, otherwise MIS would need to be adjusted
+            // terminate if lost at russian roulette
             {
-                const float pSurvive = path.bounceCount > maxBounces ? 0 : (path.bounceCount > 3 ? min(0.95, path.throughput) : 1);
+                const float pSurvive = (path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
                 if (rng.getFloat() > pSurvive) return path.radiance;
                 path.throughput /= pSurvive;
             }
@@ -163,7 +162,6 @@ struct PathTracingIntegrator : Integrator {
 };
 
 // primary ray + light sample
-// same as above with max_bounces = 0, but simpler code
 struct DirectLightIntegrator : Integrator {
     uint envSamples;
     uint meshSamples;

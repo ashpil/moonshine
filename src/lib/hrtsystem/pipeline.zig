@@ -290,7 +290,7 @@ pub const StandardBindings = struct {
 pub const PathTracing = Pipeline(.{
     .shader_path = "hrtsystem/main_pt.hlsl",
     .SpecConstants = extern struct {
-        max_bounces: u32 = 4,
+        russian_roulette_depth: u32 = 3,
         env_samples_per_bounce: u32 = 1,
         mesh_samples_per_bounce: u32 = 1,
     },

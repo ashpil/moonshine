@@ -103,7 +103,6 @@ pub fn main() !void {
 
     try encoder.begin();
     var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .max_bounces = 1024,
         .env_samples_per_bounce = 1,
         .mesh_samples_per_bounce = 1,
     }, .{ scene.background.sampler });
