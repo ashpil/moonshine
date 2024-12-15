@@ -115,29 +115,29 @@ struct PathTracingIntegrator : Integrator {
                 path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
             }
 
+            // accumulate direct light samples
             if (!bsdf.isDelta()) {
-                // accumulate direct light samples from env map
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
                     path.radiance += path.throughput * estimateDirectMISLight(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, envSamplesPerBounce, 1);
                 }
 
-                // accumulate direct light samples from emissive meshes
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
                     path.radiance += path.throughput * estimateDirectMISLight(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, meshSamplesPerBounce, 1);
                 }
             }
 
-            // sample direction for next bounce
-            const BSDFSample sample = bsdf.sample(outgoingDirSs, float2(rng.getFloat(), rng.getFloat()));
+            // set up next bounce
+            {
+                const BSDFSample sample = bsdf.sample(outgoingDirSs, float2(rng.getFloat(), rng.getFloat()));
 
-            // set up info for next bounce
-            path.ray.direction = shadingFrame.frameToWorld(sample.dirFs);
-            path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
-            path.ray.pdf = sample.eval.pdf;
-            path.throughput *= sample.eval.reflectance;
-            path.bounceCount += 1;
+                path.ray.direction = shadingFrame.frameToWorld(sample.dirFs);
+                path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
+                path.ray.pdf = sample.eval.pdf;
+                path.throughput *= sample.eval.reflectance;
+                path.bounceCount += 1;
+            }
 
             // terminate if lost at russian roulette
             {
