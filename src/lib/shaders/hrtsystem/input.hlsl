@@ -30,7 +30,7 @@ void raygen() {
     Ray ray = pushConsts.camera.generateRay(pushConsts.coords, float2(0, 0));
 
     Payload payload;
-    TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(), payload);
+    TraceRay(TLAS, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(0, 1.#INF), payload);
 
     click_data[0] = payload.click_data;
 }

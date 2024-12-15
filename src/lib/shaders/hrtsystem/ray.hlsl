@@ -5,12 +5,12 @@ struct Ray {
     float3 direction;
     float pdf; // probability this ray was sampled
 
-    RayDesc desc() {
+    RayDesc desc(float tmin, float tmax) {
         RayDesc desc;
         desc.Origin = origin;
         desc.Direction = direction;
-        desc.TMin = 0;
-        desc.TMax = 1.#INF;
+        desc.TMin = tmin;
+        desc.TMax = tmax;
         return desc;
     }
 

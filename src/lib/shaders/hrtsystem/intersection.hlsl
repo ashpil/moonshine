@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../utils/math.hlsl"
+#include "ray.hlsl"
 
 struct [raypayload] Intersection {
     uint instanceIndex : read(caller) : write(closesthit, miss);  // MAX_UINT for no hit
@@ -15,9 +16,9 @@ struct [raypayload] Intersection {
     }
 
     // traces a ray to find the nearest intersection
-    static Intersection find(RaytracingAccelerationStructure accel, RayDesc ray) {
+    static Intersection find(RaytracingAccelerationStructure accel, Ray ray) {
         Intersection its;
-        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray, its);
+        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(0, 1.#INF), its);
         return its;
     }
 

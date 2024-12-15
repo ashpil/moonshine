@@ -97,7 +97,7 @@ struct PathTracingIntegrator : Integrator {
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
         Path path = Path::create(initialRay);
 
-        for (Intersection its = Intersection::find(scene.tlas, path.ray.desc()); its.hit(); its = Intersection::find(scene.tlas, path.ray.desc())) {
+        for (Intersection its = Intersection::find(scene.tlas, path.ray); its.hit(); its = Intersection::find(scene.tlas, path.ray)) {
 
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
@@ -180,7 +180,7 @@ struct DirectLightIntegrator : Integrator {
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
         float pathRadiance = 0;
 
-        Intersection its = Intersection::find(scene.tlas, initialRay.desc());
+        Intersection its = Intersection::find(scene.tlas, initialRay);
         if (its.hit()) {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
@@ -214,7 +214,7 @@ struct DirectLightIntegrator : Integrator {
                     Ray ray = initialRay;
                     ray.direction = shadingFrame.frameToWorld(sample.dirFs);
                     ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
-                    Intersection its = Intersection::find(scene.tlas, ray.desc());
+                    Intersection its = Intersection::find(scene.tlas, ray);
                     if (its.hit()) {
                         // hit -- collect light from emissive meshes
                         const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
