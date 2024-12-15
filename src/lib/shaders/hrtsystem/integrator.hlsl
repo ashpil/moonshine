@@ -131,7 +131,6 @@ struct PathTracingIntegrator : Integrator {
 
             // sample direction for next bounce
             const BSDFSample sample = bsdf.sample(outgoingDirSs, float2(rng.getFloat(), rng.getFloat()));
-            if (sample.eval.reflectance == 0) return path.radiance;
 
             // set up info for next bounce
             path.ray.direction = shadingFrame.frameToWorld(sample.dirFs);
@@ -142,7 +141,7 @@ struct PathTracingIntegrator : Integrator {
 
             // terminate if lost at russian roulette
             {
-                const float pSurvive = (path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
+                const float pSurvive = (path.throughput == 0 || path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
                 if (rng.getFloat() < (1 - pSurvive)) return path.radiance;
                 path.throughput /= pSurvive;
             }
