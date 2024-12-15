@@ -115,13 +115,6 @@ struct PathTracingIntegrator : Integrator {
                 path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
             }
 
-            // terminate if lost at russian roulette
-            {
-                const float pSurvive = (path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
-                if (rng.getFloat() > pSurvive) return path.radiance;
-                path.throughput /= pSurvive;
-            }
-
             if (!bsdf.isDelta()) {
                 // accumulate direct light samples from env map
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
@@ -146,6 +139,13 @@ struct PathTracingIntegrator : Integrator {
             path.ray.pdf = sample.eval.pdf;
             path.throughput *= sample.eval.reflectance;
             path.bounceCount += 1;
+
+            // terminate if lost at russian roulette
+            {
+                const float pSurvive = (path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
+                if (rng.getFloat() > pSurvive) return path.radiance;
+                path.throughput /= pSurvive;
+            }
         }
 
         // we only get here on misses -- terminations for other reasons return from loop
