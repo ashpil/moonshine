@@ -244,11 +244,13 @@ pub fn PipelineBindings(
 
 pub fn Pipeline(comptime options: struct {
     shader_path: [:0]const u8,
-    SpecConstants: type = struct {},
+    SpecConstants: type = extern struct {},
     PushConstants: type = extern struct {},
     PushSetBindings: type, // todo: should be specified in higher level types rather than raw vk ones
     additional_descriptor_layout_count: comptime_int = 0,
 }) type {
+    if (@typeInfo(options.SpecConstants).@"struct".layout == .auto) @compileError("specialization constant struct layout is auto but must not be");
+
     return struct {
         bindings: Bindings,
         handle: vk.Pipeline,

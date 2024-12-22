@@ -56,12 +56,13 @@ const Stage = struct {
 
 pub fn Pipeline(comptime options: struct {
     shader_path: [:0]const u8,
-    SpecConstants: type = struct {},
     PushConstants: type = extern struct {},
+    SpecConstants: type = extern struct {},
     PushSetBindings: type,
     additional_descriptor_layout_count: comptime_int = 0,
     stages: []const Stage,
 }) type {
+    if (@typeInfo(options.SpecConstants).@"struct".layout == .auto) @compileError("specialization constant struct layout is auto but must not be");
 
     return struct {
         bindings: Bindings,
