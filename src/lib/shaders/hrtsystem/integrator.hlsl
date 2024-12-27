@@ -24,7 +24,7 @@ float misWeight(const uint fCount, const float fPdf, const uint gCount, const fl
 // estimates direct lighting from light + brdf via MIS
 // only samples light
 template <class Light, class BSDF>
-float estimateDirectMISLight(RaytracingAccelerationStructure accel, Frame frame, Light light, BSDF material, float3 outgoingDirFs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
+float estimateDirect(RaytracingAccelerationStructure accel, Frame frame, Light light, BSDF material, float3 outgoingDirFs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
     const LightSample lightSample = light.sample(λ, positionWs, rand);
 
     if (lightSample.eval.radiance != 0) {
@@ -120,12 +120,12 @@ struct PathTracingIntegrator : Integrator {
             if (!bsdf.isDelta()) {
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectMISLight(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, envSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirect(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, envSamplesPerBounce, 1);
                 }
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectMISLight(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirect(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, meshSamplesPerBounce, 1);
                 }
             }
 
@@ -196,13 +196,13 @@ struct DirectLightIntegrator : Integrator {
                 // accumulate direct light samples from env map
                 for (uint directCount = 0; directCount < envSamples; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    pathRadiance += estimateDirectMISLight(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, envSamples, brdfSamples);
+                    pathRadiance += estimateDirect(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, envSamples, brdfSamples);
                 }
 
                 // accumulate direct light samples from emissive meshes
                 for (uint directCount = 0; directCount < meshSamples; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    pathRadiance += estimateDirectMISLight(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, meshSamples, brdfSamples);
+                    pathRadiance += estimateDirect(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, meshSamples, brdfSamples);
                 }
             }
 
