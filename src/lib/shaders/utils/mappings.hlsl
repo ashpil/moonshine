@@ -53,6 +53,13 @@ float3 squareToUniformHemisphere(float2 square) {
     return float3(r * cos(phi), r * sin(phi), z);
 }
 
+float3 squareToUniformSphere(float2 square) {
+    float z = 1 - 2 * square.x;
+    float r = sqrt(1 - z * z);
+    float phi = 2 * PI * square.y;
+    return float3(r * float2(cos(phi), sin(phi)), z);
+}
+
 float3 sphericalToCartesian(float sinTheta, float cosTheta, float phi) {
     return float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
 }

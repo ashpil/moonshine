@@ -1,0 +1,39 @@
+#pragma once
+
+#include "ray.hlsl"
+
+interface Medium {
+    float transmittance(float distance);
+    float pdf(float distance);
+    float sample(float rand);
+};
+
+struct Homogeneous : Medium {
+    float σ_s;
+    float σ_a;
+
+    static Homogeneous create(float σ_s, float σ_a) {
+        Homogeneous h;
+        h.σ_s = σ_s;
+        h.σ_a = σ_a;
+        return h;
+    }
+
+    float σ_t() {
+        return σ_s + σ_a;
+    }
+
+    float transmittance(float distance) {
+        return exp(-σ_t() * distance);
+    }
+
+    float pdf(float distance) {
+        return exp(-σ_t() * distance) * σ_t();
+    }
+
+    // TODO: doesn't sampling proportionally to σ_s (rather than σ_t) make more sense?
+    // as the border case where σ_s == 0 should mean there is no scattering
+    float sample(float rand) {
+        return -log(1 - rand) / σ_t();
+    }
+};

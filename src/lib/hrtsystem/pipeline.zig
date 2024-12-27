@@ -288,6 +288,34 @@ pub const StandardBindings = struct {
     output_image: core.pipeline.StorageImage,
 };
 
+pub const StandardPushConstants = extern struct {
+    camera: Camera.Camera,
+    aspect_ratio: f32,
+    sample_count: u32,
+    global_medium: extern struct {
+        @"σ_s": f32 = 0.0,
+        @"σ_a": f32 = 0.0,
+    } = .{},
+};
+
+pub const VolumePathTracing = Pipeline(.{
+    .shader_path = "hrtsystem/main_volume_pt.hlsl",
+    .SpecConstants = extern struct {
+        russian_roulette_depth: u32 = 3,
+        env_samples_per_bounce: u32 = 1,
+        mesh_samples_per_bounce: u32 = 1,
+    },
+    .PushConstants = StandardPushConstants,
+    .additional_descriptor_layout_count = 2,
+    .PushSetBindings = StandardBindings,
+    .stages = &[_]Stage {
+        .{ .type = .raygen, .entrypoint = "raygen" },
+        .{ .type = .miss, .entrypoint = "miss" },
+        .{ .type = .miss, .entrypoint = "shadowmiss" },
+        .{ .type = .closest_hit, .entrypoint = "closesthit" },
+    }
+});
+
 pub const PathTracing = Pipeline(.{
     .shader_path = "hrtsystem/main_pt.hlsl",
     .SpecConstants = extern struct {
@@ -295,11 +323,7 @@ pub const PathTracing = Pipeline(.{
         env_samples_per_bounce: u32 = 1,
         mesh_samples_per_bounce: u32 = 1,
     },
-    .PushConstants = extern struct {
-        camera: Camera.Camera,
-        aspect_ratio: f32,
-        sample_count: u32,
-    },
+    .PushConstants = StandardPushConstants,
     .additional_descriptor_layout_count = 2,
     .PushSetBindings = StandardBindings,
     .stages = &[_]Stage {
@@ -317,11 +341,7 @@ pub const DirectLighting = Pipeline(.{
         mesh_samples: u32 = 1,
         brdf_samples: u32 = 1,
     },
-    .PushConstants = extern struct {
-        camera: Camera.Camera,
-        aspect_ratio: f32,
-        sample_count: u32,
-    },
+    .PushConstants = StandardPushConstants,
     .additional_descriptor_layout_count = 2,
     .PushSetBindings = StandardBindings,
     .stages = &[_]Stage {

@@ -2,6 +2,7 @@
 #include "camera.hlsl"
 #include "scene.hlsl"
 #include "integrator.hlsl"
+#include "medium.hlsl"
 
 // I use the `d` prefix to indicate a descriptor variable
 // because as a functional programmer impure functions scare me
@@ -30,8 +31,9 @@
 
 // PUSH CONSTANTS
 struct PushConsts {
-	Camera camera;
-	uint sampleCount;
+    Camera camera;
+    uint sampleCount;
+    Homogeneous globalMedium;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -52,6 +54,7 @@ void integrate(Integrator integrator) {
     scene.world = world;
     scene.envMap = EnvMap::create(dBackgroundRgbTexture, dBackgroundSampler, dBackgroundLuminanceTexture);
     scene.meshLights = MeshLights::create(dTrianglePower, dTriangleMetadata, dGeometryToTrianglePowerOffset, dEmissiveTriangleCount[0], world);
+    scene.globalMedium = pushConsts.globalMedium;
 
     Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount, imageCoords.x, imageCoords.y));
 

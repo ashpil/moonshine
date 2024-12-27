@@ -4,6 +4,8 @@
 #include "../utils/random.hlsl"
 #include "reflection_frame.hlsl"
 #include "material.hlsl"
+#include "medium.hlsl"
+#include "phase_function.hlsl"
 #include "world.hlsl"
 #include "light.hlsl"
 #include "ray.hlsl"
@@ -37,6 +39,30 @@ float estimateDirect(RaytracingAccelerationStructure accel, Frame frame, Light l
             const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
             if (!ShadowIntersection::hit(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset))) {
                 return totalRadiance;
+            }
+        }
+    }
+
+    return 0;
+}
+
+// estimates direct lighting from light + brdf via MIS
+// only samples light
+// separate function for volumes as we need to find the closest hit, not just terminate on any hit
+template <class Light, class BSDF>
+float estimateDirectVolumetric(RaytracingAccelerationStructure accel, Frame frame, Light light, BSDF material, float3 outgoingDirFs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, Homogeneous medium, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
+    const LightSample lightSample = light.sample(λ, positionWs, rand);
+
+    if (lightSample.eval.radiance != 0) {
+        const float3 incomingDirFs = frame.worldToFrame(lightSample.dirWs);
+        const BSDFEvaluation bsdfEval = material.evaluate(incomingDirFs, outgoingDirFs);
+        if (bsdfEval.reflectance != 0) {
+            const float weight = misWeight(lightSamplesTaken, lightSample.eval.pdf, brdfSamplesTaken, bsdfEval.pdf);
+            const float totalRadiance = lightSample.eval.radiance * bsdfEval.reflectance * weight;
+
+            const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
+            if (!Intersection::find(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset)).hit()) {
+                return totalRadiance * medium.transmittance(lightSample.distance);
             }
         }
     }
@@ -80,6 +106,104 @@ struct Path {
 
 interface Integrator {
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng);
+};
+
+struct VolumePathTracingIntegrator : Integrator {
+    uint russianRouletteDepth;
+    uint envSamplesPerBounce;
+    uint meshSamplesPerBounce;
+
+    static VolumePathTracingIntegrator create(uint russianRouletteDepth, uint envSamplesPerBounce, uint meshSamplesPerBounce) {
+        VolumePathTracingIntegrator integrator;
+        integrator.russianRouletteDepth = russianRouletteDepth;
+        integrator.envSamplesPerBounce = envSamplesPerBounce;
+        integrator.meshSamplesPerBounce = meshSamplesPerBounce;
+        return integrator;
+    }
+
+    float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
+        Path path = Path::create(initialRay);
+        while (true) {
+            const float mediumTMax = scene.globalMedium.sample(rng.getFloat());
+            const Intersection its = Intersection::find(scene.tlas, path.ray, mediumTMax);
+            if (its.hit()) {
+                // decode mesh attributes and material from intersection
+                const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
+                const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
+                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, λ);
+
+                const float3 outgoingDirWs = -path.ray.direction;
+                const Frame shadingFrame = selectFrame(surface, material, outgoingDirWs);
+                const float3 outgoingDirSs = shadingFrame.worldToFrame(outgoingDirWs);
+
+                // attenuate throughput by transmittance, divided by P(t > tHit)
+                {
+                    const float tHit = distance(path.ray.origin, surface.position);
+                    const float pMoreThanT = scene.globalMedium.transmittance(tHit);
+                    const float transmittance = scene.globalMedium.transmittance(tHit);
+                    path.throughput *= transmittance / pMoreThanT;
+                }
+
+                // collect light from emissive meshes
+                {
+                    const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
+                    const float weight = misWeight(1, path.ray.pdf, meshSamplesPerBounce, lightPdf);
+                    path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
+                }
+
+                // accumulate direct light samples
+                if (!bsdf.isDelta()) {
+                    for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
+                        float2 rand = float2(rng.getFloat(), rng.getFloat());
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, shadingFrame, scene.envMap, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, scene.globalMedium, rand, envSamplesPerBounce, 1);
+                    }
+
+                    for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
+                        float2 rand = float2(rng.getFloat(), rng.getFloat());
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, shadingFrame, scene.meshLights, bsdf, outgoingDirSs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, scene.globalMedium, rand, meshSamplesPerBounce, 1);
+                    }
+                }
+
+                // set up next bounce
+                {
+                    const BSDFSample sample = bsdf.sample(outgoingDirSs, float2(rng.getFloat(), rng.getFloat()));
+
+                    path.ray.direction = shadingFrame.frameToWorld(sample.dirFs);
+                    path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
+                    path.ray.pdf = sample.eval.pdf;
+                    path.throughput *= sample.eval.reflectance;
+                }
+            } else {
+                path.throughput *= scene.globalMedium.transmittance(mediumTMax) / scene.globalMedium.pdf(mediumTMax);
+
+                const Isotropic phaseFunction;
+                const PhaseFunctionSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
+                path.ray.origin = path.ray.origin + path.ray.direction * mediumTMax;
+                path.ray.direction = sample.dirWs;
+                path.ray.pdf = 1.#INF; // lights not sampled
+                path.throughput *= scene.globalMedium.σ_s * sample.eval.attenuation;
+            }
+            path.bounceCount += 1;
+
+            // terminate if lost at russian roulette
+            {
+                const float pSurvive = (path.throughput == 0 || path.bounceCount > russianRouletteDepth ? min(0.95, path.throughput) : 1);
+                if (rng.getFloat() < (1 - pSurvive)) return path.radiance;
+                path.throughput /= pSurvive;
+            }
+        }
+
+        // we only get here on misses -- terminations for other reasons return from loop
+
+        // handle env map
+        {
+            const LightEvaluation l = scene.envMap.evaluate(λ, path.ray.direction);
+            const float weight = misWeight(1, path.ray.pdf, envSamplesPerBounce, l.pdf);
+            path.radiance += path.throughput * l.radiance * weight;
+        }
+
+        return path.radiance;
+    }
 };
 
 struct PathTracingIntegrator : Integrator {

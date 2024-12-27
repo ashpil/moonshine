@@ -339,6 +339,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
 
     imports.appendSlice(&.{
         compileShader(b, .ray_tracing, "hrtsystem/input.hlsl"),
+        compileShader(b, .ray_tracing, "hrtsystem/main_volume_pt.hlsl"),
         compileShader(b, .ray_tracing, "hrtsystem/main_pt.hlsl"),
         compileShader(b, .ray_tracing, "hrtsystem/main_direct.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/equirectangular_to_equal_area.hlsl"),

@@ -15,10 +15,14 @@ struct [raypayload] Intersection {
         return its;
     }
 
-    // traces a ray to find the nearest intersection
     static Intersection find(RaytracingAccelerationStructure accel, Ray ray) {
+        return Intersection::find(accel, ray, 1.#INF);
+    }
+
+    // traces a ray to find the nearest intersection where tHit < tMax
+    static Intersection find(RaytracingAccelerationStructure accel, Ray ray, float tmax) {
         Intersection its;
-        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(0, 1.#INF), its);
+        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, 0xFF, 0, 0, 0, ray.desc(0, tmax), its);
         return its;
     }
 

@@ -15,8 +15,9 @@ const Camera = hrtsystem.CameraManager;
 const Accel = hrtsystem.Accel;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
-const PathTracingPipeline = hrtsystem.pipeline.PathTracing;
 const DirectLightingPipeline = hrtsystem.pipeline.DirectLighting;
+const PathTracingPipeline = hrtsystem.pipeline.PathTracing;
+const VolumePathTracingPipeline = hrtsystem.pipeline.VolumePathTracing;
 const ObjectPicker = hrtsystem.ObjectPicker;
 
 const displaysystem = engine.displaysystem;
@@ -80,8 +81,9 @@ const Integrator = struct {
     }
 
     const Variants = struct {
-        path_tracing: IntegratorWithOptions(PathTracingPipeline),
         direct_lighting: IntegratorWithOptions(DirectLightingPipeline),
+        path_tracing: IntegratorWithOptions(PathTracingPipeline),
+        volume_path_tracing: IntegratorWithOptions(VolumePathTracingPipeline),
     };
 
     const Type = blk: {
