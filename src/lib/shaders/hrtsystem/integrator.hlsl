@@ -26,15 +26,16 @@ float misWeight(const uint fCount, const float fPdf, const uint gCount, const fl
 template <class Light, class BSDF>
 float estimateDirectMISLight(RaytracingAccelerationStructure accel, Frame frame, Light light, BSDF material, float3 outgoingDirFs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
     const LightSample lightSample = light.sample(λ, positionWs, rand);
-    const float3 lightDirWs = normalize(lightSample.connection);
 
     if (lightSample.eval.radiance != 0) {
-        const float3 lightDirFs = frame.worldToFrame(lightDirWs);
-        const BSDFEvaluation bsdfEval = material.evaluate(lightDirFs, outgoingDirFs);
+        const float3 incomingDirFs = frame.worldToFrame(lightSample.dirWs);
+        const BSDFEvaluation bsdfEval = material.evaluate(incomingDirFs, outgoingDirFs);
         if (bsdfEval.reflectance != 0) {
             const float weight = misWeight(lightSamplesTaken, lightSample.eval.pdf, brdfSamplesTaken, bsdfEval.pdf);
             const float totalRadiance = lightSample.eval.radiance * bsdfEval.reflectance * weight;
-            if (!ShadowIntersection::hit(accel, positionWs + faceForward(triangleNormalDirWs, lightDirWs) * spawnOffset, lightSample.connection - faceForward(triangleNormalDirWs, lightDirWs) * spawnOffset)) {
+
+            const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
+            if (!ShadowIntersection::hit(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset))) {
                 return totalRadiance;
             }
         }

@@ -18,7 +18,8 @@ struct LightEvaluation {
 };
 
 struct LightSample {
-    float3 connection; // connection vector in world space from initial position to sampled position
+    float3 dirWs;
+    float distance;
     LightEvaluation eval;
 };
 
@@ -66,9 +67,9 @@ struct EnvMap : Light {
         const float discretePdf = luminanceTexture[idx] * float(size * size) / integral;
         const float2 uv = (float2(idx) + rand) / float2(size, size);
 
-        const float envMapDistance = 10000000000;
         LightSample lightSample;
-        lightSample.connection = squareToEqualAreaSphere(uv) * envMapDistance;
+        lightSample.dirWs = squareToEqualAreaSphere(uv);
+        lightSample.distance = 1.#INF;
         lightSample.eval.pdf = discretePdf / (4.0 * PI);
         lightSample.eval.radiance = Spectrum::sampleEmission(λ, rgbTexture[idx]) / lightSample.eval.pdf;
 
@@ -121,9 +122,9 @@ struct TriangleLight: Light {
         const SurfacePoint surface = t.surfacePoint(barycentrics, toWorld, toMesh);
 
         LightSample lightSample;
-        lightSample.connection = surface.position - positionWs;
-        lightSample.connection += faceForward(surface.triangleFrame.n, -lightSample.connection) * surface.spawnOffset;
-        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, normalize(lightSample.connection), surface.triangleFrame.n) / t.area(toWorld);
+        lightSample.dirWs = normalize(surface.position - positionWs);
+        lightSample.distance = distance(surface.position, positionWs) + dot(lightSample.dirWs, faceForward(surface.triangleFrame.n, -lightSample.dirWs) * surface.spawnOffset);
+        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) / t.area(toWorld);
         lightSample.eval.radiance = material.getEmissive(λ, surface.texcoord) / lightSample.eval.pdf;
 
         return lightSample;
