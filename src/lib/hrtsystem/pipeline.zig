@@ -298,48 +298,25 @@ pub const StandardPushConstants = extern struct {
     } = .{},
 };
 
-pub const VolumePathTracing = Pipeline(.{
-    .shader_path = "hrtsystem/main_volume_pt.hlsl",
-    .SpecConstants = extern struct {
-        russian_roulette_depth: u32 = 3,
-        env_samples_per_bounce: u32 = 1,
-        mesh_samples_per_bounce: u32 = 1,
-    },
-    .PushConstants = StandardPushConstants,
-    .additional_descriptor_layout_count = 2,
-    .PushSetBindings = StandardBindings,
-    .stages = &[_]Stage {
-        .{ .type = .raygen, .entrypoint = "raygen" },
-        .{ .type = .miss, .entrypoint = "miss" },
-        .{ .type = .miss, .entrypoint = "shadowmiss" },
-        .{ .type = .closest_hit, .entrypoint = "closesthit" },
-    }
-});
+pub const Integrator = enum(u32) {
+    direct_lighting,
+    path_tracing,
+    volume_path_tracing,
+};
 
-pub const PathTracing = Pipeline(.{
-    .shader_path = "hrtsystem/main_pt.hlsl",
+pub const StandardPipeline = Pipeline(.{
+    .shader_path = "hrtsystem/main.hlsl",
     .SpecConstants = extern struct {
-        russian_roulette_depth: u32 = 3,
-        env_samples_per_bounce: u32 = 1,
-        mesh_samples_per_bounce: u32 = 1,
-    },
-    .PushConstants = StandardPushConstants,
-    .additional_descriptor_layout_count = 2,
-    .PushSetBindings = StandardBindings,
-    .stages = &[_]Stage {
-        .{ .type = .raygen, .entrypoint = "raygen" },
-        .{ .type = .miss, .entrypoint = "miss" },
-        .{ .type = .miss, .entrypoint = "shadowmiss" },
-        .{ .type = .closest_hit, .entrypoint = "closesthit" },
-    }
-});
-
-pub const DirectLighting = Pipeline(.{
-    .shader_path = "hrtsystem/main_direct.hlsl",
-    .SpecConstants = extern struct {
-        env_samples: u32 = 1,
-        mesh_samples: u32 = 1,
-        brdf_samples: u32 = 1,
+        integrator: Integrator = .path_tracing,
+        direct_lighting_env_samples: u32 = 1,
+        direct_lighting_mesh_samples: u32 = 1,
+        direct_lighting_brdf_samples: u32 = 1,
+        path_tracing_russian_roulette_depth: u32 = 3,
+        path_tracing_env_samples_per_bounce: u32 = 1,
+        path_tracing_mesh_samples_per_bounce: u32 = 1,
+        volume_path_tracing_russian_roulette_depth: u32 = 3,
+        volume_path_tracing_env_samples_per_bounce: u32 = 1,
+        volume_path_tracing_mesh_samples_per_bounce: u32 = 1,
     },
     .PushConstants = StandardPushConstants,
     .additional_descriptor_layout_count = 2,

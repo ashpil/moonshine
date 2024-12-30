@@ -37,8 +37,25 @@ struct PushConsts {
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
-template <class Integrator>
-void integrate(Integrator integrator) {
+enum class IntegratorType : uint {
+    DirectLight,
+    PathTracing,
+    VolumePathTracing,
+};
+
+[[vk::constant_id(0)]] const uint dIntegratorType = 1;
+[[vk::constant_id(1)]] const uint dDirectLightEnvSamples = 1;  // how many times the environment map should be sampled for light
+[[vk::constant_id(2)]] const uint dDirectLightMeshSamples = 1; // how many times emissive meshes should be sampled for light
+[[vk::constant_id(3)]] const uint dDirectLightBrdfSamples = 1; // how many times BRDF should be sampled for light
+[[vk::constant_id(4)]] const uint dPathTracingRussianRouletteDepth = 3; // at which bounce depth russian roulette should start
+[[vk::constant_id(5)]] const uint dPathTracingEnvSamplesPerBounce = 1;  // how many times the environment map should be sampled per bounce for light
+[[vk::constant_id(6)]] const uint dPathTracingMeshSamplesPerBounce = 1; // how many times emissive meshes should be sampled per bounce for light
+[[vk::constant_id(7)]] const uint dVolumePathTracingRussianRouletteDepth = 3; // at which bounce depth russian roulette should start
+[[vk::constant_id(8)]] const uint dVolumePathTracingEnvSamplesPerBounce = 1;  // how many times the environment map should be sampled per bounce for light
+[[vk::constant_id(9)]] const uint dVolumePathTracingMeshSamplesPerBounce = 1; // how many times emissive meshes should be sampled per bounce for light
+
+[shader("raygeneration")]
+void raygen() {
     const uint2 imageCoords = DispatchRaysIndex().xy;
     const uint2 imageSize = DispatchRaysDimensions().xy;
 
@@ -65,7 +82,20 @@ void integrate(Integrator integrator) {
 
     // trace the ray
     WavelengthSample w = WavelengthSample::sampleVisible(rng.getFloat());
-    const float newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+
+    const IntegratorType t = (IntegratorType)dIntegratorType;
+    float newSample;
+    // not using a switch here as that causes a strange dxc miscompilation
+    if (t == IntegratorType::DirectLight) {
+        const DirectLightIntegrator integrator = DirectLightIntegrator::create(dDirectLightEnvSamples, dDirectLightMeshSamples, dDirectLightBrdfSamples);
+        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+    } else if (t == IntegratorType::PathTracing) {
+        const PathTracingIntegrator integrator = PathTracingIntegrator::create(dPathTracingRussianRouletteDepth, dPathTracingEnvSamplesPerBounce, dPathTracingMeshSamplesPerBounce);
+        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+    } else if (t == IntegratorType::VolumePathTracing) {
+        const VolumePathTracingIntegrator integrator = VolumePathTracingIntegrator::create(dVolumePathTracingRussianRouletteDepth, dVolumePathTracingEnvSamplesPerBounce, dVolumePathTracingMeshSamplesPerBounce);
+        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+    }
 
     // accumulate
     const float3 priorSampleAverage = pushConsts.sampleCount == 0 ? 0 : dOutputImage[imageCoords].xyz;
@@ -94,4 +124,3 @@ void miss(inout Intersection its) {
 void shadowmiss(inout ShadowIntersection its) {
     its.inShadow = false;
 }
-

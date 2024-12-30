@@ -6,7 +6,7 @@ const engine = @import("engine");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
-const Pipeline = engine.hrtsystem.pipeline.PathTracing;
+const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 
 const vk_helpers = core.vk_helpers;
@@ -102,10 +102,7 @@ pub fn main() !void {
     try logger.log("load world");
 
     try encoder.begin();
-    var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .env_samples_per_bounce = 1,
-        .mesh_samples_per_bounce = 1,
-    }, .{ scene.background.sampler });
+    var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{}, .{ scene.background.sampler });
     defer pipeline.destroy(&context);
     try encoder.submitAndIdleUntilDone(&context);
 

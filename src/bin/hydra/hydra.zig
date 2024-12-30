@@ -16,7 +16,7 @@ const MeshManager = hrtsystem.MeshManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const TextureManager = MaterialManager.TextureManager;
 const Accel = hrtsystem.Accel;
-const Pipeline = hrtsystem.pipeline.PathTracing;
+const Pipeline = hrtsystem.pipeline.StandardPipeline;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -109,8 +109,8 @@ pub const HdMoonshine = struct {
     };
 
     const pipeline_settings = Pipeline.SpecConstants {
-        .env_samples_per_bounce = 0,
-        .mesh_samples_per_bounce = 1,
+        .path_tracing_env_samples_per_bounce = 0,
+        .path_tracing_mesh_samples_per_bounce = 1,
     };
 
     pub export fn HdMoonshineCreate() ?*HdMoonshine {

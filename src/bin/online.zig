@@ -15,9 +15,7 @@ const Camera = hrtsystem.CameraManager;
 const Accel = hrtsystem.Accel;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
-const DirectLightingPipeline = hrtsystem.pipeline.DirectLighting;
-const PathTracingPipeline = hrtsystem.pipeline.PathTracing;
-const VolumePathTracingPipeline = hrtsystem.pipeline.VolumePathTracing;
+const Pipeline = hrtsystem.pipeline.StandardPipeline;
 const ObjectPicker = hrtsystem.ObjectPicker;
 
 const displaysystem = engine.displaysystem;
@@ -70,106 +68,6 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 
 pub const required_vulkan_functions = displaysystem.required_vulkan_functions ++ Platform.required_vulkan_functions ++ hrtsystem.required_vulkan_functions;
 
-// I'm certain at some point I'll look back on this and think that there's absolutely no reason this required this level of
-// metaprogramming. in fact, I'm already sort of doing it now
-const Integrator = struct {
-    pub fn IntegratorWithOptions(Pipeline: type) type {
-        return struct {
-            pipeline: Pipeline,
-            options: Pipeline.SpecConstants,
-        };
-    }
-
-    const Variants = struct {
-        direct_lighting: IntegratorWithOptions(DirectLightingPipeline),
-        path_tracing: IntegratorWithOptions(PathTracingPipeline),
-        volume_path_tracing: IntegratorWithOptions(VolumePathTracingPipeline),
-    };
-
-    const Type = blk: {
-        var fields: [@typeInfo(Variants).@"struct".fields.len]std.builtin.Type.EnumField = undefined;
-        for (@typeInfo(Variants).@"struct".fields, &fields, 0..) |struct_field, *enum_field, i| {
-            enum_field.* = std.builtin.Type.EnumField {
-                .name = struct_field.name,
-                .value = i,
-            };
-        }
-        break :blk @Type(std.builtin.Type {
-            .@"enum" = std.builtin.Type.Enum {
-                .tag_type = usize,
-                .fields = &fields,
-                .decls = &.{},
-                .is_exhaustive = true,
-            }
-        });
-    };
-
-    variants: Variants,
-    active: Type,
-
-    pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, scene: Scene) !Integrator {
-        var integrator: Integrator = undefined;
-        integrator.active = .path_tracing;
-
-        inline for (@typeInfo(Variants).@"struct".fields) |field| {
-            @field(integrator.variants, field.name).pipeline = try @typeInfo(field.type).@"struct".fields[0].type.create(vc, allocator, encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{}, .{ scene.background.sampler });
-            @field(integrator.variants, field.name).options = .{};
-        }
-
-        return integrator;
-    }
-
-    // recreates all so that a change in a shader doesn't get missed
-    pub fn recreate(self: *Integrator, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder) std.BoundedArray(anyerror!vk.Pipeline, @typeInfo(Variants).@"struct".fields.len) {
-        var out = std.BoundedArray(anyerror!vk.Pipeline, @typeInfo(Variants).@"struct".fields.len) {};
-        inline for (@typeInfo(Variants).@"struct".fields) |field| {
-            out.append(@field(self.variants, field.name).pipeline.recreate(vc, allocator, encoder, @field(self.variants, field.name).options)) catch unreachable;
-        }
-        return out;
-    }
-
-    pub fn integrate(self: Integrator, scene: Scene, encoder: *Encoder, active_camera: u32, active_sensor: u32) void {
-        inline for (@typeInfo(Variants).@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, @tagName(self.active))) {
-                const integrator = @field(self.variants, field.name).pipeline;
-
-                // bind some stuff
-                integrator.recordBindPipeline(encoder.buffer);
-                integrator.recordBindAdditionalDescriptorSets(encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
-
-                // push some stuff
-                integrator.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(active_sensor, 0));
-                integrator.recordPushConstants(encoder.buffer, .{ .camera = scene.camera.cameras.items[active_camera][1], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
-
-                // trace some stuff
-                integrator.recordTraceRays(encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
-                break;
-            }
-        } else unreachable;
-    }
-
-    pub fn exposeToImgui(self: *Integrator) void {
-        inline for (@typeInfo(Variants).@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, @tagName(self.active))) {
-                inline for (@typeInfo(@TypeOf(@field(self.variants, field.name).options)).@"struct".fields) |option| {
-                    _ = switch (option.type) {
-                        u32 => imgui.dragScalar(u32, option.name, &@field(@field(self.variants, field.name).options, option.name), 1.0, 0, std.math.maxInt(u32)),
-                        else => unreachable, // TODO
-                    };
-                }
-
-                break;
-            }
-        } else unreachable;
-    }
-
-    pub fn destroy(self: *Integrator, vc: *const VulkanContext) void {
-        inline for (@typeInfo(Variants).@"struct".fields) |field| {
-            @field(self.variants, field.name).pipeline.destroy(vc);
-        }
-    }
-};
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -208,8 +106,9 @@ pub fn main() !void {
     var object_picker = try ObjectPicker.create(&context, allocator, &encoder);
     defer object_picker.destroy(&context);
 
-    var integrator = try Integrator.create(&context, allocator, &encoder, scene);
-    defer integrator.destroy(&context);
+    var spec_constants = Pipeline.SpecConstants {};
+    var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, spec_constants, .{ scene.background.sampler });
+    defer pipeline.destroy(&context);
 
     var gui = try Platform.create(&context, display.swapchain, window, window_extent, &encoder);
     defer gui.destroy(&context);
@@ -294,24 +193,36 @@ pub fn main() !void {
         }
         if (imgui.collapsingHeader("Integrator")) {
             imgui.pushItemWidth(imgui.getFontSize() * -14.2);
-            if (imgui.enumCombo(Integrator.Type, "Type", &integrator.active)) {
-                scene.camera.sensors.items[active_sensor].clear();
+            _ = imgui.enumCombo(hrtsystem.pipeline.Integrator, "Type", &spec_constants.integrator);
+            switch (spec_constants.integrator) {
+                .direct_lighting => {
+                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.direct_lighting_env_samples, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.direct_lighting_mesh_samples, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "BRDF Samples", &spec_constants.direct_lighting_brdf_samples, 1.0, 0, std.math.maxInt(u32));
+                },
+                .path_tracing => {
+                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
+                },
+                .volume_path_tracing => {
+                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.volume_path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.volume_path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                    _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.volume_path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
+                }
             }
-            integrator.exposeToImgui();
             const last_rebuild_failed = rebuild_error;
             if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
                 rebuild_error = false;
                 try encoder.begin();
-                for (integrator.recreate(&context, allocator, &encoder).slice()) |result| {
-                    if (result) |old_pipeline| {
-                        try frame_encoder.attachResource(old_pipeline);
-                        scene.camera.sensors.items[active_sensor].clear();
-                    } else |err| if (err == error.ShaderCompileFail) {
-                        rebuild_error = true;
-                    } else return err;
-                }
+                if (pipeline.recreate(&context, allocator, &encoder, spec_constants)) |old_pipeline| {
+                    try frame_encoder.attachResource(old_pipeline);
+                    scene.camera.sensors.items[active_sensor].clear();
+                } else |err| if (err == error.ShaderCompileFail) {
+                    rebuild_error = true;
+                } else return err;
                 try encoder.submitAndIdleUntilDone(&context);
                 if (!rebuild_error) {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
@@ -438,7 +349,11 @@ pub fn main() !void {
         if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
             scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
-            integrator.integrate(scene, frame_encoder, active_camera, active_sensor);
+            pipeline.recordBindPipeline(frame_encoder.buffer);
+            pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
+            pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_sensor, 0));
+            pipeline.recordPushConstants(frame_encoder.buffer, .{ .camera = scene.camera.cameras.items[active_camera][1], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
+            pipeline.recordTraceRays(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
             scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }
 

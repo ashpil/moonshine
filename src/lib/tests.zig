@@ -6,7 +6,7 @@ const engine = @import("engine");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
-const Pipeline = engine.hrtsystem.pipeline.PathTracing;
+const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
 const Scene = engine.hrtsystem.Scene;
 const World = engine.hrtsystem.World;
 const MeshManager = engine.hrtsystem.MeshManager;
@@ -357,8 +357,8 @@ test "white sphere on white background is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .env_samples_per_bounce = 0,
-        .mesh_samples_per_bounce = 0,
+        .path_tracing_env_samples_per_bounce = 0,
+        .path_tracing_mesh_samples_per_bounce = 0,
     }, .{ scene.background.sampler });
     defer pipeline.destroy(&tc.vc);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
@@ -369,8 +369,8 @@ test "white sphere on white background is white" {
     // do that again but with env sampling
     try tc.encoder.begin();
     const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
-        .env_samples_per_bounce = 1,
-        .mesh_samples_per_bounce = 0,
+        .path_tracing_env_samples_per_bounce = 1,
+        .path_tracing_mesh_samples_per_bounce = 0,
     });
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
@@ -456,8 +456,8 @@ test "inside illuminating sphere is white" {
     defer scene.destroy(&tc.vc, allocator);
 
     var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
-        .env_samples_per_bounce = 0,
-        .mesh_samples_per_bounce = 0,
+        .path_tracing_env_samples_per_bounce = 0,
+        .path_tracing_mesh_samples_per_bounce = 0,
     }, .{ scene.background.sampler });
     defer pipeline.destroy(&tc.vc);
 
@@ -469,8 +469,8 @@ test "inside illuminating sphere is white" {
     try tc.encoder.begin();
     // do that again but with mesh sampling
     const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
-        .env_samples_per_bounce = 0,
-        .mesh_samples_per_bounce = 1,
+        .path_tracing_env_samples_per_bounce = 0,
+        .path_tracing_mesh_samples_per_bounce = 1,
     });
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
