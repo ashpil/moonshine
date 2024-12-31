@@ -10,6 +10,7 @@ const Encoder = core.Encoder;
 const descriptor = core.descriptor;
 
 const Camera = @import("./CameraManager.zig");
+const World = @import("./World.zig");
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -292,10 +293,7 @@ pub const StandardPushConstants = extern struct {
     camera: Camera.Camera,
     aspect_ratio: f32,
     sample_count: u32,
-    global_medium: extern struct {
-        @"σ_s": f32 = 0.0,
-        @"σ_a": f32 = 0.0,
-    } = .{},
+    global_medium: World.Medium = .{},
 };
 
 pub const Integrator = enum(u32) {

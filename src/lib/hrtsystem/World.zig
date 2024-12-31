@@ -35,6 +35,11 @@ pub const PolymorphicBSDF = MaterialManager.PolymorphicBSDF;
 pub const Instance = Accel.Instance;
 pub const Geometry = Accel.Geometry;
 
+pub const Medium = extern struct {
+    @"σ_s": f32 = 0.0,
+    @"σ_a": f32 = 0.0,
+};
+
 meshes: MeshManager,
 materials: MaterialManager,
 
