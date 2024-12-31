@@ -83,18 +83,24 @@ void raygen() {
     // trace the ray
     WavelengthSample w = WavelengthSample::sampleVisible(rng.getFloat());
 
-    const IntegratorType t = (IntegratorType)dIntegratorType;
+    const IntegratorType integratorType = (IntegratorType)dIntegratorType;
     float newSample;
-    // not using a switch here as that causes a strange dxc miscompilation
-    if (t == IntegratorType::DirectLight) {
-        const DirectLightIntegrator integrator = DirectLightIntegrator::create(dDirectLightEnvSamples, dDirectLightMeshSamples, dDirectLightBrdfSamples);
-        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
-    } else if (t == IntegratorType::PathTracing) {
-        const PathTracingIntegrator integrator = PathTracingIntegrator::create(dPathTracingRussianRouletteDepth, dPathTracingEnvSamplesPerBounce, dPathTracingMeshSamplesPerBounce);
-        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
-    } else if (t == IntegratorType::VolumePathTracing) {
-        const VolumePathTracingIntegrator integrator = VolumePathTracingIntegrator::create(dVolumePathTracingRussianRouletteDepth, dVolumePathTracingEnvSamplesPerBounce, dVolumePathTracingMeshSamplesPerBounce);
-        newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+    switch (integratorType) {
+        case IntegratorType::DirectLight: {
+            const DirectLightIntegrator integrator = DirectLightIntegrator::create(dDirectLightEnvSamples, dDirectLightMeshSamples, dDirectLightBrdfSamples);
+            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            break;
+        }
+        case IntegratorType::PathTracing: {
+            const PathTracingIntegrator integrator = PathTracingIntegrator::create(dPathTracingRussianRouletteDepth, dPathTracingEnvSamplesPerBounce, dPathTracingMeshSamplesPerBounce);
+            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            break;
+        }
+        case IntegratorType::VolumePathTracing: {
+            const VolumePathTracingIntegrator integrator = VolumePathTracingIntegrator::create(dVolumePathTracingRussianRouletteDepth, dVolumePathTracingEnvSamplesPerBounce, dVolumePathTracingMeshSamplesPerBounce);
+            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            break;
+        }
     }
 
     // accumulate
