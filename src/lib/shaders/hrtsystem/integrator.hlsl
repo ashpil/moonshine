@@ -67,26 +67,6 @@ float estimateDirectVolumetric(RaytracingAccelerationStructure accel, Light ligh
     return 0;
 }
 
-template <class Light, class PhaseFunction>
-float estimateDirectVolumetricPhase(RaytracingAccelerationStructure accel, Light light, PhaseFunction material, float3 outgoingDirWs, float λ, float3 positionWs, Homogeneous medium, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
-    const LightSample lightSample = light.sample(λ, positionWs, rand);
-
-    if (lightSample.eval.radiance != 0) {
-        const PhaseFunctionEvaluation bsdfEval = material.evaluate(lightSample.dirWs, outgoingDirWs);
-        if (bsdfEval.attenuation != 0) {
-            const float weight = misWeight(lightSamplesTaken, lightSample.eval.pdf, brdfSamplesTaken, bsdfEval.pdf);
-            const float totalRadiance = lightSample.eval.radiance * bsdfEval.attenuation * weight;
-
-            const Ray ray = {positionWs, lightSample.dirWs, 1.#INF};
-            if (!Intersection::find(accel, ray, lightSample.distance).hit()) {
-                return totalRadiance * medium.transmittance(lightSample.distance);
-            }
-        }
-    }
-
-    return 0;
-}
-
 // selects a shading normal based on the most preferred normal that is plausible
 Frame selectFrame(const SurfacePoint surface, const Material material, const float3 outgoingDirWs) {
     const Frame textureFrame = material.getTextureFrame(surface.texcoord, surface.frame);
@@ -197,16 +177,16 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetricPhase(scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, scene.globalMedium, rand, envSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, scene.globalMedium, rand, envSamplesPerBounce, 1);
                 }
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetricPhase(scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, scene.globalMedium, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, scene.globalMedium, rand, meshSamplesPerBounce, 1);
                 }
 
-                const PhaseFunctionSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
-                path.ray.direction = sample.dirWs;
+                const BSDFSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
+                path.ray.direction = sample.dir;
                 path.ray.origin = position;
                 path.ray.pdf = sample.eval.pdf;
                 path.throughput *= sample.eval.attenuation;
