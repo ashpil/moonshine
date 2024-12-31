@@ -483,7 +483,7 @@ test "inside illuminating sphere is white" {
     const volume_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
         .integrator = .volume_path_tracing,
         .path_tracing_env_samples_per_bounce = 0,
-        .path_tracing_mesh_samples_per_bounce = 0,
+        .path_tracing_mesh_samples_per_bounce = 1,
     });
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
