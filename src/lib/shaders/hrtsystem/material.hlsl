@@ -51,7 +51,7 @@ struct Material {
     }
 };
 
-// all code below expects stuff to be in the reflection frame
+// most material code below expects stuff to be in the reflection frame
 
 interface MicrofacetDistribution {
     float D(float3 m);
@@ -175,7 +175,7 @@ struct BSDFEvaluation {
 };
 
 struct BSDFSample {
-    float3 dirFs;
+    float3 dir;
     BSDFEvaluation eval;
 };
 
@@ -214,7 +214,7 @@ struct Lambert : BSDF {
         if (w_o.z < 0.0) w_i.z *= -1;
 
         BSDFSample sample;
-        sample.dirFs = w_i;
+        sample.dir = w_i;
         sample.eval = evaluate(w_i, w_o);
         // ideally we would never sample something with a zero pdf...
         // not sure if there's a bug here currently or if this is to be expected
@@ -265,11 +265,11 @@ struct StandardPBR : BSDF {
         BSDFSample sample;
         if (coinFlipRemap(pSpecularSample, square.x)) {
             float3 h = distr.sample(w_o, square);
-            sample.dirFs = -reflect(w_o, h);
+            sample.dir = -reflect(w_o, h);
         } else {
-            sample.dirFs = Lambert::create(reflectance).sample(w_o, square).dirFs;
+            sample.dir = Lambert::create(reflectance).sample(w_o, square).dir;
         }
-        sample.eval = evaluate(sample.dirFs, w_o);
+        sample.eval = evaluate(sample.dir, w_o);
         // ideally we would never sample something with a zero pdf...
         // not sure if there's a bug here currently or if this is to be expected
         sample.eval.reflectance = sample.eval.pdf > 0 ? sample.eval.reflectance / sample.eval.pdf : 0;
@@ -352,7 +352,7 @@ struct DisneyDiffuse : BSDF {
 struct PerfectMirror : BSDF {
     BSDFSample sample(float3 w_o, float2 square) {
         BSDFSample sample;
-        sample.dirFs = float3(-w_o.x, -w_o.y, w_o.z);
+        sample.dir = float3(-w_o.x, -w_o.y, w_o.z);
         sample.eval.reflectance = 1;
         sample.eval.pdf = 1.#INF;
         return sample;
@@ -398,7 +398,7 @@ struct Glass : BSDF {
         BSDFSample sample;
 
         if (coinFlipRemap(fresnel, square.x)) {
-            sample.dirFs = float3(-w_o.x, -w_o.y, w_o.z);
+            sample.dir = float3(-w_o.x, -w_o.y, w_o.z);
         } else {
             float etaI;
             float etaT;
@@ -409,9 +409,9 @@ struct Glass : BSDF {
                 etaT = AIR_IOR;
                 etaI = intIOR;
             }
-            sample.dirFs = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
+            sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
         }
-        if (all(sample.dirFs != 0.0)) {
+        if (all(sample.dir != 0.0)) {
             sample.eval.reflectance = 1;
             sample.eval.pdf = 1.#INF;
         } else {
@@ -434,56 +434,68 @@ struct PolymorphicBSDF : BSDF {
     uint64_t addr;
     float2 texcoords;
     float λ;
+    Frame frame;
 
-    static PolymorphicBSDF load(Material material, float2 texcoords, float λ) {
+    static PolymorphicBSDF load(Material material, float2 texcoords, Frame frame, float λ) {
         PolymorphicBSDF bsdf;
         bsdf.type = material.type;
         bsdf.addr = material.addr;
         bsdf.texcoords = texcoords;
         bsdf.λ = λ;
+        bsdf.frame = frame;
         return bsdf;
     }
 
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
+        const float3 w_i_frame = frame.worldToFrame(w_i);
+        const float3 w_o_frame = frame.worldToFrame(w_o);
         switch (type) {
             case BSDFType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords, λ);
-                return m.evaluate(w_i, w_o);
+                return m.evaluate(w_i_frame, w_o_frame);
             }
             case BSDFType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords, λ);
-                return m.evaluate(w_i, w_o);
+                return m.evaluate(w_i_frame, w_o_frame);
             }
             case BSDFType::PerfectMirror: {
                 PerfectMirror m;
-                return m.evaluate(w_i, w_o);
+                return m.evaluate(w_i_frame, w_o_frame);
             }
             case BSDFType::Glass: {
                 Glass m = Glass::load(addr, λ);
-                return m.evaluate(w_i, w_o);
+                return m.evaluate(w_i_frame, w_o_frame);
             }
         }
     }
 
     BSDFSample sample(float3 w_o, float2 square) {
+        const float3 w_o_frame = frame.worldToFrame(w_o);
+        BSDFSample sample;
         switch (type) {
             case BSDFType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords, λ);
-                return m.sample(w_o, square);
+                sample = m.sample(w_o_frame, square);
+                break;
             }
             case BSDFType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords, λ);
-                return m.sample(w_o, square);
+                sample = m.sample(w_o_frame, square);
+                break;
             }
             case BSDFType::PerfectMirror: {
                 PerfectMirror m;
-                return m.sample(w_o, square);
+                sample = m.sample(w_o_frame, square);
+                break;
             }
             case BSDFType::Glass: {
                 Glass m = Glass::load(addr, λ);
-                return m.sample(w_o, square);
+                sample = m.sample(w_o_frame, square);
+                break;
             }
         }
+        sample.dir = frame.frameToWorld(sample.dir);
+        return sample;
     }
 
     bool isDelta() {
