@@ -163,12 +163,12 @@ namespace Fresnel {
 };
 
 struct BSDFEvaluation {
-    float reflectance;
+    float attenuation;
     float pdf;
 
     static BSDFEvaluation empty() {
         BSDFEvaluation eval;
-        eval.reflectance = 0;
+        eval.attenuation = 0;
         eval.pdf = 0;
         return eval;
     }
@@ -204,7 +204,7 @@ struct Lambert : BSDF {
 
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
         BSDFEvaluation eval;
-        eval.reflectance = Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) * reflectance / PI : 0.0;
+        eval.attenuation = Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) * reflectance / PI : 0.0;
         eval.pdf = Frame::sameHemisphere(w_i, w_o) ? abs(Frame::cosTheta(w_i)) / PI : 0.0;
         return eval;
     }
@@ -218,7 +218,7 @@ struct Lambert : BSDF {
         sample.eval = evaluate(w_i, w_o);
         // ideally we would never sample something with a zero pdf...
         // not sure if there's a bug here currently or if this is to be expected
-        sample.eval.reflectance = sample.eval.pdf > 0 ? sample.eval.reflectance / sample.eval.pdf : 0;
+        sample.eval.attenuation = sample.eval.pdf > 0 ? sample.eval.attenuation / sample.eval.pdf : 0;
         return sample;
     }
 
@@ -272,7 +272,7 @@ struct StandardPBR : BSDF {
         sample.eval = evaluate(sample.dir, w_o);
         // ideally we would never sample something with a zero pdf...
         // not sure if there's a bug here currently or if this is to be expected
-        sample.eval.reflectance = sample.eval.pdf > 0 ? sample.eval.reflectance / sample.eval.pdf : 0;
+        sample.eval.attenuation = sample.eval.pdf > 0 ? sample.eval.attenuation / sample.eval.pdf : 0;
         return sample;
     }
 
@@ -298,10 +298,10 @@ struct StandardPBR : BSDF {
         float D = distr.D(h);
         float specular = Frame::sameHemisphere(w_o, w_i) ? (F * G * D) / (4 * abs(Frame::cosTheta(w_i)) * abs(Frame::cosTheta(w_o))) : 0;
 
-        float diffuse = Lambert::create(reflectance).evaluate(w_i, w_o).reflectance;
+        float diffuse = Lambert::create(reflectance).evaluate(w_i, w_o).attenuation;
 
         BSDFEvaluation eval;
-        eval.reflectance = abs(Frame::cosTheta(w_i)) * specular + (1.0 - metalness) * diffuse;
+        eval.attenuation = abs(Frame::cosTheta(w_i)) * specular + (1.0 - metalness) * diffuse;
         eval.pdf = pdf(w_i, w_o);
         return eval;
     }
@@ -340,7 +340,7 @@ struct DisneyDiffuse : BSDF {
         float R_R = 2 * roughness * cosThetaHI * cosThetaHI;
         float retro = R_R * (F_I + F_O + F_I * F_O * (R_R - 1));
 
-        eval.reflectance *= ((1 - F_I / 2) * (1 - F_O / 2) + retro);
+        eval.attenuation *= ((1 - F_I / 2) * (1 - F_O / 2) + retro);
         return eval;
     }
 
@@ -353,7 +353,7 @@ struct PerfectMirror : BSDF {
     BSDFSample sample(float3 w_o, float2 square) {
         BSDFSample sample;
         sample.dir = float3(-w_o.x, -w_o.y, w_o.z);
-        sample.eval.reflectance = 1;
+        sample.eval.attenuation = 1;
         sample.eval.pdf = 1.#INF;
         return sample;
     }
@@ -412,7 +412,7 @@ struct Glass : BSDF {
             sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
         }
         if (all(sample.dir != 0.0)) {
-            sample.eval.reflectance = 1;
+            sample.eval.attenuation = 1;
             sample.eval.pdf = 1.#INF;
         } else {
             sample.eval = BSDFEvaluation::empty();
