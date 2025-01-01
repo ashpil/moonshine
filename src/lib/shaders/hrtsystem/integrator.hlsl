@@ -129,7 +129,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 // decode mesh attributes and material from intersection
                 const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), λ);
+                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
                 // attenuate throughput by transmittance, divided by P(t > tHit)
                 {
@@ -239,7 +239,7 @@ struct PathTracingIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), λ);
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             {
@@ -317,7 +317,7 @@ struct DirectLightIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), λ);
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             pathRadiance += material.getEmissive(λ, surface.texcoord);

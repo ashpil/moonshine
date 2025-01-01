@@ -434,43 +434,59 @@ struct PolymorphicBSDF : BSDF {
     uint64_t addr;
     float2 texcoords;
     float λ;
-    Frame frame;
+    Frame shadingFrame;
+    Frame triangleFrame;
 
-    static PolymorphicBSDF load(Material material, float2 texcoords, Frame frame, float λ) {
+    static PolymorphicBSDF load(Material material, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
         PolymorphicBSDF bsdf;
         bsdf.type = material.type;
         bsdf.addr = material.addr;
         bsdf.texcoords = texcoords;
         bsdf.λ = λ;
-        bsdf.frame = frame;
+        bsdf.shadingFrame = shadingFrame;
+        bsdf.triangleFrame = triangleFrame;
         return bsdf;
     }
 
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
-        const float3 w_i_frame = frame.worldToFrame(w_i);
-        const float3 w_o_frame = frame.worldToFrame(w_o);
+        BSDFEvaluation eval = BSDFEvaluation::empty();
+
+        // zero out cases where the shading normal and geometric normal disagree on the type of event
+        const bool geometricTransmission = sign(dot(w_i, triangleFrame.n)) != sign(dot(w_o, triangleFrame.n));
+        const bool shadingTransmission = sign(dot(w_i, shadingFrame.n)) != sign(dot(w_o, shadingFrame.n));
+        if (geometricTransmission != shadingTransmission) return eval;
+
+        const float3 w_i_frame = shadingFrame.worldToFrame(w_i);
+        const float3 w_o_frame = shadingFrame.worldToFrame(w_o);
+
         switch (type) {
             case BSDFType::StandardPBR: {
                 StandardPBR m = StandardPBR::load(addr, texcoords, λ);
-                return m.evaluate(w_i_frame, w_o_frame);
+                eval = m.evaluate(w_i_frame, w_o_frame);
+                break;
             }
             case BSDFType::Lambert: {
                 Lambert m = Lambert::load(addr, texcoords, λ);
-                return m.evaluate(w_i_frame, w_o_frame);
+                eval = m.evaluate(w_i_frame, w_o_frame);
+                break;
             }
             case BSDFType::PerfectMirror: {
                 PerfectMirror m;
-                return m.evaluate(w_i_frame, w_o_frame);
+                eval = m.evaluate(w_i_frame, w_o_frame);
+                break;
             }
             case BSDFType::Glass: {
                 Glass m = Glass::load(addr, λ);
-                return m.evaluate(w_i_frame, w_o_frame);
+                eval = m.evaluate(w_i_frame, w_o_frame);
+                break;
             }
         }
+
+        return eval;
     }
 
     BSDFSample sample(float3 w_o, float2 square) {
-        const float3 w_o_frame = frame.worldToFrame(w_o);
+        const float3 w_o_frame = shadingFrame.worldToFrame(w_o);
         BSDFSample sample;
         switch (type) {
             case BSDFType::StandardPBR: {
@@ -494,7 +510,16 @@ struct PolymorphicBSDF : BSDF {
                 break;
             }
         }
-        sample.dir = frame.frameToWorld(sample.dir);
+        sample.dir = shadingFrame.frameToWorld(sample.dir);
+
+        // zero out cases where the shading normal and geometric normal disagree on the type of event
+        const bool geometricTransmission = sign(dot(sample.dir, triangleFrame.n)) != sign(dot(w_o, triangleFrame.n));
+        const bool shadingTransmission = sign(dot(sample.dir, shadingFrame.n)) != sign(dot(w_o, shadingFrame.n));
+        if (geometricTransmission != shadingTransmission) {
+            sample.eval.attenuation = 0;
+            sample.eval.pdf = 0;
+        }
+
         return sample;
     }
 
