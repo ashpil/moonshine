@@ -168,7 +168,7 @@ struct VolumePathTracingIntegrator : Integrator {
                     path.ray.pdf = sample.eval.pdf;
                     path.throughput *= sample.eval.attenuation;
                 }
-            } else {
+            } else if (mediumTMax != 1.#INF) {
                 path.throughput *= scene.globalMedium.σ_s * scene.globalMedium.transmittance(mediumTMax) / scene.globalMedium.pdf(mediumTMax);
 
                 const float3 outgoingDirWs = -path.ray.direction;
@@ -190,6 +190,9 @@ struct VolumePathTracingIntegrator : Integrator {
                 path.ray.origin = position;
                 path.ray.pdf = sample.eval.pdf;
                 path.throughput *= sample.eval.attenuation;
+            } else {
+                // traced an infinite ray that hit nothing
+                break;
             }
             path.bounceCount += 1;
 
