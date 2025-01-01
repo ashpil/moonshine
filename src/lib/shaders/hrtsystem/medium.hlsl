@@ -24,7 +24,12 @@ struct Homogeneous : Medium {
     }
 
     float transmittance(float distance) {
-        return exp(-σ_t() * distance);
+        if (σ_t() == 0) {
+            // if distance == INF and σ_t() == 0 we want 1 as a result, not nan
+            return 1;
+        } else {
+            return exp(-σ_t() * distance);
+        }
     }
 
     float pdf(float distance) {
