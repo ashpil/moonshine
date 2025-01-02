@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ray.hlsl"
+#include "spectrum.hlsl"
 
 interface Medium {
     float transmittance(float distance);
@@ -44,5 +45,14 @@ struct Homogeneous : Medium {
     // as the border case where σ_s == 0 should mean there is no scattering
     float sample(float rand) {
         return -log(1 - rand) / σ_t();
+    }
+};
+
+struct RGBHomogeneous {
+    float3 σ_s;
+    float3 σ_a;
+
+    Homogeneous sample(const float λ) {
+        return Homogeneous::create(Spectrum::sampleReflectance(λ, σ_s), Spectrum::sampleReflectance(λ, σ_a));
     }
 };

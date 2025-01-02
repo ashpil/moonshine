@@ -130,7 +130,8 @@ struct VolumePathTracingIntegrator : Integrator {
     }
 
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
-        Path path = Path::create(initialRay, scene.globalMedium);
+        const Homogeneous globalMedium = scene.globalMedium.sample(λ);
+        Path path = Path::create(initialRay, globalMedium);
         while (true) {
             const float mediumTMax = path.medium.sample(rng.getFloat());
             const Intersection its = Intersection::find(scene.tlas, path.ray, mediumTMax);
@@ -178,9 +179,9 @@ struct VolumePathTracingIntegrator : Integrator {
                     const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
                     if (transmission) {
                         if (entering) {
-                            path.medium = material.medium;
+                            path.medium = material.medium.sample(λ);
                         } else {
-                            path.medium = scene.globalMedium;
+                            path.medium = globalMedium;
                         }
                     }
 

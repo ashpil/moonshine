@@ -33,7 +33,7 @@
 struct PushConsts {
     Camera camera;
     uint sampleCount;
-    Homogeneous globalMedium;
+    RGBHomogeneous globalMedium;
     float globalIOR;
 };
 [[vk::push_constant]] PushConsts pushConsts;

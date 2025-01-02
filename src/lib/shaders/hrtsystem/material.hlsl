@@ -45,7 +45,7 @@ struct Material {
     uint normal;
     uint emissive;
 
-    Homogeneous medium;
+    RGBHomogeneous medium;
 
     // IOR of the interior of the volume enclosed by the mesh of this material
     // only valid to be used when mesh has non-zero volume

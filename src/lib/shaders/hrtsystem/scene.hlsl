@@ -9,6 +9,6 @@ struct Scene {
     World world;
     EnvMap envMap;
     MeshLights meshLights;
-    Homogeneous globalMedium;
+    RGBHomogeneous globalMedium;
     float globalIOR;
 };

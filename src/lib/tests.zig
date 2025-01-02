@@ -488,6 +488,6 @@ test "inside illuminating sphere is white" {
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 1024, .{ .@"σ_s" = 0.05 });
+    try tc.renderToOutput(&pipeline, &scene, 1024, .{ .@"σ_s" = F32x3.new(0.05, 0.05, 0.05) });
     try assertWhiteFurnaceImage(tc.output_buffer.slice);
 }

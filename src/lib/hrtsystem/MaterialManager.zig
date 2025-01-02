@@ -10,6 +10,7 @@ const Image = core.Image;
 const vk_helpers = core.vk_helpers;
 
 const F32x2 = engine.vector.Vec2(f32);
+const F32x3 = engine.vector.Vec3(f32);
 
 // I define a material to be a BSDF that may vary over a surface,
 // plus a normal and emissive map
@@ -54,8 +55,8 @@ pub const CauchyIOR = extern struct {
 };
 
 pub const Medium = extern struct {
-    @"σ_s": f32 = 0.0,
-    @"σ_a": f32 = 0.0,
+    @"σ_s": F32x3 = F32x3.new(0, 0, 0),
+    @"σ_a": F32x3 = F32x3.new(0, 0, 0),
 };
 
 pub const GpuMaterial = extern struct {
