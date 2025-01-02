@@ -23,6 +23,7 @@
     * Standard PBR with metallic + roughness
     * Mirror
     * Glass with dispersion
+* Homogeneous volumes
 
 ### Dependencies
 #### Build
@@ -43,7 +44,7 @@
   * Conductor with complex IOR
   * Transmissive with roughness
   * Material composition
-* Volumetrics
+* Nested dielectrics
 * Lights
   * Experiment with sampling triangle via solid angle after selecting it via area
   * Experiment with unifying sampling mesh lights and environment map
