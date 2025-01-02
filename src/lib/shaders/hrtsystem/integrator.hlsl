@@ -48,7 +48,7 @@ float estimateDirect(RaytracingAccelerationStructure accel, Light light, BSDF ma
 // only samples light
 // separate function for volumes as we need to find the closest hit, not just terminate on any hit
 template <class Light, class BSDF>
-float estimateDirectVolumetric(RaytracingAccelerationStructure accel, Light light, BSDF material, float3 outgoingDirWs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, Homogeneous medium, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
+float estimateDirectVolumetric(RaytracingAccelerationStructure accel, Light light, BSDF material, float3 outgoingDirWs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, Homogeneous interiorMedium, Homogeneous exteriorMedium, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
     const LightSample lightSample = light.sample(λ, positionWs, rand);
 
     if (lightSample.eval.radiance != 0) {
@@ -59,7 +59,12 @@ float estimateDirectVolumetric(RaytracingAccelerationStructure accel, Light ligh
 
             const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
             if (!Intersection::find(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset)).hit()) {
-                return totalRadiance * medium.transmittance(lightSample.distance);
+                const bool inside = dot(lightSample.dirWs, triangleNormalDirWs) < 0;
+                if (inside) {
+                    return totalRadiance * interiorMedium.transmittance(lightSample.distance);
+                } else {
+                    return totalRadiance * exteriorMedium.transmittance(lightSample.distance);
+                }
             }
         }
     }
@@ -114,7 +119,6 @@ interface Integrator {
 // TODO:
 // * support nested/overlapping media
 // * special-case for index-matched glass
-// * properly take into account medium when light sampling on surface of medium-containing mesh
 // * don't assume original ray starts in global medium
 struct VolumePathTracingIntegrator : Integrator {
     uint russianRouletteDepth;
@@ -141,6 +145,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 // decode mesh attributes and material from intersection
                 const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
+                const Homogeneous interiorMedium = material.medium.sample(λ);
                 const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.globalIOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
                 // attenuate throughput by transmittance, divided by P(t > tHit)
@@ -162,12 +167,12 @@ struct VolumePathTracingIntegrator : Integrator {
                 if (!bsdf.isDelta()) {
                     for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                         float2 rand = float2(rng.getFloat(), rng.getFloat());
-                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.envMap, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, path.medium, rand, envSamplesPerBounce, 1);
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.envMap, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, interiorMedium, globalMedium, rand, envSamplesPerBounce, 1);
                     }
 
                     for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                         float2 rand = float2(rng.getFloat(), rng.getFloat());
-                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, path.medium, rand, meshSamplesPerBounce, 1);
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, interiorMedium, globalMedium, rand, meshSamplesPerBounce, 1);
                     }
                 }
 
@@ -179,7 +184,7 @@ struct VolumePathTracingIntegrator : Integrator {
                     const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
                     if (transmission) {
                         if (entering) {
-                            path.medium = material.medium.sample(λ);
+                            path.medium = interiorMedium;
                         } else {
                             path.medium = globalMedium;
                         }
@@ -199,12 +204,12 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.medium, rand, envSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.medium, path.medium, rand, envSamplesPerBounce, 1);
                 }
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.medium, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.medium, path.medium, rand, meshSamplesPerBounce, 1);
                 }
 
                 const BSDFSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
