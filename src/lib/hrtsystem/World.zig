@@ -63,7 +63,14 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     // stuff that is in every material
     var material = blk: {
         var material: Material = undefined;
-        material.medium = MaterialManager.Medium {};
+
+        material.medium = MaterialManager.Medium {
+            .@"σ_a" = F32x3.new(
+                @log(gltf_material.attenuation_color[0]),
+                @log(gltf_material.attenuation_color[1]),
+                @log(gltf_material.attenuation_color[2]),
+            ).scale(-1 / gltf_material.attenuation_distance),
+        };
 
         {
             const dispersion = @max(gltf_material.dispersion, 0.2); // real materials have dispersion!
