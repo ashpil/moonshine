@@ -115,6 +115,7 @@ interface Integrator {
 // * support nested/overlapping media
 // * special-case for index-matched glass
 // * properly take into account medium when light sampling on surface of medium-containing mesh
+// * don't assume original ray starts in global medium
 struct VolumePathTracingIntegrator : Integrator {
     uint russianRouletteDepth;
     uint envSamplesPerBounce;
@@ -139,7 +140,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 // decode mesh attributes and material from intersection
                 const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.globalIOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
                 // attenuate throughput by transmittance, divided by P(t > tHit)
                 {
@@ -259,7 +260,7 @@ struct PathTracingIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.globalIOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             {
@@ -337,7 +338,7 @@ struct DirectLightIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.globalIOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             pathRadiance += material.getEmissive(λ, surface.texcoord);

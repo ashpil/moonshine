@@ -105,7 +105,7 @@ pub const HdMoonshine = struct {
         color: ?TextureManager.Handle = null,
         metalness: ?TextureManager.Handle = null,
         roughness: ?TextureManager.Handle = null,
-        ior: ?f32 = null,
+        // ior: ?f32 = null,
     };
 
     const pipeline_settings = Pipeline.SpecConstants {
@@ -190,11 +190,11 @@ pub const HdMoonshine = struct {
                         const bytes = std.mem.asBytes(&roughness);
                         self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
                     }
-                    if (update.value_ptr.ior) |ior| {
-                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "ior");
-                        const bytes = std.mem.asBytes(&ior);
-                        self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
-                    }
+                    // if (update.value_ptr.ior) |ior| {
+                    //     const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "ior");
+                    //     const bytes = std.mem.asBytes(&ior);
+                    //     self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                    // }
                 }
 
                 // could be more granular with this and instance updates below
@@ -423,17 +423,17 @@ pub const HdMoonshine = struct {
     //     }, std.mem.span(name)) catch unreachable; // TODO: error handling
     // }
 
-    pub export fn HdMoonshineCreateMaterial(self: *HdMoonshine, material: Material) MaterialManager.Handle {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-        return self.world.materials.upload(&self.vc, self.allocator.allocator(), &self.encoder, MaterialManager.Material {
-            .normal = material.normal,
-            .emissive = material.emissive,
-            .bsdf = MaterialManager.PolymorphicBSDF {
-                .standard_pbr = material.standard_pbr,
-            },
-        }, "hydra") catch unreachable; // TODO: error handling
-    }
+    // pub export fn HdMoonshineCreateMaterial(self: *HdMoonshine, material: Material) MaterialManager.Handle {
+    //     self.mutex.lock();
+    //     defer self.mutex.unlock();
+    //     return self.world.materials.upload(&self.vc, self.allocator.allocator(), &self.encoder, MaterialManager.Material {
+    //         .normal = material.normal,
+    //         .emissive = material.emissive,
+    //         .bsdf = MaterialManager.PolymorphicBSDF {
+    //             .standard_pbr = material.standard_pbr,
+    //         },
+    //     }, "hydra") catch unreachable; // TODO: error handling
+    // }
 
     pub export fn HdMoonshineSetMaterialNormal(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
         self.mutex.lock();
@@ -475,13 +475,13 @@ pub const HdMoonshine = struct {
         result.value_ptr.roughness = image;
     }
 
-    pub export fn HdMoonshineSetMaterialIOR(self: *HdMoonshine, material: MaterialManager.Handle, ior: f32) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-        const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
-        if (!result.found_existing) result.value_ptr.* = .{};
-        result.value_ptr.ior = ior;
-    }
+    // pub export fn HdMoonshineSetMaterialIOR(self: *HdMoonshine, material: MaterialManager.Handle, ior: f32) void {
+    //     self.mutex.lock();
+    //     defer self.mutex.unlock();
+    //     const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
+    //     if (!result.found_existing) result.value_ptr.* = .{};
+    //     result.value_ptr.ior = ior;
+    // }
 
     pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, mesh: MeshManager.Handle, material: MaterialManager.Handle, visible: bool) Accel.Handle {
         self.mutex.lock();

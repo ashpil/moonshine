@@ -64,6 +64,15 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     var material = blk: {
         var material: Material = undefined;
         material.medium = MaterialManager.Medium {};
+
+        {
+            const dispersion = @max(gltf_material.dispersion, 0.2); // real materials have dispersion!
+            const abbe_number = 20.0 / dispersion;
+
+            const ior = gltf_material.ior;
+            material.ior = MaterialManager.CauchyIOR.fromAbbeNumberAndIOR(abbe_number, ior);
+        }
+
         material.normal = if (gltf_material.normal_texture) |texture| normal: {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 
@@ -111,23 +120,9 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     };
 
     var standard_pbr: MaterialManager.StandardPBR = undefined;
-    standard_pbr.ior = gltf_material.ior;
 
     if (gltf_material.transmission_factor == 1.0) {
-        const dispersion = @max(gltf_material.dispersion, 0.2); // real materials have dispersion!
-        const abbe_number = 20.0 / dispersion;
-
-        const fraunhofer_F = 486.13;
-        const fraunhofer_d = 587.56;
-        const fraunhofer_C = 656.27;
-
-        const b = (standard_pbr.ior - 1.0) / (abbe_number * (std.math.pow(f32, fraunhofer_F, -2.0) - std.math.pow(f32, fraunhofer_C, -2.0)));
-        const a = standard_pbr.ior - (b / std.math.pow(f32, fraunhofer_d, 2.0));
-
-        material.bsdf = .{ .glass = .{
-            .cauchy_a = a,
-            .cauchy_b = b,
-        }};
+        material.bsdf = .{ .glass = {} };
         return material;
     }
 

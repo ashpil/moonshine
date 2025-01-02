@@ -3,7 +3,6 @@
 static const float PI = 3.14159265;
 static const float EPSILON = 0.000000119;
 static const uint MAX_UINT = 0xFFFFFFFF;
-static const float AIR_IOR = 1.000277;
 
 float3 vectorToColor(float3 v) {
     return (v + 1.0) / 2.0;

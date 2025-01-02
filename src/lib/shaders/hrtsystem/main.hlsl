@@ -34,6 +34,7 @@ struct PushConsts {
     Camera camera;
     uint sampleCount;
     Homogeneous globalMedium;
+    float globalIOR;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -72,6 +73,7 @@ void raygen() {
     scene.envMap = EnvMap::create(dBackgroundRgbTexture, dBackgroundSampler, dBackgroundLuminanceTexture);
     scene.meshLights = MeshLights::create(dTrianglePower, dTriangleMetadata, dGeometryToTrianglePowerOffset, dEmissiveTriangleCount[0], world);
     scene.globalMedium = pushConsts.globalMedium;
+    scene.globalIOR = pushConsts.globalIOR;
 
     Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount, imageCoords.x, imageCoords.y));
 

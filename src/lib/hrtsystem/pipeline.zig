@@ -294,6 +294,7 @@ pub const StandardPushConstants = extern struct {
     aspect_ratio: f32,
     sample_count: u32,
     global_medium: Material.Medium = .{},
+    global_ior: f32 = 1,
 };
 
 pub const Integrator = enum(u32) {

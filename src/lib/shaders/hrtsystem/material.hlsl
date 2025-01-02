@@ -8,6 +8,15 @@
 #include "spectrum.hlsl"
 #include "medium.hlsl"
 
+struct CauchyIOR {
+    float a;
+    float b;
+
+    float at(const float λ) {
+        return a + b / (λ * λ);
+    }
+};
+
 float3 decodeNormal(float2 rg) {
     rg = rg * 2 - 1;
     return float3(rg, sqrt(1.0 - saturate(dot(rg, rg)))); // saturate due to float/compression annoyingness
@@ -37,6 +46,10 @@ struct Material {
     uint emissive;
 
     Homogeneous medium;
+
+    // IOR of the interior of the volume enclosed by the mesh of this material
+    // only valid to be used when mesh has non-zero volume
+    CauchyIOR IOR;
 
     // find appropriate thing to decode from address using `type`
     BSDFType type;
@@ -237,20 +250,21 @@ struct StandardPBR : BSDF {
 
     float reflectance; // reflectance - everywhere within [0, 1]
     float metalness; // metalness - k_s - part it is specular. diffuse is (1 - specular); [0, 1]
-    float ior; // ior - internal index of refraction; [0, inf)
+    float intIOR;
+    float extIOR;
 
-    static StandardPBR load(const uint64_t addr, const float2 texcoords, const float λ) {
+    static StandardPBR load(const uint64_t addr, const float intIOR, const float extIOR, const float2 texcoords, const float λ) {
         uint colorTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 0);
         uint metalnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 1);
         uint roughnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 2);
-        float ior = vk::RawBufferLoad<float>(addr + sizeof(uint) * 3);
 
         StandardPBR material;
         material.reflectance = Spectrum::sampleReflectance(λ, dTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
         material.metalness = dTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
         float roughness = dTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
         material.distr = GGX::create(max(pow(roughness, 2), 0.001));
-        material.ior = ior;
+        material.intIOR = intIOR;
+        material.extIOR = extIOR;
         return material;
     }
 
@@ -293,7 +307,7 @@ struct StandardPBR : BSDF {
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
         float3 h = normalize(w_i + w_o);
 
-        float fDielectric = Fresnel::dielectric(dot(w_i, h), AIR_IOR, ior);
+        float fDielectric = Fresnel::dielectric(dot(w_i, h), extIOR, intIOR);
         float fMetallic = Fresnel::schlick(dot(w_i, h), reflectance);
 
         float F = lerp(fDielectric, fMetallic, metalness);
@@ -381,23 +395,19 @@ float3 refractDir(float3 wi, float3 n, float eta) {
     return eta * -wi + (eta * cosThetaI - cosThetaT) * n;
 }
 
-float cauchyIOR(const float a, const float b, const float λ) {
-    return a + b / (λ * λ);
-}
-
 struct Glass : BSDF {
     float intIOR;
+    float extIOR;
 
-    static Glass load(const uint64_t addr, const float λ) {
+    static Glass load(const float intIOR, const float extIOR) {
         Glass material;
-        const float a = vk::RawBufferLoad<float>(addr + sizeof(float) * 0);
-        const float b = vk::RawBufferLoad<float>(addr + sizeof(float) * 1);
-        material.intIOR = cauchyIOR(a, b, λ);
+        material.intIOR = intIOR;
+        material.extIOR = extIOR;
         return material;
     }
 
     BSDFSample sample(float3 w_o, float2 square) {
-        float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), AIR_IOR, intIOR);
+        float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), extIOR, intIOR);
         BSDFSample sample;
 
         if (coinFlipRemap(fresnel, square.x)) {
@@ -406,10 +416,10 @@ struct Glass : BSDF {
             float etaI;
             float etaT;
             if (Frame::cosTheta(w_o) > 0) {
-                etaI = AIR_IOR;
+                etaI = extIOR;
                 etaT = intIOR;
             } else {
-                etaT = AIR_IOR;
+                etaT = extIOR;
                 etaI = intIOR;
             }
             sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
@@ -440,7 +450,10 @@ struct PolymorphicBSDF : BSDF {
     Frame shadingFrame;
     Frame triangleFrame;
 
-    static PolymorphicBSDF load(Material material, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
+    float intIOR;
+    float extIOR;
+
+    static PolymorphicBSDF load(Material material, float extIOR, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
         PolymorphicBSDF bsdf;
         bsdf.type = material.type;
         bsdf.addr = material.addr;
@@ -448,6 +461,8 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
+        bsdf.intIOR = material.IOR.at(λ);
+        bsdf.extIOR = extIOR;
         return bsdf;
     }
 
@@ -464,7 +479,7 @@ struct PolymorphicBSDF : BSDF {
 
         switch (type) {
             case BSDFType::StandardPBR: {
-                StandardPBR m = StandardPBR::load(addr, texcoords, λ);
+                StandardPBR m = StandardPBR::load(addr, intIOR, extIOR, texcoords, λ);
                 eval = m.evaluate(w_i_frame, w_o_frame);
                 break;
             }
@@ -479,7 +494,7 @@ struct PolymorphicBSDF : BSDF {
                 break;
             }
             case BSDFType::Glass: {
-                Glass m = Glass::load(addr, λ);
+                Glass m = Glass::load(intIOR, extIOR);
                 eval = m.evaluate(w_i_frame, w_o_frame);
                 break;
             }
@@ -493,7 +508,7 @@ struct PolymorphicBSDF : BSDF {
         BSDFSample sample;
         switch (type) {
             case BSDFType::StandardPBR: {
-                StandardPBR m = StandardPBR::load(addr, texcoords, λ);
+                StandardPBR m = StandardPBR::load(addr, intIOR, extIOR, texcoords, λ);
                 sample = m.sample(w_o_frame, square);
                 break;
             }
@@ -508,7 +523,7 @@ struct PolymorphicBSDF : BSDF {
                 break;
             }
             case BSDFType::Glass: {
-                Glass m = Glass::load(addr, λ);
+                Glass m = Glass::load(intIOR, extIOR);
                 sample = m.sample(w_o_frame, square);
                 break;
             }
@@ -543,4 +558,3 @@ struct PolymorphicBSDF : BSDF {
         }
     }
 };
-

@@ -29,7 +29,28 @@ pub const Material = struct {
 
     medium: Medium = .{},
 
+    ior: CauchyIOR = .{},
+
     bsdf: PolymorphicBSDF,
+};
+
+pub const CauchyIOR = extern struct {
+    a: f32 = 1.0,
+    b: f32 = 0.0,
+
+    pub fn fromAbbeNumberAndIOR(abbe_number: f32, ior: f32) CauchyIOR {
+        const fraunhofer_F = 486.13;
+        const fraunhofer_d = 587.56;
+        const fraunhofer_C = 656.27;
+
+        const b = (ior - 1.0) / (abbe_number * (std.math.pow(f32, fraunhofer_F, -2.0) - std.math.pow(f32, fraunhofer_C, -2.0)));
+        const a = ior - (b / std.math.pow(f32, fraunhofer_d, 2.0));
+
+        return CauchyIOR {
+            .a = a,
+            .b = b,
+        };
+    }
 };
 
 pub const Medium = extern struct {
@@ -42,6 +63,8 @@ pub const GpuMaterial = extern struct {
     emissive: TextureManager.Handle,
 
     medium: Medium,
+
+    ior: CauchyIOR,
 
     type: BSDF = .standard_pbr,
     addr: vk.DeviceAddress,
@@ -58,7 +81,7 @@ pub const BSDF = enum(u32) {
 // BSDFs themselves, as BSDFs do not very over a surface
 // but these textures do
 pub const PolymorphicBSDF = union(BSDF) {
-    glass: Glass,
+    glass: void,
     lambert: Lambert,
     perfect_mirror: void, // no payload
     standard_pbr: StandardPBR,
@@ -72,17 +95,11 @@ pub const StandardPBR = extern struct {
     color: TextureManager.Handle,
     metalness: TextureManager.Handle,
     roughness: TextureManager.Handle,
-    ior: f32 = 1.5,
 };
 
 pub const Lambert = extern struct {
     const color_components = 3;
     color: TextureManager.Handle,
-};
-
-pub const Glass = extern struct {
-    cauchy_a: f32,
-    cauchy_b: f32,
 };
 
 // takes in a tagged union and returns a struct that has each of the union fields as a field,
@@ -167,6 +184,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                 .normal = info.normal,
                 .emissive = info.emissive,
                 .medium = info.medium,
+                .ior = info.ior,
                 .type = std.meta.activeTag(info.bsdf),
                 .addr = if (@sizeOf(field.type) != 0) @field(self.variant_buffers, field.name).addr + (@field(self.variant_buffers, field.name).len - 1) * @sizeOf(field.type) else 0,
             };
