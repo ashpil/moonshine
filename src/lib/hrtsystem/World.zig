@@ -35,11 +35,6 @@ pub const PolymorphicBSDF = MaterialManager.PolymorphicBSDF;
 pub const Instance = Accel.Instance;
 pub const Geometry = Accel.Geometry;
 
-pub const Medium = extern struct {
-    @"σ_s": f32 = 0.0,
-    @"σ_a": f32 = 0.0,
-};
-
 meshes: MeshManager,
 materials: MaterialManager,
 
@@ -68,6 +63,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     // stuff that is in every material
     var material = blk: {
         var material: Material = undefined;
+        material.medium = MaterialManager.Medium {};
         material.normal = if (gltf_material.normal_texture) |texture| normal: {
             const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 

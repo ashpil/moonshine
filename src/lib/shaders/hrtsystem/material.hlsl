@@ -6,6 +6,7 @@
 #include "../utils/math.hlsl"
 #include "../utils/mappings.hlsl"
 #include "spectrum.hlsl"
+#include "medium.hlsl"
 
 float3 decodeNormal(float2 rg) {
     rg = rg * 2 - 1;
@@ -34,6 +35,8 @@ enum class BSDFType : uint {
 struct Material {
     uint normal;
     uint emissive;
+
+    Homogeneous medium;
 
     // find appropriate thing to decode from address using `type`
     BSDFType type;

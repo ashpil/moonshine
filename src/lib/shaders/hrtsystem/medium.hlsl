@@ -19,6 +19,10 @@ struct Homogeneous : Medium {
         return h;
     }
 
+    static Homogeneous none() {
+        return Homogeneous::create(0, 0);
+    }
+
     float σ_t() {
         return σ_s + σ_a;
     }

@@ -51,7 +51,7 @@ const TestingContext = struct {
         };
     }
 
-    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline, scene: *const Scene, spp: usize, global_medium: World.Medium) !void {
+    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline, scene: *const Scene, spp: usize, global_medium: MaterialManager.Medium) !void {
         try self.encoder.begin();
 
         // prepare our stuff
