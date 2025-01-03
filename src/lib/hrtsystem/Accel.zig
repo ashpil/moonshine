@@ -142,6 +142,31 @@ fn makeBlases(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *
 
     try blases.ensureUnusedCapacity(allocator, geometries.len);
 
+    // place these barriers ahead of the for loop before so that if the vulkan implementaiton
+    // treats all barriers as global, we won't serialize BLAS builds.
+    // though maybe it should be somewhere else completely...
+    for (geometries) |geometry_list| {
+        for (geometry_list) |geometry| {
+            const mesh = mesh_manager.meshes.get(geometry.mesh);
+            encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+                Encoder.BufferBarrier {
+                    .src_stage_mask = .{ .all_transfer_bit = true },
+                    .src_access_mask = .{ .transfer_write_bit = true },
+                    .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                    .dst_access_mask = .{ .memory_read_bit = true },
+                    .buffer = mesh.index_buffer.handle,
+                },
+                Encoder.BufferBarrier {
+                    .src_stage_mask = .{ .all_transfer_bit = true },
+                    .src_access_mask = .{ .transfer_write_bit = true },
+                    .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+                    .dst_access_mask = .{ .memory_read_bit = true },
+                    .buffer = mesh.position_buffer.handle,
+                },
+            });
+        }
+    }
+
     for (geometries, build_infos, build_geometry_infos) |list, *build_info, *build_geometry_info| {
         const vk_geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, list.len);
 
