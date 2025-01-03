@@ -280,7 +280,7 @@ fn assertWhiteFurnaceImage(image: []const [4]f32) !void {
         average += val / @as(f64, @floatFromInt(image.len));
         if (!std.math.approxEqAbs(f32, val, 1.0, 0.3)) return error.NonWhitePixel;
     }
-    if (!std.math.approxEqAbs(f64, average, 1.0, 0.01)) return error.NonWhiteAverage;
+    if (!std.math.approxEqAbs(f64, average, 1.0, 0.002)) return error.NonWhiteAverage;
 }
 
 test "white sphere on white background is white" {
