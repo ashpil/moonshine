@@ -65,6 +65,10 @@ struct Material {
     float getEmissive(float λ, float2 texcoords) {
         return Spectrum::sampleEmission(λ, dTextures[NonUniformResourceIndex(emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
     }
+
+    bool isIndexMatched(float λ, float extIOR) {
+        return type == BSDFType::Glass && IOR.at(λ) == extIOR;
+    }
 };
 
 // most material code below expects stuff to be in the reflection frame
