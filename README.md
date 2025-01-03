@@ -18,7 +18,9 @@
     * Direct light sampling with multiple importance sampling for all lights and materials
 * Lights
     * 360° environment maps
+      * Sampled via [hierarchical warping](https://pharr.org/matt/blog/2019/06/05/visualizing-env-light-warpings)
     * Emissive meshes
+      * Sampled according to power via 1D [hierarchical warping](https://pharr.org/matt/blog/2019/06/05/visualizing-env-light-warpings)
 * Materials
     * Standard PBR with metallic + roughness
     * Mirror
@@ -35,17 +37,6 @@
       * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
 #### Run
 * A GPU supporting Vulkan ray tracing
-
-### Some notes about conventions
-* `+z` is up
-* phi is azimuthal angle (0-2pi) and theta is polar angle (0-pi)
-
-### Some light reading
-- [Importance sampling](https://computergraphics.stackexchange.com/q/4979)
-- [Explicit light sampling](https://computergraphics.stackexchange.com/q/5152)
-- [Multiple importance sampling](https://graphics.stanford.edu/courses/cs348b-03/papers/veach-chapter9.pdf)
-- [Microfacets](https://agraphicsguy.wordpress.com/2015/11/01/sampling-microfacet-brdf/)
-- [Actual materials](https://github.com/wdas/brdf) - ton of BRDF examples, in **CODE**!
 
 ### License
 
