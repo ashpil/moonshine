@@ -381,6 +381,103 @@ test "white sphere on white background is white" {
     try assertWhiteFurnaceImage(tc.output_buffer.slice);
 }
 
+test "white volume on white background is white" {
+    const allocator = std.testing.allocator;
+    const extent = vk.Extent2D { .width = 32, .height = 32 };
+    var tc = try TestingContext.create(allocator, extent);
+    defer tc.destroy(allocator);
+
+    try tc.encoder.begin();
+    var world = try World.createEmpty(&tc.vc, allocator, &tc.encoder);
+
+    // add sphere to world
+    {
+        const mesh_handle = try world.meshes.upload(&tc.vc, allocator, &tc.encoder, try icosphere(5, allocator, &tc.encoder, false));
+
+        const normal: *F32x2 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
+        normal.* = MaterialManager.Material.default_normal;
+        const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
+
+        const emissive: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
+        emissive.* = F32x4.new(0, 0, 0, std.math.nan(f32));
+        const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
+
+        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material {
+            .normal = normal_texture,
+            .emissive = emissive_texture,
+            .bsdf = MaterialManager.PolymorphicBSDF {
+                .glass = {},
+            },
+            .medium = MaterialManager.Medium {
+                .@"σ_s" = F32x3.new(1, 1, 1),
+            }
+        }, "white");
+
+        _ = try world.accel.uploadInstance(&tc.vc, allocator, &tc.encoder, world.meshes, world.materials, Accel.Instance {
+            .visible = true,
+            .transform = Mat3x4.identity,
+            .geometries = &[1]Accel.Geometry {
+                .{
+                    .material = material_handle,
+                    .mesh = mesh_handle,
+                }
+            },
+        });
+    }
+
+    var camera = Camera {};
+    _ = try camera.appendCamera(allocator, Camera.Camera {
+        .transform = Mat3x4.fromTransformTranslation(Mat3.identity, F32x3.new(-3, 0, 0)),
+        .model = .thin_lens,
+        .thin_lens = Camera.ThinLens {
+            .vfov = std.math.pi / 4.0,
+        },
+    }, try allocator.dupeZ(u8, ""));
+    _ = try camera.appendSensor(&tc.vc, allocator, extent);
+
+    var background = try Background.create(&tc.vc, allocator);
+    var white = [4]f32 {1, 1, 1, 1};
+    const image = Rgba2D {
+        .ptr = @ptrCast(&white),
+        .extent = .{
+            .width = 1,
+            .height = 1,
+        }
+    };
+    try background.addBackground(&tc.vc, allocator, &tc.encoder, image, "white");
+
+    var scene = Scene {
+        .world = world,
+        .camera = camera,
+        .background = background,
+    };
+    defer scene.destroy(&tc.vc, allocator);
+
+    var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
+        .integrator = .volume_path_tracing,
+        .volume_path_tracing_env_samples_per_bounce = 0,
+        .volume_path_tracing_mesh_samples_per_bounce = 0,
+    }, .{ scene.background.sampler });
+    defer pipeline.destroy(&tc.vc);
+    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
+
+    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+
+    // do that again but with env sampling
+    try tc.encoder.begin();
+    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
+        .integrator = .volume_path_tracing,
+        .volume_path_tracing_env_samples_per_bounce = 1,
+        .volume_path_tracing_mesh_samples_per_bounce = 0,
+    });
+    defer tc.vc.device.destroyPipeline(other_pipeline, null);
+    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
+
+    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+}
+
 test "inside illuminating sphere is white" {
     const allocator = std.testing.allocator;
 
