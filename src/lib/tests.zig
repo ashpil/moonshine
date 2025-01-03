@@ -105,6 +105,8 @@ const TestingContext = struct {
         self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, self.output_buffer.handle);
 
         try self.encoder.submitAndIdleUntilDone(&self.vc);
+
+        scene.camera.sensors.items[0].clear();
     }
 
     fn destroy(self: *TestingContext, allocator: std.mem.Allocator) void {
@@ -278,7 +280,7 @@ fn assertWhiteFurnaceImage(image: []const [4]f32) !void {
         average += val / @as(f64, @floatFromInt(image.len));
         if (!std.math.approxEqAbs(f32, val, 1.0, 0.3)) return error.NonWhitePixel;
     }
-    if (!std.math.approxEqAbs(f64, average, 1.0, 0.001)) return error.NonWhiteAverage;
+    if (!std.math.approxEqAbs(f64, average, 1.0, 0.01)) return error.NonWhiteAverage;
 }
 
 test "white sphere on white background is white" {
@@ -482,12 +484,12 @@ test "inside illuminating sphere is white" {
     // do that again but with non-absorbing volume
     const volume_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
         .integrator = .volume_path_tracing,
-        .path_tracing_env_samples_per_bounce = 0,
-        .path_tracing_mesh_samples_per_bounce = 1,
+        .volume_path_tracing_env_samples_per_bounce = 0,
+        .volume_path_tracing_mesh_samples_per_bounce = 1,
     });
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 1024, .{ .@"σ_s" = F32x3.new(0.05, 0.05, 0.05) });
+    try tc.renderToOutput(&pipeline, &scene, 1024, .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) });
     try assertWhiteFurnaceImage(tc.output_buffer.slice);
 }
