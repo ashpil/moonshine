@@ -48,7 +48,7 @@ struct Material {
     RGBHomogeneous medium;
 
     // IOR of the interior of the volume enclosed by the mesh of this material
-    // only valid to be used when mesh has non-zero volume
+    // convention that IOR == 0 means that the internal IOR is always the same as the external IOR. useful for meshes enclosing volumes
     CauchyIOR IOR;
 
     // find appropriate thing to decode from address using `type`
@@ -67,7 +67,7 @@ struct Material {
     }
 
     bool isIndexMatched(float λ, float extIOR) {
-        return type == BSDFType::Glass && IOR.at(λ) == extIOR;
+        return type == BSDFType::Glass && (IOR.at(λ) == extIOR || IOR.at(λ) == 0);
     }
 };
 
@@ -465,7 +465,7 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
-        bsdf.intIOR = material.IOR.at(λ);
+        bsdf.intIOR = material.IOR.at(λ) != 0 ? material.IOR.at(λ) : extIOR;
         bsdf.extIOR = extIOR;
         return bsdf;
     }
