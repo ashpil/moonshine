@@ -293,8 +293,7 @@ pub const StandardPushConstants = extern struct {
     camera: Camera.Camera,
     aspect_ratio: f32,
     sample_count: u32,
-    global_medium: Material.Medium = .{},
-    global_ior: f32 = 1,
+    global_volume: Material.Volume = .{},
 };
 
 pub const Integrator = enum(u32) {

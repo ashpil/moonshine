@@ -6,16 +6,7 @@
 #include "../utils/math.hlsl"
 #include "../utils/mappings.hlsl"
 #include "spectrum.hlsl"
-#include "medium.hlsl"
-
-struct CauchyIOR {
-    float a;
-    float b;
-
-    float at(const float λ) {
-        return a + b / (λ * λ);
-    }
-};
+#include "volume.hlsl"
 
 float3 decodeNormal(float2 rg) {
     rg = rg * 2 - 1;
@@ -45,11 +36,9 @@ struct Material {
     uint normal;
     uint emissive;
 
-    RGBHomogeneous medium;
-
-    // IOR of the interior of the volume enclosed by the mesh of this material
-    // convention that IOR == 0 means that the internal IOR is always the same as the external IOR. useful for meshes enclosing volumes
-    CauchyIOR IOR;
+    // TODO: don't assume mesh is closed
+    // volume enclosed by the mesh of this material
+    ChromaticVolume volume;
 
     // find appropriate thing to decode from address using `type`
     BSDFType type;
@@ -66,8 +55,9 @@ struct Material {
         return Spectrum::sampleEmission(λ, dTextures[NonUniformResourceIndex(emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
     }
 
+    // convention that IOR == 0 means that the internal IOR is always the same as the external IOR. useful for meshes enclosing media
     bool isIndexMatched(float λ, float extIOR) {
-        return type == BSDFType::Glass && (IOR.at(λ) == extIOR || IOR.at(λ) == 0);
+        return type == BSDFType::Glass && (volume.IOR.at(λ) == extIOR || volume.IOR.at(λ) == 0);
     }
 };
 
@@ -465,7 +455,7 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
-        bsdf.intIOR = material.IOR.at(λ) != 0 ? material.IOR.at(λ) : extIOR;
+        bsdf.intIOR = material.volume.IOR.at(λ) != 0 ? material.volume.IOR.at(λ) : extIOR;
         bsdf.extIOR = extIOR;
         return bsdf;
     }

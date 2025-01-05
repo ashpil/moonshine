@@ -28,11 +28,14 @@ pub const Material = struct {
     normal: TextureManager.Handle,
     emissive: TextureManager.Handle,
 
-    medium: Medium = .{},
-
-    ior: CauchyIOR = .{},
+    volume: Volume = .{},
 
     bsdf: PolymorphicBSDF,
+};
+
+pub const Volume = extern struct {
+    medium: Medium = .{},
+    ior: CauchyIOR = .{},
 };
 
 pub const CauchyIOR = extern struct {
@@ -63,9 +66,7 @@ pub const GpuMaterial = extern struct {
     normal: TextureManager.Handle,
     emissive: TextureManager.Handle,
 
-    medium: Medium,
-
-    ior: CauchyIOR,
+    volume: Volume,
 
     type: BSDF = .standard_pbr,
     addr: vk.DeviceAddress,
@@ -184,8 +185,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             const gpu_material = GpuMaterial {
                 .normal = info.normal,
                 .emissive = info.emissive,
-                .medium = info.medium,
-                .ior = info.ior,
+                .volume = info.volume,
                 .type = std.meta.activeTag(info.bsdf),
                 .addr = if (@sizeOf(field.type) != 0) @field(self.variant_buffers, field.name).addr + (@field(self.variant_buffers, field.name).len - 1) * @sizeOf(field.type) else 0,
             };

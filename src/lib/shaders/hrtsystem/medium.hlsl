@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ray.hlsl"
 #include "spectrum.hlsl"
 
 interface Medium {
@@ -48,11 +47,11 @@ struct Homogeneous : Medium {
     }
 };
 
-struct RGBHomogeneous {
+struct ChromaticHomogeneous {
     float3 σ_s;
     float3 σ_a;
 
-    Homogeneous sample(const float λ) {
+    Homogeneous at(const float λ) {
         return Homogeneous::create(Spectrum::sampleReflectance(λ, σ_s), Spectrum::sampleReflectance(λ, σ_a));
     }
 };

@@ -64,7 +64,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     var material = blk: {
         var material: Material = undefined;
 
-        material.medium = MaterialManager.Medium {
+        material.volume.medium = MaterialManager.Medium {
             .@"σ_a" = F32x3.new(
                 @log(gltf_material.attenuation_color[0]),
                 @log(gltf_material.attenuation_color[1]),
@@ -77,7 +77,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             const abbe_number = 20.0 / dispersion;
 
             const ior = gltf_material.ior;
-            material.ior = MaterialManager.CauchyIOR.fromAbbeNumberAndIOR(abbe_number, ior);
+            material.volume.ior = MaterialManager.CauchyIOR.fromAbbeNumberAndIOR(abbe_number, ior);
         }
 
         material.normal = if (gltf_material.normal_texture) |texture| normal: {
