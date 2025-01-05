@@ -68,6 +68,7 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
                 medium = globalMedium;
             }
             // trace rays, going through all index-matched media
+            // TODO: might be able to do this in a short-circuiting way somehow, as we can terminate early if we find any opaque object
             for (Intersection its = Intersection::find(accel, ray, remainingDistance); its.hit(); its = Intersection::find(accel, ray, remainingDistance)) {
                 const Material material = world.material(its.instanceIndex, its.geometryIndex);
                 if (material.isIndexMatched(λ, globalIOR)) {
