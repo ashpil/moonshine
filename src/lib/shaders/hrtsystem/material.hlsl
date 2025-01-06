@@ -55,9 +55,8 @@ struct Material {
         return Spectrum::sampleEmission(λ, dTextures[NonUniformResourceIndex(emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
     }
 
-    // convention that IOR == 0 means that the internal IOR is always the same as the external IOR. useful for meshes enclosing media
     bool isIndexMatched(float λ, float extIOR) {
-        return type == BSDFType::Glass && (volume.IOR.at(λ) == extIOR || volume.IOR.at(λ) == 0);
+        return type == BSDFType::Glass && volume.IOR.at(λ) == extIOR;
     }
 };
 
@@ -455,7 +454,7 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
-        bsdf.intIOR = material.volume.IOR.at(λ) != 0 ? material.volume.IOR.at(λ) : extIOR;
+        bsdf.intIOR = material.volume.IOR.at(λ);
         bsdf.extIOR = extIOR;
         return bsdf;
     }
