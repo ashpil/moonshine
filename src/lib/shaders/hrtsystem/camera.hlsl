@@ -31,7 +31,6 @@ struct ThinLens {
         Ray ray;
         ray.origin = float3(0.0, lens);
         ray.direction = normalize(focus - ray.origin);
-        ray.pdf = 1.#INF;
 
         return ray;
     }
@@ -46,7 +45,6 @@ struct Orthographic {
         Ray ray;
         ray.origin = float3(0.0, uv * halfViewport);
         ray.direction = float3(1, 0, 0);
-        ray.pdf = 1.#INF;
 
         return ray;
     }

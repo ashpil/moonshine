@@ -34,7 +34,7 @@ float estimateDirect(RaytracingAccelerationStructure accel, Light light, BSDF ma
             const float weight = misWeight(lightSamplesTaken, lightSample.eval.pdf, brdfSamplesTaken, bsdfEval.pdf);
             const float totalRadiance = lightSample.eval.radiance * bsdfEval.attenuation * weight;
 
-            const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
+            const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs};
             if (!ShadowIntersection::hit(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset))) {
                 return totalRadiance;
             }
@@ -57,7 +57,7 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
             const float weight = misWeight(lightSamplesTaken, lightSample.eval.pdf, brdfSamplesTaken, bsdfEval.pdf);
             const float totalRadiance = lightSample.eval.radiance * bsdfEval.attenuation * weight;
 
-            Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs, 1.#INF};
+            Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs};
             float throughput = 1;
             float remainingDistance = lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset);
             const bool inside = dot(lightSample.dirWs, triangleNormalDirWs) <= 0;
@@ -121,6 +121,7 @@ struct Path {
     Ray ray;
     float throughput;
     float radiance;
+    float pdf;
     uint bounceCount;
     Volume volume;
 
@@ -129,6 +130,7 @@ struct Path {
         p.ray = ray;
         p.throughput = 1;
         p.radiance = 0;
+        p.pdf = 1.#INF; // assume initial event was delta
         p.bounceCount = 0;
         p.volume = volume;
         return p;
@@ -185,7 +187,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 // collect light from emissive meshes
                 {
                     const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
-                    const float weight = misWeight(1, path.ray.pdf, meshSamplesPerBounce, lightPdf);
+                    const float weight = misWeight(1, path.pdf, meshSamplesPerBounce, lightPdf);
                     path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
                 }
 
@@ -218,7 +220,7 @@ struct VolumePathTracingIntegrator : Integrator {
 
                     path.ray.direction = sample.dir;
                     path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
-                    path.ray.pdf = material.isIndexMatched(λ, globalVolume.IOR) ? path.ray.pdf : sample.eval.pdf; // preserve prior PDF for index-matched surfaces
+                    path.pdf = material.isIndexMatched(λ, globalVolume.IOR) ? path.pdf : sample.eval.pdf; // preserve prior PDF for index-matched surfaces
                     path.throughput *= sample.eval.attenuation;
                 }
             } else if (mediumTMax != 1.#INF) {
@@ -241,7 +243,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 const BSDFSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
                 path.ray.direction = sample.dir;
                 path.ray.origin = position;
-                path.ray.pdf = sample.eval.pdf;
+                path.pdf = sample.eval.pdf;
                 path.throughput *= sample.eval.attenuation;
             } else {
                 // traced an infinite ray that hit nothing
@@ -262,7 +264,7 @@ struct VolumePathTracingIntegrator : Integrator {
         // handle env map
         {
             const LightEvaluation l = scene.envMap.evaluate(λ, path.ray.direction);
-            const float weight = misWeight(1, path.ray.pdf, envSamplesPerBounce, l.pdf);
+            const float weight = misWeight(1, path.pdf, envSamplesPerBounce, l.pdf);
             path.radiance += path.throughput * l.radiance * weight;
         }
 
@@ -297,7 +299,7 @@ struct PathTracingIntegrator : Integrator {
             // collect light from emissive meshes
             {
                 const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
-                const float weight = misWeight(1, path.ray.pdf, meshSamplesPerBounce, lightPdf);
+                const float weight = misWeight(1, path.pdf, meshSamplesPerBounce, lightPdf);
                 path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
             }
 
@@ -320,7 +322,7 @@ struct PathTracingIntegrator : Integrator {
 
                 path.ray.direction = sample.dir;
                 path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
-                path.ray.pdf = sample.eval.pdf;
+                path.pdf = sample.eval.pdf;
                 path.throughput *= sample.eval.attenuation;
                 path.bounceCount += 1;
             }
@@ -338,7 +340,7 @@ struct PathTracingIntegrator : Integrator {
         // handle env map
         {
             const LightEvaluation l = scene.envMap.evaluate(λ, path.ray.direction);
-            const float weight = misWeight(1, path.ray.pdf, envSamplesPerBounce, l.pdf);
+            const float weight = misWeight(1, path.pdf, envSamplesPerBounce, l.pdf);
             path.radiance += path.throughput * l.radiance * weight;
         }
 
