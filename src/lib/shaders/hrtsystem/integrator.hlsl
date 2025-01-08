@@ -35,7 +35,7 @@ float estimateDirect(RaytracingAccelerationStructure accel, Light light, BSDF ma
             const float totalRadiance = lightSample.eval.radiance * bsdfEval.attenuation * weight;
 
             const Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs};
-            if (!ShadowIntersection::hit(accel, ray, lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset))) {
+            if (!ShadowIntersection::hit(accel, ray, lightSample.distance - spawnOffset / abs(dot(lightSample.dirWs, triangleNormalDirWs)))) {
                 return totalRadiance;
             }
         }

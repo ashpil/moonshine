@@ -123,7 +123,7 @@ struct TriangleLight: Light {
 
         LightSample lightSample;
         lightSample.dirWs = normalize(surface.position - positionWs);
-        lightSample.distance = distance(surface.position, positionWs) + dot(lightSample.dirWs, faceForward(surface.triangleFrame.n, -lightSample.dirWs) * surface.spawnOffset);
+        lightSample.distance = distance(surface.position, positionWs) - surface.spawnOffset / abs(dot(lightSample.dirWs, surface.triangleFrame.n));
         lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) / t.area(toWorld);
         lightSample.eval.radiance = material.getEmissive(λ, surface.texcoord) / lightSample.eval.pdf;
 
