@@ -11,6 +11,7 @@
   * Experiment with sampling triangle via solid angle after selecting it via area
   * Experiment with unifying sampling mesh lights and environment map
   * BVH
+  * Sampling of filtered environment maps
 * Testing
   * Proper statistical tests GPU sampling routines
   * Proper statistical tests to make sure images have expected mean/variance
