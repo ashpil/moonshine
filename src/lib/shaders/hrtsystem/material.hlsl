@@ -250,13 +250,15 @@ struct StandardPBR : BSDF {
         uint colorTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 0);
         uint metalnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 1);
         uint roughnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 2);
+        float cauchyIORa = vk::RawBufferLoad<float>(addr + sizeof(uint) * 3);
+        float cauchyIORb = vk::RawBufferLoad<float>(addr + sizeof(uint) * 4);
 
         StandardPBR material;
         material.reflectance = Spectrum::sampleReflectance(λ, dTextures[NonUniformResourceIndex(colorTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
         material.metalness = dTextures[NonUniformResourceIndex(metalnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
         float roughness = dTextures[NonUniformResourceIndex(roughnessTextureIndex)].SampleLevel(dTextureSampler, texcoords, 0).r;
         material.distr = GGX::create(max(pow(roughness, 2), 0.001));
-        material.intIOR = intIOR;
+        material.intIOR = CauchyIOR::create(cauchyIORa, cauchyIORb).at(λ);
         material.extIOR = extIOR;
         return material;
     }

@@ -97,6 +97,10 @@ pub const StandardPBR = extern struct {
     color: TextureManager.Handle,
     metalness: TextureManager.Handle,
     roughness: TextureManager.Handle,
+    ior: CauchyIOR = CauchyIOR {
+        .a = 1.5,
+        .b = 0,
+    },
 };
 
 pub const Lambert = extern struct {

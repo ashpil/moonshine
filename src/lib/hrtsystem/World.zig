@@ -133,6 +133,13 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         return material;
     }
 
+    {
+        const dispersion = @max(gltf_material.dispersion, 0.2); // real materials have dispersion!
+        const abbe_number = 20.0 / dispersion;
+
+        standard_pbr.ior = MaterialManager.CauchyIOR.fromAbbeNumberAndIOR(abbe_number, gltf_material.ior);
+    }
+
     standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
         const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
 

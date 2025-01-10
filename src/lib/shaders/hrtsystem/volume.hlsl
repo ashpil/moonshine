@@ -6,6 +6,13 @@ struct CauchyIOR {
     float a;
     float b;
 
+    static CauchyIOR create(float a, float b) {
+        CauchyIOR o;
+        o.a = a;
+        o.b = b;
+        return o;
+    }
+
     float at(const float λ) {
         return a + b / (λ * λ);
     }
