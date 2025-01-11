@@ -121,6 +121,7 @@ struct GGX : MicrofacetDistribution {
 
 // ηi is index of refraction for medium on current side of boundary
 // ηt is index of refraction for medium on other side of boundary
+// ηr is relative index of refraction (ηi / ηt)
 namespace Fresnel {
     float schlickR0(float ηi, float ηt) {
         return pow((ηt - ηi) / (ηt + ηi), 2);
@@ -140,32 +141,23 @@ namespace Fresnel {
         return lerp(layer1, layer2, f);
     }
 
+    // returns NaN for TIR
+    float snellsLaw(const float cosThetaI, const float ηr) {
+        const float sin2ThetaI = 1 - cosThetaI * cosThetaI;
+        const float sin2ThetaT = (ηr * ηr) * sin2ThetaI;
+        const float cosThetaT = sqrt(1 - sin2ThetaT);
+        return cosThetaT;
+    }
+
     // boundary of two dielectric surfaces
-    // PBRT version
-    float dielectric(float cosThetaI, float ηi, float ηt) {
-        cosThetaI = clamp(cosThetaI, -1, 1);
+    float dielectric(const float cosTheta, const float ηr) {
+        const float cosThetaI = clamp(abs(cosTheta), -1, 1);
+        const float cosThetaT = snellsLaw(cosThetaI, ηr);
 
-        // potentially swap indices of refraction
-        // TODO: should this be here?
-        bool entering = cosThetaI > 0;
-        if (!entering) {
-            float tmp = ηi;
-            ηi = ηt;
-            ηt = tmp;
-            cosThetaI = abs(cosThetaI);
-        }
+        if (isnan(cosThetaT)) return 1;
 
-        // compute cosThetaT using Snell's Law
-        float sinThetaI = sqrt(max(0, 1 - cosThetaI * cosThetaI));
-        float sinThetaT = ηi / ηt * sinThetaI;
-
-        // handle total internal reflection
-        if (sinThetaT >= 1) return 1;
-
-        float cosThetaT = sqrt(max(0, 1 - sinThetaT * sinThetaT));
-
-        float r_parl = ((ηt * cosThetaI) - (ηi * cosThetaT)) / ((ηt * cosThetaI) + (ηi * cosThetaT));
-        float r_perp = ((ηi * cosThetaI) - (ηt * cosThetaT)) / ((ηi * cosThetaI) + (ηt * cosThetaT));
+        const float r_parl = (cosThetaI - ηr * cosThetaT) / (cosThetaI + ηr * cosThetaT);
+        const float r_perp = (ηr * cosThetaI - cosThetaT) / (ηr * cosThetaI + cosThetaT);
 
         return (r_parl * r_parl + r_perp * r_perp) / 2;
     }
@@ -302,7 +294,7 @@ struct StandardPBR : BSDF {
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
         float3 h = normalize(w_i + w_o);
 
-        float fDielectric = Fresnel::dielectric(dot(w_i, h), extIOR, intIOR);
+        float fDielectric = Fresnel::dielectric(dot(w_i, h), extIOR / intIOR);
         float fMetallic = Fresnel::schlick(dot(w_i, h), reflectance);
 
         float F = lerp(fDielectric, fMetallic, metalness);
@@ -379,15 +371,13 @@ struct PerfectMirror : BSDF {
     }
 };
 
-float3 refractDir(float3 wi, float3 n, float eta) {
-    float cosThetaI = dot(n, wi);
-    float sin2ThetaI = max(0, 1 - cosThetaI * cosThetaI);
-    float sin2ThetaT = eta * eta * sin2ThetaI;
-    if (sin2ThetaT >= 1) return 0.0;
+float3 refractDir(float3 wi, float3 n, float ηr) {
+    const float cosThetaI = clamp(abs(dot(n, wi)), -1, 1);
+    const float cosThetaT = Fresnel::snellsLaw(cosThetaI, ηr);
 
-    float cosThetaT = sqrt(1 - sin2ThetaT);
+    if (isnan(cosThetaT)) return 1;
 
-    return eta * -wi + (eta * cosThetaI - cosThetaT) * n;
+    return ηr * -wi + (ηr * cosThetaI - cosThetaT) * n;
 }
 
 struct Glass : BSDF {
@@ -402,22 +392,15 @@ struct Glass : BSDF {
     }
 
     BSDFSample sample(float3 w_o, float2 square) {
-        float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), extIOR, intIOR);
-        BSDFSample sample;
+        const float etaR = Frame::cosTheta(w_o) > 0 ? extIOR / intIOR : intIOR / extIOR;
 
+        const float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), etaR);
+
+        BSDFSample sample;
         if (coinFlipRemap(fresnel, square.x)) {
             sample.dir = float3(-w_o.x, -w_o.y, w_o.z);
         } else {
-            float etaI;
-            float etaT;
-            if (Frame::cosTheta(w_o) > 0) {
-                etaI = extIOR;
-                etaT = intIOR;
-            } else {
-                etaT = extIOR;
-                etaI = intIOR;
-            }
-            sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaI / etaT);
+            sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaR);
         }
         if (all(sample.dir != 0.0)) {
             sample.eval.attenuation = 1;
