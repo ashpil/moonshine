@@ -246,7 +246,7 @@ struct StandardPBR : BSDF {
     float intIOR;
     float extIOR;
 
-    static StandardPBR load(const uint64_t addr, const float intIOR, const float extIOR, const float2 texcoords, const float λ) {
+    static StandardPBR load(const uint64_t addr, const float extIOR, const float2 texcoords, const float λ) {
         uint colorTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 0);
         uint metalnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 1);
         uint roughnessTextureIndex = vk::RawBufferLoad<uint>(addr + sizeof(uint) * 2);
@@ -474,7 +474,7 @@ struct PolymorphicBSDF : BSDF {
 
         switch (type) {
             case BSDFType::StandardPBR: {
-                StandardPBR m = StandardPBR::load(addr, intIOR, extIOR, texcoords, λ);
+                StandardPBR m = StandardPBR::load(addr, extIOR, texcoords, λ);
                 eval = m.evaluate(w_i_frame, w_o_frame);
                 break;
             }
@@ -503,7 +503,7 @@ struct PolymorphicBSDF : BSDF {
         BSDFSample sample;
         switch (type) {
             case BSDFType::StandardPBR: {
-                StandardPBR m = StandardPBR::load(addr, intIOR, extIOR, texcoords, λ);
+                StandardPBR m = StandardPBR::load(addr, extIOR, texcoords, λ);
                 sample = m.sample(w_o_frame, square);
                 break;
             }
