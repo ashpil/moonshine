@@ -54,10 +54,6 @@ struct Material {
     float getEmissive(float λ, float2 texcoords) {
         return Spectrum::sampleEmission(λ, dTextures[NonUniformResourceIndex(emissive)].SampleLevel(dTextureSampler, texcoords, 0).rgb);
     }
-
-    bool isIndexMatched(float λ, float extIOR) {
-        return type == BSDFType::Glass && volume.IOR.at(λ) == extIOR;
-    }
 };
 
 // most material code below expects stuff to be in the reflection frame
@@ -431,7 +427,7 @@ struct PolymorphicBSDF : BSDF {
     float intIOR;
     float extIOR;
 
-    static PolymorphicBSDF load(Material material, float extIOR, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
+    static PolymorphicBSDF load(Material material, float intIOR, float extIOR, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
         PolymorphicBSDF bsdf;
         bsdf.type = material.type;
         bsdf.addr = material.addr;
@@ -439,7 +435,7 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
-        bsdf.intIOR = material.volume.IOR.at(λ);
+        bsdf.intIOR = intIOR;
         bsdf.extIOR = extIOR;
         return bsdf;
     }
