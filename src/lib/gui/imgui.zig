@@ -309,6 +309,14 @@ pub fn alignTextToFramePadding() void {
     c.igAlignTextToFramePadding();
 }
 
+pub fn treeNode(label: [*:0]const u8) bool {
+    return c.igTreeNode_Str(label);
+}
+
+pub fn treePop() void {
+    c.igTreePop();
+}
+
 pub fn button(label: [*:0]const u8, size: Vec2) bool {
     return c.igButton(label, size);
 }

@@ -236,8 +236,8 @@ pub fn main() !void {
             imgui.popItemWidth();
         }
         imgui.end();
-        imgui.setNextWindowPos(@as(f32, @floatFromInt(@max(display.swapchain.extent.width, 50) - 50)) - 250, 50);
-        imgui.setNextWindowSize(250, 350);
+        imgui.setNextWindowPos(@as(f32, @floatFromInt(@max(display.swapchain.extent.width, 50) - 50)) - 350, 50);
+        imgui.setNextWindowSize(350, 450);
         imgui.begin("Click");
         if (has_clicked) {
             imgui.separatorText("pixel");
@@ -251,7 +251,7 @@ pub fn main() !void {
                 const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
                 const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
                 var geometry = try sync_copier.copyBufferItem(&context, Accel.Geometry, scene.world.accel.geometries.handle, accel_geometry_index);
-                const material = try sync_copier.copyBufferItem(&context, MaterialManager.GpuMaterial, scene.world.materials.materials.handle, geometry.material);
+                var material = try sync_copier.copyBufferItem(&context, MaterialManager.GpuMaterial, scene.world.materials.materials.handle, geometry.material);
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                 if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
                     scene.world.accel.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
@@ -264,23 +264,24 @@ pub fn main() !void {
                 try imgui.textFmt("Has texcoords: {}", .{!mesh.texcoord_buffer.isNull()});
                 try imgui.textFmt("Has normals: {}", .{!mesh.normal_buffer.isNull()});
                 imgui.separatorText("material");
-                try imgui.textFmt("normal: {}", .{material.normal});
-                try imgui.textFmt("emissive: {}", .{material.emissive});
-                try imgui.textFmt("type: {s}", .{@tagName(material.type)});
+                {
+                    var changed = false;
+                    changed = imgui.dragScalar(u32, "normal", &material.normal, 1, 0, std.math.maxInt(u32)) or changed;
+                    changed = imgui.dragScalar(u32, "emissive", &material.emissive, 1, 0, std.math.maxInt(u32)) or changed;
+                    changed = exposeToImguiRecursive(MaterialManager.Volume, &material.volume, "volume") or changed;
+                    if (changed) {
+                        scene.world.materials.recordUpdateSingleMaterial(frame_encoder.buffer, geometry.material, material);
+                        scene.camera.sensors.items[active_sensor].clear();
+                    }
+                }
                 inline for (@typeInfo(MaterialManager.BSDF).@"enum".fields, @typeInfo(MaterialManager.PolymorphicBSDF).@"union".fields) |enum_field, union_field| {
                     const VariantType = union_field.type;
                     if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
-                        const material_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
-                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer.handle, material_idx);
-                        inline for (@typeInfo(VariantType).@"struct".fields) |struct_field| {
-                            switch (struct_field.type) {
-                                f32 => if (imgui.dragScalar(f32, (struct_field.name[0..struct_field.name.len].* ++ .{ 0 })[0..struct_field.name.len :0], &@field(material_variant, struct_field.name), 0.01, 0, std.math.inf(f32))) {
-                                    scene.world.materials.recordUpdateSingleVariant(VariantType, frame_encoder.buffer, material_idx, material_variant);
-                                    scene.camera.sensors.items[active_sensor].clear();
-                                },
-                                u32 => try imgui.textFmt("{s}: {}", .{ struct_field.name, @field(material_variant, struct_field.name) }),
-                                else => unreachable,
-                            }
+                        const variant_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
+                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer.handle, variant_idx);
+                        if (exposeToImguiRecursive(VariantType, &material_variant, @tagName(material.type))) {
+                            scene.world.materials.recordUpdateSingleVariant(VariantType, frame_encoder.buffer, variant_idx, material_variant);
+                            scene.camera.sensors.items[active_sensor].clear();
                         }
                     }
                 }
@@ -458,4 +459,23 @@ pub fn main() !void {
     try context.device.deviceWaitIdle();
 
     std.log.info("Program completed!", .{});
+}
+
+pub fn exposeToImguiRecursive(T: type, value: *T, name: [:0]const u8) bool {
+    var changed = false;
+    if (imgui.treeNode(name)) {
+        inline for (@typeInfo(T).@"struct".fields) |struct_field| {
+            changed = switch (struct_field.type) {
+                f32 => imgui.dragScalar(f32, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, 0, std.math.inf(f32)),
+                u32 => imgui.dragScalar(u32, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
+                else => if (@hasDecl(struct_field.type, "ComponentType")) switch (struct_field.type.ComponentType) {
+                    f32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, 0, std.math.inf(f32)),
+                    u32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
+                    else => unreachable,
+                } else exposeToImguiRecursive(struct_field.type, &@field(value, struct_field.name), struct_field.name),
+            } or changed;
+        }
+        imgui.treePop();
+    }
+    return changed;
 }

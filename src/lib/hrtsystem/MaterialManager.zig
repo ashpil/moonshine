@@ -202,6 +202,27 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     return self.material_count - 1;
 }
 
+pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.CommandBuffer, material: Handle, value: GpuMaterial) void {
+    const offset = @sizeOf(GpuMaterial) * material;
+    const size = @sizeOf(GpuMaterial);
+    command_buffer.updateBuffer(self.materials.handle, offset, size, &value);
+
+    command_buffer.pipelineBarrier2(&vk.DependencyInfo {
+        .buffer_memory_barrier_count = 1,
+        .p_buffer_memory_barriers = @ptrCast(&vk.BufferMemoryBarrier2 {
+            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .shader_storage_read_bit = true },
+            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
+            .buffer = self.materials.handle,
+            .offset = offset,
+            .size = size,
+        }),
+    });
+}
+
 pub fn recordUpdateSingleVariant(self: *Self, comptime VariantType: type, command_buffer: VulkanContext.CommandBuffer, variant_idx: u32, new_data: VariantType) void {
     const variant_name = inline for (@typeInfo(PolymorphicBSDF).@"union".fields) |union_field| {
         if (union_field.type == VariantType) {
