@@ -285,7 +285,8 @@ pub fn main() !void {
                         }
                     }
                 }
-                imgui.separatorText("transform");
+                imgui.separatorText("instance");
+                try imgui.textFmt("Thick: {}", .{instance.instance_custom_index_and_mask.mask != 0b10000000 });
                 const old_transform: Mat3x4 = @bitCast(instance.transform);
                 var translation = old_transform.extractTranslation();
                 imgui.pushItemWidth(imgui.getFontSize() * -6);

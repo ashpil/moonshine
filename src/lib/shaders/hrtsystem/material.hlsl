@@ -380,23 +380,37 @@ struct Glass : BSDF {
     float intIOR;
     float extIOR;
 
-    static Glass load(const float intIOR, const float extIOR) {
+    bool thin;
+
+    static Glass load(const float intIOR, const float extIOR, const bool thin) {
         Glass material;
         material.intIOR = intIOR;
         material.extIOR = extIOR;
+        material.thin = thin;
         return material;
     }
 
     BSDFSample sample(float3 w_o, float2 square) {
-        const float etaR = Frame::cosTheta(w_o) > 0 ? extIOR / intIOR : intIOR / extIOR;
+        const float etaR = (thin || Frame::cosTheta(w_o) > 0) ? extIOR / intIOR : intIOR / extIOR;
 
         const float fresnel = Fresnel::dielectric(Frame::cosTheta(w_o), etaR);
 
+        float pReflect;
+        if (thin && fresnel != 1) {
+            pReflect = fresnel + (fresnel * fresnel) * (1 - fresnel) / (1 - fresnel * fresnel);
+        } else {
+            pReflect = fresnel;
+        }
+
         BSDFSample sample;
-        if (coinFlipRemap(fresnel, square.x)) {
+        if (coinFlipRemap(pReflect, square.x)) {
             sample.dir = float3(-w_o.x, -w_o.y, w_o.z);
         } else {
-            sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaR);
+            if (thin) {
+                sample.dir = -w_o;
+            } else {
+                sample.dir = refractDir(w_o, faceForward(float3(0.0, 0.0, 1.0), w_o), etaR);
+            }
         }
         if (all(sample.dir != 0.0)) {
             sample.eval.attenuation = 1;
@@ -427,7 +441,9 @@ struct PolymorphicBSDF : BSDF {
     float intIOR;
     float extIOR;
 
-    static PolymorphicBSDF load(Material material, float intIOR, float extIOR, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
+    bool thick;
+
+    static PolymorphicBSDF load(Material material, bool thick, float intIOR, float extIOR, float2 texcoords, Frame shadingFrame, Frame triangleFrame, float λ) {
         PolymorphicBSDF bsdf;
         bsdf.type = material.type;
         bsdf.addr = material.addr;
@@ -435,8 +451,9 @@ struct PolymorphicBSDF : BSDF {
         bsdf.λ = λ;
         bsdf.shadingFrame = shadingFrame;
         bsdf.triangleFrame = triangleFrame;
-        bsdf.intIOR = intIOR;
+        bsdf.intIOR = thick ? intIOR : material.volume.IOR.at(λ);
         bsdf.extIOR = extIOR;
+        bsdf.thick = thick;
         return bsdf;
     }
 
@@ -468,7 +485,7 @@ struct PolymorphicBSDF : BSDF {
                 break;
             }
             case BSDFType::Glass: {
-                Glass m = Glass::load(intIOR, extIOR);
+                Glass m = Glass::load(intIOR, extIOR, !thick);
                 eval = m.evaluate(w_i_frame, w_o_frame);
                 break;
             }
@@ -497,7 +514,7 @@ struct PolymorphicBSDF : BSDF {
                 break;
             }
             case BSDFType::Glass: {
-                Glass m = Glass::load(intIOR, extIOR);
+                Glass m = Glass::load(intIOR, extIOR, !thick);
                 sample = m.sample(w_o_frame, square);
                 break;
             }

@@ -34,6 +34,7 @@ const F32x3 = vector.Vec3(f32);
 pub const Instance = struct {
     transform: Mat3x4, // transform of this instance
     visible: bool = true, // whether this instance is visible
+    thick: bool = false,
     geometries: []const Geometry, // geometries in this instance
 };
 
@@ -382,7 +383,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
             },
             .instance_custom_index_and_mask = .{
                 .instance_custom_index = self.geometry_count,
-                .mask = if (instance.visible) 0xFF else 0x00,
+                .mask = if (instance.visible) if (instance.thick) 0xFF else 0b10000000 else 0x00,
             },
             .instance_shader_binding_table_record_offset_and_flags = .{
                 .instance_shader_binding_table_record_offset = 0,

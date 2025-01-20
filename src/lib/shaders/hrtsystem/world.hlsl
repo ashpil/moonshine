@@ -10,6 +10,10 @@ struct Instance { // same required by vulkan on host side
     uint instanceShaderBindingTableRecordOffset : 24;
     uint flags : 8;
     uint64_t accelerationStructureReference;
+
+    bool thick() {
+        return mask != 0b10000000;
+    }
 };
 
 struct Geometry {
@@ -162,6 +166,10 @@ struct World {
         const uint instanceID = instances[instanceIndex].instanceCustomIndex;
         const Geometry geometry = geometries[NonUniformResourceIndex(instanceID + geometryIndex)];
         return materials[NonUniformResourceIndex(geometry.materialIndex)];
+    }
+
+    bool thick(uint instanceIndex) {
+        return instances[instanceIndex].thick();
     }
 
     float triangleArea(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {

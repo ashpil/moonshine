@@ -162,9 +162,8 @@ struct VolumePathTracingIntegrator : Integrator {
                 // decode mesh attributes and material from intersection
                 const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-                const Volume materialVolume = material.volume.at(λ);
-                const VolumeBoundary volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ));
-                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+                VolumeBoundary volumeBoundary; if (scene.world.thick(its.instanceIndex)) { volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ)); } else { volumeBoundary = VolumeBoundary::none(path.volumeTracker.current); } // I am pretending ternary expressions work for arbitrary types
+                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thick(its.instanceIndex), volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
                 // attenuate throughput by transmittance, divided by P(t > tHit)
                 {
@@ -198,7 +197,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 {
                     const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
 
-                    const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
+                    const bool transmission = scene.world.thick(its.instanceIndex) && sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
                     const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
                     if (transmission) path.volumeTracker.cross(entering, volumeBoundary);
 
@@ -278,8 +277,8 @@ struct PathTracingIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const VolumeBoundary volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ));
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+            VolumeBoundary volumeBoundary; if (scene.world.thick(its.instanceIndex)) { volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ)); } else { volumeBoundary = VolumeBoundary::none(path.volumeTracker.current); } // I am pretending ternary expressions work for arbitrary types
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thick(its.instanceIndex), volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             {
@@ -305,7 +304,7 @@ struct PathTracingIntegrator : Integrator {
             {
                 const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
 
-                const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
+                const bool transmission = scene.world.thick(its.instanceIndex) && sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
                 const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
                 if (transmission) path.volumeTracker.cross(entering, volumeBoundary);
 
@@ -361,7 +360,7 @@ struct DirectLightIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, material.volume.IOR.at(λ), scene.globalVolume.IOR.at(λ), surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thick(its.instanceIndex), material.volume.IOR.at(λ), scene.globalVolume.IOR.at(λ), surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             pathRadiance += material.getEmissive(λ, surface.texcoord);
