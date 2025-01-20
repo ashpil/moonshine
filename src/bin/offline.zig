@@ -171,7 +171,7 @@ pub fn main() !void {
     try logger.log("render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.slice.ptr, .extent = scene.camera.sensors.items[0].extent }, allocator, config.out_filepath);
+    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.mapped, .extent = scene.camera.sensors.items[0].extent }, allocator, config.out_filepath);
 
     try logger.log("write exr");
 }

@@ -366,7 +366,7 @@ test "white sphere on white background is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
     try tc.encoder.begin();
@@ -378,7 +378,7 @@ test "white sphere on white background is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }
 
 test "white volume on white background is white" {
@@ -464,7 +464,7 @@ test "white volume on white background is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
     try tc.encoder.begin();
@@ -477,7 +477,7 @@ test "white volume on white background is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }
 
 test "inside illuminating sphere is white" {
@@ -565,7 +565,7 @@ test "inside illuminating sphere is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     try tc.encoder.begin();
     // do that again but with mesh sampling
@@ -577,7 +577,7 @@ test "inside illuminating sphere is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024, .{});
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     try tc.encoder.begin();
     // do that again but with non-absorbing volume
@@ -590,5 +590,5 @@ test "inside illuminating sphere is white" {
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024, .{ .medium = .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) } });
-    try assertWhiteFurnaceImage(tc.output_buffer.slice);
+    try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }

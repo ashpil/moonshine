@@ -63,7 +63,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         const buffer_name = try std.fmt.allocPrintZ(allocator, "mesh {s} positions", .{ host_mesh.name });
         defer allocator.free(buffer_name);
         const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }).create(vc, host_mesh.positions.len, buffer_name);
-        gpu_buffer.uploadFrom(encoder, host_mesh.positions);
+        gpu_buffer.uploadFrom(encoder, 0, host_mesh.positions);
 
         break :blk gpu_buffer;
     };
@@ -74,7 +74,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             const buffer_name = try std.fmt.allocPrintZ(allocator, "mesh {s} texcoords", .{ host_mesh.name });
             defer allocator.free(buffer_name);
             const gpu_buffer = try core.mem.DeviceBuffer(F32x2, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, texcoords.len, buffer_name);
-            gpu_buffer.uploadFrom(encoder, texcoords);
+            gpu_buffer.uploadFrom(encoder, 0, texcoords);
             break :blk gpu_buffer;
         } else {
             break :blk core.mem.DeviceBuffer(F32x2, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }) {};
@@ -87,7 +87,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             const buffer_name = try std.fmt.allocPrintZ(allocator, "mesh {s} normals", .{ host_mesh.name });
             defer allocator.free(buffer_name);
             const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, normals.len, buffer_name);
-            gpu_buffer.uploadFrom(encoder, normals);
+            gpu_buffer.uploadFrom(encoder, 0, normals);
             break :blk gpu_buffer;
         } else {
             break :blk core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }) {};
@@ -100,7 +100,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             const buffer_name = try std.fmt.allocPrintZ(allocator, "mesh {s} incides", .{ host_mesh.name });
             defer allocator.free(buffer_name);
             const gpu_buffer = try core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }).create(vc, indices.len, buffer_name);
-            gpu_buffer.uploadFrom(encoder, indices);
+            gpu_buffer.uploadFrom(encoder, 0, indices);
             break :blk gpu_buffer;
         } else {
             break :blk core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }) {};

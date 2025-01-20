@@ -512,7 +512,7 @@ pub const HdMoonshine = struct {
     pub export fn HdMoonshineSetInstanceVisibility(self: *HdMoonshine, handle: Accel.Handle, visible: bool) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        self.world.accel.instances_host.slice[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
+        self.world.accel.instances_host.hostSlice()[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
         self.need_instance_update = true;
         self.camera.clearAllSensors();
     }
@@ -520,7 +520,7 @@ pub const HdMoonshine = struct {
     pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat3x4) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const old_transform: Mat3x4 = @bitCast(self.world.accel.instances_host.slice[handle].transform);
+        const old_transform: Mat3x4 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
         if (!std.math.approxEqRel(f32, @abs(old_transform.truncate().determinant()), @abs(new_transform.truncate().determinant()), 0.001)) {
             // should tell us if this matrix was scaled
             // though may run into precision issues and rotation might seem like a scale
@@ -530,7 +530,7 @@ pub const HdMoonshine = struct {
                 .mesh = self.instance_to_mesh.items[handle],
             }) catch unreachable;
         }
-        self.world.accel.instances_host.slice[handle].transform = @bitCast(new_transform);
+        self.world.accel.instances_host.hostSlice()[handle].transform = @bitCast(new_transform);
         self.need_instance_update = true;
         self.camera.clearAllSensors();
     }
@@ -543,7 +543,7 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineGetSensorData(self: *const HdMoonshine, sensor: Camera.SensorHandle) [*][4]f32 {
-        return self.output_buffers.items[sensor].slice.ptr;
+        return self.output_buffers.items[sensor].hostSlice().ptr;
     }
 
     pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Camera) Camera.CameraHandle {

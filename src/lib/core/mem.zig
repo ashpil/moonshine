@@ -45,7 +45,8 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
     return struct {
         handle: vk.Buffer = .null_handle,
         memory: vk.DeviceMemory = .null_handle,
-        slice: if (host_visible) []T else void = if (host_visible) &.{} else {},
+        mapped: if (host_visible) [*]T else void = if (host_visible) undefined else {},
+        len: vk.DeviceSize = 0,
 
         const Self = @This();
 
@@ -55,15 +56,16 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             const size =  @sizeOf(T) * count;
             const buffer, const memory = try createRawBuffer(vc, size, usage, memory_properties, name);
 
-            const slice = if (host_visible) blk: {
+            const mapped = if (host_visible) blk: {
                 const ptr: [*]align(vk_map_memory_minimum_guaranteed_alignment) u8 = @alignCast(@ptrCast(try vc.device.mapMemory(memory, 0, vk.WHOLE_SIZE, .{})));
-                break :blk @as([*]T, @ptrCast(ptr))[0..count];
+                break :blk @as([*]T, @ptrCast(ptr));
             } else ({});
 
             return Self {
                 .handle = buffer,
                 .memory = memory,
-                .slice = slice,
+                .mapped = mapped,
+                .len = count,
             };
         }
 
@@ -88,14 +90,30 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
                 encoder.buffer.updateBuffer(self.handle, dst_offset * @sizeOf(T), bytes.len, src.ptr);
             }
 
-            pub fn uploadFrom(self: Self, encoder: *Encoder, src: BufferSlice(T)) void {
+            pub fn uploadFrom(self: Self, encoder: *Encoder, dst_offset: vk.DeviceSize, src: BufferSlice(T)) void {
                 const region = vk.BufferCopy {
-                    .src_offset = src.offset,
-                    .dst_offset = 0,
+                    .src_offset = src.asBytes().offset,
+                    .dst_offset = dst_offset * @sizeOf(T),
                     .size = src.asBytes().len,
                 };
 
                 encoder.buffer.copyBuffer(src.handle, self.handle, 1, @ptrCast(&region));
+            }
+        } else struct {};
+
+        pub usingnamespace if (usage.contains(.{ .transfer_src_bit = true })) struct {
+            pub fn deviceSlice(self: Self) BufferSlice(T) {
+                return BufferSlice(T) {
+                    .handle = self.handle,
+                    .offset = 0,
+                    .len = self.len,
+                };
+            }
+        } else struct {};
+
+        pub usingnamespace if (host_visible) struct {
+            pub fn hostSlice(self: Self) []T {
+                return self.mapped[0..self.len];
             }
         } else struct {};
 
@@ -120,8 +138,8 @@ pub fn DeviceBuffer(comptime T: type, comptime usage: vk.BufferUsageFlags) type 
 pub fn BufferSlice(comptime T: type) type {
     return struct {
         handle: vk.Buffer = .null_handle,
-        offset: vk.DeviceSize = 0,
-        len: vk.DeviceSize = 0,
+        offset: vk.DeviceSize = 0, // in bytes
+        len: vk.DeviceSize = 0, // in T
 
         const Self = @This();
 
@@ -130,6 +148,17 @@ pub fn BufferSlice(comptime T: type) type {
                 .handle = self.handle,
                 .offset = self.offset,
                 .len = @sizeOf(T) * self.len,
+            };
+        }
+
+        pub fn slice(self: Self, start: vk.DeviceSize, end: vk.DeviceSize) BufferSlice(T) {
+            std.debug.assert(start < end);
+            std.debug.assert(end < self.len);
+            const offset = self.offset + start * @sizeOf(T);
+            return BufferSlice(T) {
+                .handle = self.handle,
+                .offset = offset,
+                .len = end - start,
             };
         }
     };

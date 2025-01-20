@@ -415,7 +415,7 @@ const ShaderBindingTable = struct {
         const handle = try core.mem.DeviceBuffer(u8, .{ .shader_binding_table_bit_khr = true, .transfer_dst_bit = true, .shader_device_address_bit = true }).create(vc, sbt_size, "sbt");
         errdefer handle.destroy(vc);
 
-        handle.uploadFrom(encoder, encoder.upload_allocator.getBufferSlice(sbt));
+        handle.uploadFrom(encoder, 0, encoder.upload_allocator.getBufferSlice(sbt));
 
         const raygen_address = handle.getAddress(vc);
         const miss_address = raygen_address + miss_index;
@@ -479,7 +479,7 @@ const ShaderBindingTable = struct {
         std.mem.copyBackwards(u8, sbt[hit_index..hit_index + hit_size], sbt[raygen_size + miss_size..raygen_size + miss_size + hit_size]);
         std.mem.copyBackwards(u8, sbt[miss_index..miss_index + miss_size], sbt[raygen_size..raygen_size + miss_size]);
 
-        self.handle.uploadFrom(encoder, encoder.upload_allocator.getBufferSlice(sbt));
+        self.handle.uploadFrom(encoder, 0, encoder.upload_allocator.getBufferSlice(sbt));
     }
 
     pub fn getRaygenSBT(self: *const ShaderBindingTable) vk.StridedDeviceAddressRegionKHR {

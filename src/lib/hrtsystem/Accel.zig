@@ -394,14 +394,14 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
             }),
         };
 
-        self.instances_host.slice[self.instance_count] = vk_instance;
+        self.instances_host.hostSlice()[self.instance_count] = vk_instance;
 
         self.instances_device.updateFrom(encoder, self.instance_count, &.{ vk_instance }); // TODO: can copy
     }
 
     // upload world_to_instance matrix
     {
-        self.world_to_instance_host.slice[self.instance_count] = instance.transform.inverseAffine();
+        self.world_to_instance_host.hostSlice()[self.instance_count] = instance.transform.inverseAffine();
         self.world_to_instance_device.updateFrom(encoder, self.instance_count, &.{ instance.transform.inverseAffine() }); // TODO: can copy
     }
 

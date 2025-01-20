@@ -30,13 +30,13 @@ queue: std.ArrayListUnmanaged(Destruction) = .{},
 
 const Self = @This();
 
-// works on any type exclusively made up of Vulkan objects
+// works on any type exclusively made up of Vulkan objects and primitives
 pub fn append(self: *Self, allocator: std.mem.Allocator, item: anytype) !void {
     const T = @TypeOf(item);
 
     if (comptime @typeInfo(T) == .@"struct") {
         inline for (@typeInfo(T).@"struct".fields) |field| {
-            if (field.type != void) {
+            if (field.type != void and @typeInfo(field.type) != .int) {
                 try self.append(allocator, @field(item, field.name));
             }
         }

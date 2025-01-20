@@ -97,7 +97,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.Acceler
     try vc.device.resetFences(1, @ptrCast(&self.ready_fence));
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
-    return self.buffer.slice[0].toClickedObject();
+    return self.buffer.hostSlice()[0].toClickedObject();
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {

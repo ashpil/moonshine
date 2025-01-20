@@ -359,16 +359,16 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, swapch
     // copy all imgui vertex/index data into our one big buffer
     const vertex_buffer = self.vertex_buffers[display_image_index];
     const index_buffer = self.index_buffers[display_image_index];
-    std.debug.assert(draw_data.TotalVtxCount <= vertex_buffer.slice.len);
-    std.debug.assert(draw_data.TotalIdxCount <= index_buffer.slice.len);
+    std.debug.assert(draw_data.TotalVtxCount <= vertex_buffer.len);
+    std.debug.assert(draw_data.TotalIdxCount <= index_buffer.len);
     if (draw_data.CmdListsCount > 0) {
         var vertex_offset: usize = 0;
         var index_offset: usize = 0;
         for (draw_data.CmdLists.Data[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
             const vertex_count: usize = @intCast(cmd_list.*.VtxBuffer.Size);
             const index_count: usize = @intCast(cmd_list.*.IdxBuffer.Size);
-            @memcpy(vertex_buffer.slice[vertex_offset..].ptr, cmd_list.*.VtxBuffer.Data[0..vertex_count]);
-            @memcpy(index_buffer.slice[index_offset..].ptr, cmd_list.*.IdxBuffer.Data[0..index_count]);
+            @memcpy(vertex_buffer.hostSlice()[vertex_offset..].ptr, cmd_list.*.VtxBuffer.Data[0..vertex_count]);
+            @memcpy(index_buffer.hostSlice()[index_offset..].ptr, cmd_list.*.IdxBuffer.Data[0..index_count]);
             vertex_offset += vertex_count;
             index_offset += index_count;
         }

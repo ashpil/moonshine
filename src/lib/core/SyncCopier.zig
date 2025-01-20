@@ -35,7 +35,7 @@ pub fn create(vc: *const VulkanContext, max_bytes: u32) !Self {
 }
 
 pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInner: type, buffer: vk.Buffer, idx: vk.DeviceSize) !BufferInner {
-    std.debug.assert(@sizeOf(BufferInner) <= self.buffer.slice.len);
+    std.debug.assert(@sizeOf(BufferInner) <= self.buffer.len);
 
     try self.encoder.begin();
     self.encoder.copyBuffer(buffer, self.buffer.handle, &[_]vk.BufferCopy {
@@ -51,11 +51,11 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     try vc.device.resetFences(1, @ptrCast(&self.ready_fence));
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
-    return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.slice.ptr))).*;
+    return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.mapped))).*;
 }
 
 pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType: type, src_image: vk.Image, src_layout: vk.ImageLayout, offset: vk.Offset3D) !PixelType {
-    std.debug.assert(@sizeOf(PixelType) <= self.buffer.slice.len);
+    std.debug.assert(@sizeOf(PixelType) <= self.buffer.len);
 
     try self.encoder.begin();
     self.encoder.buffer.copyImageToBuffer(src_image, src_layout, self.buffer.handle, 1, @ptrCast(&vk.BufferImageCopy {
@@ -81,7 +81,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     try vc.device.resetFences(1, @ptrCast(&self.ready_fence));
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
-    return @as(*PixelType, @ptrCast(@alignCast(self.buffer.slice.ptr))).*;
+    return @as(*PixelType, @ptrCast(@alignCast(self.buffer.mapped))).*;
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
