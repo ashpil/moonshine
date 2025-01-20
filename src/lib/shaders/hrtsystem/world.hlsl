@@ -11,8 +11,10 @@ struct Instance { // same required by vulkan on host side
     uint flags : 8;
     uint64_t accelerationStructureReference;
 
+    static const uint THIN_MASK = 0b10000000;
+
     bool thin() {
-        return mask == 0b10000000;
+        return mask == THIN_MASK;
     }
 };
 

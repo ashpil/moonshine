@@ -29,7 +29,7 @@ namespace VolumeAlgebra {
 static Volume findContainingVolume(Scene scene, float3 position, float λ) {
     Volume initial = scene.globalVolume.at(λ);
     Ray ray = { position, float3(0, 0, 1) }; // direction arbitrary
-    for (Intersection its = Intersection::find(scene.tlas, ray, 1.#INF, 0b01111111); its.hit(); its = Intersection::find(scene.tlas, ray, 1.#INF, 0b01111111)) {
+    for (Intersection its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK); its.hit(); its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK)) {
         const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
         const Volume volume = scene.world.material(its.instanceIndex, its.geometryIndex).volume.at(λ);
 
