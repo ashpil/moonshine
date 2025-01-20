@@ -11,8 +11,8 @@ struct Instance { // same required by vulkan on host side
     uint flags : 8;
     uint64_t accelerationStructureReference;
 
-    bool thick() {
-        return mask != 0b10000000;
+    bool thin() {
+        return mask == 0b10000000;
     }
 };
 
@@ -168,8 +168,8 @@ struct World {
         return materials[NonUniformResourceIndex(geometry.materialIndex)];
     }
 
-    bool thick(uint instanceIndex) {
-        return instances[instanceIndex].thick();
+    bool thin(uint instanceIndex) {
+        return instances[instanceIndex].thin();
     }
 
     float triangleArea(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {

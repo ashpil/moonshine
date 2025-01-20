@@ -265,23 +265,23 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             const mesh = gltf.data.meshes.items[model_idx];
             var geometries = std.ArrayList(Geometry).init(allocator);
             try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
-            var instance_thick: bool = undefined;
+            var instance_thin: bool = undefined;
             for (mesh.primitives.items, 0..) |primitive, primitive_idx| {
-                const material, const thick = if (primitive.material) |material_idx| blk: {
+                const material, const thin = if (primitive.material) |material_idx| blk: {
                     const material = gltf.data.materials.items[material_idx];
                     // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
                     // and ignoring them is a better approximation than making them exist but be opaque
                     if (material.alpha_mode != .@"opaque") continue;
-                    const thick = material.thickness_factor > 0;
-                    break :blk .{ material_idx, thick };
+                    const thin = material.thickness_factor == 0;
+                    break :blk .{ material_idx, thin };
                 } else .{ (materials.material_count - 1), false };
                 if (primitive_idx != 0) {
                     // thickness in moonshine is on a per-instance basis, but gltf is per-material.
                     // currently, just assert all materials in an instance have same thickness.
                     // a better solution would be to break-up instances with non-same thickness.
-                    std.debug.assert(instance_thick == thick);
+                    std.debug.assert(instance_thin == thin);
                 }
-                instance_thick = thick;
+                instance_thin = thin;
                 geometries.appendAssumeCapacity(Geometry {
                     .mesh = @intCast(objects.items.len),
                     .material = @intCast(material),
@@ -398,7 +398,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                 ),
                 .geometries = try geometries.toOwnedSlice(),
-                .thick = instance_thick,
+                .thin = instance_thin,
             });
         }
     }
