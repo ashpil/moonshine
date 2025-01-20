@@ -119,14 +119,14 @@ struct Path {
     uint bounceCount;
     VolumeTracker volumeTracker;
 
-    static Path create(const Ray ray, const Volume volume) {
+    static Path create(const Scene scene, const Ray ray, const float λ) {
         Path p;
         p.ray = ray;
         p.throughput = 1;
         p.radiance = 0;
         p.pdf = 1.#INF; // assume initial event was delta
         p.bounceCount = 0;
-        p.volumeTracker = VolumeTracker::create(volume);
+        p.volumeTracker = VolumeTracker::create(findContainingVolume(scene, ray.origin, λ));
         return p;
     }
 };
@@ -137,7 +137,6 @@ interface Integrator {
 
 // TODO:
 // * support volume priorities
-// * don't assume original ray starts in global medium
 struct VolumePathTracingIntegrator : Integrator {
     uint russianRouletteDepth;
     uint envSamplesPerBounce;
@@ -152,7 +151,7 @@ struct VolumePathTracingIntegrator : Integrator {
     }
 
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
-        Path path = Path::create(initialRay, scene.globalVolume.at(λ));
+        Path path = Path::create(scene, initialRay, λ);
         while (true) {
             const float mediumTMax = path.volumeTracker.current.medium.sample(rng.getFloat());
             const Intersection its = Intersection::find(scene.tlas, path.ray, mediumTMax);
@@ -269,7 +268,7 @@ struct PathTracingIntegrator : Integrator {
     }
 
     float incomingRadiance(const Scene scene, const Ray initialRay, const float λ, inout Rng rng) {
-        Path path = Path::create(initialRay, scene.globalVolume.at(λ));
+        Path path = Path::create(scene, initialRay, λ);
 
         for (Intersection its = Intersection::find(scene.tlas, path.ray); its.hit(); its = Intersection::find(scene.tlas, path.ray)) {
             const float3 outgoingDirWs = -path.ray.direction;
