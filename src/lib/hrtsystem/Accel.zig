@@ -588,45 +588,32 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
 
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
-pub fn recordUpdateSingleTransform(self: *Self, command_buffer: VulkanContext.CommandBuffer, instance_idx: u32, new_transform: Mat3x4) void {
-    const offset = @sizeOf(vk.AccelerationStructureInstanceKHR) * instance_idx + @offsetOf(vk.AccelerationStructureInstanceKHR, "transform");
-    const offset_inverse = @sizeOf(Mat3x4) * instance_idx;
-    const size = @sizeOf(vk.TransformMatrixKHR);
-    command_buffer.updateBuffer(self.instances_device.handle, offset, size, &new_transform);
-    command_buffer.updateBuffer(self.world_to_instance_device.handle, offset_inverse, size, &new_transform.inverseAffine());
-    const barriers = [_]vk.BufferMemoryBarrier2 {
+pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat3x4, thin: bool, visible: bool) void {
+    self.instances_host.hostSlice()[instance_idx].instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else 0xFF else 0x00;
+    self.instances_host.hostSlice()[instance_idx].transform = @bitCast(transform);
+    self.world_to_instance_host.hostSlice()[instance_idx] = @bitCast(transform.inverseAffine());
+    self.instances_device.uploadFrom(encoder, instance_idx, self.instances_host.deviceSlice().slice(instance_idx, instance_idx + 1));
+    self.world_to_instance_device.uploadFrom(encoder, instance_idx, self.world_to_instance_host.deviceSlice().slice(instance_idx, instance_idx + 1));
+    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
         .{
-            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .buffer = self.instances_device.handle,
-            .offset = offset,
-            .size = size,
+            .offset = instance_idx * @sizeOf(vk.AccelerationStructureInstanceKHR),
+            .size = @sizeOf(vk.AccelerationStructureInstanceKHR),
         },
         .{
-            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+            .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .buffer = self.world_to_instance_device.handle,
-            .offset = offset_inverse,
-            .size = size,
+            .offset = instance_idx * @sizeOf(vk.TransformMatrixKHR),
+            .size = @sizeOf(vk.TransformMatrixKHR),
         },
-    };
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .buffer_memory_barrier_count = barriers.len,
-        .p_buffer_memory_barriers = &barriers,
     });
-}
-
-// TODO: get it working
-pub fn updateVisibility(self: *Self, instance_idx: u32, visible: bool) void {
-    self.instances_host.data[instance_idx].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
 }
 
 // probably bad idea if you're changing many

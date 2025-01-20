@@ -86,6 +86,10 @@ pub fn separatorText(msg: [*:0]const u8) void {
     c.igSeparatorText(msg);
 }
 
+pub fn checkbox(label: [*:0]const u8, value: *bool) bool {
+    return c.igCheckbox(label, value);
+}
+
 pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T, max: T) bool {
     const data_type = switch (T) {
         u32 => c.ImGuiDataType_U32,

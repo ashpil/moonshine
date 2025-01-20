@@ -285,15 +285,21 @@ pub fn main() !void {
                         }
                     }
                 }
-                imgui.separatorText("instance");
-                try imgui.textFmt("Thin: {}", .{instance.instance_custom_index_and_mask.mask == 0b10000000 });
-                const old_transform: Mat3x4 = @bitCast(instance.transform);
-                var translation = old_transform.extractTranslation();
-                imgui.pushItemWidth(imgui.getFontSize() * -6);
-                if (imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32))) {
-                    scene.world.accel.recordUpdateSingleTransform(frame_encoder.buffer, object.instance_index, old_transform.withTranslation(translation));
-                    try scene.world.accel.recordRebuild(frame_encoder.buffer);
-                    scene.camera.sensors.items[active_sensor].clear();
+                {
+                    imgui.separatorText("instance");
+                    const visible = instance.instance_custom_index_and_mask.mask != 0b00000000;
+                    var thin = instance.instance_custom_index_and_mask.mask == 0b10000000;
+                    var changed = false;
+                    changed = imgui.checkbox("Thin", &thin) or changed;
+                    const old_transform: Mat3x4 = @bitCast(instance.transform);
+                    var translation = old_transform.extractTranslation();
+                    imgui.pushItemWidth(imgui.getFontSize() * -6);
+                    changed = imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    if (changed) {
+                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, old_transform.withTranslation(translation), thin, visible);
+                        try scene.world.accel.recordRebuild(frame_encoder.buffer);
+                        scene.camera.sensors.items[active_sensor].clear();
+                    }
                 }
             }
             imgui.popItemWidth();
