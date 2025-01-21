@@ -46,49 +46,51 @@ static Volume findContainingVolume(Scene scene, float3 position, float λ) {
     return VolumeAlgebra::clampToValid(initial);
 }
 
-struct VolumeBoundary {
-    Volume internal;
-    Volume external;
-
-    static VolumeBoundary none(Volume v) {
-        VolumeBoundary b;
-        b.internal = v;
-        b.external = v;
-        return b;
-    }
-
-    bool isIndexMatched() {
-        return internal.IOR == external.IOR;
-    }
-};
-
 struct VolumeTracker {
     Volume current;
+
+    Volume other;
+    bool inside;
 
     static VolumeTracker create(Volume initial) {
         VolumeTracker t;
         t.current = initial;
+        t.other = initial;
+        t.inside = true; // should be unused
         return t;
     }
 
-    VolumeBoundary boundary(bool inside, Volume v) {
-        VolumeBoundary boundary;
+    void newBoundary(bool newInside, Volume newVolume) {
+        inside = newInside;
         if (inside) {
-            boundary.internal = current;
             // assume that negative numbers here are due to bad roundoff, and clamp
-            boundary.external = VolumeAlgebra::clampToValid(VolumeAlgebra::sub(current, v));
+            other = VolumeAlgebra::clampToValid(VolumeAlgebra::sub(current, newVolume));
         } else {
-            boundary.internal = VolumeAlgebra::add(current, v);
-            boundary.external = current;
+            other = VolumeAlgebra::add(current, newVolume);
         }
-        return boundary;
     }
 
-    void cross(bool entering, VolumeBoundary boundary) {
-        if (entering) {
-            current = boundary.internal;
+    bool isIndexMatched() {
+        return current.IOR == other.IOR;
+    }
+
+    Volume internal() {
+        if (inside) {
+            return current;
         } else {
-            current = boundary.external;
+            return other;
         }
+    }
+
+    Volume external() {
+        if (inside) {
+            return other;
+        } else {
+            return current;
+        }
+    }
+
+    void cross() {
+        current = other;
     }
 };

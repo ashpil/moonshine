@@ -49,7 +49,7 @@ float estimateDirect(RaytracingAccelerationStructure accel, Light light, BSDF ma
 // only samples light
 // separate function for volumes as we need to find the closest hit, not just terminate on any hit
 template <class Light, class BSDF>
-float estimateDirectVolumetric(World world, RaytracingAccelerationStructure accel, Light light, BSDF material, float3 outgoingDirWs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, VolumeBoundary volumeBoundary, VolumeTracker volumeTracker, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
+float estimateDirectVolumetric(World world, RaytracingAccelerationStructure accel, Light light, BSDF material, float3 outgoingDirWs, float λ, float3 positionWs, float3 triangleNormalDirWs, float spawnOffset, VolumeTracker volumeTracker, float2 rand, uint lightSamplesTaken, uint brdfSamplesTaken) {
     const LightSample lightSample = light.sample(λ, positionWs, rand);
 
     if (lightSample.eval.radiance != 0) {
@@ -62,23 +62,22 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
             float throughput = 1;
             float remainingDistance = lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset);
             const bool transmission = sign(dot(lightSample.dirWs, triangleNormalDirWs)) != sign(dot(outgoingDirWs, triangleNormalDirWs));
-            const bool entering = dot(lightSample.dirWs, triangleNormalDirWs) < 0;
-            if (transmission) volumeTracker.cross(entering, volumeBoundary);
+            if (transmission) volumeTracker.cross();
             // trace rays, going through all index-matched media
             // TODO: might be able to do this in a short-circuiting way somehow, as we can terminate early if we find any opaque object
             // TODO: should we be taking contribution of index-matched emissive objects into account?
+            // TODO: can continue on delta thin translucent materials here if their attenuation is taken into account
             for (Intersection its = Intersection::find(accel, ray, remainingDistance); its.hit(); its = Intersection::find(accel, ray, remainingDistance)) {
                 const Material material = world.material(its.instanceIndex, its.geometryIndex);
                 const SurfacePoint surface = world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
-                const bool entering = dot(ray.direction, surface.triangleFrame.n) < 0;
-                const VolumeBoundary volumeBoundary = volumeTracker.boundary(!entering, material.volume.at(λ));
-                if (volumeBoundary.isIndexMatched()) {
+                if (!world.thin(its.instanceIndex)) volumeTracker.newBoundary(dot(ray.direction, surface.triangleFrame.n) >= 0, material.volume.at(λ));
+                if (!world.thin(its.instanceIndex) && volumeTracker.isIndexMatched()) {
                     // attenuate throughput
                     const float tHit = distance(ray.origin, surface.position);
                     throughput *= volumeTracker.current.medium.transmittance(tHit);
 
                     // update state for next iteration
-                    volumeTracker.cross(entering, volumeBoundary);
+                    volumeTracker.cross();
                     ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
                     remainingDistance = remainingDistance - tHit + dot(ray.direction, faceForward(surface.triangleFrame.n, -ray.direction) * surface.spawnOffset);
                 } else {
@@ -161,8 +160,8 @@ struct VolumePathTracingIntegrator : Integrator {
                 // decode mesh attributes and material from intersection
                 const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-                VolumeBoundary volumeBoundary; if (scene.world.thin(its.instanceIndex)) { volumeBoundary = VolumeBoundary::none(path.volumeTracker.current); } else { volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ)); } // I am pretending ternary expressions work for arbitrary types
-                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thin(its.instanceIndex), volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+                if (!scene.world.thin(its.instanceIndex)) path.volumeTracker.newBoundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ));
+                const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thin(its.instanceIndex), path.volumeTracker.internal().IOR, path.volumeTracker.external().IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
                 // attenuate throughput by transmittance, divided by P(t > tHit)
                 {
@@ -183,12 +182,12 @@ struct VolumePathTracingIntegrator : Integrator {
                 if (!bsdf.isDelta()) {
                     for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                         float2 rand = float2(rng.getFloat(), rng.getFloat());
-                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, volumeBoundary, path.volumeTracker, rand, envSamplesPerBounce, 1);
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, path.volumeTracker, rand, envSamplesPerBounce, 1);
                     }
 
                     for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                         float2 rand = float2(rng.getFloat(), rng.getFloat());
-                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, volumeBoundary, path.volumeTracker, rand, meshSamplesPerBounce, 1);
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, path.volumeTracker, rand, meshSamplesPerBounce, 1);
                     }
                 }
 
@@ -196,13 +195,12 @@ struct VolumePathTracingIntegrator : Integrator {
                 {
                     const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
 
-                    const bool transmission = !scene.world.thin(its.instanceIndex) && sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
-                    const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
-                    if (transmission) path.volumeTracker.cross(entering, volumeBoundary);
+                    const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
+                    if (transmission) path.volumeTracker.cross();
 
                     path.ray.direction = sample.dir;
                     path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
-                    path.pdf = (transmission && bsdf.isDelta() && volumeBoundary.isIndexMatched()) ? path.pdf : sample.eval.pdf; // preserve prior PDF for index-matched surfaces
+                    path.pdf = (!scene.world.thin(its.instanceIndex) && transmission && bsdf.isDelta() && path.volumeTracker.isIndexMatched()) ? path.pdf : sample.eval.pdf; // preserve prior PDF for index-matched surfaces
                     path.throughput *= sample.eval.attenuation;
                 }
             } else if (mediumTMax != 1.#INF) {
@@ -214,12 +212,12 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, VolumeBoundary::none(path.volumeTracker.current), path.volumeTracker, rand, envSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.volumeTracker, rand, envSamplesPerBounce, 1);
                 }
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, VolumeBoundary::none(path.volumeTracker.current), path.volumeTracker, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, path.volumeTracker, rand, meshSamplesPerBounce, 1);
                 }
 
                 const BSDFSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
@@ -276,8 +274,8 @@ struct PathTracingIntegrator : Integrator {
             // decode mesh attributes and material from intersection
             const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
             const Material material = scene.world.material(its.instanceIndex, its.geometryIndex);
-            VolumeBoundary volumeBoundary; if (scene.world.thin(its.instanceIndex)) { volumeBoundary = VolumeBoundary::none(path.volumeTracker.current); } else { volumeBoundary = path.volumeTracker.boundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ)); } // I am pretending ternary expressions work for arbitrary types
-            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thin(its.instanceIndex), volumeBoundary.internal.IOR, volumeBoundary.external.IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
+            if (!scene.world.thin(its.instanceIndex)) path.volumeTracker.newBoundary(dot(outgoingDirWs, surface.triangleFrame.n) < 0, material.volume.at(λ));
+            const PolymorphicBSDF bsdf = PolymorphicBSDF::load(material, scene.world.thin(its.instanceIndex), path.volumeTracker.internal().IOR, path.volumeTracker.external().IOR, surface.texcoord, selectFrame(surface, material, outgoingDirWs), surface.triangleFrame, λ);
 
             // collect light from emissive meshes
             {
@@ -303,9 +301,8 @@ struct PathTracingIntegrator : Integrator {
             {
                 const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
 
-                const bool transmission = !scene.world.thin(its.instanceIndex) && sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
-                const bool entering = dot(sample.dir, surface.triangleFrame.n) < 0;
-                if (transmission) path.volumeTracker.cross(entering, volumeBoundary);
+                const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
+                if (transmission) path.volumeTracker.cross();
 
                 path.ray.direction = sample.dir;
                 path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
