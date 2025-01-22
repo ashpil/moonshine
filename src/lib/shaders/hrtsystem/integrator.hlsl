@@ -60,14 +60,15 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
 
             Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs};
             float throughput = 1;
-            float remainingDistance = lightSample.distance - dot(lightSample.dirWs, faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset);
+            float spawnPrecisionOffset = spawnOffset / abs(dot(lightSample.dirWs, triangleNormalDirWs));
+            float remainingDistance = lightSample.distance;
             const bool transmission = sign(dot(lightSample.dirWs, triangleNormalDirWs)) != sign(dot(outgoingDirWs, triangleNormalDirWs));
             if (transmission) volumeTracker.cross();
             // trace rays, going through all index-matched media
             // TODO: might be able to do this in a short-circuiting way somehow, as we can terminate early if we find any opaque object
             // TODO: should we be taking contribution of index-matched emissive objects into account?
             // TODO: can continue on delta thin translucent materials here if their attenuation is taken into account
-            for (Intersection its = Intersection::find(accel, ray, remainingDistance); its.hit(); its = Intersection::find(accel, ray, remainingDistance)) {
+            for (Intersection its = Intersection::find(accel, ray, remainingDistance - spawnPrecisionOffset); its.hit(); its = Intersection::find(accel, ray, remainingDistance - spawnPrecisionOffset)) {
                 const Material material = world.material(its.instanceIndex, its.geometryIndex);
                 const SurfacePoint surface = world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
                 if (!world.thin(its.instanceIndex)) volumeTracker.newBoundary(dot(ray.direction, surface.triangleFrame.n) >= 0, material.volume.at(λ));
@@ -79,7 +80,8 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
                     // update state for next iteration
                     volumeTracker.cross();
                     ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
-                    remainingDistance = remainingDistance - tHit + dot(ray.direction, faceForward(surface.triangleFrame.n, -ray.direction) * surface.spawnOffset);
+                    remainingDistance = remainingDistance - tHit;
+                    spawnPrecisionOffset = surface.spawnOffset / abs(dot(ray.direction, surface.triangleFrame.n));
                 } else {
                     return 0;
                 }
