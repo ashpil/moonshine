@@ -196,14 +196,13 @@ struct VolumePathTracingIntegrator : Integrator {
                 // set up next bounce
                 {
                     const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
-
                     const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
-                    if (transmission) path.volumeTracker.cross();
 
                     path.ray.direction = sample.dir;
                     path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
                     path.pdf = (!scene.world.thin(its.instanceIndex) && transmission && bsdf.isDelta() && path.volumeTracker.isIndexMatched()) ? path.pdf : sample.eval.pdf; // preserve prior PDF for index-matched surfaces
                     path.throughput *= sample.eval.attenuation;
+                    if (transmission) path.volumeTracker.cross();
                 }
             } else if (mediumTMax != 1.#INF) {
                 path.throughput *= path.volumeTracker.current.medium.σ_s * path.volumeTracker.current.medium.transmittance(mediumTMax) / path.volumeTracker.current.medium.pdf(mediumTMax);
@@ -302,15 +301,14 @@ struct PathTracingIntegrator : Integrator {
             // set up next bounce
             {
                 const BSDFSample sample = bsdf.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
-
                 const bool transmission = sign(dot(sample.dir, surface.triangleFrame.n)) != sign(dot(outgoingDirWs, surface.triangleFrame.n));
-                if (transmission) path.volumeTracker.cross();
 
                 path.ray.direction = sample.dir;
                 path.ray.origin = surface.position + faceForward(surface.triangleFrame.n, path.ray.direction) * surface.spawnOffset;
                 path.pdf = sample.eval.pdf;
                 path.throughput *= sample.eval.attenuation;
                 path.bounceCount += 1;
+                if (transmission) path.volumeTracker.cross();
             }
 
             // terminate if lost at russian roulette
