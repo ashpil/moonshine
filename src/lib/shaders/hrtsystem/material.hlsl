@@ -35,7 +35,6 @@ struct Material {
     uint normal;
     uint emissive;
 
-    // TODO: don't assume mesh is closed
     // volume enclosed by the mesh of this material
     ChromaticVolume volume;
 

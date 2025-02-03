@@ -1,10 +1,13 @@
 #include "volume.hlsl"
 
+// probably does not satisfy the actual definition of an algebra as it's not closed
+// and there's not always an inverse
 namespace VolumeAlgebra {
     Volume add(Volume lhs, Volume rhs) {
         Volume o;
         o.medium.σ_s = lhs.medium.σ_s + rhs.medium.σ_s;
         o.medium.σ_a = lhs.medium.σ_a + rhs.medium.σ_a;
+        o.phase.g = lhs.phase.g + rhs.phase.g;
         o.IOR = lhs.IOR * rhs.IOR;
         return o;
     }
@@ -13,14 +16,15 @@ namespace VolumeAlgebra {
         Volume o;
         o.medium.σ_s = lhs.medium.σ_s - rhs.medium.σ_s;
         o.medium.σ_a = lhs.medium.σ_a - rhs.medium.σ_a;
+        o.phase.g = lhs.phase.g - rhs.phase.g;
         o.IOR = lhs.IOR / rhs.IOR;
         return o;
     }
 
-    // not fully a group as there's no valid inverse for these
     Volume clampToValid(Volume v) {
         v.medium.σ_s = max(v.medium.σ_s, 0);
         v.medium.σ_a = max(v.medium.σ_a, 0);
+        v.phase.g = clamp(v.phase.g, -0.9999999, 0.9999999); // TODO: handle delta phase functions
         return v;
     }
 };
@@ -56,7 +60,7 @@ struct VolumeTracker {
             if (entering) {
                 // make sure we don't get something *slightly* above zero when we should've had zero
                 // the more principled thing here is probably some ULP shenanigans
-                t.current[priority] = VolumeAlgebra::sub(t.current[priority], VolumeAlgebra::add(volume, Volume::create(Homogeneous::create(volume.medium.σ_s * 0.0000001, volume.medium.σ_a * 0.0000001), 1)));
+                t.current[priority] = VolumeAlgebra::sub(t.current[priority], VolumeAlgebra::add(volume, Volume::create(Homogeneous::create(volume.medium.σ_s * 0.0000001, volume.medium.σ_a * 0.0000001), HenyeyGreenstein::create(0), 1)));
                 t.depth[priority - 1] -= 1;
             } else {
                 t.current[priority] = VolumeAlgebra::add(t.current[priority], volume);

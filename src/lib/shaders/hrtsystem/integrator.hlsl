@@ -212,19 +212,18 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 const float3 outgoingDirWs = -path.ray.direction;
                 const float3 position = path.ray.origin + path.ray.direction * mediumTMax;
-                const Isotropic phaseFunction;
 
                 for (uint directCount = 0; directCount < envSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, phaseFunction, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, envSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.envMap, path.volumeTracker.currentVolume().phase, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, envSamplesPerBounce, 1);
                 }
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, phaseFunction, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, path.volumeTracker.currentVolume().phase, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, meshSamplesPerBounce, 1);
                 }
 
-                const BSDFSample sample = phaseFunction.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
+                const BSDFSample sample = path.volumeTracker.currentVolume().phase.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
                 path.ray.direction = sample.dir;
                 path.ray.origin = position;
                 path.pdf = sample.eval.pdf;

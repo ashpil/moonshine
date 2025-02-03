@@ -477,10 +477,10 @@ pub fn exposeToImguiRecursive(T: type, value: *T, name: [:0]const u8) bool {
     if (imgui.treeNode(name)) {
         inline for (@typeInfo(T).@"struct".fields) |struct_field| {
             changed = switch (struct_field.type) {
-                f32 => imgui.dragScalar(f32, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, 0, std.math.inf(f32)),
+                f32 => imgui.dragScalar(f32, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, -std.math.inf(f32), std.math.inf(f32)),
                 u32 => imgui.dragScalar(u32, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
                 else => if (@hasDecl(struct_field.type, "ComponentType")) switch (struct_field.type.ComponentType) {
-                    f32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, 0, std.math.inf(f32)),
+                    f32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, -std.math.inf(f32), std.math.inf(f32)),
                     u32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
                     else => unreachable,
                 } else exposeToImguiRecursive(struct_field.type, &@field(value, struct_field.name), struct_field.name),

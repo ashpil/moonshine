@@ -72,6 +72,8 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             ).scale(-1 / gltf_material.attenuation_distance),
         };
 
+        material.volume.phase.g = 0.0;
+
         {
             const dispersion = @max(gltf_material.dispersion, 0.2); // real materials have dispersion!
             const abbe_number = 20.0 / dispersion;

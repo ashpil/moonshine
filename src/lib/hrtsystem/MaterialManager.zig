@@ -35,6 +35,7 @@ pub const Material = struct {
 
 pub const Volume = extern struct {
     medium: Medium = .{},
+    phase: HenyeyGreenstein = .{},
     ior: CauchyIOR = .{},
 };
 
@@ -55,6 +56,10 @@ pub const CauchyIOR = extern struct {
             .b = b,
         };
     }
+};
+
+pub const HenyeyGreenstein = extern struct {
+    g: f32 = 0.0,
 };
 
 pub const Medium = extern struct {
