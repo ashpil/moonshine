@@ -66,9 +66,9 @@ struct VolumeTracker {
         }
 
         for (uint i = 0; i < VOLUME_PRIORITY_COUNT; i++) {
-            t.current[i] = VolumeAlgebra::clampToValid(t.current[i]);
+            t.current[i] = t.current[i];
         }
-        t.other = t.currentVolume();
+        t.other = t.current[t.activePriority()];
         return t;
     }
 
@@ -78,8 +78,7 @@ struct VolumeTracker {
         priority = newPriority;
         if (inside) {
             if (depth[priority - 1] > 1) {
-                // assume that negative numbers here are due to bad roundoff, and clamp
-                other = VolumeAlgebra::clampToValid(VolumeAlgebra::sub(current[priority], newVolume));
+                other = VolumeAlgebra::sub(current[priority], newVolume);
             } else {
                 other = current[0];
                 for (uint i = priority - 1; i > 0; i--) {
@@ -104,7 +103,8 @@ struct VolumeTracker {
     }
 
     Volume currentVolume() {
-        return current[activePriority()];
+        // assume that negative numbers here are due to bad roundoff, and clamp
+        return VolumeAlgebra::clampToValid(current[activePriority()]);
     }
 
     uint activePriority() {
@@ -118,13 +118,13 @@ struct VolumeTracker {
         if (inside) {
             return currentVolume();
         } else {
-            return other;
+            return VolumeAlgebra::clampToValid(other);
         }
     }
 
     Volume external() {
         if (inside) {
-            return other;
+            return VolumeAlgebra::clampToValid(other);
         } else {
             return currentVolume();
         }
