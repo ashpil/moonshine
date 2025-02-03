@@ -11,7 +11,6 @@
 
 #include "../utils/random.hlsl"
 #include "../utils/math.hlsl"
-#include "material.hlsl"
 
 static const float CIE1931YIntegral = 106.85691710117189;
 

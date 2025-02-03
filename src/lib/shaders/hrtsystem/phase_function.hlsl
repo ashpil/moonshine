@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../utils/mappings.hlsl"
-#include "material.hlsl"
+#include "bsdf.hlsl"
 
 struct Isotropic : BSDF {
     BSDFEvaluation evaluate(float3 w_i, float3 w_o) {
