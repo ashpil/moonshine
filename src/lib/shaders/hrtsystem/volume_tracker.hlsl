@@ -25,58 +25,98 @@ namespace VolumeAlgebra {
     }
 };
 
-// find volume containing the world-space position. expensive
-static Volume findContainingVolume(Scene scene, float3 position, float λ) {
-    Volume initial = scene.globalVolume.at(λ);
-    Ray ray = { position, float3(0, 0, 1) }; // direction arbitrary
-    for (Intersection its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK); its.hit(); its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK)) {
-        const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
-        const Volume volume = scene.world.material(its.instanceIndex, its.geometryIndex).volume.at(λ);
-
-        const bool entering = dot(ray.direction, surface.triangleFrame.n) < 0;
-        if (entering) {
-            // make sure we don't get something *slightly* above zero when we should've had zero
-            // the more principled thing here is probably some ULP shenanigans
-            initial = VolumeAlgebra::sub(initial, VolumeAlgebra::add(volume, Volume::create(Homogeneous::create(volume.medium.σ_s * 0.0000001, volume.medium.σ_a * 0.0000001), 1)));
-        } else {
-            initial = VolumeAlgebra::add(initial, volume);
-        }
-        ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
-    }
-    return VolumeAlgebra::clampToValid(initial);
-}
-
 struct VolumeTracker {
-    Volume current;
+    static const uint VOLUME_PRIORITY_COUNT = 8;
+
+    Volume current[VOLUME_PRIORITY_COUNT];
+    int depth[VOLUME_PRIORITY_COUNT - 1]; // last is always global, which is known to have depth == 0
 
     Volume other;
     bool inside;
+    uint priority;
 
-    static VolumeTracker create(Volume initial) {
+    // find volume stack containing the world-space position. expensive
+    static VolumeTracker fromPosition(Scene scene, float3 position, float λ) {
         VolumeTracker t;
-        t.current = initial;
-        t.other = initial;
+        for (uint i = 0; i < VOLUME_PRIORITY_COUNT - 1; i++) {
+            t.depth[i] = 0;
+            t.current[i + 1] = scene.globalVolume.at(λ);
+        }
+        t.current[0] = scene.globalVolume.at(λ);
         t.inside = true; // should be unused
+        t.priority = 0;
+
+        Ray ray = { position, float3(0, 1, 0) }; // direction arbitrary
+        for (Intersection its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK); its.hit(); its = Intersection::find(scene.tlas, ray, 1.#INF, ~Instance::THIN_MASK)) {
+            const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
+            const Volume volume = scene.world.material(its.instanceIndex, its.geometryIndex).volume.at(λ);
+            const uint priority = scene.world.priority(its.instanceIndex);
+
+            const bool entering = dot(ray.direction, surface.triangleFrame.n) < 0;
+            if (entering) {
+                // make sure we don't get something *slightly* above zero when we should've had zero
+                // the more principled thing here is probably some ULP shenanigans
+                t.current[priority] = VolumeAlgebra::sub(t.current[priority], VolumeAlgebra::add(volume, Volume::create(Homogeneous::create(volume.medium.σ_s * 0.0000001, volume.medium.σ_a * 0.0000001), 1)));
+                t.depth[priority - 1] -= 1;
+            } else {
+                t.current[priority] = VolumeAlgebra::add(t.current[priority], volume);
+                t.depth[priority - 1] += 1;
+            }
+            ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
+        }
+
+        for (uint i = 0; i < VOLUME_PRIORITY_COUNT; i++) {
+            t.current[i] = VolumeAlgebra::clampToValid(t.current[i]);
+        }
+        t.other = t.currentVolume();
         return t;
     }
 
-    void newBoundary(bool newInside, Volume newVolume) {
+    // surface should only be considered if this returns true
+    bool newBoundary(bool newInside, uint newPriority, Volume newVolume) {
         inside = newInside;
+        priority = newPriority;
         if (inside) {
-            // assume that negative numbers here are due to bad roundoff, and clamp
-            other = VolumeAlgebra::clampToValid(VolumeAlgebra::sub(current, newVolume));
+            if (depth[priority - 1] > 1) {
+                // assume that negative numbers here are due to bad roundoff, and clamp
+                other = VolumeAlgebra::clampToValid(VolumeAlgebra::sub(current[priority], newVolume));
+            } else {
+                other = current[0];
+                for (uint i = priority - 1; i > 0; i--) {
+                    if (depth[i - 1] != 0) {
+                        other = current[i];
+                        break;
+                    }
+                }
+            }
         } else {
-            other = VolumeAlgebra::add(current, newVolume);
+            if (depth[priority - 1] > 0) {
+                other = VolumeAlgebra::add(current[priority], newVolume);
+            } else {
+                other = newVolume;
+            }
         }
+        return activePriority() <= priority;
     }
 
     bool isIndexMatched() {
-        return current.IOR == other.IOR;
+        return currentVolume().IOR == other.IOR;
+    }
+
+    Volume currentVolume() {
+        return current[activePriority()];
+    }
+
+    uint activePriority() {
+        for (uint i = VOLUME_PRIORITY_COUNT - 1; i > 0; i--) {
+            if (depth[i - 1] != 0) return i;
+        }
+        return 0;
     }
 
     Volume internal() {
         if (inside) {
-            return current;
+            return currentVolume();
         } else {
             return other;
         }
@@ -86,11 +126,12 @@ struct VolumeTracker {
         if (inside) {
             return other;
         } else {
-            return current;
+            return currentVolume();
         }
     }
 
     void cross() {
-        current = other;
+        current[priority] = other;
+        depth[priority - 1] += inside ? -1 : 1;
     }
 };

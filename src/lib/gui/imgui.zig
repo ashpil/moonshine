@@ -91,13 +91,14 @@ pub fn checkbox(label: [*:0]const u8, value: *bool) bool {
 }
 
 pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T, max: T) bool {
-    const data_type = switch (T) {
+    const data_type = comptime switch (T) {
+        u8 => c.ImGuiDataType_U8,
         u32 => c.ImGuiDataType_U32,
         f32 => c.ImGuiDataType_Float,
         else => unreachable, // TODO
     };
-    const format = switch (T) {
-        u32 => "%d",
+    const format = comptime switch (T) {
+        u8, u32 => "%d",
         f32 => "%.2f",
         else => unreachable, // TODO
     };

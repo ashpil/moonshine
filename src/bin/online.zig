@@ -289,14 +289,18 @@ pub fn main() !void {
                     imgui.separatorText("instance");
                     const visible = instance.instance_custom_index_and_mask.mask != 0b00000000;
                     var thin = instance.instance_custom_index_and_mask.mask == 0b10000000;
+                    var priority: u8 = @intCast(if (thin) 1 else @ctz(instance.instance_custom_index_and_mask.mask) + 1);
                     var changed = false;
                     changed = imgui.checkbox("Thin", &thin) or changed;
+                    if (thin) imgui.beginDisabled();
+                    changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
+                    if (thin) imgui.endDisabled();
                     const old_transform: Mat3x4 = @bitCast(instance.transform);
                     var translation = old_transform.extractTranslation();
                     imgui.pushItemWidth(imgui.getFontSize() * -6);
                     changed = imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                     if (changed) {
-                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, old_transform.withTranslation(translation), thin, visible);
+                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, old_transform.withTranslation(translation), thin, @intCast(priority), visible);
                         try scene.world.accel.recordRebuild(frame_encoder.buffer);
                         scene.camera.sensors.items[active_sensor].clear();
                     }

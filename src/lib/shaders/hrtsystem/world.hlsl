@@ -16,6 +16,10 @@ struct Instance { // same required by vulkan on host side
     bool thin() {
         return mask == THIN_MASK;
     }
+
+    uint priority() {
+        return firstbithigh(mask) + 1;
+    }
 };
 
 struct Geometry {
@@ -172,6 +176,10 @@ struct World {
 
     bool thin(uint instanceIndex) {
         return instances[instanceIndex].thin();
+    }
+
+    uint priority(uint instanceIndex) {
+        return instances[instanceIndex].priority();
     }
 
     float triangleArea(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {

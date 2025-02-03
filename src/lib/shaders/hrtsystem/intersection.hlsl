@@ -37,13 +37,16 @@ struct [raypayload] Intersection {
 struct [raypayload] ShadowIntersection {
     bool inShadow : read(caller) : write(miss);
 
-    // traces a shadow ray, returning whether it hit geometry
-    static bool hit(RaytracingAccelerationStructure accel, Ray ray, float maxDistance) {
+    static bool hit(RaytracingAccelerationStructure accel, Ray ray, float tmax) {
+        return ShadowIntersection::hit(accel, ray, tmax, 0xFF);
+    }
+
+    static bool hit(RaytracingAccelerationStructure accel, Ray ray, float tmax, uint mask) {
         const uint shadowTraceFlags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
 
         ShadowIntersection its;
         its.inShadow = true;
-        TraceRay(accel, shadowTraceFlags, 0xFF, 0, 0, 1, ray.desc(0, maxDistance), its);
+        TraceRay(accel, shadowTraceFlags, mask, 0, 0, 1, ray.desc(0, tmax), its);
         return its.inShadow;
     }
 };

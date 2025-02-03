@@ -35,6 +35,7 @@ pub const Instance = struct {
     transform: Mat3x4, // transform of this instance
     visible: bool = true, // whether this instance is visible
     thin: bool = true,
+    priority: u4 = 1, // 1-7 valid values
     geometries: []const Geometry, // geometries in this instance
 };
 
@@ -383,7 +384,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
             },
             .instance_custom_index_and_mask = .{
                 .instance_custom_index = self.geometry_count,
-                .mask = if (instance.visible) if (instance.thin) 0b10000000 else 0xFF else 0x00,
+                .mask = if (instance.visible) if (instance.thin) 0b10000000 else @as(u8, 1) << @intCast(instance.priority - 1) else 0x00,
             },
             .instance_shader_binding_table_record_offset_and_flags = .{
                 .instance_shader_binding_table_record_offset = 0,
@@ -588,8 +589,8 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
 
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
-pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat3x4, thin: bool, visible: bool) void {
-    self.instances_host.hostSlice()[instance_idx].instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else 0xFF else 0x00;
+pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat3x4, thin: bool, priority: u4, visible: bool) void {
+    self.instances_host.hostSlice()[instance_idx].instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
     self.instances_host.hostSlice()[instance_idx].transform = @bitCast(transform);
     self.world_to_instance_host.hostSlice()[instance_idx] = @bitCast(transform.inverseAffine());
     self.instances_device.uploadFrom(encoder, instance_idx, self.instances_host.deviceSlice().slice(instance_idx, instance_idx + 1));
