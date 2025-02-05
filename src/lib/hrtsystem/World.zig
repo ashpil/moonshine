@@ -276,7 +276,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     if (material.alpha_mode != .@"opaque") continue;
                     const thin = material.thickness_factor == 0;
                     break :blk .{ material_idx, thin };
-                } else .{ (materials.material_count - 1), false };
+                } else .{ (materials.material_count - 1), true };
                 if (primitive_idx != 0) {
                     // thickness in moonshine is on a per-instance basis, but gltf is per-material.
                     // currently, just assert all materials in an instance have same thickness.
