@@ -459,25 +459,11 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
         .transform_offset = 0,
     })});
 
-    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_commands_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-            .dst_stage_mask = .{ .all_commands_bit = true },
-            .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-            .buffer = self.instances_device.handle,
-        },
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_commands_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-            .dst_stage_mask = .{ .all_commands_bit = true },
-            .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-            .buffer = self.geometries.handle,
-        },
-    });
+    encoder.global_barrier();
     for (instance.geometries, 0..) |geometry, i| {
         self.recordUpdatePower(encoder, mesh_manager, material_manager, @intCast(self.instance_count - 1), @intCast(i), geometry.mesh);
     }
+    encoder.global_barrier();
 
     self.geometry_count += @intCast(instance.geometries.len);
 

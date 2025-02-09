@@ -283,3 +283,15 @@ pub fn barrier(self: Self, images: []const ImageBarrier, buffers: []const Buffer
         .p_buffer_memory_barriers = @ptrCast(buffers.ptr),
     });
 }
+
+pub fn global_barrier(self: Self) void {
+    self.buffer.pipelineBarrier2(&vk.DependencyInfo {
+        .memory_barrier_count = 1,
+        .p_memory_barriers = @ptrCast(&vk.MemoryBarrier2 {
+            .src_stage_mask = .{ .all_commands_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
+            .dst_stage_mask = .{ .all_commands_bit = true },
+            .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
+        })
+    });
+}
