@@ -24,7 +24,7 @@ pub fn main() void {
                 stderr.writeAll("... ") catch {};
             }
             if (err != error.SkipZigTest) {
-                if (enable_print) stderr.writeAll("FAIL\n") catch {};
+                if (enable_print) stderr.writer().print("FAIL {}\n", .{ err }) catch {};
                 failed += 1;
                 if (!enable_print) return err;
                 continue;
