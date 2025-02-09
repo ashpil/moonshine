@@ -416,6 +416,7 @@ test "white volume on white background is white" {
         }, "white");
 
         _ = try world.accel.uploadInstance(&tc.vc, allocator, &tc.encoder, world.meshes, world.materials, Accel.Instance {
+            .thin = false,
             .visible = true,
             .transform = Mat3x4.identity,
             .geometries = &[1]Accel.Geometry {
