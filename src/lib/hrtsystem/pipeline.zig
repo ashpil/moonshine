@@ -279,6 +279,7 @@ pub const StandardBindings = struct {
     world_to_instances: ?vk.Buffer,
     meshes: ?vk.Buffer,
     geometries: ?vk.Buffer,
+    model_to_geometry_offset: ?vk.Buffer,
     material_values: ?vk.Buffer,
     triangle_power_image: core.pipeline.SampledImage,
     triangle_meta: vk.Buffer,

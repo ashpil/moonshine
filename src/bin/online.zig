@@ -13,6 +13,7 @@ const TextureManager = core.Images.TextureManager;
 const hrtsystem = engine.hrtsystem;
 const Camera = hrtsystem.CameraManager;
 const Accel = hrtsystem.Accel;
+const ModelManager = hrtsystem.ModelManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
 const Pipeline = hrtsystem.pipeline.StandardPipeline;
@@ -249,12 +250,13 @@ pub fn main() !void {
                 try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
                 // TODO: all of the copying below should be done once, on object pick
                 const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
-                const accel_geometry_index = instance.instance_custom_index_and_mask.instance_custom_index + object.geometry_index;
-                var geometry = try sync_copier.copyBufferItem(&context, Accel.Geometry, scene.world.accel.geometries.handle, accel_geometry_index);
+                const geometry_offset = try sync_copier.copyBufferItem(&context, u32, scene.world.models.model_to_geometry_offset.handle, instance.instance_custom_index_and_mask.instance_custom_index);
+                const accel_geometry_index = geometry_offset + object.geometry_index;
+                var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry, scene.world.models.geometries.handle, accel_geometry_index);
                 var material = try sync_copier.copyBufferItem(&context, MaterialManager.GpuMaterial, scene.world.materials.materials.handle, geometry.material);
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                 if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
-                    scene.world.accel.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
+                    scene.world.models.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
                 imgui.separatorText("mesh");

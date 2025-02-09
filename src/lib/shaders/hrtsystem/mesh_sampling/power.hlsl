@@ -7,12 +7,13 @@
 [[vk::binding(1, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 [[vk::binding(2, 0)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(3, 0)]] StructuredBuffer<Geometry> dGeometries;
-[[vk::binding(4, 0)]] StructuredBuffer<Material> dMaterials;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> emissiveTriangleCount;
+[[vk::binding(4, 0)]] StructuredBuffer<uint> dModelToGeometryOffset;
+[[vk::binding(5, 0)]] StructuredBuffer<Material> dMaterials;
+[[vk::binding(6, 0)]] StructuredBuffer<uint> emissiveTriangleCount;
 
 // dst
-[[vk::binding(6, 0)]] RWTexture1D<float> dstPower;
-[[vk::binding(7, 0)]] RWStructuredBuffer<TriangleMetadata> dstTriangleMetadata;
+[[vk::binding(7, 0)]] RWTexture1D<float> dstPower;
+[[vk::binding(8, 0)]] RWStructuredBuffer<TriangleMetadata> dstTriangleMetadata;
 
 // mesh info
 struct PushConsts {
@@ -32,6 +33,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     world.instances = dInstances;
     world.worldToInstance = dWorldToInstance;
     world.meshes = dMeshes;
+    world.modelToGeometryOffset = dModelToGeometryOffset;
     world.geometries = dGeometries;
     world.materials = dMaterials;
 

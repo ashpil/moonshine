@@ -168,8 +168,7 @@ struct MeshLights : Light {
         }
         const TriangleMetadata meta = metadata[idx];
 
-        const uint instanceID = world.instances[meta.instanceIndex].instanceCustomIndex;
-        const uint primitiveIndex = idx - geometryToTrianglePowerOffset[instanceID + meta.geometryIndex];
+        const uint primitiveIndex = idx - geometryToTrianglePowerOffset[meta.instanceIndex + meta.geometryIndex];
 
         const TriangleLight inner = TriangleLight::create(meta.instanceIndex, meta.geometryIndex, primitiveIndex, world);
         lightSample = inner.sample(λ, positionWs, rand);
@@ -180,8 +179,7 @@ struct MeshLights : Light {
 
     float selectionPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
         if (integral() == 0.0) return 0.0; // no lights
-        const uint instanceID = world.instances[instanceIndex].instanceCustomIndex;
-        const uint offset = geometryToTrianglePowerOffset[instanceID + geometryIndex];
+        const uint offset = geometryToTrianglePowerOffset[instanceIndex + geometryIndex];
         const uint invalidOffset = 0xFFFFFFFF;
         if (offset == invalidOffset) return 0.0; // no light at this triangle
         const uint idx = offset + primitiveIndex;

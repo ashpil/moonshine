@@ -319,10 +319,10 @@ pub const HdMoonshine = struct {
             self.need_instance_update = false;
         }
 
-        while (self.power_updates.items.len != 0) {
-            const update = self.power_updates.pop();
-            self.world.accel.recordUpdatePower(&self.encoder, self.world.meshes, self.world.materials, update.instance, 0, update.mesh);
-        }
+        // while (self.power_updates.items.len != 0) {
+        //     const update = self.power_updates.pop();
+        //     self.world.accel.recordUpdatePower(&self.encoder, self.world.meshes, self.world.materials, update.instance, 0, update.mesh);
+        // }
 
         // TODO: this memory barrier is a little more extreme than neccessary
         self.encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
@@ -483,27 +483,27 @@ pub const HdMoonshine = struct {
     //     result.value_ptr.ior = ior;
     // }
 
-    pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, mesh: MeshManager.Handle, material: MaterialManager.Handle, visible: bool) Accel.Handle {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-        const instance = Accel.Instance {
-            .transform = transform,
-            .visible = visible,
-            .geometries = &[1]Accel.Geometry {
-                .{
-                    .mesh = mesh,
-                    .material = material,
-                }
-            },
-        };
-        self.camera.clearAllSensors();
-        self.power_updates.append(self.allocator.allocator(), PowerUpdate {
-            .instance = self.world.accel.instance_count,
-            .mesh = mesh,
-        }) catch unreachable;
-        self.instance_to_mesh.append(self.allocator.allocator(), mesh) catch unreachable;
-        return self.world.accel.uploadInstance(&self.vc, self.allocator.allocator(), &self.encoder, self.world.meshes, self.world.materials, instance) catch unreachable; // TODO: error handling
-    }
+    // pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, mesh: MeshManager.Handle, material: MaterialManager.Handle, visible: bool) Accel.Handle {
+    //     self.mutex.lock();
+    //     defer self.mutex.unlock();
+    //     const instance = Accel.Instance {
+    //         .transform = transform,
+    //         .visible = visible,
+    //         .geometries = &[1]Accel.Geometry {
+    //             .{
+    //                 .mesh = mesh,
+    //                 .material = material,
+    //             }
+    //         },
+    //     };
+    //     self.camera.clearAllSensors();
+    //     self.power_updates.append(self.allocator.allocator(), PowerUpdate {
+    //         .instance = self.world.accel.instance_count,
+    //         .mesh = mesh,
+    //     }) catch unreachable;
+    //     self.instance_to_mesh.append(self.allocator.allocator(), mesh) catch unreachable;
+    //     return self.world.accel.uploadInstance(&self.vc, self.allocator.allocator(), &self.encoder, self.world.meshes, self.world.materials, instance) catch unreachable; // TODO: error handling
+    // }
 
     pub export fn HdMoonshineDestroyInstance(self: *HdMoonshine, handle: Accel.Handle) void {
         HdMoonshineSetInstanceVisibility(self, handle, false); // sike. TODO: proper destruction

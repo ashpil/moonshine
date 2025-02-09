@@ -13,21 +13,22 @@
 [[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 [[vk::binding(3, 0)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(4, 0)]] StructuredBuffer<Geometry> dGeometries;
-[[vk::binding(5, 0)]] StructuredBuffer<Material> dMaterials;
+[[vk::binding(5, 0)]] StructuredBuffer<uint> dModelToGeometryOffset;
+[[vk::binding(6, 0)]] StructuredBuffer<Material> dMaterials;
 
 // EMISSIVE TRIANGLES
-[[vk::binding(6, 0)]] Texture1D<float> dTrianglePower;
-[[vk::binding(7, 0)]] StructuredBuffer<TriangleMetadata> dTriangleMetadata;
-[[vk::binding(8, 0)]] StructuredBuffer<uint> dGeometryToTrianglePowerOffset;
-[[vk::binding(9, 0)]] StructuredBuffer<uint> dEmissiveTriangleCount;
+[[vk::binding(7, 0)]] Texture1D<float> dTrianglePower;
+[[vk::binding(8, 0)]] StructuredBuffer<TriangleMetadata> dTriangleMetadata;
+[[vk::binding(9, 0)]] StructuredBuffer<uint> dGeometryToTrianglePowerOffset;
+[[vk::binding(10, 0)]] StructuredBuffer<uint> dEmissiveTriangleCount;
 
 // BACKGROUND
-[[vk::combinedImageSampler]] [[vk::binding(10, 0)]] Texture2D<float3> dBackgroundRgbTexture;
-[[vk::combinedImageSampler]] [[vk::binding(10, 0)]] SamplerState dBackgroundSampler;
-[[vk::binding(11, 0)]] Texture2D<float> dBackgroundLuminanceTexture;
+[[vk::combinedImageSampler]] [[vk::binding(11, 0)]] Texture2D<float3> dBackgroundRgbTexture;
+[[vk::combinedImageSampler]] [[vk::binding(11, 0)]] SamplerState dBackgroundSampler;
+[[vk::binding(12, 0)]] Texture2D<float> dBackgroundLuminanceTexture;
 
 // OUTPUT
-[[vk::binding(12, 0)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(13, 0)]] RWTexture2D<float4> dOutputImage;
 
 // PUSH CONSTANTS
 struct PushConsts {
@@ -63,6 +64,7 @@ void raygen() {
     world.instances = dInstances;
     world.worldToInstance = dWorldToInstance;
     world.meshes = dMeshes;
+    world.modelToGeometryOffset = dModelToGeometryOffset;
     world.geometries = dGeometries;
     world.materials = dMaterials;
 

@@ -15,8 +15,9 @@ const vk_helpers = core.vk_helpers;
 
 const MaterialManager = engine.hrtsystem.MaterialManager;
 const TextureManager = MaterialManager.TextureManager;
-
 const MeshManager = engine.hrtsystem.MeshManager;
+const ModelManager = engine.hrtsystem.ModelManager;
+
 const Accel = engine.hrtsystem.Accel;
 const ConstantSpectra = engine.hrtsystem.ConstantSpectra;
 
@@ -33,10 +34,11 @@ const U8x4 = vector.Vec4(u8);
 pub const Material = MaterialManager.Material;
 pub const PolymorphicBSDF = MaterialManager.PolymorphicBSDF;
 pub const Instance = Accel.Instance;
-pub const Geometry = Accel.Geometry;
+pub const Geometry = ModelManager.Geometry;
 
 meshes: MeshManager,
 materials: MaterialManager,
+models: ModelManager,
 
 accel: Accel,
 
@@ -239,14 +241,6 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     };
     errdefer materials.destroy(vc, allocator);
 
-    var objects = std.ArrayList(MeshManager.Mesh).init(allocator);
-    defer objects.deinit();
-
-    // go over heirarchy, finding meshes
-    var instances = std.ArrayList(Instance).init(allocator);
-    defer instances.deinit();
-    defer for (instances.items) |instance| allocator.free(instance.geometries);
-
     const buffers = try allocator.alloc([]align(4) const u8, gltf.data.buffers.items.len);
     defer allocator.free(buffers);
     for (gltf.data.buffers.items, buffers) |src, *dst| {
@@ -262,10 +256,20 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     }
     defer for (buffers[(if (gltf.glb_binary != null) 1 else 0)..]) |buffer| allocator.free(buffer);
 
+    var meshes = MeshManager {};
+    errdefer meshes.destroy(vc, allocator);
+
+    var models = ModelManager {};
+    errdefer models.destroy(vc, allocator);
+
+    var accel = try Accel.createEmpty(vc, allocator, materials.textures.descriptor_layout, encoder);
+    errdefer accel.destroy(vc);
+
     for (gltf.data.nodes.items) |node| {
         if (node.mesh) |model_idx| {
             const mesh = gltf.data.meshes.items[model_idx];
             var geometries = std.ArrayList(Geometry).init(allocator);
+            defer geometries.deinit();
             try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
             var instance_thin: bool = undefined;
             for (mesh.primitives.items, 0..) |primitive, primitive_idx| {
@@ -284,10 +288,6 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     std.debug.assert(instance_thin == thin);
                 }
                 instance_thin = thin;
-                geometries.appendAssumeCapacity(Geometry {
-                    .mesh = @intCast(objects.items.len),
-                    .material = @intCast(material),
-                });
                 // get indices
                 const indices = if (primitive.indices) |indices_index| blk2: {
                     const accessor = gltf.data.accessors.items[indices_index];
@@ -376,50 +376,42 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 errdefer encoder.uploadAllocator().free(vertices.positions);
                 errdefer encoder.uploadAllocator().free(vertices.texcoords);
 
-                // get vertices
-                try objects.append(MeshManager.Mesh {
+                const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh {
                     .name = mesh.name,
                     .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
                     .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,
                     .normals = if (vertices.normals.len != 0) encoder.upload_allocator.getBufferSlice(vertices.normals) else null,
                     .indices = if (indices) |i| encoder.upload_allocator.getBufferSlice(i) else null,
                 });
+
+                geometries.appendAssumeCapacity(Geometry {
+                    .mesh = mesh_handle,
+                    .material = @intCast(material),
+                });
             }
 
-            if (geometries.items.len == 0) {
-                geometries.deinit();
-                continue;
-            }
+            if (geometries.items.len == 0) continue;
+
+            const model = try models.upload(vc, allocator, encoder, meshes, geometries.items);
 
             const mat = Gltf.getGlobalTransform(&gltf.data, node);
-            // convert to Z-up
-            try instances.append(Instance {
+            _ = try accel.uploadInstance(vc, encoder, meshes, materials, models, Instance {
+                // convert to Z-up
                 .transform = Mat3x4.new(
                     F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
                     F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
                 ),
-                .geometries = try geometries.toOwnedSlice(),
+                .model = model,
                 .thin = instance_thin,
-            });
+            }, geometries.items);
         }
-    }
-
-    var meshes = MeshManager {};
-    errdefer meshes.destroy(vc, allocator);
-    for (objects.items) |object| {
-        _ = try meshes.upload(vc, allocator, encoder, object);
-    }
-
-    var accel = try Accel.createEmpty(vc, allocator, materials.textures.descriptor_layout, encoder);
-    errdefer accel.destroy(vc, allocator);
-    for (instances.items) |instance| {
-        _ = try accel.uploadInstance(vc, allocator, encoder, meshes, materials, instance);
     }
 
     return Self {
         .materials = materials,
         .meshes = meshes,
+        .models = models,
         .accel = accel,
         .constant_specta = try ConstantSpectra.create(vc, encoder),
     };
@@ -432,6 +424,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     return Self {
         .materials = materials,
         .meshes = .{},
+        .models = .{},
         .accel = try Accel.createEmpty(vc, allocator, materials.textures.descriptor_layout, encoder),
         .constant_specta = try ConstantSpectra.create(vc, encoder),
     };
@@ -448,6 +441,7 @@ pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.materials.destroy(vc, allocator);
     self.meshes.destroy(vc, allocator);
-    self.accel.destroy(vc, allocator);
+    self.models.destroy(vc, allocator);
+    self.accel.destroy(vc);
     self.constant_specta.destroy(vc);
 }

@@ -155,22 +155,21 @@ struct World {
     StructuredBuffer<Instance> instances;
     StructuredBuffer<row_major float3x4> worldToInstance;
 
+    StructuredBuffer<uint> modelToGeometryOffset;
     StructuredBuffer<Mesh> meshes;
     StructuredBuffer<Geometry> geometries;
 
     StructuredBuffer<Material> materials;
 
-    // TODO: there's a lot of indirection in these two functions just to load some data
-    // probably can reorganize this for there to be some more direct path
     Mesh mesh(uint instanceIndex, uint geometryIndex) {
         const uint instanceID = instances[instanceIndex].instanceCustomIndex;
-        const Geometry geometry = geometries[NonUniformResourceIndex(instanceID + geometryIndex)];
+        const Geometry geometry = geometries[NonUniformResourceIndex(modelToGeometryOffset[instanceID] + geometryIndex)];
         return meshes[NonUniformResourceIndex(geometry.meshIndex)];
     }
 
     Material material(uint instanceIndex, uint geometryIndex) {
         const uint instanceID = instances[instanceIndex].instanceCustomIndex;
-        const Geometry geometry = geometries[NonUniformResourceIndex(instanceID + geometryIndex)];
+        const Geometry geometry = geometries[NonUniformResourceIndex(modelToGeometryOffset[instanceID] + geometryIndex)];
         return materials[NonUniformResourceIndex(geometry.materialIndex)];
     }
 

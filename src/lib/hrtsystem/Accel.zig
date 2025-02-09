@@ -10,6 +10,7 @@ const vk_helpers = core.vk_helpers;
 
 const MeshManager = @import("./MeshManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
+const ModelManager = @import("./ModelManager.zig");
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);
@@ -18,36 +19,14 @@ const F32x3 = vector.Vec3(f32);
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
 // how all the meshes and materials fit together
-//
-// an acceleration structure has:
-// - a list of instances
-//
-// each instance has:
-// - a transform
-// - a visible flag
-// - a list of geometries
-//
-// each geometry (BLAS) has:
-// - a mesh
-// - a material
 
 pub const Instance = struct {
-    transform: Mat3x4, // transform of this instance
-    visible: bool = true, // whether this instance is visible
+    transform: Mat3x4,
+    visible: bool = true,
     thin: bool = true,
     priority: u4 = 1, // 1-7 valid values
-    geometries: []const Geometry, // geometries in this instance
+    model: ModelManager.Handle,
 };
-
-pub const Geometry = extern struct {
-    mesh: u32, // idx of mesh that this geometry uses
-    material: u32, // idx of material that this geometry uses
-};
-
-const BottomLevelAccels = std.MultiArrayList(struct {
-    handle: vk.AccelerationStructureKHR,
-    buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }),
-});
 
 const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/mesh_sampling/power.hlsl",
     .PushConstants = extern struct {
@@ -60,6 +39,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
         world_to_instances: vk.Buffer,
         meshes: vk.Buffer,
         geometries: vk.Buffer,
+        model_to_geometry_offset: vk.Buffer,
         material_values: vk.Buffer,
         emissive_triangle_count: vk.Buffer,
         dst_power: engine.core.pipeline.StorageImage,
@@ -90,14 +70,13 @@ const TriangleMetadata = extern struct {
 
 triangle_power_pipeline: TrianglePowerPipeline,
 triangle_power_fold_pipeline: TrianglePowerFoldPipeline,
-// TODO: this needs to be 2D and possibly aliased, or just a buffer rather than an image
 triangle_powers_meta: core.mem.DeviceBuffer(TriangleMetadata, .{ .storage_buffer_bit = true }),
+// TODO: should build a separate one for each model so that instances are actually instanced here
+// TODO: this should be a storage buffer rather than an image
 triangle_powers: Image,
 triangle_powers_mips: [std.math.log2(max_emissive_triangles) + 1]vk.ImageView,
 geometry_to_triangle_power_offset: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
 emissive_triangle_count: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }), // size 1
-
-blases: BottomLevelAccels = .{},
 
 instance_count: u32 = 0,
 instances_device: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
@@ -110,11 +89,6 @@ instances_address: vk.DeviceAddress,
 // ray queries provide them in any shader which would be a benefit of using them
 world_to_instance_device: core.mem.DeviceBuffer(Mat3x4, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 world_to_instance_host: core.mem.UploadBuffer(Mat3x4),
-
-// flat jagged array for geometries --
-// use instanceCustomIndex + GeometryID() here to get geometry
-geometry_count: u24 = 0,
-geometries: core.mem.DeviceBuffer(Geometry, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR = .null_handle,
@@ -129,122 +103,6 @@ const Self = @This();
 const max_instances = std.math.powi(u32, 2, 12) catch unreachable;
 const max_geometries = std.math.powi(u32, 2, 12) catch unreachable;
 const max_emissive_triangles = std.math.powi(u32, 2, 15) catch unreachable;
-
-// lots of temp memory allocations here
-// encoder must be in recording state
-// returns scratch buffers that must be kept alive until command is completed
-fn makeBlases(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, mesh_manager: MeshManager, geometries: []const []const Geometry, blases: *BottomLevelAccels) !void {
-    const build_geometry_infos = try allocator.alloc(vk.AccelerationStructureBuildGeometryInfoKHR, geometries.len);
-    defer allocator.free(build_geometry_infos);
-    defer for (build_geometry_infos) |build_geometry_info| allocator.free(build_geometry_info.p_geometries.?[0..build_geometry_info.geometry_count]);
-
-    const build_infos = try allocator.alloc([*]vk.AccelerationStructureBuildRangeInfoKHR, geometries.len);
-    defer allocator.free(build_infos);
-    defer for (build_infos, build_geometry_infos) |build_info, build_geometry_info| allocator.free(build_info[0..build_geometry_info.geometry_count]);
-
-    try blases.ensureUnusedCapacity(allocator, geometries.len);
-
-    // place these barriers ahead of the for loop before so that if the vulkan implementaiton
-    // treats all barriers as global, we won't serialize BLAS builds.
-    // though maybe it should be somewhere else completely...
-    for (geometries) |geometry_list| {
-        for (geometry_list) |geometry| {
-            const mesh = mesh_manager.meshes.get(geometry.mesh);
-            encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
-                Encoder.BufferBarrier {
-                    .src_stage_mask = .{ .all_transfer_bit = true },
-                    .src_access_mask = .{ .transfer_write_bit = true },
-                    .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-                    .dst_access_mask = .{ .memory_read_bit = true },
-                    .buffer = mesh.index_buffer.handle,
-                },
-                Encoder.BufferBarrier {
-                    .src_stage_mask = .{ .all_transfer_bit = true },
-                    .src_access_mask = .{ .transfer_write_bit = true },
-                    .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-                    .dst_access_mask = .{ .memory_read_bit = true },
-                    .buffer = mesh.position_buffer.handle,
-                },
-            });
-        }
-    }
-
-    for (geometries, build_infos, build_geometry_infos) |list, *build_info, *build_geometry_info| {
-        const vk_geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, list.len);
-
-        build_geometry_info.* = vk.AccelerationStructureBuildGeometryInfoKHR {
-            .type = .bottom_level_khr,
-            .flags = .{ .prefer_fast_trace_bit_khr = true },
-            .mode = .build_khr,
-            .geometry_count = @intCast(vk_geometries.len),
-            .p_geometries = vk_geometries.ptr,
-            .scratch_data = undefined,
-        };
-
-        const primitive_counts = try allocator.alloc(u32, list.len);
-        defer allocator.free(primitive_counts);
-
-        build_info.* = (try allocator.alloc(vk.AccelerationStructureBuildRangeInfoKHR, list.len)).ptr;
-
-        for (list, vk_geometries, primitive_counts, 0..) |geo, *geometry, *primitive_count, j| {
-            const mesh = mesh_manager.meshes.get(geo.mesh);
-
-            geometry.* = vk.AccelerationStructureGeometryKHR {
-                .geometry_type = .triangles_khr,
-                .flags = .{ .opaque_bit_khr = true },
-                .geometry = .{
-                    .triangles = .{
-                        .vertex_format = .r32g32b32_sfloat,
-                        .vertex_data = .{
-                            .device_address = mesh.position_buffer.getAddress(vc),
-                        },
-                        .vertex_stride = @sizeOf(F32x3),
-                        .max_vertex = @intCast(mesh.vertex_count - 1),
-                        .index_type = if (mesh.index_count != 0) .uint32 else .none_khr,
-                        .index_data = .{
-                            .device_address = mesh.index_buffer.getAddress(vc),
-                        },
-                        .transform_data = .{
-                            .device_address = 0,
-                        }
-                    }
-                }
-            };
-
-            build_info.*[j] =  vk.AccelerationStructureBuildRangeInfoKHR {
-                .primitive_count = @intCast(if (mesh.index_count != 0) mesh.index_count else @divExact(mesh.vertex_count, 3)),
-                .primitive_offset = 0,
-                .transform_offset = 0,
-                .first_vertex = 0,
-            };
-            primitive_count.* = build_info.*[j].primitive_count;
-        }
-
-        const size_info = getBuildSizesInfo(vc, build_geometry_info, primitive_counts.ptr);
-
-        const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.build_scratch_size, "blas scratch buffer");
-        try encoder.attachResource(scratch_buffer);
-        build_geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
-
-        const buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }).create(vc, size_info.acceleration_structure_size, "blas buffer");
-        errdefer buffer.destroy(vc);
-
-        build_geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
-            .buffer = buffer.handle,
-            .offset = 0,
-            .size = size_info.acceleration_structure_size,
-            .type = .bottom_level_khr,
-        }, null);
-        errdefer vc.device.destroyAccelerationStructureKHR(build_geometry_info.dst_acceleration_structure, null);
-
-        blases.appendAssumeCapacity(.{
-            .handle = build_geometry_info.dst_acceleration_structure,
-            .buffer = buffer,
-        });
-    }
-
-    encoder.buildAccelerationStructures(build_geometry_infos, build_infos);
-}
 
 pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, texture_descriptor_layout: MaterialManager.TextureManager.DescriptorLayout, encoder: *Encoder) !Self {
     var triangle_power_pipeline = try TrianglePowerPipeline.create(vc, allocator, .{}, .{}, .{ texture_descriptor_layout.handle });
@@ -286,8 +144,6 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
         try vk_helpers.setDebugName(vc.device, view.*, std.fmt.comptimePrint("triangle powers view {}", .{ level_index }));
     }
 
-    const geometries = try core.mem.DeviceBuffer(Geometry, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometries");
-    errdefer geometries.destroy(vc);
     const geometry_to_triangle_power_offset = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometry to triangle power offset");
     errdefer geometry_to_triangle_power_offset.destroy(vc);
 
@@ -355,7 +211,6 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
         .triangle_powers = triangle_powers,
         .triangle_powers_mips = triangle_powers_mips,
         .emissive_triangle_count = emissive_triangle_count,
-        .geometries = geometries,
         .geometry_to_triangle_power_offset = geometry_to_triangle_power_offset,
         .instances_device = instances_device,
         .instances_host = instances_host,
@@ -367,14 +222,9 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
 
 // accel must not be in use
 pub const Handle = u32;
-pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, instance: Instance) !Handle {
-    std.debug.assert(self.geometry_count + instance.geometries.len <= max_geometries);
+// TODO: instance light accel so that geometry does not need to be passed into here
+pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, model_manager: ModelManager, instance: Instance, geometries: []const ModelManager.Geometry) !Handle {
     std.debug.assert(self.instance_count < max_instances);
-
-    try makeBlases(vc, allocator, encoder, mesh_manager, &.{ instance.geometries }, &self.blases);
-
-    // update geometries flat jagged array
-    self.geometries.updateFrom(encoder, self.geometry_count, instance.geometries);
 
     // upload instance
     {
@@ -383,7 +233,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
                 .matrix = @bitCast(instance.transform),
             },
             .instance_custom_index_and_mask = .{
-                .instance_custom_index = self.geometry_count,
+                .instance_custom_index = instance.model,
                 .mask = if (instance.visible) if (instance.thin) 0b10000000 else @as(u8, 1) << @intCast(instance.priority - 1) else 0x00,
             },
             .instance_shader_binding_table_record_offset_and_flags = .{
@@ -391,20 +241,29 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
                 .flags = 0,
             },
             .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
-                .acceleration_structure = self.blases.items(.handle)[self.blases.len - 1],
+                .acceleration_structure = model_manager.blases.items(.handle)[instance.model],
             }),
         };
 
         self.instances_host.hostSlice()[self.instance_count] = vk_instance;
-
-        self.instances_device.updateFrom(encoder, self.instance_count, &.{ vk_instance }); // TODO: can copy
+        self.instances_device.uploadFrom(encoder, self.instance_count, self.instances_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
     }
 
     // upload world_to_instance matrix
     {
         self.world_to_instance_host.hostSlice()[self.instance_count] = instance.transform.inverseAffine();
-        self.world_to_instance_device.updateFrom(encoder, self.instance_count, &.{ instance.transform.inverseAffine() }); // TODO: can copy
+        self.world_to_instance_device.uploadFrom(encoder, self.instance_count, self.world_to_instance_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
     }
+
+    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .copy_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
+            .dst_access_mask = .{ .memory_read_bit = true },
+            .buffer = self.instances_device.handle,
+        },
+    });
 
     self.instance_count += 1;
 
@@ -460,17 +319,15 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, allocator: std.mem.
     })});
 
     encoder.global_barrier();
-    for (instance.geometries, 0..) |geometry, i| {
-        self.recordUpdatePower(encoder, mesh_manager, material_manager, @intCast(self.instance_count - 1), @intCast(i), geometry.mesh);
+    for (geometries, 0..) |geometry, i| {
+        self.recordUpdatePower(encoder, mesh_manager, material_manager, model_manager, @intCast(self.instance_count - 1), @intCast(i), geometry.mesh);
     }
     encoder.global_barrier();
-
-    self.geometry_count += @intCast(instance.geometries.len);
 
     return @intCast(self.instance_count - 1);
 }
 
-pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, instance_index: u32, geometry_index: u32, mesh_index: u32) void {
+pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, model_manager: ModelManager, instance_index: u32, geometry_index: u32, mesh_index: u32) void {
     const mesh = mesh_manager.meshes.get(mesh_index);
     const primitive_count = if (mesh.index_count != 0) mesh.index_count else @divExact(mesh.vertex_count, 3);
 
@@ -502,7 +359,8 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
         .instances = self.instances_device.handle,
         .world_to_instances = self.world_to_instance_device.handle,
         .meshes = mesh_manager.addresses_buffer.handle,
-        .geometries = self.geometries.handle,
+        .geometries = model_manager.geometries.handle,
+        .model_to_geometry_offset = model_manager.model_to_geometry_offset.handle,
         .material_values = material_manager.materials.handle,
         .emissive_triangle_count = self.emissive_triangle_count.handle,
         .dst_power = .{ .view = self.triangle_powers_mips[0] },
@@ -603,27 +461,6 @@ pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, inst
     });
 }
 
-// probably bad idea if you're changing many
-pub fn recordUpdateSingleMaterial(self: Self, command_buffer: VulkanContext.CommandBuffer, geometry_idx: u32, new_material_idx: u32) void {
-    const offset = @sizeOf(Geometry) * geometry_idx + @offsetOf(Geometry, "material");
-    const size = @sizeOf(u32);
-    command_buffer.updateBuffer(self.geometries.handle, offset, size, &new_material_idx);
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = @ptrCast(&vk.BufferMemoryBarrier2 {
-            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
-            .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .buffer = self.geometries.handle,
-            .offset = offset,
-            .size = size,
-        }),
-    });
-}
-
 pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !void {
     const geometry = vk.AccelerationStructureGeometryKHR {
         .geometry_type = .instances_khr,
@@ -676,13 +513,11 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
     });
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.instances_device.destroy(vc);
     self.instances_host.destroy(vc);
     self.world_to_instance_device.destroy(vc);
     self.world_to_instance_host.destroy(vc);
-
-    self.geometries.destroy(vc);
 
     self.triangle_powers.destroy(vc);
     self.triangle_powers_meta.destroy(vc);
@@ -697,16 +532,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     for (self.triangle_powers_mips) |view| {
         vc.device.destroyImageView(view, null);
     }
-
-    const blases_slice = self.blases.slice();
-    const blases_handles = blases_slice.items(.handle);
-    const blases_buffers = blases_slice.items(.buffer);
-
-    for (0..self.blases.len) |i| {
-        vc.device.destroyAccelerationStructureKHR(blases_handles[i], null);
-        blases_buffers[i].destroy(vc);
-    }
-    self.blases.deinit(allocator);
 
     vc.device.destroyAccelerationStructureKHR(self.tlas_handle, null);
     self.tlas_buffer.destroy(vc);
