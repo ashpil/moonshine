@@ -187,6 +187,10 @@ pub fn main() !void {
                     changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera][1].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
                 },
             }
+            imgui.text("Transform");
+            changed = imgui.dragVector(F32x4, "##1", &scene.camera.cameras.items[active_camera][1].transform.x, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x4, "##2", &scene.camera.cameras.items[active_camera][1].transform.y, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragVector(F32x4, "##3", &scene.camera.cameras.items[active_camera][1].transform.z, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
             if (changed) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
@@ -297,12 +301,14 @@ pub fn main() !void {
                     if (thin) imgui.beginDisabled();
                     changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
                     if (thin) imgui.endDisabled();
-                    const old_transform: Mat3x4 = @bitCast(instance.transform);
-                    var translation = old_transform.extractTranslation();
+                    var transform: Mat3x4 = @bitCast(instance.transform);
                     imgui.pushItemWidth(imgui.getFontSize() * -6);
-                    changed = imgui.dragVector(F32x3, "Translation", &translation, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    imgui.text("Transform");
+                    changed = imgui.dragVector(F32x4, "##1", &transform.x, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    changed = imgui.dragVector(F32x4, "##2", &transform.y, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    changed = imgui.dragVector(F32x4, "##3", &transform.z, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                     if (changed) {
-                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, old_transform.withTranslation(translation), thin, @intCast(priority), visible);
+                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
                         try scene.world.accel.recordRebuild(frame_encoder.buffer);
                         scene.camera.sensors.items[active_sensor].clear();
                     }
