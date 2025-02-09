@@ -269,14 +269,14 @@ pub fn Mat3x4(comptime T: type) type {
 
         const Self = @This();
 
-        pub const identity = Self.new(Vec4T.e_0, Vec4T.e_1, Vec4T.e_2);
+        pub const identity = Self.fromRows(Vec4T.e_0, Vec4T.e_1, Vec4T.e_2);
 
-        pub fn new(x: Vec4T, y: Vec4T, z: Vec4T) Self {
+        pub fn fromRows(x: Vec4T, y: Vec4T, z: Vec4T) Self {
             return Self { .x = x, .y = y, .z = z };
         }
 
         pub fn fromColumns(x: Vec3T, y: Vec3T, z: Vec3T, w: Vec3T) Self {
-            return Self.new(
+            return Self.fromRows(
                 Vec4T.new(x.x, y.x, z.x, w.x),
                 Vec4T.new(x.y, y.y, z.y, w.y),
                 Vec4T.new(x.z, y.z, z.z, w.z),
@@ -311,7 +311,7 @@ pub fn Mat3x4(comptime T: type) type {
             const transposed_z = Vec3T.new(other.x.z, other.y.z, other.z.z).extend(0);
             const transposed_w = Vec3T.new(other.x.w, other.y.w, other.z.w).extend(1);
 
-            return Self.new(
+            return Self.fromRows(
                 Vec4T.new(self.x.dot(transposed_x), self.x.dot(transposed_y), self.x.dot(transposed_z), self.x.dot(transposed_w)),
                 Vec4T.new(self.y.dot(transposed_x), self.y.dot(transposed_y), self.y.dot(transposed_z), self.y.dot(transposed_w)),
                 Vec4T.new(self.z.dot(transposed_x), self.z.dot(transposed_y), self.z.dot(transposed_z), self.z.dot(transposed_w)),
@@ -323,7 +323,7 @@ pub fn Mat3x4(comptime T: type) type {
         }
 
         pub fn truncate(self: Self) Mat3T {
-            return Mat3T.new(self.x.truncate(), self.y.truncate(), self.z.truncate());
+            return Mat3T.fromRows(self.x.truncate(), self.y.truncate(), self.z.truncate());
         }
 
         pub fn withTranslation(self: Self, v: Vec3T) Self {
@@ -335,7 +335,7 @@ pub fn Mat3x4(comptime T: type) type {
         }
 
         pub fn fromTransformTranslation(transform: Mat3T, translation: Vec3T) Self {
-            return Self.new(
+            return Self.fromRows(
                 transform.x.extend(translation.x),
                 transform.y.extend(translation.y),
                 transform.z.extend(translation.z),
@@ -361,7 +361,7 @@ pub fn Mat3x4(comptime T: type) type {
                 const inv_p = p.inverse();
                 const neg_inv_p_v = inv_p.scale(-1).mulVector(v);
 
-                return Self.new(
+                return Self.fromRows(
                     Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
                     Vec4T.new(inv_p.x.y, inv_p.y.y, inv_p.z.y, neg_inv_p_v.y),
                     Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.z),
@@ -383,9 +383,9 @@ pub fn Mat3(comptime T: type) type {
 
         const Self = @This();
 
-        pub const identity = Self.new(Vec3T.e_0, Vec3T.e_1, Vec3T.e_2);
+        pub const identity = Self.fromRows(Vec3T.e_0, Vec3T.e_1, Vec3T.e_2);
 
-        pub fn new(x: Vec3T, y: Vec3T, z: Vec3T) Self {
+        pub fn fromRows(x: Vec3T, y: Vec3T, z: Vec3T) Self {
             return Self { .x = x, .y = y, .z = z };
         }
 
@@ -399,7 +399,7 @@ pub fn Mat3(comptime T: type) type {
 
         pub fn mul(self: Self, other: Self) Self {
             const transposed = other.transpose();
-            return Self.new(
+            return Self.fromRows(
                 Vec3T.new(self.x.dot(transposed.x), self.x.dot(transposed.y), self.x.dot(transposed.z)),
                 Vec3T.new(self.y.dot(transposed.x), self.y.dot(transposed.y), self.y.dot(transposed.z)),
                 Vec3T.new(self.z.dot(transposed.x), self.z.dot(transposed.y), self.z.dot(transposed.z)),
@@ -410,7 +410,7 @@ pub fn Mat3(comptime T: type) type {
             const x = self.x.scale(scalar);
             const y = self.y.scale(scalar);
             const z = self.z.scale(scalar);
-            return Self.new(x, y, z);
+            return Self.fromRows(x, y, z);
         }
 
         pub fn determinant(self: Self) T {
@@ -418,7 +418,7 @@ pub fn Mat3(comptime T: type) type {
         }
 
         pub fn transpose(self: Self) Self {
-            return Self.new(
+            return Self.fromRows(
                 Vec3T.new(self.x.x, self.y.x, self.z.x),
                 Vec3T.new(self.x.y, self.y.y, self.z.y),
                 Vec3T.new(self.x.z, self.y.z, self.z.z),
@@ -432,14 +432,14 @@ pub fn Mat3(comptime T: type) type {
                 const v1 = self.y.cross(self.z);
                 const v2 = self.z.cross(self.x);
                 const v3 = self.x.cross(self.y);
-                return Self.new(v1, v2, v3).scale(1 / det);
+                return Self.fromRows(v1, v2, v3).scale(1 / det);
             }
 
             pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
                 const sin, const cos = .{ math.sin(angle), math.cos(angle) };
                 const x, const y, const z = .{ axis.x, axis.y, axis.z };
 
-                return Self.new(
+                return Self.fromRows(
                     Vec3T.new((1 - cos) * x * x + cos, (1 - cos) * x * y - sin * z, (1 - cos) * x * z + sin * y),
                     Vec3T.new((1 - cos) * x * y + sin * z, (1 - cos) * y * y + cos, (1 - cos) * y * z - sin * x),
                     Vec3T.new((1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos),

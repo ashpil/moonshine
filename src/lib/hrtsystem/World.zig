@@ -397,7 +397,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             const mat = Gltf.getGlobalTransform(&gltf.data, node);
             _ = try accel.uploadInstance(vc, encoder, meshes, materials, models, Instance {
                 // convert to Z-up
-                .transform = Mat3x4.new(
+                .transform = Mat3x4.fromRows(
                     F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
                     F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
                     F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
