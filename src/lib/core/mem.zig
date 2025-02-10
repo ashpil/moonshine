@@ -155,7 +155,7 @@ pub fn BufferSlice(comptime T: type) type {
 
         pub fn slice(self: Self, start: vk.DeviceSize, end: vk.DeviceSize) BufferSlice(T) {
             std.debug.assert(start < end);
-            std.debug.assert(end < self.len);
+            std.debug.assert(end <= self.len);
             const offset = self.offset + start * @sizeOf(T);
             return BufferSlice(T) {
                 .handle = self.handle,
