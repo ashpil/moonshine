@@ -15,6 +15,7 @@ const Material = @import("./MaterialManager.zig");
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
+const Mat3x4 = vector.Mat3x4(f32);
 
 const StageType = enum {
     miss,
@@ -264,7 +265,7 @@ pub const ObjectPickPipeline = Pipeline(.{
     .PushSetBindings = struct {
         tlas: vk.AccelerationStructureKHR,
         output_image: core.pipeline.StorageImage,
-        click_data: vk.Buffer,
+        click_data: core.mem.BufferSlice(engine.hrtsystem.ObjectPicker.ClickDataShader),
     },
     .stages = &[_]Stage {
         .{ .type = .raygen, .entrypoint = "raygen" },
@@ -275,16 +276,16 @@ pub const ObjectPickPipeline = Pipeline(.{
 
 pub const StandardBindings = struct {
     tlas: ?vk.AccelerationStructureKHR,
-    instances: ?vk.Buffer,
-    world_to_instances: ?vk.Buffer,
-    meshes: ?vk.Buffer,
-    geometries: ?vk.Buffer,
-    model_to_geometry_offset: ?vk.Buffer,
-    material_values: ?vk.Buffer,
+    instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
+    world_to_instances: ?core.mem.BufferSlice(Mat3x4),
+    meshes: ?core.mem.BufferSlice(engine.hrtsystem.MeshManager.MeshAddresses),
+    geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
+    model_to_geometry_offset: ?core.mem.BufferSlice(u32),
+    material_values: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.GpuMaterial),
     triangle_power_image: core.pipeline.SampledImage,
-    triangle_meta: vk.Buffer,
-    geometry_to_triangle_power_offset: vk.Buffer,
-    emissive_triangle_count: vk.Buffer,
+    triangle_meta: core.mem.BufferSlice(engine.hrtsystem.Accel.TriangleMetadata),
+    geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
+    emissive_triangle_count: core.mem.BufferSlice(u32),
     background_rgb_image: core.pipeline.CombinedImageSampler,
     background_luminance_image: core.pipeline.SampledImage,
     output_image: core.pipeline.StorageImage,

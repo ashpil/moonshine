@@ -60,25 +60,28 @@ pub fn createShaderModule(vc: *const VulkanContext, comptime shader_path: [:0]co
 }
 
 pub const StorageImage= struct {
+    pub const descriptor_type: vk.DescriptorType = .storage_image;
+
     view: vk.ImageView,
 };
 
 pub const SampledImage = struct {
+    pub const descriptor_type: vk.DescriptorType = .sampled_image;
+
     view: vk.ImageView,
 };
 
 pub const CombinedImageSampler = struct {
+    pub const descriptor_type: vk.DescriptorType = .combined_image_sampler;
+
     view: vk.ImageView,
 };
 
-fn typeToDescriptorType(comptime t: type) vk.DescriptorType {
-    return switch (t) {
-        vk.Buffer => .storage_buffer,
+fn typeToDescriptorType(comptime T: type) vk.DescriptorType {
+    if (@hasDecl(T, "descriptor_type")) return T.descriptor_type;
+    return switch (T) {
         vk.AccelerationStructureKHR => .acceleration_structure_khr,
-        StorageImage => .storage_image,
-        SampledImage => .sampled_image,
-        CombinedImageSampler => .combined_image_sampler,
-        else => @compileError("unknown descriptor type " ++ @typeName(t)),
+        else => @compileError("unknown descriptor type " ++ @typeName(T)),
     };
 }
 
@@ -119,9 +122,9 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .descriptor_type = descriptor_type,
                 .p_image_info = undefined,
                 .p_buffer_info = @ptrCast(&vk.DescriptorBufferInfo {
-                    .buffer = binding_value,
-                    .offset = 0,
-                    .range = vk.WHOLE_SIZE,
+                    .buffer = binding_value.handle,
+                    .offset = binding_value.asBytes().offset,
+                    .range = binding_value.asBytes().len,
                 }),
                 .p_texel_buffer_view = undefined,
             },

@@ -16,7 +16,7 @@ const F32x2 = @import("../vector.zig").Vec2(f32);
 
 const Self = @This();
 
-const ClickDataShader = extern struct {
+pub const ClickDataShader = extern struct {
     instance_index: i32, // -1 if clicked background
     geometry_index: u32,
     primitive_index: u32,
@@ -82,7 +82,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.Acceler
     self.pipeline.recordPushDescriptors(self.encoder.buffer, Pipeline.PushSetBindings {
         .tlas = accel,
         .output_image = .{ .view = sensor.image.view },
-        .click_data = self.buffer.handle,
+        .click_data = self.buffer.deviceSlice(),
     });
 
     self.pipeline.recordPushConstants(self.encoder.buffer, .{ .camera = camera, .aspect_ratio = sensor.aspectRatio(), .click_position = normalized_coords });

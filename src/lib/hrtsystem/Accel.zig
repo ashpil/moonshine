@@ -14,7 +14,6 @@ const ModelManager = @import("./ModelManager.zig");
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);
-const F32x3 = vector.Vec3(f32);
 
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
@@ -35,15 +34,15 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
         triangle_count: u32,
     },
     .PushSetBindings = struct {
-        instances: vk.Buffer,
-        world_to_instances: vk.Buffer,
-        meshes: vk.Buffer,
-        geometries: vk.Buffer,
-        model_to_geometry_offset: vk.Buffer,
-        material_values: vk.Buffer,
-        emissive_triangle_count: vk.Buffer,
+        instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
+        world_to_instances: core.mem.BufferSlice(Mat3x4),
+        meshes: core.mem.BufferSlice(engine.hrtsystem.MeshManager.MeshAddresses),
+        geometries: core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
+        model_to_geometry_offset: core.mem.BufferSlice(u32),
+        material_values: core.mem.BufferSlice(engine.hrtsystem.MaterialManager.GpuMaterial),
+        emissive_triangle_count: core.mem.BufferSlice(u32),
         dst_power: engine.core.pipeline.StorageImage,
-        dst_triangle_metadata: vk.Buffer,
+        dst_triangle_metadata: core.mem.BufferSlice(TriangleMetadata),
     },
     .additional_descriptor_layout_count = 1,
 });
@@ -52,9 +51,9 @@ const TrianglePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path 
     .PushSetBindings = struct {
         src_mip: engine.core.pipeline.SampledImage,
         dst_mip: engine.core.pipeline.StorageImage,
-        instances: vk.Buffer,
-        geometry_to_triangle_power_offset: vk.Buffer,
-        emissive_triangle_count: vk.Buffer,
+        instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
+        geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
+        emissive_triangle_count: core.mem.BufferSlice(u32),
     },
     .PushConstants = extern struct {
         instance_index: u32,
@@ -63,7 +62,7 @@ const TrianglePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path 
     },
 });
 
-const TriangleMetadata = extern struct {
+pub const TriangleMetadata = extern struct {
     instance_index: u32,
     geometry_index: u32,
 };
@@ -356,15 +355,15 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
     self.triangle_power_pipeline.recordBindPipeline(encoder.buffer);
     self.triangle_power_pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ material_manager.textures.descriptor_set });
     self.triangle_power_pipeline.recordPushDescriptors(encoder.buffer, .{
-        .instances = self.instances_device.handle,
-        .world_to_instances = self.world_to_instance_device.handle,
-        .meshes = mesh_manager.addresses_buffer.handle,
-        .geometries = model_manager.geometries.handle,
-        .model_to_geometry_offset = model_manager.model_to_geometry_offset.handle,
-        .material_values = material_manager.materials.handle,
-        .emissive_triangle_count = self.emissive_triangle_count.handle,
+        .instances = self.instances_device.deviceSlice(),
+        .world_to_instances = self.world_to_instance_device.deviceSlice(),
+        .meshes = mesh_manager.addresses_buffer.deviceSlice(),
+        .geometries = model_manager.geometries.deviceSlice(),
+        .model_to_geometry_offset = model_manager.model_to_geometry_offset.deviceSlice(),
+        .material_values = material_manager.materials.deviceSlice(),
+        .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
         .dst_power = .{ .view = self.triangle_powers_mips[0] },
-        .dst_triangle_metadata = self.triangle_powers_meta.handle,
+        .dst_triangle_metadata = self.triangle_powers_meta.deviceSlice(),
     });
     self.triangle_power_pipeline.recordPushConstants(encoder.buffer, .{
         .instance_index = instance_index,
@@ -402,9 +401,9 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
         self.triangle_power_fold_pipeline.recordPushDescriptors(encoder.buffer, .{
             .src_mip = .{ .view = self.triangle_powers_mips[dst_mip_level - 1] },
             .dst_mip = .{ .view = self.triangle_powers_mips[dst_mip_level] },
-            .instances = self.instances_device.handle,
-            .geometry_to_triangle_power_offset = self.geometry_to_triangle_power_offset.handle,
-            .emissive_triangle_count = self.emissive_triangle_count.handle,
+            .instances = self.instances_device.deviceSlice(),
+            .geometry_to_triangle_power_offset = self.geometry_to_triangle_power_offset.deviceSlice(),
+            .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
         });
         self.triangle_power_fold_pipeline.recordPushConstants(encoder.buffer, .{
             .instance_index = instance_index,

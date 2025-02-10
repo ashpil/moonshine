@@ -101,7 +101,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             }
         } else struct {};
 
-        pub usingnamespace if (usage.contains(.{ .transfer_src_bit = true })) struct {
+        pub usingnamespace if (usage.contains(.{ .transfer_src_bit = true }) or usage.contains(.{ .storage_buffer_bit = true })) struct {
             pub fn deviceSlice(self: Self) BufferSlice(T) {
                 return BufferSlice(T) {
                     .handle = self.handle,
@@ -140,6 +140,8 @@ pub fn BufferSlice(comptime T: type) type {
         handle: vk.Buffer = .null_handle,
         offset: vk.DeviceSize = 0, // in bytes
         len: vk.DeviceSize = 0, // in T
+
+        pub const descriptor_type: vk.DescriptorType = .storage_buffer;
 
         const Self = @This();
 

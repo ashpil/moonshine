@@ -38,7 +38,7 @@ const Meshes = std.MultiArrayList(struct {
 });
 
 // store seperately to be able to get pointers to geometry data in shader
-const MeshAddresses = packed struct {
+pub const MeshAddresses = packed struct {
     position_address: vk.DeviceAddress,
     texcoord_address: vk.DeviceAddress,
     normal_address: vk.DeviceAddress,
