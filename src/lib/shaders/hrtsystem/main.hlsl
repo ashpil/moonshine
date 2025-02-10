@@ -86,28 +86,30 @@ void raygen() {
     WavelengthSample w = WavelengthSample::sampleVisible(rng.getFloat());
 
     const IntegratorType integratorType = (IntegratorType)dIntegratorType;
-    float newSample;
+    float radiance;
     switch (integratorType) {
         case IntegratorType::DirectLight: {
             const DirectLightIntegrator integrator = DirectLightIntegrator::create(dDirectLightEnvSamples, dDirectLightMeshSamples, dDirectLightBrdfSamples);
-            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            radiance = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
             break;
         }
         case IntegratorType::PathTracing: {
             const PathTracingIntegrator integrator = PathTracingIntegrator::create(dPathTracingRussianRouletteDepth, dPathTracingEnvSamplesPerBounce, dPathTracingMeshSamplesPerBounce);
-            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            radiance = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
             break;
         }
         case IntegratorType::VolumePathTracing: {
             const VolumePathTracingIntegrator integrator = VolumePathTracingIntegrator::create(dVolumePathTracingRussianRouletteDepth, dVolumePathTracingEnvSamplesPerBounce, dVolumePathTracingMeshSamplesPerBounce);
-            newSample = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
+            radiance = integrator.incomingRadiance(scene, initialRay, w.λ, rng);
             break;
         }
     }
 
     // accumulate
     const float3 priorSampleAverage = pushConsts.sampleCount == 0 ? 0 : dOutputImage[imageCoords].xyz;
-    dOutputImage[imageCoords] = float4(accumulate(priorSampleAverage, Spectrum::toLinearSRGB(w.λ, newSample) / w.pdf, pushConsts.sampleCount), 1);
+    const float3 newSample = Spectrum::toLinearSRGB(w.λ, radiance) / w.pdf;
+    const float3 newAverage = accumulate(priorSampleAverage, newSample, pushConsts.sampleCount);
+    dOutputImage[imageCoords] = float4(newAverage, 1);
 }
 
 struct Attributes
