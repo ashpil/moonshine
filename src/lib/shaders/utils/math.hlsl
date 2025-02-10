@@ -41,6 +41,15 @@ void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
     v3 = cross(v2, v1);
 }
 
+uint log2Int(const uint x) {
+    return firstbithigh(x);
+}
+
+uint log2IntCeil(const uint x) {
+    if (x == 1) return 0;
+    return log2Int(x - 1) + 1;
+}
+
 // TODO: switch to this when figure it why it doesn't work
 // void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
 //     float sign = v1.z >= 0.0f ? 1.0f : -1.0f;

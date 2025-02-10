@@ -155,7 +155,7 @@ struct MeshLights : Light {
 
         if (integral() == 0.0) return lightSample;
 
-        const uint mipCount = uint(ceil(log2(emissiveTriangleCount))) + 1;
+        const uint mipCount = log2IntCeil(emissiveTriangleCount) + 1;
 
         uint idx = 0;
         for (uint level = mipCount; level-- > 0;) {
@@ -193,11 +193,9 @@ struct MeshLights : Light {
     }
 
     float integral() {
-        const uint size = emissiveTriangleCount;
+        if (emissiveTriangleCount == 0) return 0;
 
-        if (size == 0) return 0;
-
-        const uint mipCount = uint(ceil(log2(emissiveTriangleCount))) + 1;
+        const uint mipCount = log2IntCeil(emissiveTriangleCount) + 1;
         return power.Load(uint2(0, mipCount - 1));
     }
 };
