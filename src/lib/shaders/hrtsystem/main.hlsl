@@ -17,7 +17,7 @@
 [[vk::binding(6, 0)]] StructuredBuffer<Material> dMaterials;
 
 // EMISSIVE TRIANGLES
-[[vk::binding(7, 0)]] Texture1D<float> dTrianglePower;
+[[vk::binding(7, 0)]] StructuredBuffer<float> dTrianglePower;
 [[vk::binding(8, 0)]] StructuredBuffer<TriangleMetadata> dTriangleMetadata;
 [[vk::binding(9, 0)]] StructuredBuffer<uint> dGeometryToTrianglePowerOffset;
 [[vk::binding(10, 0)]] StructuredBuffer<uint> dEmissiveTriangleCount;

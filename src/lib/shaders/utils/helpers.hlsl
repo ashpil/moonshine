@@ -33,3 +33,11 @@ uint bufferDimensions(StructuredBuffer<T> buffer) {
     buffer.GetDimensions(size, stride);
     return size;
 }
+
+template<typename T>
+uint bufferDimensions(RWStructuredBuffer<T> buffer) {
+    uint size;
+    uint stride;
+    buffer.GetDimensions(size, stride);
+    return size;
+}

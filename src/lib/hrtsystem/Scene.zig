@@ -121,7 +121,7 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) engine.h
         .geometries = self.world.models.geometries.deviceSlice(),
         .model_to_geometry_offset = self.world.models.model_to_geometry_offset.deviceSlice(),
         .material_values = self.world.materials.materials.deviceSlice(),
-        .triangle_power_image = .{ .view = self.world.accel.triangle_powers.view },
+        .triangle_powers = self.world.accel.triangle_powers.deviceSlice(),
         .triangle_meta = self.world.accel.triangle_powers_meta.deviceSlice(),
         .geometry_to_triangle_power_offset = self.world.accel.geometry_to_triangle_power_offset.deviceSlice(),
         .emissive_triangle_count = self.world.accel.emissive_triangle_count.deviceSlice(),

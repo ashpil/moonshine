@@ -133,13 +133,13 @@ struct TriangleLight: Light {
 
 // all mesh lights in scene
 struct MeshLights : Light {
-    Texture1D<float> power;
+    StructuredBuffer<float> power;
     StructuredBuffer<TriangleMetadata> metadata;
     StructuredBuffer<uint> geometryToTrianglePowerOffset;
     uint emissiveTriangleCount;
     World world;
 
-    static MeshLights create(Texture1D<float> power, StructuredBuffer<TriangleMetadata> metadata, StructuredBuffer<uint> geometryToTrianglePowerOffset, uint emissiveTriangleCount, World world) {
+    static MeshLights create(StructuredBuffer<float> power, StructuredBuffer<TriangleMetadata> metadata, StructuredBuffer<uint> geometryToTrianglePowerOffset, uint emissiveTriangleCount, World world) {
         MeshLights lights;
         lights.power = power;
         lights.metadata = metadata;
@@ -155,14 +155,15 @@ struct MeshLights : Light {
 
         if (integral() == 0.0) return lightSample;
 
-        const uint mipCount = log2IntCeil(emissiveTriangleCount) + 1;
+        const uint levelCount = log2IntCeil(emissiveTriangleCount) + 1;
+        const uint bufferLevelCount = log2IntCeil(bufferDimensions(metadata)) + 1;
 
         uint idx = 0;
-        for (uint level = mipCount; level-- > 0;) {
+        for (uint level = bufferLevelCount - levelCount + 1; level < bufferLevelCount; level++) {
             Reservoir<uint> r = Reservoir<uint>::empty();
             for (uint i = 0; i < 2; i++) {
                 const uint coord = 2 * idx + i;
-                r.update(coord, power.Load(uint2(coord, level)), rand.x);
+                r.update(coord, power[(1u << level) - 1 + coord], rand.x);
             }
             idx = r.selected;
         }
@@ -179,11 +180,12 @@ struct MeshLights : Light {
 
     float selectionPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
         if (integral() == 0.0) return 0.0; // no lights
-        const uint offset = geometryToTrianglePowerOffset[instanceIndex + geometryIndex];
+        const uint triangleOffset = geometryToTrianglePowerOffset[instanceIndex + geometryIndex];
         const uint invalidOffset = 0xFFFFFFFF;
-        if (offset == invalidOffset) return 0.0; // no light at this triangle
-        const uint idx = offset + primitiveIndex;
-        return power.Load(uint2(idx, 0)) / integral();
+        if (triangleOffset == invalidOffset) return 0.0; // no light at this triangle
+        const uint idx = triangleOffset + primitiveIndex;
+        const uint levelOffset = bufferDimensions(metadata) - 1;
+        return power[levelOffset + idx] / integral();
     }
 
     float areaPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
@@ -194,8 +196,6 @@ struct MeshLights : Light {
 
     float integral() {
         if (emissiveTriangleCount == 0) return 0;
-
-        const uint mipCount = log2IntCeil(emissiveTriangleCount) + 1;
-        return power.Load(uint2(0, mipCount - 1));
+        return power[0];
     }
 };

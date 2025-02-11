@@ -282,7 +282,7 @@ pub const StandardBindings = struct {
     geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
     model_to_geometry_offset: ?core.mem.BufferSlice(u32),
     material_values: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.GpuMaterial),
-    triangle_power_image: core.pipeline.SampledImage,
+    triangle_powers: core.mem.BufferSlice(f32),
     triangle_meta: core.mem.BufferSlice(engine.hrtsystem.Accel.TriangleMetadata),
     geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
     emissive_triangle_count: core.mem.BufferSlice(u32),

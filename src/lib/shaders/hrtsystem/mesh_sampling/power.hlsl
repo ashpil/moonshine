@@ -12,7 +12,7 @@
 [[vk::binding(6, 0)]] StructuredBuffer<uint> emissiveTriangleCount;
 
 // dst
-[[vk::binding(7, 0)]] RWTexture1D<float> dstPower;
+[[vk::binding(7, 0)]] RWStructuredBuffer<float> dstPower;
 [[vk::binding(8, 0)]] RWStructuredBuffer<TriangleMetadata> dstTriangleMetadata;
 
 // mesh info
@@ -54,7 +54,8 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const float power = PI * world.triangleArea(pushConsts.instanceIndex, pushConsts.geometryIndex, srcPrimitive) * average_emissive;
 
 	const uint dstOffset = emissiveTriangleCount[0];
-	dstPower[dstOffset + srcPrimitive] = power;
+	const uint levelOffset = bufferDimensions(dstTriangleMetadata) - 1;
+	dstPower[levelOffset + dstOffset + srcPrimitive] = power;
 	dstTriangleMetadata[dstOffset + srcPrimitive].instanceIndex = pushConsts.instanceIndex;
 	dstTriangleMetadata[dstOffset + srcPrimitive].geometryIndex = pushConsts.geometryIndex;
 }

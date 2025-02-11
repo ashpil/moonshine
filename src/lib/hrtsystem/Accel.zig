@@ -41,7 +41,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
         model_to_geometry_offset: core.mem.BufferSlice(u32),
         material_values: core.mem.BufferSlice(engine.hrtsystem.MaterialManager.GpuMaterial),
         emissive_triangle_count: core.mem.BufferSlice(u32),
-        dst_power: engine.core.pipeline.StorageImage,
+        dst_power: core.mem.BufferSlice(f32),
         dst_triangle_metadata: core.mem.BufferSlice(TriangleMetadata),
     },
     .additional_descriptor_layout_count = 1,
@@ -49,8 +49,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
 
 const TrianglePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/mesh_sampling/fold.hlsl",
     .PushSetBindings = struct {
-        src_mip: engine.core.pipeline.SampledImage,
-        dst_mip: engine.core.pipeline.StorageImage,
+        levels: core.mem.BufferSlice(f32),
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
         geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
         emissive_triangle_count: core.mem.BufferSlice(u32),
@@ -59,6 +58,8 @@ const TrianglePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path 
         instance_index: u32,
         geometry_index: u32,
         triangle_count: u32,
+        src_level_offset: u32,
+        dst_level_offset: u32,
     },
 });
 
@@ -71,9 +72,7 @@ triangle_power_pipeline: TrianglePowerPipeline,
 triangle_power_fold_pipeline: TrianglePowerFoldPipeline,
 triangle_powers_meta: core.mem.DeviceBuffer(TriangleMetadata, .{ .storage_buffer_bit = true }),
 // TODO: should build a separate one for each model so that instances are actually instanced here
-// TODO: this should be a storage buffer rather than an image
-triangle_powers: Image,
-triangle_powers_mips: [std.math.log2(max_emissive_triangles) + 1]vk.ImageView,
+triangle_powers: core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 geometry_to_triangle_power_offset: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
 emissive_triangle_count: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }), // size 1
 
@@ -99,9 +98,9 @@ tlas_update_scratch_address: vk.DeviceAddress = 0,
 const Self = @This();
 
 // TODO: resizable buffers
-const max_instances = std.math.powi(u32, 2, 12) catch unreachable;
-const max_geometries = std.math.powi(u32, 2, 12) catch unreachable;
-const max_emissive_triangles = std.math.powi(u32, 2, 15) catch unreachable;
+const max_instances = std.math.pow(u32, 2, 12);
+const max_geometries = std.math.pow(u32, 2, 12);
+const max_emissive_triangles = std.math.pow(u32, 2, 15);
 
 pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, texture_descriptor_layout: MaterialManager.TextureManager.DescriptorLayout, encoder: *Encoder) !Self {
     var triangle_power_pipeline = try TrianglePowerPipeline.create(vc, allocator, .{}, .{}, .{ texture_descriptor_layout.handle });
@@ -116,32 +115,11 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
     const emissive_triangle_count = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, 1, "emissive triangle count");
     errdefer emissive_triangle_count.destroy(vc);
 
-    const triangle_powers = try Image.create(vc, vk.Extent2D { .width = max_emissive_triangles, .height = 1 }, .{ .storage_bit = true, .sampled_bit = true, .transfer_dst_bit = true }, .r32_sfloat, true, "triangle powers");
+    std.debug.assert(max_emissive_triangles % 2 == 0);
+    const emissive_triangle_level_count = comptime std.math.log2(max_emissive_triangles) + 1;
+    const triangle_powers_element_count = std.math.pow(u32, 2, emissive_triangle_level_count) - 1;
+    const triangle_powers = try core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, triangle_powers_element_count, "triangle powers");
     errdefer triangle_powers.destroy(vc);
-
-    var triangle_powers_mips: [std.math.log2(max_emissive_triangles) + 1]vk.ImageView = undefined;
-    inline for (&triangle_powers_mips, 0..) |*view, level_index| {
-        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo {
-            .flags = .{},
-            .image = triangle_powers.handle,
-            .view_type = vk.ImageViewType.@"1d",
-            .format = .r32_sfloat,
-            .components = .{
-                .r = .identity,
-                .g = .identity,
-                .b = .identity,
-                .a = .identity,
-            },
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = @intCast(level_index),
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        }, null);
-        try vk_helpers.setDebugName(vc.device, view.*, std.fmt.comptimePrint("triangle powers view {}", .{ level_index }));
-    }
 
     const geometry_to_triangle_power_offset = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometry to triangle power offset");
     errdefer geometry_to_triangle_power_offset.destroy(vc);
@@ -157,49 +135,31 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
     const world_to_instance_host = try core.mem.UploadBuffer(Mat3x4).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_host.destroy(vc);
 
-    encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = &[1]vk.ImageMemoryBarrier2 {
-            .{
-                .dst_stage_mask = .{ .clear_bit = true },
-                .dst_access_mask = .{ .transfer_write_bit = true },
-                .old_layout = .undefined,
-                .new_layout = .transfer_dst_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = triangle_powers.handle,
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = vk.REMAINING_MIP_LEVELS,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            }
-        },
-    });
-    encoder.clearColorImage(triangle_powers.handle, .transfer_dst_optimal, vk.ClearColorValue { .float_32 = .{ 0, 0, 0, 0 }});
     encoder.fillBuffer(emissive_triangle_count.handle, 1, @as(u32, 0));
     encoder.fillBuffer(geometry_to_triangle_power_offset.handle, max_geometries, @as(u32, std.math.maxInt(u32)));
-    encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = &[1]vk.ImageMemoryBarrier2 {
-            .{
-                .src_stage_mask = .{ .clear_bit = true },
-                .src_access_mask = .{ .transfer_write_bit = true },
-                .old_layout = .transfer_dst_optimal,
-                .new_layout = .shader_read_only_optimal,
-                .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                .image = triangle_powers.handle,
-                .subresource_range = .{
-                    .aspect_mask = .{ .color_bit = true },
-                    .base_mip_level = 0,
-                    .level_count = vk.REMAINING_MIP_LEVELS,
-                    .base_array_layer = 0,
-                    .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                },
-            }
+    encoder.fillBuffer(triangle_powers.handle, triangle_powers_element_count, @as(f32, 0.0));
+
+    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .all_transfer_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
+            .buffer = emissive_triangle_count.handle,
+        },
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .all_transfer_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
+            .buffer = geometry_to_triangle_power_offset.handle,
+        },
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .all_transfer_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
+            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
+            .buffer = triangle_powers.handle,
         },
     });
 
@@ -208,7 +168,6 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
         .triangle_power_fold_pipeline = triangle_power_fold_pipeline,
         .triangle_powers_meta = triangle_powers_meta,
         .triangle_powers = triangle_powers,
-        .triangle_powers_mips = triangle_powers_mips,
         .emissive_triangle_count = emissive_triangle_count,
         .geometry_to_triangle_power_offset = geometry_to_triangle_power_offset,
         .instances_device = instances_device,
@@ -338,19 +297,7 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
     // probably we will just get a GPU crash instead :(
     if (primitive_count > max_emissive_triangles) return;
 
-    encoder.barrier(&[_]Encoder.ImageBarrier {
-        Encoder.ImageBarrier {
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = .{ .shader_read_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_write_bit = true },
-            .old_layout = .shader_read_only_optimal,
-            .new_layout = .general,
-            .image = self.triangle_powers.handle,
-            .base_mip_level = 0,
-            .level_count = 1,
-        }
-    }, &.{});
+    const emissive_triangle_level_count = comptime std.math.log2(max_emissive_triangles) + 1;
 
     self.triangle_power_pipeline.recordBindPipeline(encoder.buffer);
     self.triangle_power_pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ material_manager.textures.descriptor_set });
@@ -362,7 +309,7 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
         .model_to_geometry_offset = model_manager.model_to_geometry_offset.deviceSlice(),
         .material_values = material_manager.materials.deviceSlice(),
         .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
-        .dst_power = .{ .view = self.triangle_powers_mips[0] },
+        .dst_power = self.triangle_powers.deviceSlice(),
         .dst_triangle_metadata = self.triangle_powers_meta.deviceSlice(),
     });
     self.triangle_power_pipeline.recordPushConstants(encoder.buffer, .{
@@ -375,32 +322,20 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
     self.triangle_power_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
     self.triangle_power_fold_pipeline.recordBindPipeline(encoder.buffer);
 
-    for (1..self.triangle_powers_mips.len) |dst_mip_level| {
-        encoder.barrier(&[_]Encoder.ImageBarrier {
-            Encoder.ImageBarrier {
+    for (1..emissive_triangle_level_count) |dst_level_usize| {
+        const dst_level: u32 = @intCast(dst_level_usize);
+        encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+            Encoder.BufferBarrier {
                 .src_stage_mask = .{ .compute_shader_bit = true },
                 .src_access_mask = .{ .shader_write_bit = true },
                 .dst_stage_mask = .{ .compute_shader_bit = true },
                 .dst_access_mask = .{ .shader_read_bit = true },
-                .old_layout = .general,
-                .new_layout = .shader_read_only_optimal,
-                .image = self.triangle_powers.handle,
-                .base_mip_level = @intCast(dst_mip_level - 1),
-                .level_count = 1,
+                .buffer = self.triangle_powers.handle,
             },
-            Encoder.ImageBarrier {
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_write_bit = true },
-                .old_layout = .shader_read_only_optimal,
-                .new_layout = .general,
-                .image = self.triangle_powers.handle,
-                .base_mip_level = @intCast(dst_mip_level),
-                .level_count = 1,
-            }
-        }, &.{});
+        });
+        const dst_level_size = std.math.pow(u32, 2, @intCast(emissive_triangle_level_count - dst_level));
         self.triangle_power_fold_pipeline.recordPushDescriptors(encoder.buffer, .{
-            .src_mip = .{ .view = self.triangle_powers_mips[dst_mip_level - 1] },
-            .dst_mip = .{ .view = self.triangle_powers_mips[dst_mip_level] },
+            .levels = self.triangle_powers.deviceSlice(),
             .instances = self.instances_device.deviceSlice(),
             .geometry_to_triangle_power_offset = self.geometry_to_triangle_power_offset.deviceSlice(),
             .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
@@ -409,25 +344,22 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
             .instance_index = instance_index,
             .geometry_index = geometry_index,
             .triangle_count = primitive_count,
+            .src_level_offset = std.math.pow(u32, 2, emissive_triangle_level_count - dst_level - 0) - 1,
+            .dst_level_offset = std.math.pow(u32, 2, emissive_triangle_level_count - dst_level - 1) - 1,
         });
-        const dst_mip_size = std.math.pow(u32, 2, @intCast(self.triangle_powers_mips.len - dst_mip_level));
-        const mip_dispatch_size = std.math.divCeil(u32, dst_mip_size, shader_local_size) catch unreachable;
+        const mip_dispatch_size = std.math.divCeil(u32, dst_level_size, shader_local_size) catch unreachable;
         self.triangle_power_fold_pipeline.recordDispatch(encoder.buffer, .{ .width = mip_dispatch_size, .height = 1, .depth = 1 });
     }
 
-    encoder.barrier(&[_]Encoder.ImageBarrier {
-        Encoder.ImageBarrier {
+    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+        Encoder.BufferBarrier {
             .src_stage_mask = .{ .compute_shader_bit = true },
             .src_access_mask = .{ .shader_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_read_bit = true },
-            .old_layout = .general,
-            .new_layout = .shader_read_only_optimal,
-            .image = self.triangle_powers.handle,
-            .base_mip_level = self.triangle_powers_mips.len - 1,
-            .level_count = 1,
-        }
-    }, &.{});
+            .buffer = self.triangle_powers.handle,
+        },
+    });
 }
 
 // probably bad idea if you're changing many
@@ -527,10 +459,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.triangle_power_fold_pipeline.destroy(vc);
 
     self.tlas_update_scratch_buffer.destroy(vc);
-
-    for (self.triangle_powers_mips) |view| {
-        vc.device.destroyImageView(view, null);
-    }
 
     vc.device.destroyAccelerationStructureKHR(self.tlas_handle, null);
     self.tlas_buffer.destroy(vc);
