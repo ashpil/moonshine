@@ -83,6 +83,8 @@ struct TriangleLocalSpace {
     float3 normals[3];
     float2 texcoords[3];
 
+    // TODO: currently this does both barycentric evaluation and local to world
+    // conversion. there's probably a way to decouple this into two functions
     SurfacePoint surfacePoint(const float2 attribs, const float3x4 toWorld, const float3x4 toMesh) {
         SurfacePoint surface;
 
