@@ -45,7 +45,7 @@ pub const Mesh = struct {
 };
 
 host: std.MultiArrayList(Mesh.Host) = .{},
-device: core.mem.DeviceBuffer(Mesh.Device, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true }) = .{},
+device: core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }) = .{},
 
 const Self = @This();
 
@@ -113,7 +113,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         .index_address = index_buffer.getAddress(vc),
     };
 
-    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .storage_buffer_bit = true }).create(vc, max_meshes, "meshes");
+    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }).create(vc, max_meshes, "meshes");
     self.device.updateFrom(encoder, self.host.len, &.{ device });
 
     try self.host.append(allocator, .{
