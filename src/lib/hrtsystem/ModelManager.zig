@@ -45,14 +45,14 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                 .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
                 .dst_stage_mask = .{ .all_commands_bit = true },
                 .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .buffer = mesh_manager.meshes.items(.position_buffer)[geometry.mesh].handle,
+                .buffer = mesh_manager.host.items(.position_buffer)[geometry.mesh].handle,
             },
             Encoder.BufferBarrier {
                 .src_stage_mask = .{ .all_commands_bit = true },
                 .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
                 .dst_stage_mask = .{ .all_commands_bit = true },
                 .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .buffer = mesh_manager.meshes.items(.index_buffer)[geometry.mesh].handle,
+                .buffer = mesh_manager.host.items(.index_buffer)[geometry.mesh].handle,
             },
         });
     }
@@ -67,7 +67,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     defer allocator.free(build_infos);
 
     for (geometries, vk_geometries, primitive_counts, build_infos) |geometry, *vk_geometry, *primitive_count, *build_info| {
-        const mesh = mesh_manager.meshes.get(geometry.mesh);
+        const mesh = mesh_manager.host.get(geometry.mesh);
 
         vk_geometry.* = vk.AccelerationStructureGeometryKHR {
             .geometry_type = .triangles_khr,

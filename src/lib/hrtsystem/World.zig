@@ -61,10 +61,11 @@ fn loadImage(allocator: std.mem.Allocator, image: Gltf.Image, gltf_directory: ?[
 }
 
 // TODO: consider just uploading all textures upfront rather than as part of this function
-fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8, gltf_material: Gltf.Material, textures: *TextureManager) !Material {
+fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8, gltf_material: Gltf.Material, textures: *TextureManager) !Material.Parameters {
     // stuff that is in every material
     var material = blk: {
-        var material: Material = undefined;
+        var material: Material.Parameters = undefined;
+        material.name = gltf_material.name;
 
         material.volume.medium = MaterialManager.Medium {
             .@"σ_a" = F32x3.new(
@@ -101,7 +102,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             break :normal try textures.upload(vc, U8x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else normal: {
             const rg: *F32x2 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
-            rg.* = Material.default_normal;
+            rg.* = Material.Parameters.default_normal;
             break :normal try textures.upload(vc, F32x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = 1, .height = 1 }, "default normal");
         };
 
@@ -227,15 +228,13 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
         for (gltf.data.materials.items) |material| {
             const mat = try gltfMaterialToMaterial(vc, allocator, encoder, gltf, gltf_directory, material, &materials.textures);
-            const namez = try allocator.dupeZ(u8, material.name);
-            defer allocator.free(namez);
-            _ = try materials.upload(vc, allocator, encoder, mat, namez);
+            _ = try materials.upload(vc, allocator, encoder, mat);
         }
 
         const default_material = try gltfMaterialToMaterial(vc, allocator, encoder, gltf, gltf_directory, Gltf.Material {
             .name = "default",
         }, &materials.textures);
-        _ = try materials.upload(vc, allocator, encoder, default_material, "default");
+        _ = try materials.upload(vc, allocator, encoder, default_material);
 
         break :blk materials;
     };
@@ -376,7 +375,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 errdefer encoder.uploadAllocator().free(vertices.positions);
                 errdefer encoder.uploadAllocator().free(vertices.texcoords);
 
-                const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh {
+                const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh.Parameters {
                     .name = mesh.name,
                     .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
                     .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,

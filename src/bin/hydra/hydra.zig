@@ -158,44 +158,44 @@ pub const HdMoonshine = struct {
         // update instance transforms
         {
             if (self.material_updates.count() != 0) {
-                var iter = self.material_updates.iterator();
-                while (iter.next()) |update| {
-                    // since only standard pbr materials are supported
-                    // the material index and variant index should be identical
-                    const index = update.key_ptr.*;
+                // var iter = self.material_updates.iterator();
+                // while (iter.next()) |update| {
+                //     // since only standard pbr materials are supported
+                //     // the material index and variant index should be identical
+                //     const index = update.key_ptr.*;
 
-                    // TODO: can merge some of these cmdUpdateBuffers sometimes
-                    if (update.value_ptr.normal) |normal| {
-                        const offset = index * @sizeOf(MaterialManager.GpuMaterial) + @offsetOf(MaterialManager.GpuMaterial, "normal");
-                        const bytes = std.mem.asBytes(&normal);
-                        self.encoder.buffer.updateBuffer(self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
-                    }
-                    if (update.value_ptr.emissive) |emissive| {
-                        const offset = index * @sizeOf(MaterialManager.GpuMaterial) + @offsetOf(MaterialManager.GpuMaterial, "emissive");
-                        const bytes = std.mem.asBytes(&emissive);
-                        self.encoder.buffer.updateBuffer(self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
-                    }
-                    if (update.value_ptr.color) |color| {
-                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "color");
-                        const bytes = std.mem.asBytes(&color);
-                        self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
-                    }
-                    if (update.value_ptr.metalness) |metalness| {
-                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "metalness");
-                        const bytes = std.mem.asBytes(&metalness);
-                        self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
-                    }
-                    if (update.value_ptr.roughness) |roughness| {
-                        const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "roughness");
-                        const bytes = std.mem.asBytes(&roughness);
-                        self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
-                    }
-                    // if (update.value_ptr.ior) |ior| {
-                    //     const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "ior");
-                    //     const bytes = std.mem.asBytes(&ior);
-                    //     self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
-                    // }
-                }
+                //     // TODO: can merge some of these cmdUpdateBuffers sometimes
+                //     if (update.value_ptr.normal) |normal| {
+                //         const offset = index * @sizeOf(MaterialManager.GpuMaterial) + @offsetOf(MaterialManager.GpuMaterial, "normal");
+                //         const bytes = std.mem.asBytes(&normal);
+                //         self.encoder.buffer.updateBuffer(self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
+                //     }
+                //     if (update.value_ptr.emissive) |emissive| {
+                //         const offset = index * @sizeOf(MaterialManager.GpuMaterial) + @offsetOf(MaterialManager.GpuMaterial, "emissive");
+                //         const bytes = std.mem.asBytes(&emissive);
+                //         self.encoder.buffer.updateBuffer(self.world.materials.materials.handle, offset, bytes.len, bytes.ptr);
+                //     }
+                //     if (update.value_ptr.color) |color| {
+                //         const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "color");
+                //         const bytes = std.mem.asBytes(&color);
+                //         self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                //     }
+                //     if (update.value_ptr.metalness) |metalness| {
+                //         const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "metalness");
+                //         const bytes = std.mem.asBytes(&metalness);
+                //         self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                //     }
+                //     if (update.value_ptr.roughness) |roughness| {
+                //         const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "roughness");
+                //         const bytes = std.mem.asBytes(&roughness);
+                //         self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                //     }
+                //     // if (update.value_ptr.ior) |ior| {
+                //     //     const offset = index * @sizeOf(MaterialManager.StandardPBR) + @offsetOf(MaterialManager.StandardPBR, "ior");
+                //     //     const bytes = std.mem.asBytes(&ior);
+                //     //     self.encoder.buffer.updateBuffer(self.world.materials.variant_buffers.standard_pbr.buffer.handle, offset, bytes.len, bytes.ptr);
+                //     // }
+                // }
 
                 // could be more granular with this and instance updates below
                 const update_barriers = [_]vk.BufferMemoryBarrier2 {

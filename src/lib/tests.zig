@@ -121,7 +121,7 @@ const TestingContext = struct {
 //
 // http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
 // https://observablehq.com/@mourner/fast-icosphere-mesh
-fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reverse_winding_order: bool) !MeshManager.Mesh {
+fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reverse_winding_order: bool) !MeshManager.Mesh.Parameters {
     const Subdivider = struct {
         const MidpointCache = std.AutoArrayHashMapUnmanaged(u64, u32);
 
@@ -246,7 +246,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
         }
     }
 
-    const mesh = MeshManager.Mesh {
+    const mesh = MeshManager.Mesh.Parameters {
         .name = "icosphere",
         .positions = encoder.upload_allocator.getBufferSlice(positions),
         .normals = null, // TODO: add normals here when normals are robust enough
@@ -298,7 +298,7 @@ test "white sphere on white background is white" {
         const mesh_handle = try world.meshes.upload(&tc.vc, allocator, &tc.encoder, try icosphere(5, allocator, &tc.encoder, false));
 
         const normal: *F32x2 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
-        normal.* = MaterialManager.Material.default_normal;
+        normal.* = MaterialManager.Material.Parameters.default_normal;
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const albedo: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
@@ -309,7 +309,8 @@ test "white sphere on white background is white" {
         emissive.* = F32x4.new(0, 0, 0, std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
-        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material {
+        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
+            .name = "white",
             .normal = normal_texture,
             .emissive = emissive_texture,
             .bsdf = MaterialManager.PolymorphicBSDF {
@@ -317,7 +318,7 @@ test "white sphere on white background is white" {
                     .color = albedo_texture,
                 }
             }
-        }, "white");
+        });
 
         const geometries = [_]ModelManager.Geometry {
             .{
@@ -400,14 +401,15 @@ test "white volume on white background is white" {
         const mesh_handle = try world.meshes.upload(&tc.vc, allocator, &tc.encoder, try icosphere(5, allocator, &tc.encoder, false));
 
         const normal: *F32x2 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
-        normal.* = MaterialManager.Material.default_normal;
+        normal.* = MaterialManager.Material.Parameters.default_normal;
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const emissive: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
         emissive.* = F32x4.new(0, 0, 0, std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
-        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material {
+        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
+            .name = "white",
             .normal = normal_texture,
             .emissive = emissive_texture,
             .bsdf = MaterialManager.PolymorphicBSDF {
@@ -418,7 +420,7 @@ test "white volume on white background is white" {
                     .@"σ_s" = F32x3.new(1, 1, 1),
                 }
             }
-        }, "white");
+        });
 
         const geometries = [_]ModelManager.Geometry {
             .{
@@ -505,7 +507,7 @@ test "inside illuminating sphere is white" {
         const mesh_handle = try world.meshes.upload(&tc.vc, allocator, &tc.encoder, try icosphere(5, allocator, &tc.encoder, true));
 
         const normal: *F32x2 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
-        normal.* = MaterialManager.Material.default_normal;
+        normal.* = MaterialManager.Material.Parameters.default_normal;
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const albedo: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
@@ -516,7 +518,8 @@ test "inside illuminating sphere is white" {
         emissive.* = F32x4.new(0.5, 0.5, 0.5, std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
-        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material {
+        const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
+            .name = "grey",
             .normal = normal_texture,
             .emissive = emissive_texture,
             .bsdf = MaterialManager.PolymorphicBSDF {
@@ -524,7 +527,7 @@ test "inside illuminating sphere is white" {
                     .color = albedo_texture,
                 }
             }
-        }, "white");
+        });
 
         const geometries = [_]ModelManager.Geometry {
             .{

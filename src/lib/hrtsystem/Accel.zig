@@ -36,10 +36,10 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     .PushSetBindings = struct {
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
         world_to_instances: core.mem.BufferSlice(Mat3x4),
-        meshes: core.mem.BufferSlice(engine.hrtsystem.MeshManager.MeshAddresses),
+        meshes: core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
         geometries: core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
         model_to_geometry_offset: core.mem.BufferSlice(u32),
-        materials: core.mem.BufferSlice(engine.hrtsystem.MaterialManager.GpuMaterial),
+        materials: core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
         emissive_triangle_count: core.mem.BufferSlice(u32),
         dst_power: core.mem.BufferSlice(f32),
         dst_triangle_metadata: core.mem.BufferSlice(TriangleMetadata),
@@ -286,7 +286,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 }
 
 pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, model_manager: ModelManager, instance_index: u32, geometry_index: u32, mesh_index: u32) void {
-    const mesh = mesh_manager.meshes.get(mesh_index);
+    const mesh = mesh_manager.host.get(mesh_index);
     const primitive_count = if (mesh.index_count != 0) mesh.index_count else @divExact(mesh.vertex_count, 3);
 
     // this mesh is too big to importance sample...
@@ -304,7 +304,7 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
     self.triangle_power_pipeline.recordPushDescriptors(encoder.buffer, .{
         .instances = self.instances_device.deviceSlice(),
         .world_to_instances = self.world_to_instance_device.deviceSlice(),
-        .meshes = mesh_manager.addresses_buffer.deviceSlice(),
+        .meshes = mesh_manager.device.deviceSlice(),
         .geometries = model_manager.geometries.deviceSlice(),
         .model_to_geometry_offset = model_manager.model_to_geometry_offset.deviceSlice(),
         .materials = material_manager.materials.deviceSlice(),

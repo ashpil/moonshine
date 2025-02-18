@@ -117,7 +117,7 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) engine.h
         .tlas = self.world.accel.tlas_handle,
         .instances = self.world.accel.instances_device.deviceSlice(),
         .world_to_instances = self.world.accel.world_to_instance_device.deviceSlice(),
-        .meshes = self.world.meshes.addresses_buffer.deviceSlice(),
+        .meshes = self.world.meshes.device.deviceSlice(),
         .geometries = self.world.models.geometries.deviceSlice(),
         .model_to_geometry_offset = self.world.models.model_to_geometry_offset.deviceSlice(),
         .materials = self.world.materials.materials.deviceSlice(),

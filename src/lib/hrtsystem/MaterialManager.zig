@@ -14,23 +14,35 @@ const F32x3 = engine.vector.Vec3(f32);
 
 // I define a material to be a BSDF that may vary over a surface,
 // plus a normal and emissive map
-
-// on the host side, materials are represented as a regular tagged union
-//
-// since GPUs do not support tagged unions, we solve this with a little indirection,
-// translating this into a GPU buffer for each variant, and have a base material struct
-// that simply has an enum and a device address, which points to the specific variant
 pub const Material = struct {
-    pub const default_normal = F32x2.new(0.5, 0.5);
-    const normal_components = @TypeOf(default_normal).element_count;
-    const emissive_components = 3;
+    // on the host side, materials are represented as a regular tagged union
+    pub const Parameters = struct {
+        pub const default_normal = F32x2.new(0.5, 0.5);
+        const normal_components = @TypeOf(default_normal).element_count;
+        const emissive_components = 3;
 
-    normal: TextureManager.Handle,
-    emissive: TextureManager.Handle,
+        name: []const u8,
 
-    volume: Volume = .{},
+        normal: TextureManager.Handle,
+        emissive: TextureManager.Handle,
 
-    bsdf: PolymorphicBSDF,
+        volume: Volume = .{},
+
+        bsdf: PolymorphicBSDF,
+    };
+
+    // since GPUs do not support tagged unions, we solve this with a little indirection,
+    // translating this into a GPU buffer for each variant, and have a base material struct
+    // that simply has an enum and a device address, which points to the specific variant
+    pub const Device = extern struct {
+        normal: TextureManager.Handle,
+        emissive: TextureManager.Handle,
+
+        volume: Volume,
+
+        type: BSDF = .standard_pbr,
+        addr: vk.DeviceAddress,
+    };
 };
 
 pub const Volume = extern struct {
@@ -65,16 +77,6 @@ pub const HenyeyGreenstein = extern struct {
 pub const Medium = extern struct {
     @"σ_s": F32x3 = F32x3.new(0, 0, 0),
     @"σ_a": F32x3 = F32x3.new(0, 0, 0),
-};
-
-pub const GpuMaterial = extern struct {
-    normal: TextureManager.Handle,
-    emissive: TextureManager.Handle,
-
-    volume: Volume,
-
-    type: BSDF = .standard_pbr,
-    addr: vk.DeviceAddress,
 };
 
 pub const BSDF = enum(u32) {
@@ -153,7 +155,7 @@ const VariantBuffers = StructFromTaggedUnion(PolymorphicBSDF, VariantBuffer);
 
 material_count: u32,
 textures: TextureManager,
-materials: core.mem.DeviceBuffer(GpuMaterial, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+materials: core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 variant_buffers: VariantBuffers,
 
@@ -174,32 +176,32 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
 
 // you can either do this or create below, but not both
 // texture handles must've been already added to the MaterialManager's textures
-pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, info: Material, name: [:0]const u8) !Handle {
+pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, parameters: Material.Parameters) !Handle {
     std.debug.assert(self.material_count < max_materials);
 
     inline for (@typeInfo(PolymorphicBSDF).@"union".fields, 0..) |field, field_idx| {
-        if (@as(BSDF, @enumFromInt(field_idx)) == std.meta.activeTag(info.bsdf)) {
+        if (@as(BSDF, @enumFromInt(field_idx)) == std.meta.activeTag(parameters.bsdf)) {
             if (@sizeOf(field.type) != 0) {
                 const variant_buffer = &@field(self.variant_buffers, field.name);
                 if (variant_buffer.buffer.isNull()) {
-                    const buffer_name = try std.fmt.allocPrintZ(allocator, "material {s} {s}", .{ name, field.name });
+                    const buffer_name = try std.fmt.allocPrintZ(allocator, "material {s} {s}", .{ parameters.name, field.name });
                     defer allocator.free(buffer_name);
                     variant_buffer.buffer = try core.mem.DeviceBuffer(field.type, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, buffer_name);
                     variant_buffer.addr = variant_buffer.buffer.getAddress(vc);
                 }
-                variant_buffer.buffer.updateFrom(encoder, variant_buffer.len, &.{ @field(info.bsdf, field.name) });
+                variant_buffer.buffer.updateFrom(encoder, variant_buffer.len, &.{ @field(parameters.bsdf, field.name) });
                 variant_buffer.len += 1;
             }
 
-            const gpu_material = GpuMaterial {
-                .normal = info.normal,
-                .emissive = info.emissive,
-                .volume = info.volume,
-                .type = std.meta.activeTag(info.bsdf),
+            const material = Material.Device {
+                .normal = parameters.normal,
+                .emissive = parameters.emissive,
+                .volume = parameters.volume,
+                .type = std.meta.activeTag(parameters.bsdf),
                 .addr = if (@sizeOf(field.type) != 0) @field(self.variant_buffers, field.name).addr + (@field(self.variant_buffers, field.name).len - 1) * @sizeOf(field.type) else 0,
             };
-            if (self.materials.isNull()) self.materials = try core.mem.DeviceBuffer(GpuMaterial, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, "materials");
-            self.materials.updateFrom(encoder, self.material_count, &.{ gpu_material });
+            if (self.materials.isNull()) self.materials = try core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, "materials");
+            self.materials.updateFrom(encoder, self.material_count, &.{ material });
         }
     }
 
@@ -207,9 +209,9 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     return self.material_count - 1;
 }
 
-pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.CommandBuffer, material: Handle, value: GpuMaterial) void {
-    const offset = @sizeOf(GpuMaterial) * material;
-    const size = @sizeOf(GpuMaterial);
+pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.CommandBuffer, material: Handle, value: Material.Device) void {
+    const offset = @sizeOf(Material.Device) * material;
+    const size = @sizeOf(Material.Device);
     command_buffer.updateBuffer(self.materials.handle, offset, size, &value);
 
     command_buffer.pipelineBarrier2(&vk.DependencyInfo {
