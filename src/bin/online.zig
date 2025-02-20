@@ -254,8 +254,8 @@ pub fn main() !void {
                 try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
                 // TODO: all of the copying below should be done once, on object pick
                 const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
-                const geometry_offset = try sync_copier.copyBufferItem(&context, u32, scene.world.models.model_to_geometry_offset.handle, instance.instance_custom_index_and_mask.instance_custom_index);
-                const accel_geometry_index = geometry_offset + object.geometry_index;
+                const model = try sync_copier.copyBufferItem(&context, ModelManager.Model.Device, scene.world.models.models_device.handle, instance.instance_custom_index_and_mask.instance_custom_index);
+                const accel_geometry_index = model.geometry_offset + object.geometry_index;
                 var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry, scene.world.models.geometries.handle, accel_geometry_index);
                 var material = try sync_copier.copyBufferItem(&context, MaterialManager.Material.Device, scene.world.materials.materials.handle, geometry.material);
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});

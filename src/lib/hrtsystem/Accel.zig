@@ -36,10 +36,10 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     .PushSetBindings = struct {
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
         world_to_instances: core.mem.BufferSlice(Mat3x4),
-        meshes: core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
-        geometries: core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
-        model_to_geometry_offset: core.mem.BufferSlice(u32),
-        materials: core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
+        meshes: core.mem.BufferSlice(MeshManager.Mesh.Device),
+        geometries: core.mem.BufferSlice(ModelManager.Geometry),
+        models: core.mem.BufferSlice(ModelManager.Model.Device),
+        materials: core.mem.BufferSlice(MaterialManager.Material.Device),
         emissive_triangle_count: core.mem.BufferSlice(u32),
         dst_power: core.mem.BufferSlice(f32),
         dst_triangle_metadata: core.mem.BufferSlice(TriangleMetadata),
@@ -199,7 +199,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
                 .flags = 0,
             },
             .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
-                .acceleration_structure = model_manager.blases.items(.handle)[instance.model],
+                .acceleration_structure = model_manager.models_host.items(.blas_handle)[instance.model],
             }),
         };
 
@@ -306,7 +306,7 @@ pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManag
         .world_to_instances = self.world_to_instance_device.deviceSlice(),
         .meshes = mesh_manager.device.deviceSlice(),
         .geometries = model_manager.geometries.deviceSlice(),
-        .model_to_geometry_offset = model_manager.model_to_geometry_offset.deviceSlice(),
+        .models = model_manager.models_device.deviceSlice(),
         .materials = material_manager.materials.deviceSlice(),
         .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
         .dst_power = self.triangle_powers.deviceSlice(),

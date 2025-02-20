@@ -14,10 +14,16 @@ pub const Geometry = extern struct {
     material: MaterialManager.Handle,
 };
 
-const BottomLevelAccels = std.MultiArrayList(struct {
-    handle: vk.AccelerationStructureKHR,
-    buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }),
-});
+pub const Model = struct {
+    const Host = struct {
+        blas_handle: vk.AccelerationStructureKHR,
+        blas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }),
+    };
+
+    pub const Device = extern struct {
+        geometry_offset: u32,
+    };
+};
 
 const max_geometries = std.math.powi(u32, 2, 12) catch unreachable;
 const max_models = std.math.powi(u32, 2, 12) catch unreachable;
@@ -27,8 +33,8 @@ const max_models = std.math.powi(u32, 2, 12) catch unreachable;
 geometry_count: u32 = 0,
 geometries: core.mem.DeviceBuffer(Geometry, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
 
-blases: BottomLevelAccels = .{},
-model_to_geometry_offset: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
+models_host: std.MultiArrayList(Model.Host) = .{},
+models_device: core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
 
 pub const Handle = u24;
 
@@ -36,7 +42,7 @@ const Self = @This();
 
 pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, mesh_manager: MeshManager, geometries: []const Geometry) !Handle {
     std.debug.assert(self.geometry_count + geometries.len <= max_geometries);
-    std.debug.assert(self.blases.len < max_models);
+    std.debug.assert(self.models_host.len < max_models);
 
     for (geometries) |geometry| {
         encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
@@ -131,29 +137,33 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     if (self.geometries.isNull()) self.geometries = try core.mem.DeviceBuffer(Geometry, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometries");
     self.geometries.updateFrom(encoder, self.geometry_count, geometries);
 
-    if (self.model_to_geometry_offset.isNull()) self.model_to_geometry_offset = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_models, "model idx to geometry offset");
-    self.model_to_geometry_offset.updateFrom(encoder, self.blases.len, &.{ @intCast(self.geometry_count) });
+    if (self.models_device.isNull()) self.models_device = try core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_models, "model idx to geometry offset");
+    self.models_device.updateFrom(encoder, self.models_host.len, &.{
+        Model.Device {
+            .geometry_offset = @intCast(self.geometry_count),
+        }
+    });
 
     self.geometry_count += @intCast(geometries.len);
 
-    try self.blases.append(allocator, .{
-        .handle = build_geometry_info.dst_acceleration_structure,
-        .buffer = buffer,
+    try self.models_host.append(allocator, .{
+        .blas_handle = build_geometry_info.dst_acceleration_structure,
+        .blas_buffer = buffer,
     });
 
-    return @intCast(self.blases.len - 1);
+    return @intCast(self.models_host.len - 1);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.geometries.destroy(vc);
-    self.model_to_geometry_offset.destroy(vc);
-    for (self.blases.items(.handle)) |handle| {
+    self.models_device.destroy(vc);
+    for (self.models_host.items(.blas_handle)) |handle| {
         vc.device.destroyAccelerationStructureKHR(handle, null);
     }
-    for (self.blases.items(.buffer)) |buffer| {
+    for (self.models_host.items(.blas_buffer)) |buffer| {
         buffer.destroy(vc);
     }
-    self.blases.deinit(allocator);
+    self.models_host.deinit(allocator);
 }
 
 // probably bad idea if you're changing many

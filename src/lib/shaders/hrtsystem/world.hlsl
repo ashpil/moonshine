@@ -153,11 +153,15 @@ struct TriangleLocalSpace {
     }
 };
 
+struct Model {
+    uint geometryOffset;
+};
+
 struct World {
     StructuredBuffer<Instance> instances;
     StructuredBuffer<row_major float3x4> worldToInstance;
 
-    StructuredBuffer<uint> modelToGeometryOffset;
+    StructuredBuffer<Model> models;
     StructuredBuffer<Mesh> meshes;
     StructuredBuffer<Geometry> geometries;
 
@@ -165,13 +169,13 @@ struct World {
 
     Mesh mesh(uint instanceIndex, uint geometryIndex) {
         const uint instanceID = instances[instanceIndex].instanceCustomIndex;
-        const Geometry geometry = geometries[NonUniformResourceIndex(modelToGeometryOffset[instanceID] + geometryIndex)];
+        const Geometry geometry = geometries[NonUniformResourceIndex(models[instanceID].geometryOffset + geometryIndex)];
         return meshes[NonUniformResourceIndex(geometry.meshIndex)];
     }
 
     Material material(uint instanceIndex, uint geometryIndex) {
         const uint instanceID = instances[instanceIndex].instanceCustomIndex;
-        const Geometry geometry = geometries[NonUniformResourceIndex(modelToGeometryOffset[instanceID] + geometryIndex)];
+        const Geometry geometry = geometries[NonUniformResourceIndex(models[instanceID].geometryOffset + geometryIndex)];
         return materials[NonUniformResourceIndex(geometry.materialIndex)];
     }
 

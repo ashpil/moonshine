@@ -7,7 +7,7 @@
 [[vk::binding(1, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 [[vk::binding(2, 0)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(3, 0)]] StructuredBuffer<Geometry> dGeometries;
-[[vk::binding(4, 0)]] StructuredBuffer<uint> dModelToGeometryOffset;
+[[vk::binding(4, 0)]] StructuredBuffer<Model> dModels;
 [[vk::binding(5, 0)]] StructuredBuffer<Material> dMaterials;
 [[vk::binding(6, 0)]] StructuredBuffer<uint> emissiveTriangleCount;
 
@@ -33,7 +33,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     world.instances = dInstances;
     world.worldToInstance = dWorldToInstance;
     world.meshes = dMeshes;
-    world.modelToGeometryOffset = dModelToGeometryOffset;
+    world.models = dModels;
     world.geometries = dGeometries;
     world.materials = dMaterials;
 

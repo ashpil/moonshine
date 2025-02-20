@@ -13,7 +13,7 @@
 [[vk::binding(2, 0)]] StructuredBuffer<row_major float3x4> dWorldToInstance;
 [[vk::binding(3, 0)]] StructuredBuffer<Mesh> dMeshes;
 [[vk::binding(4, 0)]] StructuredBuffer<Geometry> dGeometries;
-[[vk::binding(5, 0)]] StructuredBuffer<uint> dModelToGeometryOffset;
+[[vk::binding(5, 0)]] StructuredBuffer<Model> dModels;
 [[vk::binding(6, 0)]] StructuredBuffer<Material> dMaterials;
 
 // EMISSIVE TRIANGLES
@@ -64,7 +64,7 @@ void raygen() {
     world.instances = dInstances;
     world.worldToInstance = dWorldToInstance;
     world.meshes = dMeshes;
-    world.modelToGeometryOffset = dModelToGeometryOffset;
+    world.models = dModels;
     world.geometries = dGeometries;
     world.materials = dMaterials;
 
