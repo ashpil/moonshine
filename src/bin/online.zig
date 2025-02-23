@@ -371,8 +371,8 @@ pub fn main() !void {
             scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
             pipeline.recordBindPipeline(frame_encoder.buffer);
             pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
-            pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_sensor, 0));
-            pipeline.recordPushConstants(frame_encoder.buffer, .{ .camera = scene.camera.cameras.items[active_camera][1], .aspect_ratio = scene.camera.sensors.items[active_sensor].aspectRatio(), .sample_count = scene.camera.sensors.items[active_sensor].sample_count });
+            pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
+            pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0));
             pipeline.recordTraceRays(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
             scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
         }

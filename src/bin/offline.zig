@@ -121,11 +121,11 @@ pub fn main() !void {
         // bind our stuff
         pipeline.recordBindPipeline(encoder.buffer);
         pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
-        pipeline.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(0, 0));
+        pipeline.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(0, 0, 0));
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(encoder.buffer, .{ .camera = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count });
+            pipeline.recordPushConstants(encoder.buffer, scene.pushConstants(0, 0, 0));
 
             // trace our stuff
             pipeline.recordTraceRays(encoder.buffer, scene.camera.sensors.items[0].extent);

@@ -114,7 +114,8 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     };
 }
 
-pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardBindings {
+pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardBindings {
+    _ = camera;
     return engine.hrtsystem.pipeline.StandardBindings {
         .tlas = self.world.accel.tlas_handle,
         .instances = self.world.accel.instances_device.deviceSlice(),
@@ -130,6 +131,16 @@ pub fn pushDescriptors(self: *const Self, sensor: u32, background: u32) engine.h
         .background_rgb_image = .{ .view = self.background.data.items[background].rgb_image.view },
         .background_luminance_image = .{ .view = self.background.data.items[background].luminance_image.view },
         .output_image = .{ .view = self.camera.sensors.items[sensor].image.view },
+    };
+}
+
+pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardPushConstants {
+    _ = background;
+    return engine.hrtsystem.pipeline.StandardPushConstants {
+        .camera = self.camera.cameras.items[camera][1],
+        .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(),
+        .sample_count = self.camera.sensors.items[sensor].sample_count,
+        .global_volume = self.global_volume,
     };
 }
 

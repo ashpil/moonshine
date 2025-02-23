@@ -61,11 +61,11 @@ const TestingContext = struct {
         // bind our stuff
         pipeline.recordBindPipeline(self.encoder.buffer);
         pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
-        pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(0, 0));
+        pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(0, 0, 0));
 
         for (0..spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(self.encoder.buffer, .{ .camera = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count, .global_volume = scene.global_volume });
+            pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(0, 0, 0));
 
             // trace our stuff
             pipeline.recordTraceRays(self.encoder.buffer, scene.camera.sensors.items[0].extent);
