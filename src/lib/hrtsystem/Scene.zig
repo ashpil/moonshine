@@ -11,6 +11,7 @@ const Encoder = core.Encoder;
 const Background = @import("./BackgroundManager.zig");
 const World = @import("./World.zig");
 const Camera = @import("./CameraManager.zig");
+const Material = @import("./MaterialManager.zig");
 
 const exr = engine.fileformats.exr;
 
@@ -25,6 +26,7 @@ const Self = @This();
 world: World,
 background: Background,
 camera: Camera,
+global_volume: Material.Volume = .{},
 
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time

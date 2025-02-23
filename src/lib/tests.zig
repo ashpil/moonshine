@@ -52,7 +52,7 @@ const TestingContext = struct {
         };
     }
 
-    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline, scene: *const Scene, spp: usize, global_volume: MaterialManager.Volume) !void {
+    fn renderToOutput(self: *TestingContext, pipeline: *const Pipeline, scene: *const Scene, spp: usize) !void {
         try self.encoder.begin();
 
         // prepare our stuff
@@ -65,7 +65,7 @@ const TestingContext = struct {
 
         for (0..spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(self.encoder.buffer, .{ .camera = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count, .global_volume = global_volume });
+            pipeline.recordPushConstants(self.encoder.buffer, .{ .camera = scene.camera.cameras.items[0][1], .aspect_ratio = scene.camera.sensors.items[0].aspectRatio(), .sample_count = scene.camera.sensors.items[0].sample_count, .global_volume = scene.global_volume });
 
             // trace our stuff
             pipeline.recordTraceRays(self.encoder.buffer, scene.camera.sensors.items[0].extent);
@@ -371,7 +371,7 @@ test "white sphere on white background is white" {
     defer pipeline.destroy(&tc.vc);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
@@ -383,7 +383,7 @@ test "white sphere on white background is white" {
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }
 
@@ -475,7 +475,7 @@ test "white volume on white background is white" {
     defer pipeline.destroy(&tc.vc);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
@@ -488,7 +488,7 @@ test "white volume on white background is white" {
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 512, .{});
+    try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }
 
@@ -581,7 +581,7 @@ test "inside illuminating sphere is white" {
 
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 1024, .{});
+    try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     try tc.encoder.begin();
@@ -593,7 +593,7 @@ test "inside illuminating sphere is white" {
     defer tc.vc.device.destroyPipeline(mesh_sampling_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 1024, .{});
+    try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     try tc.encoder.begin();
@@ -606,6 +606,7 @@ test "inside illuminating sphere is white" {
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    try tc.renderToOutput(&pipeline, &scene, 1024, .{ .medium = .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) } });
+    scene.global_volume = .{ .medium = .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) } };
+    try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }
