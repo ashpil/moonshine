@@ -361,11 +361,7 @@ pub fn Mat3x4(comptime T: type) type {
                 const inv_p = p.inverse();
                 const neg_inv_p_v = inv_p.scale(-1).mulVector(v);
 
-                return Self.fromRows(
-                    Vec4T.new(inv_p.x.x, inv_p.y.x, inv_p.z.x, neg_inv_p_v.x),
-                    Vec4T.new(inv_p.x.y, inv_p.y.y, inv_p.z.y, neg_inv_p_v.y),
-                    Vec4T.new(inv_p.x.z, inv_p.y.z, inv_p.z.z, neg_inv_p_v.z),
-                );
+                return Self.fromTransformTranslation(inv_p, neg_inv_p_v);
             }
         } else struct {};
     };
@@ -426,13 +422,14 @@ pub fn Mat3(comptime T: type) type {
         }
 
         pub usingnamespace if (@typeInfo(T) == .float) struct {
+            // https://en.wikipedia.org/wiki/Invertible_matrix#Inversion_of_3_%C3%97_3_matrices
             pub fn inverse(self: Self) Self {
                 const det = self.determinant();
                 std.debug.assert(det != 0);
                 const v1 = self.y.cross(self.z);
                 const v2 = self.z.cross(self.x);
                 const v3 = self.x.cross(self.y);
-                return Self.fromRows(v1, v2, v3).scale(1 / det);
+                return Self.fromRows(v1, v2, v3).transpose().scale(1 / det);
             }
 
             pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
