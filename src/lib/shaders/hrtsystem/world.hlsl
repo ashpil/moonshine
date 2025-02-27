@@ -144,12 +144,15 @@ struct TriangleLocalSpace {
         return surface;
     }
 
-    float area(const float3x4 toWorld) {
-        float3 p0 = mul(toWorld, float4(positions[0], 1.0));
-        float3 p1 = mul(toWorld, float4(positions[1], 1.0));
-        float3 p2 = mul(toWorld, float4(positions[2], 1.0));
+    float3 bivector() {
+        return cross(positions[1] - positions[0], positions[2] - positions[0]);
+    }
 
-        return length(cross(p1 - p0, p2 - p0)) / 2.0;
+    float area(const float3x4 toMesh, const float3x4 toWorld) {
+        const float3x3 inverseTranspose = transpose((float3x3)toMesh);
+        const float3x3 cofactor = inverseTranspose * determinant((float3x3)toWorld);
+        const float3 globalBivector = mul(cofactor, bivector());
+        return length(globalBivector) / 2.0;
     }
 };
 
@@ -188,8 +191,7 @@ struct World {
     }
 
     float triangleArea(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
-        const float3x4 toWorld = instances[NonUniformResourceIndex(instanceIndex)].transform;
-        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).area(toWorld);
+        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).area(toMesh(instanceIndex), toWorld(instanceIndex));
     }
 
     TriangleLocalSpace triangleLocalSpace(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
