@@ -27,54 +27,33 @@ pub const Instance = struct {
     model: ModelManager.Handle,
 };
 
-const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/mesh_sampling/power.hlsl",
+const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/instance_power.hlsl",
     .PushConstants = extern struct {
-        instance_index: u32,
-        geometry_index: u32,
-        triangle_count: u32,
+        instance_count: u32,
+        dst_offset: u32,
     },
     .PushSetBindings = struct {
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
         world_to_instances: core.mem.BufferSlice(Mat3x4),
-        meshes: core.mem.BufferSlice(MeshManager.Mesh.Device),
-        geometries: core.mem.BufferSlice(ModelManager.Geometry),
         models: core.mem.BufferSlice(ModelManager.Model.Device),
-        materials: core.mem.BufferSlice(MaterialManager.Material.Device),
-        emissive_triangle_count: core.mem.BufferSlice(u32),
         dst_power: core.mem.BufferSlice(f32),
-        dst_triangle_metadata: core.mem.BufferSlice(TriangleMetadata),
     },
-    .additional_descriptor_layout_count = 1,
 });
 
-const TrianglePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/mesh_sampling/fold.hlsl",
-    .PushSetBindings = struct {
-        levels: core.mem.BufferSlice(f32),
-        instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
-        geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
-        emissive_triangle_count: core.mem.BufferSlice(u32),
-    },
+const InstancePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/fold1.hlsl",
     .PushConstants = extern struct {
-        instance_index: u32,
-        geometry_index: u32,
-        triangle_count: u32,
         src_level_offset: u32,
         dst_level_offset: u32,
+        max_src_index: u32,
+    },
+    .PushSetBindings = struct {
+        levels: core.mem.BufferSlice(f32),
     },
 });
 
-pub const TriangleMetadata = extern struct {
-    instance_index: u32,
-    geometry_index: u32,
-};
-
-triangle_power_pipeline: TrianglePowerPipeline,
-triangle_power_fold_pipeline: TrianglePowerFoldPipeline,
-triangle_powers_meta: core.mem.DeviceBuffer(TriangleMetadata, .{ .storage_buffer_bit = true }),
-// TODO: should build a separate one for each model so that instances are actually instanced here
-triangle_powers: core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
-geometry_to_triangle_power_offset: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
-emissive_triangle_count: core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }), // size 1
+instance_power_pipeline: InstancePowerPipeline,
+instance_power_fold_pipeline: InstancePowerFoldPipeline,
+instance_powers: core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 instance_count: u32 = 0,
 instances_device: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
@@ -99,30 +78,19 @@ const Self = @This();
 
 // TODO: resizable buffers
 const max_instances = std.math.pow(u32, 2, 12);
-const max_geometries = std.math.pow(u32, 2, 12);
-const max_emissive_triangles = std.math.pow(u32, 2, 15);
 
-pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, texture_descriptor_layout: MaterialManager.TextureManager.DescriptorLayout, encoder: *Encoder) !Self {
-    var triangle_power_pipeline = try TrianglePowerPipeline.create(vc, allocator, .{}, .{}, .{ texture_descriptor_layout.handle });
-    errdefer triangle_power_pipeline.destroy(vc);
+pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder) !Self {
+    var instance_power_pipeline = try InstancePowerPipeline.create(vc, allocator, .{}, .{}, .{});
+    errdefer instance_power_pipeline.destroy(vc);
 
-    var triangle_power_fold_pipeline = try TrianglePowerFoldPipeline.create(vc, allocator, .{}, .{}, .{});
-    errdefer triangle_power_fold_pipeline.destroy(vc);
+    var instance_power_fold_pipeline = try InstancePowerFoldPipeline.create(vc, allocator, .{}, .{}, .{});
+    errdefer instance_power_fold_pipeline.destroy(vc);
 
-    const triangle_powers_meta = try core.mem.DeviceBuffer(TriangleMetadata, .{ .storage_buffer_bit = true }).create(vc, max_emissive_triangles, "triangle powers meta");
-    errdefer triangle_powers_meta.destroy(vc);
-
-    const emissive_triangle_count = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, 1, "emissive triangle count");
-    errdefer emissive_triangle_count.destroy(vc);
-
-    std.debug.assert(max_emissive_triangles % 2 == 0);
-    const emissive_triangle_level_count = comptime std.math.log2(max_emissive_triangles) + 1;
-    const triangle_powers_element_count = std.math.pow(u32, 2, emissive_triangle_level_count) - 1;
-    const triangle_powers = try core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, triangle_powers_element_count, "triangle powers");
-    errdefer triangle_powers.destroy(vc);
-
-    const geometry_to_triangle_power_offset = try core.mem.DeviceBuffer(u32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometry to triangle power offset");
-    errdefer geometry_to_triangle_power_offset.destroy(vc);
+    std.debug.assert(max_instances % 2 == 0);
+    const instance_powers_level_count = comptime std.math.log2(max_instances) + 1;
+    const instance_powers_element_count = std.math.pow(u32, 2, instance_powers_level_count) - 1;
+    const instance_powers = try core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, instance_powers_element_count, "instance powers");
+    errdefer instance_powers.destroy(vc);
 
     const instances_device = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }).create(vc, max_instances, "instances");
     errdefer instances_device.destroy(vc);
@@ -135,9 +103,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
     const world_to_instance_host = try core.mem.UploadBuffer(Mat3x4).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_host.destroy(vc);
 
-    encoder.fillBuffer(emissive_triangle_count.handle, 1, @as(u32, 0));
-    encoder.fillBuffer(geometry_to_triangle_power_offset.handle, max_geometries, @as(u32, std.math.maxInt(u32)));
-    encoder.fillBuffer(triangle_powers.handle, triangle_powers_element_count, @as(f32, 0.0));
+    encoder.fillBuffer(instance_powers.handle, instance_powers_element_count, @as(f32, 0.0));
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
         Encoder.BufferBarrier {
@@ -145,31 +111,14 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
             .src_access_mask = .{ .memory_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
             .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
-            .buffer = emissive_triangle_count.handle,
-        },
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_transfer_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
-            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
-            .buffer = geometry_to_triangle_power_offset.handle,
-        },
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_transfer_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
-            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
-            .buffer = triangle_powers.handle,
+            .buffer = instance_powers.handle,
         },
     });
 
     return Self {
-        .triangle_power_pipeline = triangle_power_pipeline,
-        .triangle_power_fold_pipeline = triangle_power_fold_pipeline,
-        .triangle_powers_meta = triangle_powers_meta,
-        .triangle_powers = triangle_powers,
-        .emissive_triangle_count = emissive_triangle_count,
-        .geometry_to_triangle_power_offset = geometry_to_triangle_power_offset,
+        .instance_power_pipeline = instance_power_pipeline,
+        .instance_power_fold_pipeline = instance_power_fold_pipeline,
+        .instance_powers = instance_powers,
         .instances_device = instances_device,
         .instances_host = instances_host,
         .instances_address = instances_address,
@@ -180,8 +129,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, textu
 
 // accel must not be in use
 pub const Handle = u32;
-// TODO: instance light accel so that geometry does not need to be passed into here
-pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, model_manager: ModelManager, instance: Instance, geometries: []const ModelManager.Geometry) !Handle {
+pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager, instance: Instance) !Handle {
     std.debug.assert(self.instance_count < max_instances);
 
     // upload instance
@@ -213,13 +161,27 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         self.world_to_instance_device.uploadFrom(encoder, self.instance_count, self.world_to_instance_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
     }
 
-    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
         Encoder.BufferBarrier {
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .memory_write_bit = true },
             .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .dst_access_mask = .{ .memory_read_bit = true },
             .buffer = self.instances_device.handle,
+        },
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .copy_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
+            .dst_access_mask = .{ .memory_read_bit = true, .shader_read_bit = true },
+            .buffer = self.world_to_instance_device.handle,
+        },
+        Encoder.BufferBarrier {
+            .src_stage_mask = .{ .all_transfer_bit = true },
+            .src_access_mask = .{ .memory_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
+            .dst_access_mask = .{ .shader_read_bit = true },
+            .buffer = model_manager.models_device.handle,
         },
     });
 
@@ -276,90 +238,52 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         .transform_offset = 0,
     })});
 
-    encoder.global_barrier();
-    for (geometries, 0..) |geometry, i| {
-        self.recordUpdatePower(encoder, mesh_manager, material_manager, model_manager, @intCast(self.instance_count - 1), @intCast(i), geometry.mesh);
+    {
+        const instance_powers_level_count = comptime std.math.log2(max_instances) + 1;
+        const instance_powers_element_count = std.math.pow(u32, 2, instance_powers_level_count) - 1;
+
+        self.instance_power_pipeline.recordBindPipeline(encoder.buffer);
+        self.instance_power_pipeline.recordPushDescriptors(encoder.buffer, .{
+            .instances = self.instances_device.deviceSlice(),
+            .world_to_instances = self.world_to_instance_device.deviceSlice(),
+            .models = model_manager.models_device.deviceSlice(),
+            .dst_power = self.instance_powers.deviceSlice(),
+        });
+        self.instance_power_pipeline.recordPushConstants(encoder.buffer, .{
+            .instance_count = self.instance_count,
+            .dst_offset = instance_powers_element_count - max_instances,
+        });
+        const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
+        const dispatch_size = std.math.divCeil(u32, self.instance_count, shader_local_size) catch unreachable;
+        self.instance_power_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
+        self.instance_power_fold_pipeline.recordBindPipeline(encoder.buffer);
+
+        for (1..instance_powers_level_count) |src_level_rev| {
+            const src_level: u32 = @intCast(instance_powers_level_count - src_level_rev);
+            encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+                Encoder.BufferBarrier {
+                    .src_stage_mask = .{ .compute_shader_bit = true },
+                    .src_access_mask = .{ .shader_write_bit = true },
+                    .dst_stage_mask = .{ .compute_shader_bit = true },
+                    .dst_access_mask = .{ .shader_read_bit = true },
+                    .buffer = self.instance_powers.handle,
+                },
+            });
+            const dst_level_size = std.math.pow(u32, 2, src_level);
+            self.instance_power_fold_pipeline.recordPushDescriptors(encoder.buffer, .{
+                .levels = self.instance_powers.deviceSlice(),
+            });
+            self.instance_power_fold_pipeline.recordPushConstants(encoder.buffer, .{
+                .src_level_offset = std.math.pow(u32, 2, src_level - 0) - 1,
+                .dst_level_offset = std.math.pow(u32, 2, src_level - 1) - 1,
+                .max_src_index = max_instances,
+            });
+            const level_dispatch_size = std.math.divCeil(u32, dst_level_size, shader_local_size) catch unreachable;
+            self.instance_power_fold_pipeline.recordDispatch(encoder.buffer, .{ .width = level_dispatch_size, .height = 1, .depth = 1 });
+        }
     }
-    encoder.global_barrier();
 
     return @intCast(self.instance_count - 1);
-}
-
-pub fn recordUpdatePower(self: *Self, encoder: *Encoder, mesh_manager: MeshManager, material_manager: MaterialManager, model_manager: ModelManager, instance_index: u32, geometry_index: u32, mesh_index: u32) void {
-    const mesh = mesh_manager.host.get(mesh_index);
-    const primitive_count = if (mesh.index_count != 0) mesh.index_count else @divExact(mesh.vertex_count, 3);
-
-    // this mesh is too big to importance sample...
-    // it may still emit without importance sampling, though
-    //
-    // TODO: technically this should check that the that total (in the whole scene) emissive triangle count is less than
-    // the maximum number of emissive triangles, but we don't have access to that info on the host.
-    // probably we will just get a GPU crash instead :(
-    if (primitive_count > max_emissive_triangles) return;
-
-    const emissive_triangle_level_count = comptime std.math.log2(max_emissive_triangles) + 1;
-
-    self.triangle_power_pipeline.recordBindPipeline(encoder.buffer);
-    self.triangle_power_pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ material_manager.textures.descriptor_set });
-    self.triangle_power_pipeline.recordPushDescriptors(encoder.buffer, .{
-        .instances = self.instances_device.deviceSlice(),
-        .world_to_instances = self.world_to_instance_device.deviceSlice(),
-        .meshes = mesh_manager.device.deviceSlice(),
-        .geometries = model_manager.geometries.deviceSlice(),
-        .models = model_manager.models_device.deviceSlice(),
-        .materials = material_manager.materials.deviceSlice(),
-        .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
-        .dst_power = self.triangle_powers.deviceSlice(),
-        .dst_triangle_metadata = self.triangle_powers_meta.deviceSlice(),
-    });
-    self.triangle_power_pipeline.recordPushConstants(encoder.buffer, .{
-        .instance_index = instance_index,
-        .geometry_index = geometry_index,
-        .triangle_count = primitive_count,
-    });
-    const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
-    const dispatch_size = std.math.divCeil(u32, primitive_count, shader_local_size) catch unreachable;
-    self.triangle_power_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
-    self.triangle_power_fold_pipeline.recordBindPipeline(encoder.buffer);
-
-    for (1..emissive_triangle_level_count) |dst_level_usize| {
-        const dst_level: u32 = @intCast(dst_level_usize);
-        encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
-            Encoder.BufferBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_write_bit = true },
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_read_bit = true },
-                .buffer = self.triangle_powers.handle,
-            },
-        });
-        const dst_level_size = std.math.pow(u32, 2, @intCast(emissive_triangle_level_count - dst_level));
-        self.triangle_power_fold_pipeline.recordPushDescriptors(encoder.buffer, .{
-            .levels = self.triangle_powers.deviceSlice(),
-            .instances = self.instances_device.deviceSlice(),
-            .geometry_to_triangle_power_offset = self.geometry_to_triangle_power_offset.deviceSlice(),
-            .emissive_triangle_count = self.emissive_triangle_count.deviceSlice(),
-        });
-        self.triangle_power_fold_pipeline.recordPushConstants(encoder.buffer, .{
-            .instance_index = instance_index,
-            .geometry_index = geometry_index,
-            .triangle_count = primitive_count,
-            .src_level_offset = std.math.pow(u32, 2, emissive_triangle_level_count - dst_level - 0) - 1,
-            .dst_level_offset = std.math.pow(u32, 2, emissive_triangle_level_count - dst_level - 1) - 1,
-        });
-        const mip_dispatch_size = std.math.divCeil(u32, dst_level_size, shader_local_size) catch unreachable;
-        self.triangle_power_fold_pipeline.recordDispatch(encoder.buffer, .{ .width = mip_dispatch_size, .height = 1, .depth = 1 });
-    }
-
-    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = .{ .shader_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
-            .buffer = self.triangle_powers.handle,
-        },
-    });
 }
 
 // probably bad idea if you're changing many
@@ -450,13 +374,10 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.world_to_instance_device.destroy(vc);
     self.world_to_instance_host.destroy(vc);
 
-    self.triangle_powers.destroy(vc);
-    self.triangle_powers_meta.destroy(vc);
-    self.geometry_to_triangle_power_offset.destroy(vc);
-    self.emissive_triangle_count.destroy(vc);
+    self.instance_powers.destroy(vc);
 
-    self.triangle_power_pipeline.destroy(vc);
-    self.triangle_power_fold_pipeline.destroy(vc);
+    self.instance_power_pipeline.destroy(vc);
+    self.instance_power_fold_pipeline.destroy(vc);
 
     self.tlas_update_scratch_buffer.destroy(vc);
 

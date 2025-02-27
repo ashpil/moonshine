@@ -8,6 +8,6 @@ struct Scene {
     RaytracingAccelerationStructure tlas;
     World world;
     EnvMap envMap;
-    MeshLights meshLights;
+    InstanceLights instanceLights;
     ChromaticVolume globalVolume;
 };

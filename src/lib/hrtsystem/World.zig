@@ -258,16 +258,16 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     var meshes = MeshManager {};
     errdefer meshes.destroy(vc, allocator);
 
-    var models = ModelManager {};
+    var models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout);
     errdefer models.destroy(vc, allocator);
 
-    var accel = try Accel.createEmpty(vc, allocator, materials.textures.descriptor_layout, encoder);
+    var accel = try Accel.createEmpty(vc, allocator, encoder);
     errdefer accel.destroy(vc);
 
     for (gltf.data.nodes.items) |node| {
         if (node.mesh) |model_idx| {
             const mesh = gltf.data.meshes.items[model_idx];
-            var geometries = std.ArrayList(Geometry).init(allocator);
+            var geometries = std.ArrayList(Geometry.Parameters).init(allocator);
             defer geometries.deinit();
             try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
             var instance_thin: bool = undefined;
@@ -383,7 +383,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                     .indices = if (indices) |i| encoder.upload_allocator.getBufferSlice(i) else null,
                 });
 
-                geometries.appendAssumeCapacity(Geometry {
+                geometries.appendAssumeCapacity(Geometry.Parameters {
                     .mesh = mesh_handle,
                     .material = @intCast(material),
                 });
@@ -391,10 +391,10 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
             if (geometries.items.len == 0) continue;
 
-            const model = try models.upload(vc, allocator, encoder, meshes, geometries.items);
+            const model = try models.upload(vc, allocator, encoder, meshes, materials, geometries.items);
 
             const mat = Gltf.getGlobalTransform(&gltf.data, node);
-            _ = try accel.uploadInstance(vc, encoder, meshes, materials, models, Instance {
+            _ = try accel.uploadInstance(vc, encoder, models, Instance {
                 // convert to Z-up
                 .transform = Mat3x4.fromRows(
                     F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
@@ -403,7 +403,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 ),
                 .model = model,
                 .thin = instance_thin,
-            }, geometries.items);
+            });
         }
     }
 
@@ -423,8 +423,8 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     return Self {
         .materials = materials,
         .meshes = .{},
-        .models = .{},
-        .accel = try Accel.createEmpty(vc, allocator, materials.textures.descriptor_layout, encoder),
+        .models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout),
+        .accel = try Accel.createEmpty(vc, allocator, encoder),
         .constant_specta = try ConstantSpectra.create(vc, encoder),
     };
 }

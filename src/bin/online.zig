@@ -256,7 +256,7 @@ pub fn main() !void {
                 const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
                 const model = try sync_copier.copyBufferItem(&context, ModelManager.Model.Device, scene.world.models.models_device.handle, instance.instance_custom_index_and_mask.instance_custom_index);
                 const accel_geometry_index = model.geometry_offset + object.geometry_index;
-                var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry, scene.world.models.geometries.handle, accel_geometry_index);
+                var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry.Device, scene.world.models.geometries_device.handle, accel_geometry_index);
                 var material = try sync_copier.copyBufferItem(&context, MaterialManager.Material.Device, scene.world.materials.materials.handle, geometry.material);
                 try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                 if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {

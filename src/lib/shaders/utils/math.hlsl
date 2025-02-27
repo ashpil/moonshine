@@ -50,6 +50,18 @@ uint log2IntCeil(const uint x) {
     return log2Int(x - 1) + 1;
 }
 
+float normL1(const float3 v) {
+    return abs(v.x) + abs(v.y) + abs(v.z);
+}
+
+float normL2(const float3 v) {
+    return length(v);
+}
+
+float normLInf(const float3 v) {
+    return max(max(abs(v.x), abs(v.y)), abs(v.z));
+}
+
 // TODO: switch to this when figure it why it doesn't work
 // void coordinateSystem(float3 v1, out float3 v2, out float3 v3) {
 //     float sign = v1.z >= 0.0f ? 1.0f : -1.0f;

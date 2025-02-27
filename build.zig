@@ -343,8 +343,11 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         compileShader(b, .compute, "hrtsystem/background/equirectangular_to_equal_area.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/luminance.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/fold.hlsl"),
-        compileShader(b, .compute, "hrtsystem/mesh_sampling/power.hlsl"),
-        compileShader(b, .compute, "hrtsystem/mesh_sampling/fold.hlsl"),
+        compileShader(b, .compute, "hrtsystem/local_light/triangle_power.hlsl"),
+        compileShader(b, .compute, "hrtsystem/local_light/geometry_power.hlsl"),
+        compileShader(b, .compute, "hrtsystem/local_light/instance_power.hlsl"),
+        compileShader(b, .compute, "hrtsystem/local_light/fold3.hlsl"),
+        compileShader(b, .compute, "hrtsystem/local_light/fold1.hlsl"),
     }) catch @panic("OOM");
 
     const module = b.createModule(.{

@@ -17,21 +17,19 @@
 [[vk::binding(6, 0)]] StructuredBuffer<Material> dMaterials;
 
 // EMISSIVE TRIANGLES
-[[vk::binding(7, 0)]] StructuredBuffer<float> dTrianglePower;
-[[vk::binding(8, 0)]] StructuredBuffer<TriangleMetadata> dTriangleMetadata;
-[[vk::binding(9, 0)]] StructuredBuffer<uint> dGeometryToTrianglePowerOffset;
-[[vk::binding(10, 0)]] StructuredBuffer<uint> dEmissiveTriangleCount;
+[[vk::binding(7, 0)]] StructuredBuffer<float> dInstancePower;
 
 // BACKGROUND
-[[vk::combinedImageSampler]] [[vk::binding(11, 0)]] Texture2D<float3> dBackgroundRgbTexture;
-[[vk::combinedImageSampler]] [[vk::binding(11, 0)]] SamplerState dBackgroundSampler;
-[[vk::binding(12, 0)]] Texture2D<float> dBackgroundLuminanceTexture;
+[[vk::combinedImageSampler]] [[vk::binding(8, 0)]] Texture2D<float3> dBackgroundRgbTexture;
+[[vk::combinedImageSampler]] [[vk::binding(8, 0)]] SamplerState dBackgroundSampler;
+[[vk::binding(9, 0)]] Texture2D<float> dBackgroundLuminanceTexture;
 
 // OUTPUT
-[[vk::binding(13, 0)]] RWTexture2D<float4> dOutputImage;
+[[vk::binding(10, 0)]] RWTexture2D<float4> dOutputImage;
 
 // PUSH CONSTANTS
 struct PushConsts {
+    uint instanceCount;
     Camera camera;
     uint sampleCount;
     ChromaticVolume globalVolume;
@@ -72,7 +70,7 @@ void raygen() {
     scene.tlas = dTLAS;
     scene.world = world;
     scene.envMap = EnvMap::create(dBackgroundRgbTexture, dBackgroundSampler, dBackgroundLuminanceTexture);
-    scene.meshLights = MeshLights::create(dTrianglePower, dTriangleMetadata, dGeometryToTrianglePowerOffset, dEmissiveTriangleCount[0], world);
+    scene.instanceLights = InstanceLights::create(dInstancePower, pushConsts.instanceCount, world);
     scene.globalVolume = pushConsts.globalVolume;
 
     Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount, imageCoords.x, imageCoords.y));

@@ -23,11 +23,6 @@ struct LightSample {
     LightEvaluation eval;
 };
 
-struct TriangleMetadata {
-	uint instanceIndex;
-	uint geometryIndex;
-};
-
 interface Light {
     // samples a light direction based on given position, returns
     // radiance at that point from light and pdf of this direction + radiance, ignoring visibility
@@ -124,27 +119,152 @@ struct TriangleLight: Light {
         LightSample lightSample;
         lightSample.dirWs = normalize(surface.position - positionWs);
         lightSample.distance = distance(surface.position, positionWs) - surface.spawnOffset / abs(dot(lightSample.dirWs, surface.triangleFrame.n));
-        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) / tri.area(toLocal, toWorld);
+        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) * areaPdf();
         lightSample.eval.radiance = material.getEmissive(λ, surface.texcoord) / lightSample.eval.pdf;
 
         return lightSample;
     }
+
+    float areaPdf() {
+        return 1.0 / tri.area(toLocal, toWorld);
+    }
 };
 
-// all mesh lights in scene
-struct MeshLights : Light {
-    StructuredBuffer<float> power;
-    StructuredBuffer<TriangleMetadata> metadata;
-    StructuredBuffer<uint> geometryToTrianglePowerOffset;
-    uint emissiveTriangleCount;
+// all triangles in geometry
+struct GeometryLight : Light {
+    float3x4 toWorld;
+    float3x4 toLocal;
+    Geometry geometry;
     World world;
 
-    static MeshLights create(StructuredBuffer<float> power, StructuredBuffer<TriangleMetadata> metadata, StructuredBuffer<uint> geometryToTrianglePowerOffset, uint emissiveTriangleCount, World world) {
-        MeshLights lights;
+    static GeometryLight create(World world, Geometry geometry, float3x4 toWorld, float3x4 toLocal) {
+        GeometryLight light;
+        light.geometry = geometry;
+        light.toWorld = toWorld;
+        light.toLocal = toLocal;
+        light.world = world;
+        return light;
+    }
+
+    LightSample sample(float λ, float3 positionWs, float2 rand) {
+        LightSample lightSample;
+        lightSample.eval = LightEvaluation::empty();
+
+        if (integral() == 0.0) return lightSample;
+
+        const Mesh mesh = world.meshes[geometry.meshIndex];
+        const Material material = world.materials[geometry.materialIndex];
+
+        const uint levelCount = log2IntCeil(uint(mesh.triangleCount)) + 1;
+
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+
+        uint idx = 0;
+        for (uint level = 1; level < levelCount; level++) {
+            Reservoir<uint> r = Reservoir<uint>::empty();
+            for (uint i = 0; i < 2; i++) {
+                const uint coord = 2 * idx + i;
+                const float value = normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress + sizeof(float3) * ((1u << level) - 1 + coord))));
+                r.update(coord, value, rand.x);
+            }
+            idx = r.selected;
+        }
+        const uint triangleIndex = idx;
+
+        const TriangleLocalSpace tri = mesh.triangleLocalSpace(triangleIndex);
+        const TriangleLight inner = TriangleLight::create(tri, toWorld, toLocal, material);
+
+        lightSample = inner.sample(λ, positionWs, rand);
+        lightSample.eval.pdf *= selectionPdf(triangleIndex);
+        lightSample.eval.radiance /= selectionPdf(triangleIndex);
+        return lightSample;
+    }
+
+    float selectionPdf(uint triangleIndex) {
+        if (integral() == 0.0) return 0.0; // no lights
+        const uint64_t triangleCount = world.meshes[geometry.meshIndex].triangleCount;
+        const uint levelOffset = uint(geometry.trianglePowersSize - (triangleCount > 1 ? (triangleCount + (triangleCount % 2)) : 1));
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress + sizeof(float3) * (levelOffset + triangleIndex)))) / integral();
+    }
+
+    float integral() {
+        if (world.meshes[geometry.meshIndex].triangleCount == 0) return 0;
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress)));
+    }
+};
+
+// all geometries in model
+struct ModelLight : Light {
+    float3x4 toWorld;
+    float3x4 toLocal;
+    Model model;
+    World world;
+
+    static ModelLight create(World world, Model model, float3x4 toWorld, float3x4 toLocal) {
+        ModelLight light;
+        light.model = model;
+        light.toWorld = toWorld;
+        light.toLocal = toLocal;
+        light.world = world;
+        return light;
+    }
+
+    LightSample sample(float λ, float3 positionWs, float2 rand) {
+        LightSample lightSample;
+        lightSample.eval = LightEvaluation::empty();
+
+        if (integral() == 0.0) return lightSample;
+
+        const uint levelCount = log2IntCeil(uint(model.geometryCount)) + 1;
+
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+
+        uint idx = 0;
+        for (uint level = 1; level < levelCount; level++) {
+            Reservoir<uint> r = Reservoir<uint>::empty();
+            for (uint i = 0; i < 2; i++) {
+                const uint coord = 2 * idx + i;
+                const float value = normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress + sizeof(float3) * ((1u << level) - 1 + coord))));
+                r.update(coord, value, rand.x);
+            }
+            idx = r.selected;
+        }
+        const uint geometryIndex = idx;
+
+        const GeometryLight inner = GeometryLight::create(world, world.geometries[model.geometryOffset + geometryIndex], toWorld, toLocal);
+
+        lightSample = inner.sample(λ, positionWs, rand);
+        lightSample.eval.pdf *= selectionPdf(geometryIndex);
+        lightSample.eval.radiance /= selectionPdf(geometryIndex);
+        return lightSample;
+    }
+
+    float selectionPdf(uint geometryIndex) {
+        if (integral() == 0.0) return 0.0; // no lights
+        const uint levelOffset = uint(model.geometryPowersSize - (model.geometryCount > 1 ? (model.geometryCount + (model.geometryCount % 2)) : 1));
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress + sizeof(float3) * (levelOffset + geometryIndex)))) / integral();
+    }
+
+    float integral() {
+        if (model.geometryCount == 0) return 0;
+        const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
+        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress)));
+    }
+};
+
+// all instance lights in scene
+struct InstanceLights : Light {
+    StructuredBuffer<float> power;
+    uint count;
+    World world;
+
+    static InstanceLights create(StructuredBuffer<float> power, uint count, World world) {
+        InstanceLights lights;
         lights.power = power;
-        lights.metadata = metadata;
-        lights.geometryToTrianglePowerOffset = geometryToTrianglePowerOffset;
-        lights.emissiveTriangleCount = emissiveTriangleCount;
+        lights.count = count;
         lights.world = world;
         return lights;
     }
@@ -155,8 +275,8 @@ struct MeshLights : Light {
 
         if (integral() == 0.0) return lightSample;
 
-        const uint levelCount = log2IntCeil(emissiveTriangleCount) + 1;
-        const uint bufferLevelCount = log2IntCeil(bufferDimensions(metadata)) + 1;
+        const uint levelCount = log2IntCeil(count) + 1;
+        const uint bufferLevelCount = log2IntCeil((bufferDimensions(power) + 1) / 2) + 1;
 
         uint idx = 0;
         for (uint level = bufferLevelCount - levelCount + 1; level < bufferLevelCount; level++) {
@@ -167,40 +287,37 @@ struct MeshLights : Light {
             }
             idx = r.selected;
         }
-        const TriangleMetadata meta = metadata[idx];
-
-        const uint primitiveIndex = idx - geometryToTrianglePowerOffset[meta.instanceIndex + meta.geometryIndex];
-
-        const TriangleLocalSpace tri = world.triangleLocalSpace(meta.instanceIndex, meta.geometryIndex, primitiveIndex);
-        const float3x4 toWorld = world.toWorld(meta.instanceIndex);
-        const float3x4 toLocal = world.toLocal(meta.instanceIndex);
-        const Material material = world.material(meta.instanceIndex, meta.geometryIndex);
-        const TriangleLight inner = TriangleLight::create(tri, toWorld, toLocal, material);
+        const uint instanceIndex = idx;
+        const Model model = world.models[world.instances[instanceIndex].instanceCustomIndex];
+        const ModelLight inner = ModelLight::create(world, model, world.toWorld(instanceIndex), world.toLocal(instanceIndex));
 
         lightSample = inner.sample(λ, positionWs, rand);
-        lightSample.eval.pdf *= selectionPdf(meta.instanceIndex, meta.geometryIndex, primitiveIndex);
-        lightSample.eval.radiance /= selectionPdf(meta.instanceIndex, meta.geometryIndex, primitiveIndex);
+        lightSample.eval.pdf *= selectionPdf(instanceIndex);
+        lightSample.eval.radiance /= selectionPdf(instanceIndex);
         return lightSample;
     }
 
-    float selectionPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
+    float selectionPdf(uint instanceIndex) {
         if (integral() == 0.0) return 0.0; // no lights
-        const uint triangleOffset = geometryToTrianglePowerOffset[instanceIndex + geometryIndex];
-        const uint invalidOffset = 0xFFFFFFFF;
-        if (triangleOffset == invalidOffset) return 0.0; // no light at this triangle
-        const uint idx = triangleOffset + primitiveIndex;
-        const uint levelOffset = bufferDimensions(metadata) - 1;
-        return power[levelOffset + idx] / integral();
+        const uint levelOffset = ((bufferDimensions(power) + 1) / 2) - 1;
+        return power[levelOffset + instanceIndex] / integral();
     }
 
     float areaPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
-        const float triangleSelectionPdf = selectionPdf(instanceIndex, geometryIndex, primitiveIndex);
-        const float triangleAreaPdf = 1.0 / world.triangleArea(instanceIndex, geometryIndex, primitiveIndex);
-        return triangleSelectionPdf * triangleAreaPdf;
+        const Model model = world.models[world.instances[instanceIndex].instanceCustomIndex];
+        const Geometry geometry = world.geometries[model.geometryOffset + geometryIndex];
+        const Mesh mesh = world.meshes[geometry.meshIndex];
+        const Material material = world.materials[geometry.materialIndex];
+
+        const ModelLight modelLight = ModelLight::create(world, model, world.toWorld(instanceIndex), world.toLocal(instanceIndex));
+        const GeometryLight geometryLight = GeometryLight::create(world, geometry, world.toWorld(instanceIndex), world.toLocal(instanceIndex));
+        const TriangleLight triangleLight = TriangleLight::create(mesh.triangleLocalSpace(primitiveIndex), world.toWorld(instanceIndex), world.toLocal(instanceIndex), material);
+
+        return selectionPdf(instanceIndex) * modelLight.selectionPdf(geometryIndex) * geometryLight.selectionPdf(primitiveIndex) * triangleLight.areaPdf();
     }
 
     float integral() {
-        if (emissiveTriangleCount == 0) return 0;
+        if (count == 0) return 0;
         return power[0];
     }
 };

@@ -320,20 +320,20 @@ test "white sphere on white background is white" {
             }
         });
 
-        const geometries = [_]ModelManager.Geometry {
+        const geometries = [_]ModelManager.Geometry.Parameters {
             .{
                 .material = material_handle,
                 .mesh = mesh_handle,
             }
         };
 
-        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, &geometries);
+        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, world.materials, &geometries);
 
-        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.meshes, world.materials, world.models, Accel.Instance {
+        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .model = model,
-        }, &geometries);
+        });
     }
 
     var camera = Camera {};
@@ -422,21 +422,21 @@ test "white volume on white background is white" {
             }
         });
 
-        const geometries = [_]ModelManager.Geometry {
+        const geometries = [_]ModelManager.Geometry.Parameters {
             .{
                 .material = material_handle,
                 .mesh = mesh_handle,
             }
         };
 
-        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, &geometries);
+        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, world.materials, &geometries);
 
-        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.meshes, world.materials, world.models, Accel.Instance {
+        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .thin = false,
             .visible = true,
             .transform = Mat3x4.identity,
             .model = model,
-        }, &geometries);
+        });
     }
 
     var camera = Camera {};
@@ -529,20 +529,20 @@ test "inside illuminating sphere is white" {
             }
         });
 
-        const geometries = [_]ModelManager.Geometry {
+        const geometries = [_]ModelManager.Geometry.Parameters {
             .{
                 .material = material_handle,
                 .mesh = mesh_handle,
             }
         };
 
-        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, &geometries);
+        const model = try world.models.upload(&tc.vc, allocator, &tc.encoder, world.meshes, world.materials, &geometries);
 
-        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.meshes, world.materials, world.models, Accel.Instance {
+        _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .visible = true,
             .transform = Mat3x4.identity,
             .model = model,
-        }, &geometries);
+        });
     }
 
     var camera = Camera {};

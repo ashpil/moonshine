@@ -121,13 +121,10 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
         .instances = self.world.accel.instances_device.deviceSlice(),
         .world_to_instances = self.world.accel.world_to_instance_device.deviceSlice(),
         .meshes = self.world.meshes.device.deviceSlice(),
-        .geometries = self.world.models.geometries.deviceSlice(),
+        .geometries = self.world.models.geometries_device.deviceSlice(),
         .models = self.world.models.models_device.deviceSlice(),
         .materials = self.world.materials.materials.deviceSlice(),
-        .triangle_powers = self.world.accel.triangle_powers.deviceSlice(),
-        .triangle_meta = self.world.accel.triangle_powers_meta.deviceSlice(),
-        .geometry_to_triangle_power_offset = self.world.accel.geometry_to_triangle_power_offset.deviceSlice(),
-        .emissive_triangle_count = self.world.accel.emissive_triangle_count.deviceSlice(),
+        .instance_powers = self.world.accel.instance_powers.deviceSlice(),
         .background_rgb_image = .{ .view = self.background.data.items[background].rgb_image.view },
         .background_luminance_image = .{ .view = self.background.data.items[background].luminance_image.view },
         .output_image = .{ .view = self.camera.sensors.items[sensor].image.view },
@@ -137,6 +134,7 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
 pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardPushConstants {
     _ = background;
     return engine.hrtsystem.pipeline.StandardPushConstants {
+        .instance_count = self.world.accel.instance_count,
         .camera = self.camera.cameras.items[camera][1],
         .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(),
         .sample_count = self.camera.sensors.items[sensor].sample_count,

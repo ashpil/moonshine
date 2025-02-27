@@ -178,7 +178,7 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 // collect light from emissive meshes
                 {
-                    const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
+                    const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.instanceLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
                     const float weight = misWeight(1, path.pdf, meshSamplesPerBounce, lightPdf);
                     path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
                 }
@@ -192,7 +192,7 @@ struct VolumePathTracingIntegrator : Integrator {
 
                     for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                         float2 rand = float2(rng.getFloat(), rng.getFloat());
-                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, scene.world.thin(its.instanceIndex), path.volumeTracker, rand, meshSamplesPerBounce, 1);
+                        path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.instanceLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, scene.world.thin(its.instanceIndex), path.volumeTracker, rand, meshSamplesPerBounce, 1);
                     }
                 }
 
@@ -220,7 +220,7 @@ struct VolumePathTracingIntegrator : Integrator {
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.meshLights, path.volumeTracker.currentVolume().phase, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.instanceLights, path.volumeTracker.currentVolume().phase, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, meshSamplesPerBounce, 1);
                 }
 
                 const BSDFSample sample = path.volumeTracker.currentVolume().phase.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
@@ -288,7 +288,7 @@ struct PathTracingIntegrator : Integrator {
 
             // collect light from emissive meshes
             {
-                const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
+                const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, path.ray.origin, path.ray.direction, surface.triangleFrame.n) * scene.instanceLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
                 const float weight = misWeight(1, path.pdf, meshSamplesPerBounce, lightPdf);
                 path.radiance += path.throughput * material.getEmissive(λ, surface.texcoord) * weight;
             }
@@ -302,7 +302,7 @@ struct PathTracingIntegrator : Integrator {
 
                 for (uint directCount = 0; directCount < meshSamplesPerBounce; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    path.radiance += path.throughput * estimateDirect(scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, scene.world.thin(its.instanceIndex), scene.world.priority(its.instanceIndex), meshSamplesPerBounce, 1);
+                    path.radiance += path.throughput * estimateDirect(scene.tlas, scene.instanceLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, scene.world.thin(its.instanceIndex), scene.world.priority(its.instanceIndex), meshSamplesPerBounce, 1);
                 }
             }
 
@@ -379,7 +379,7 @@ struct DirectLightIntegrator : Integrator {
                 // accumulate direct light samples from emissive meshes
                 for (uint directCount = 0; directCount < meshSamples; directCount++) {
                     float2 rand = float2(rng.getFloat(), rng.getFloat());
-                    pathRadiance += estimateDirect(scene.tlas, scene.meshLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, scene.world.thin(its.instanceIndex), scene.world.priority(its.instanceIndex), meshSamples, brdfSamples);
+                    pathRadiance += estimateDirect(scene.tlas, scene.instanceLights, bsdf, outgoingDirWs, λ, surface.position, surface.triangleFrame.n, surface.spawnOffset, rand, scene.world.thin(its.instanceIndex), scene.world.priority(its.instanceIndex), meshSamples, brdfSamples);
                 }
             }
 
@@ -393,7 +393,7 @@ struct DirectLightIntegrator : Integrator {
                     if (its.hit()) {
                         // hit -- collect light from emissive meshes
                         const SurfacePoint surface = scene.world.surfacePoint(its.instanceIndex, its.geometryIndex, its.primitiveIndex, its.barycentrics);
-                        const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, ray.origin, ray.direction, surface.triangleFrame.n) * scene.meshLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
+                        const float lightPdf = areaMeasureToSolidAngleMeasure(surface.position, ray.origin, ray.direction, surface.triangleFrame.n) * scene.instanceLights.areaPdf(its.instanceIndex, its.geometryIndex, its.primitiveIndex);
                         const float weight = misWeight(brdfSamples, sample.eval.pdf, meshSamples, lightPdf);
                         pathRadiance += sample.eval.attenuation * scene.world.material(its.instanceIndex, its.geometryIndex).getEmissive(λ, surface.texcoord) * weight;
                     } else {

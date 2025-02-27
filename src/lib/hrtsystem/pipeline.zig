@@ -279,19 +279,17 @@ pub const StandardBindings = struct {
     instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
     world_to_instances: ?core.mem.BufferSlice(Mat3x4),
     meshes: ?core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
-    geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry),
+    geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry.Device),
     models: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Model.Device),
     materials: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
-    triangle_powers: core.mem.BufferSlice(f32),
-    triangle_meta: core.mem.BufferSlice(engine.hrtsystem.Accel.TriangleMetadata),
-    geometry_to_triangle_power_offset: core.mem.BufferSlice(u32),
-    emissive_triangle_count: core.mem.BufferSlice(u32),
+    instance_powers: core.mem.BufferSlice(f32),
     background_rgb_image: core.pipeline.CombinedImageSampler,
     background_luminance_image: core.pipeline.SampledImage,
     output_image: core.pipeline.StorageImage,
 };
 
 pub const StandardPushConstants = extern struct {
+    instance_count: u32,
     camera: Camera.Camera,
     aspect_ratio: f32,
     sample_count: u32,

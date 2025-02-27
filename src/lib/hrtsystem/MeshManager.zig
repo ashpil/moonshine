@@ -33,6 +33,10 @@ pub const Mesh = struct {
 
         index_buffer: core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }),
         index_count: u32,
+
+        pub fn triangleCount(self: @This()) u32 {
+            return if (self.index_count != 0) self.index_count else @divExact(self.vertex_count, 3);
+        }
     };
 
     pub const Device = extern struct {
@@ -41,6 +45,8 @@ pub const Mesh = struct {
         normal_address: vk.DeviceAddress,
 
         index_address: vk.DeviceAddress,
+
+        triangle_count: u64,
     };
 };
 
@@ -105,18 +111,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     };
     errdefer index_buffer.destroy(vc);
 
-    const device = Mesh.Device {
-        .position_address = position_buffer.getAddress(vc),
-        .texcoord_address = texcoord_buffer.getAddress(vc),
-        .normal_address = normal_buffer.getAddress(vc) ,
-
-        .index_address = index_buffer.getAddress(vc),
-    };
-
-    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }).create(vc, max_meshes, "meshes");
-    self.device.updateFrom(encoder, self.host.len, &.{ device });
-
-    try self.host.append(allocator, .{
+    const host = Mesh.Host {
         .position_buffer = position_buffer,
         .texcoord_buffer = texcoord_buffer,
         .normal_buffer = normal_buffer,
@@ -125,7 +120,22 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
         .index_buffer = index_buffer,
         .index_count = if (parameters.indices) |indices| @intCast(indices.len) else 0,
-    });
+    };
+
+    const device = Mesh.Device {
+        .position_address = position_buffer.getAddress(vc),
+        .texcoord_address = texcoord_buffer.getAddress(vc),
+        .normal_address = normal_buffer.getAddress(vc) ,
+
+        .index_address = index_buffer.getAddress(vc),
+
+        .triangle_count = host.triangleCount(),
+    };
+
+    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }).create(vc, max_meshes, "meshes");
+    self.device.updateFrom(encoder, self.host.len, &.{ device });
+
+    try self.host.append(allocator, host);
 
     return @intCast(self.host.len - 1);
 }

@@ -25,14 +25,8 @@ struct Instance { // same required by vulkan on host side
 struct Geometry {
     uint meshIndex;
     uint materialIndex;
-};
-
-struct Mesh {
-    uint64_t positionAddress;
-    uint64_t texcoordAddress; // may be zero, for no texcoords
-    uint64_t normalAddress; // may be zero, for no vertex normals
-
-    uint64_t indexAddress; // may be zero, for unindexed geometry
+    uint64_t trianglePowersAddress;
+    uint64_t trianglePowersSize;
 };
 
 struct SurfacePoint {
@@ -157,8 +151,59 @@ struct TriangleLocalSpace {
     }
 };
 
+struct Mesh {
+    uint64_t positionAddress;
+    uint64_t texcoordAddress; // may be zero, for no texcoords
+    uint64_t normalAddress; // may be zero, for no vertex normals
+
+    uint64_t indexAddress; // may be zero, for unindexed geometry
+
+    uint64_t triangleCount;
+
+    TriangleLocalSpace triangleLocalSpace(const uint primitiveIndex) {
+        TriangleLocalSpace t;
+
+        const uint3 ind = indexAddress != 0 ? vk::RawBufferLoad<uint3>(indexAddress + sizeof(uint3) * primitiveIndex) : float3(primitiveIndex * 3 + 0, primitiveIndex * 3 + 1, primitiveIndex * 3 + 2);
+
+        // positions always available
+        t.positions[0] = loadPosition(positionAddress, ind.x);
+        t.positions[1] = loadPosition(positionAddress, ind.y);
+        t.positions[2] = loadPosition(positionAddress, ind.z);
+
+        // texcoords optional
+        if (texcoordAddress != 0) {
+            t.texcoords[0] = loadTexcoord(texcoordAddress, ind.x);
+            t.texcoords[1] = loadTexcoord(texcoordAddress, ind.y);
+            t.texcoords[2] = loadTexcoord(texcoordAddress, ind.z);
+        } else {
+            // sane defaults for constant textures
+            t.texcoords[0] = float2(0, 0);
+            t.texcoords[1] = float2(1, 0);
+            t.texcoords[2] = float2(1, 1);
+        }
+
+        // normals optional
+        if (normalAddress != 0) {
+            t.normals[0] = loadNormal(normalAddress, ind.x);
+            t.normals[1] = loadNormal(normalAddress, ind.y);
+            t.normals[2] = loadNormal(normalAddress, ind.z);
+        } else {
+            // use triangle normal
+            const float3 normal = normalize(cross(t.positions[1] - t.positions[0], t.positions[2] - t.positions[0]));
+            t.normals[0] = normal;
+            t.normals[1] = normal;
+            t.normals[2] = normal;
+        }
+
+        return t;
+    }
+};
+
 struct Model {
     uint geometryOffset;
+    uint geometryCount;
+    uint64_t geometryPowersAddress;
+    uint64_t geometryPowersSize;
 };
 
 struct World {
@@ -196,43 +241,7 @@ struct World {
     }
 
     TriangleLocalSpace triangleLocalSpace(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
-        TriangleLocalSpace t;
-
-        Mesh mesh = this.mesh(instanceIndex, geometryIndex);
-
-        const uint3 ind = mesh.indexAddress != 0 ? vk::RawBufferLoad<uint3>(mesh.indexAddress + sizeof(uint3) * primitiveIndex) : float3(primitiveIndex * 3 + 0, primitiveIndex * 3 + 1, primitiveIndex * 3 + 2);
-
-        // positions always available
-        t.positions[0] = loadPosition(mesh.positionAddress, ind.x);
-        t.positions[1] = loadPosition(mesh.positionAddress, ind.y);
-        t.positions[2] = loadPosition(mesh.positionAddress, ind.z);
-
-        // texcoords optional
-        if (mesh.texcoordAddress != 0) {
-            t.texcoords[0] = loadTexcoord(mesh.texcoordAddress, ind.x);
-            t.texcoords[1] = loadTexcoord(mesh.texcoordAddress, ind.y);
-            t.texcoords[2] = loadTexcoord(mesh.texcoordAddress, ind.z);
-        } else {
-            // sane defaults for constant textures
-            t.texcoords[0] = float2(0, 0);
-            t.texcoords[1] = float2(1, 0);
-            t.texcoords[2] = float2(1, 1);
-        }
-
-        // normals optional
-        if (mesh.normalAddress != 0) {
-            t.normals[0] = loadNormal(mesh.normalAddress, ind.x);
-            t.normals[1] = loadNormal(mesh.normalAddress, ind.y);
-            t.normals[2] = loadNormal(mesh.normalAddress, ind.z);
-        } else {
-            // use triangle normal
-            const float3 normal = normalize(cross(t.positions[1] - t.positions[0], t.positions[2] - t.positions[0]));
-            t.normals[0] = normal;
-            t.normals[1] = normal;
-            t.normals[2] = normal;
-        }
-
-        return t;
+        return this.mesh(instanceIndex, geometryIndex).triangleLocalSpace(primitiveIndex);
     }
 
     float3x4 toWorld(uint instanceIndex) {
