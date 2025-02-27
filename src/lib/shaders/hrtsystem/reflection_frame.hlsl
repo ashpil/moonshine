@@ -22,10 +22,10 @@ struct Frame {
         return frame;
     }
 
-    Frame inSpace(float4x3 m) {
-        float3 n2 = normalize(mul(m, n).xyz);
-        float3 s2 = normalize(mul(m, s).xyz);
-        float3 t2 = normalize(mul(m, t).xyz);
+    Frame inSpace(float3x3 m) {
+        float3 n2 = normalize(mul(m, n));
+        float3 s2 = normalize(mul(m, s));
+        float3 t2 = normalize(mul(m, t));
 
         return Frame::create(n2, s2, t2);
     }

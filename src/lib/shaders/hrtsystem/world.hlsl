@@ -106,9 +106,10 @@ struct TriangleLocalSpace {
 
         const float3 worldPosition = mul(toWorld, float4(surface.position, 1.0));
 
+        const float3x3 inverseTranspose = transpose((float3x3)toLocal);
         // https://developer.nvidia.com/blog/solving-self-intersection-artifacts-in-directx-raytracing/
         {
-            float3 wldNormal = mul(transpose((float3x3)toLocal), surface.triangleFrame.n);
+            float3 wldNormal = mul(inverseTranspose, surface.triangleFrame.n);
 
             const float wldScale = rsqrt(dot(wldNormal, wldNormal));
             wldNormal = mul(wldScale, wldNormal);
@@ -137,8 +138,8 @@ struct TriangleLocalSpace {
         {
             surface.position = worldPosition;
 
-            surface.triangleFrame = surface.triangleFrame.inSpace(transpose(toLocal));
-            surface.frame = surface.frame.inSpace(transpose(toLocal));
+            surface.triangleFrame = surface.triangleFrame.inSpace(inverseTranspose);
+            surface.frame = surface.frame.inSpace(inverseTranspose);
         }
 
         return surface;
