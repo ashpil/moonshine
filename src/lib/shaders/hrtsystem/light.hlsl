@@ -105,26 +105,26 @@ float areaMeasureToSolidAngleMeasure(float3 pos1, float3 pos2, float3 dir1, floa
 struct TriangleLight: Light {
     TriangleLocalSpace tri;
     float3x4 toWorld;
-    float3x4 toMesh;
+    float3x4 toLocal;
     Material material;
 
-    static TriangleLight create(TriangleLocalSpace tri, float3x4 toWorld, float3x4 toMesh, Material material) {
+    static TriangleLight create(TriangleLocalSpace tri, float3x4 toWorld, float3x4 toLocal, Material material) {
         TriangleLight light;
         light.tri = tri;
         light.toWorld = toWorld;
-        light.toMesh = toMesh;
+        light.toLocal = toLocal;
         light.material = material;
         return light;
     }
 
     LightSample sample(float λ, float3 positionWs, float2 rand) {
         const float2 barycentrics = squareToTriangle(rand);
-        const SurfacePoint surface = tri.surfacePoint(barycentrics, toWorld, toMesh);
+        const SurfacePoint surface = tri.surfacePoint(barycentrics, toWorld, toLocal);
 
         LightSample lightSample;
         lightSample.dirWs = normalize(surface.position - positionWs);
         lightSample.distance = distance(surface.position, positionWs) - surface.spawnOffset / abs(dot(lightSample.dirWs, surface.triangleFrame.n));
-        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) / tri.area(toMesh, toWorld);
+        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) / tri.area(toLocal, toWorld);
         lightSample.eval.radiance = material.getEmissive(λ, surface.texcoord) / lightSample.eval.pdf;
 
         return lightSample;
@@ -173,9 +173,9 @@ struct MeshLights : Light {
 
         const TriangleLocalSpace tri = world.triangleLocalSpace(meta.instanceIndex, meta.geometryIndex, primitiveIndex);
         const float3x4 toWorld = world.toWorld(meta.instanceIndex);
-        const float3x4 toMesh = world.toMesh(meta.instanceIndex);
+        const float3x4 toLocal = world.toLocal(meta.instanceIndex);
         const Material material = world.material(meta.instanceIndex, meta.geometryIndex);
-        const TriangleLight inner = TriangleLight::create(tri, toWorld, toMesh, material);
+        const TriangleLight inner = TriangleLight::create(tri, toWorld, toLocal, material);
 
         lightSample = inner.sample(λ, positionWs, rand);
         lightSample.eval.pdf *= selectionPdf(meta.instanceIndex, meta.geometryIndex, primitiveIndex);

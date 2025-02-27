@@ -85,7 +85,7 @@ struct TriangleLocalSpace {
 
     // TODO: currently this does both barycentric evaluation and local to world
     // conversion. there's probably a way to decouple this into two functions
-    SurfacePoint surfacePoint(const float2 attribs, const float3x4 toWorld, const float3x4 toMesh) {
+    SurfacePoint surfacePoint(const float2 attribs, const float3x4 toWorld, const float3x4 toLocal) {
         SurfacePoint surface;
 
         const float3 barycentrics = float3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
@@ -108,7 +108,7 @@ struct TriangleLocalSpace {
 
         // https://developer.nvidia.com/blog/solving-self-intersection-artifacts-in-directx-raytracing/
         {
-            float3 wldNormal = mul(transpose((float3x3)toMesh), surface.triangleFrame.n);
+            float3 wldNormal = mul(transpose((float3x3)toLocal), surface.triangleFrame.n);
 
             const float wldScale = rsqrt(dot(wldNormal, wldNormal));
             wldNormal = mul(wldScale, wldNormal);
@@ -125,7 +125,7 @@ struct TriangleLocalSpace {
 
             const float3 wldErr = c1 * mul(abs((float3x3)toWorld), abs(surface.position)) + mul(c2, abs(transpose(toWorld)[3]));
 
-            objErr += c2 * mul(abs(toMesh), float4(abs(worldPosition), 1));
+            objErr += c2 * mul(abs(toLocal), float4(abs(worldPosition), 1));
 
             const float wldOffset = dot(wldErr, abs(wldNormal));
             const float objOffset = dot(objErr, abs(surface.triangleFrame.n));
@@ -137,8 +137,8 @@ struct TriangleLocalSpace {
         {
             surface.position = worldPosition;
 
-            surface.triangleFrame = surface.triangleFrame.inSpace(transpose(toMesh));
-            surface.frame = surface.frame.inSpace(transpose(toMesh));
+            surface.triangleFrame = surface.triangleFrame.inSpace(transpose(toLocal));
+            surface.frame = surface.frame.inSpace(transpose(toLocal));
         }
 
         return surface;
@@ -148,8 +148,8 @@ struct TriangleLocalSpace {
         return cross(positions[1] - positions[0], positions[2] - positions[0]);
     }
 
-    float area(const float3x4 toMesh, const float3x4 toWorld) {
-        const float3x3 inverseTranspose = transpose((float3x3)toMesh);
+    float area(const float3x4 toLocal, const float3x4 toWorld) {
+        const float3x3 inverseTranspose = transpose((float3x3)toLocal);
         const float3x3 cofactor = inverseTranspose * determinant((float3x3)toWorld);
         const float3 globalBivector = mul(cofactor, bivector());
         return length(globalBivector) / 2.0;
@@ -191,7 +191,7 @@ struct World {
     }
 
     float triangleArea(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
-        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).area(toMesh(instanceIndex), toWorld(instanceIndex));
+        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).area(toLocal(instanceIndex), toWorld(instanceIndex));
     }
 
     TriangleLocalSpace triangleLocalSpace(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
@@ -238,11 +238,11 @@ struct World {
         return instances[NonUniformResourceIndex(instanceIndex)].transform;
     }
 
-    float3x4 toMesh(uint instanceIndex) {
+    float3x4 toLocal(uint instanceIndex) {
         return worldToInstance[NonUniformResourceIndex(instanceIndex)];
     }
 
     SurfacePoint surfacePoint(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 attribs) {
-        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).surfacePoint(attribs, toWorld(instanceIndex), toMesh(instanceIndex));
+        return triangleLocalSpace(instanceIndex, geometryIndex, primitiveIndex).surfacePoint(attribs, toWorld(instanceIndex), toLocal(instanceIndex));
     }
 };
