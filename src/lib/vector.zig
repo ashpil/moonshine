@@ -421,15 +421,23 @@ pub fn Mat3(comptime T: type) type {
             );
         }
 
+        pub fn cofactor(self: Self) Self {
+            const v1 = self.y.cross(self.z);
+            const v2 = self.z.cross(self.x);
+            const v3 = self.x.cross(self.y);
+            return Self.fromRows(v1, v2, v3);
+        }
+
+        pub fn adjugate(self: Self) Self {
+            return self.cofactor().transpose();
+        }
+
         pub usingnamespace if (@typeInfo(T) == .float) struct {
             // https://en.wikipedia.org/wiki/Invertible_matrix#Inversion_of_3_%C3%97_3_matrices
             pub fn inverse(self: Self) Self {
                 const det = self.determinant();
                 std.debug.assert(det != 0);
-                const v1 = self.y.cross(self.z);
-                const v2 = self.z.cross(self.x);
-                const v3 = self.x.cross(self.y);
-                return Self.fromRows(v1, v2, v3).transpose().scale(1 / det);
+                return self.adjugate().scale(1 / det);
             }
 
             pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
