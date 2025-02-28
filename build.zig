@@ -341,7 +341,6 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
         compileShader(b, .ray_tracing, "hrtsystem/input.hlsl"),
         compileShader(b, .ray_tracing, "hrtsystem/main.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/equirectangular_to_equal_area.hlsl"),
-        compileShader(b, .compute, "hrtsystem/background/luminance.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/fold.hlsl"),
         compileShader(b, .compute, "hrtsystem/local_light/triangle_power.hlsl"),
         compileShader(b, .compute, "hrtsystem/local_light/geometry_power.hlsl"),

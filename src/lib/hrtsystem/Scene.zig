@@ -104,7 +104,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     {
         const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
         defer allocator.free(skybox_image.asSlice());
-        try background.addBackground(vc, allocator, encoder, skybox_image, "exr");
+        _ = try background.addBackground(vc, allocator, encoder, skybox_image, "exr");
     }
 
     return Self {
@@ -125,8 +125,7 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
         .models = self.world.models.models_device.deviceSlice(),
         .materials = self.world.materials.materials.deviceSlice(),
         .instance_powers = self.world.accel.instance_powers.deviceSlice(),
-        .background_rgb_image = .{ .view = self.background.data.items[background].rgb_image.view },
-        .background_luminance_image = .{ .view = self.background.data.items[background].luminance_image.view },
+        .background_image = .{ .view = self.background.images.items[background].view },
         .output_image = .{ .view = self.camera.sensors.items[sensor].image.view },
     };
 }

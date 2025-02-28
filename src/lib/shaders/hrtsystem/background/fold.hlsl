@@ -1,7 +1,7 @@
 #include "../../utils/helpers.hlsl"
 
-[[vk::binding(0, 0)]] Texture2D<float> srcMip;
-[[vk::binding(1, 0)]] RWTexture2D<float> dstMip;
+[[vk::binding(0, 0)]] Texture2D<float4> srcMip;
+[[vk::binding(1, 0)]] RWTexture2D<float4> dstMip;
 
 [numthreads(8, 8, 1)]
 void main(uint3 dispatchXYZ: SV_DispatchThreadID) {

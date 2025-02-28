@@ -135,7 +135,7 @@ pub const HdMoonshine = struct {
 
         self.background = Background.create(&self.vc, self.allocator.allocator()) catch return null;
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
-        self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
+        _ = self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
 
         self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), &self.encoder, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }, pipeline_settings, .{ self.background.sampler }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);

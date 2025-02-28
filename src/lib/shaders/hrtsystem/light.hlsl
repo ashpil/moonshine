@@ -30,20 +30,18 @@ interface Light {
 };
 
 struct EnvMap : Light {
-    Texture2D<float3> rgbTexture;
     SamplerState sampler;
-    Texture2D<float> luminanceTexture;
+    Texture2D<float3> texture;
 
-    static EnvMap create(Texture2D<float3> rgbTexture, SamplerState sampler, Texture2D<float> luminanceTexture) {
+    static EnvMap create(Texture2D<float3> texture, SamplerState sampler) {
         EnvMap map;
-        map.rgbTexture = rgbTexture;
         map.sampler = sampler;
-        map.luminanceTexture = luminanceTexture;
+        map.texture = texture;
         return map;
     }
 
     LightSample sample(float λ, float3 positionWs, float2 rand) {
-        const uint size = textureDimensions(luminanceTexture).x;
+        const uint size = textureDimensions(texture).x;
         const uint mipCount = log2(size) + 1;
 
         uint2 idx = uint2(0, 0);
@@ -52,40 +50,40 @@ struct EnvMap : Light {
             for (uint i = 0; i < 2; i++) {
                 for (uint j = 0; j < 2; j++) {
                     const uint2 coords = 2 * idx + uint2(i, j);
-                    r.update(coords, luminanceTexture.Load(uint3(coords, level)), rand.x);
+                    r.update(coords, Spectrum::sampleEmission(λ, texture.Load(uint3(coords, level))), rand.x);
                 }
             }
             idx = r.selected;
         }
-        const float integral = luminanceTexture.Load(uint3(0, 0, mipCount - 1));
+        const float integral = Spectrum::sampleEmission(λ, texture.Load(uint3(0, 0, mipCount - 1)));
 
-        const float discretePdf = luminanceTexture[idx] * float(size * size) / integral;
+        const float discretePdf = Spectrum::sampleEmission(λ, texture[idx]) * float(size * size) / integral;
         const float2 uv = (float2(idx) + rand) / float2(size, size);
 
         LightSample lightSample;
         lightSample.dirWs = squareToEqualAreaSphere(uv);
         lightSample.distance = 1.#INF;
         lightSample.eval.pdf = discretePdf / (4.0 * PI);
-        lightSample.eval.radiance = Spectrum::sampleEmission(λ, rgbTexture[idx]) / lightSample.eval.pdf;
+        lightSample.eval.radiance = Spectrum::sampleEmission(λ, texture[idx]) / lightSample.eval.pdf;
 
         return lightSample;
     }
 
     // pdf is with respect to solid angle (no trace)
     LightEvaluation evaluate(float λ, float3 dirWs) {
-        const uint size = textureDimensions(luminanceTexture).x;
+        const uint size = textureDimensions(texture).x;
         const uint mipCount = log2(size) + 1;
-        const float integral = luminanceTexture.Load(uint3(0, 0, mipCount - 1));
+        const float integral = Spectrum::sampleEmission(λ, texture.Load(uint3(0, 0, mipCount - 1)));
 
         if (integral == 0) return LightEvaluation::empty();
 
         const float2 uv = squareToEqualAreaSphereInverse(dirWs);
         const uint2 idx = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
-        const float discretePdf = luminanceTexture[idx] * float(size * size) / integral;
+        const float discretePdf = Spectrum::sampleEmission(λ, texture[idx]) * float(size * size) / integral;
 
         LightEvaluation eval;
         eval.pdf = discretePdf / (4.0 * PI);
-        eval.radiance = Spectrum::sampleEmission(λ, rgbTexture[idx]);
+        eval.radiance = Spectrum::sampleEmission(λ, texture[idx]);
         return eval;
     }
 };

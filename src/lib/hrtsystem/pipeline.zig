@@ -283,8 +283,7 @@ pub const StandardBindings = struct {
     models: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Model.Device),
     materials: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
     instance_powers: core.mem.BufferSlice(f32),
-    background_rgb_image: core.pipeline.CombinedImageSampler,
-    background_luminance_image: core.pipeline.SampledImage,
+    background_image: core.pipeline.CombinedImageSampler,
     output_image: core.pipeline.StorageImage,
 };
 
