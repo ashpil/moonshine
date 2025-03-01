@@ -4,7 +4,7 @@
 [[vk::binding(1, 0)]] StructuredBuffer<Material> dMaterials;
 
 // dst
-[[vk::binding(2, 0)]] RWStructuredBuffer<float3> dstPower;
+[[vk::binding(2, 0)]] RWStructuredBuffer<float3x3> dstPower;
 
 // mesh info
 struct PushConsts {
@@ -30,20 +30,24 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const TriangleLocalSpace tri = dMeshes[pushConsts.meshIndex].triangleLocalSpace(srcPrimitive);
 	const Material material = dMaterials[pushConsts.materialIndex];
 
-	float totalEmissive = 0;
+	float3 totalEmissive = 0;
 
 	const uint samplesPerDimension = 8;
 	for (uint i = 0; i < samplesPerDimension; i++) {
 		for (uint j = 0; j < samplesPerDimension; j++) {
 			const float2 barycentrics = squareToTriangle(float2(i, j) / float(samplesPerDimension));
 			const float2 texcoord = interpolate(float3(1.0 - barycentrics.x - barycentrics.y, barycentrics.x, barycentrics.y), tri.texcoords);
-			totalEmissive += luminance(dTextures[NonUniformResourceIndex(material.emissive)].SampleLevel(dTextureSampler, texcoord, 0).rgb);
+			totalEmissive += dTextures[NonUniformResourceIndex(material.emissive)].SampleLevel(dTextureSampler, texcoord, 0).rgb;
 		}
 	}
 
-	const float averageEmissive = totalEmissive / float(samplesPerDimension * samplesPerDimension);
+	const float3 averageEmissive = totalEmissive / float(samplesPerDimension * samplesPerDimension);
 	const float3 projectedArea = tri.bivector() / 2.0;
-	const float3 power = PI * abs(projectedArea) * averageEmissive;
+	const float3x3 power = PI * float3x3(
+		abs(projectedArea.x) * averageEmissive,
+		abs(projectedArea.y) * averageEmissive,
+		abs(projectedArea.z) * averageEmissive
+	);
 
 	dstPower[pushConsts.dstOffset + srcPrimitive] = power;
 }

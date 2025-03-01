@@ -14,6 +14,7 @@ const ModelManager = @import("./ModelManager.zig");
 
 const vector = @import("../vector.zig");
 const Mat3x4 = vector.Mat3x4(f32);
+const F32x3 = vector.Vec3(f32);
 
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
@@ -36,7 +37,7 @@ const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
         world_to_instances: core.mem.BufferSlice(Mat3x4),
         models: core.mem.BufferSlice(ModelManager.Model.Device),
-        dst_power: core.mem.BufferSlice(f32),
+        dst_power: core.mem.BufferSlice(F32x3),
     },
 });
 
@@ -47,13 +48,13 @@ const InstancePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path 
         max_src_index: u32,
     },
     .PushSetBindings = struct {
-        levels: core.mem.BufferSlice(f32),
+        levels: core.mem.BufferSlice(F32x3),
     },
 });
 
 instance_power_pipeline: InstancePowerPipeline,
 instance_power_fold_pipeline: InstancePowerFoldPipeline,
-instance_powers: core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+instance_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 instance_count: u32 = 0,
 instances_device: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
@@ -89,7 +90,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     std.debug.assert(max_instances % 2 == 0);
     const instance_powers_level_count = comptime std.math.log2(max_instances) + 1;
     const instance_powers_element_count = std.math.pow(u32, 2, instance_powers_level_count) - 1;
-    const instance_powers = try core.mem.DeviceBuffer(f32, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, instance_powers_element_count, "instance powers");
+    const instance_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, instance_powers_element_count, "instance powers");
     errdefer instance_powers.destroy(vc);
 
     const instances_device = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }).create(vc, max_instances, "instances");
@@ -103,7 +104,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     const world_to_instance_host = try core.mem.UploadBuffer(Mat3x4).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_host.destroy(vc);
 
-    encoder.fillBuffer(instance_powers.handle, instance_powers_element_count, @as(f32, 0.0));
+    encoder.fillBuffer(instance_powers.handle, instance_powers_element_count * F32x3.element_count, @as(f32, 0.0));
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
         Encoder.BufferBarrier {

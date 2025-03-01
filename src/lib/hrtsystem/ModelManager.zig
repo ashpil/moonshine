@@ -10,13 +10,13 @@ const MeshManager = @import("./MeshManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
 
 const vector = @import("../vector.zig");
-const F32x3 = vector.Vec3(f32);
+const Mat3 = vector.Mat3(f32);
 
 pub const Model = struct {
     const Host = struct {
         blas_handle: vk.AccelerationStructureKHR,
         blas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }),
-        geometry_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
+        geometry_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
     };
 
     pub const Device = extern struct {
@@ -36,7 +36,7 @@ pub const Geometry = struct {
     pub const Host = struct {
         mesh: MeshManager.Handle,
         material: MaterialManager.Handle,
-        triangle_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
+        triangle_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
     };
 
     pub const Device = extern struct {
@@ -57,7 +57,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     .PushSetBindings = struct {
         meshes: core.mem.BufferSlice(MeshManager.Mesh.Device),
         materials: core.mem.BufferSlice(MaterialManager.Material.Device),
-        dst_power: core.mem.BufferSlice(F32x3),
+        dst_power: core.mem.BufferSlice(Mat3),
     },
     .additional_descriptor_layout_count = 1,
 });
@@ -70,7 +70,7 @@ const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     },
     .PushSetBindings = struct {
         geometries: core.mem.BufferSlice(Geometry.Device),
-        dst_power: core.mem.BufferSlice(F32x3),
+        dst_power: core.mem.BufferSlice(Mat3),
     },
 });
 
@@ -81,7 +81,7 @@ const PowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsy
         max_src_index: u32,
     },
     .PushSetBindings = struct {
-        levels: core.mem.BufferSlice(F32x3),
+        levels: core.mem.BufferSlice(Mat3),
     },
 });
 
@@ -210,7 +210,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .material = geometry.material,
             .mesh = geometry.mesh,
             // TODO: should be able to avoid allocating this for meshes that are nowhere emissive
-            .triangle_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, triangle_powers_size, "triangle powers"),
+            .triangle_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, triangle_powers_size, "triangle powers"),
         };
         errdefer host.triangle_powers.destroy(vc);
         self.geometries_host.appendAssumeCapacity(host);
@@ -348,7 +348,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         .blas_handle = build_geometry_info.dst_acceleration_structure,
         .blas_buffer = blas_buffer,
         // TODO: should be able to avoid allocating this for models that are nowhere emissive
-        .geometry_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, geometry_powers_size, "geometry powers"),
+        .geometry_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, geometry_powers_size, "geometry powers"),
     };
 
     {

@@ -17,7 +17,7 @@
 [[vk::binding(6, 0)]] StructuredBuffer<Material> dMaterials;
 
 // EMISSIVE TRIANGLES
-[[vk::binding(7, 0)]] StructuredBuffer<float> dInstancePower;
+[[vk::binding(7, 0)]] StructuredBuffer<float3> dInstancePower;
 
 // BACKGROUND
 [[vk::combinedImageSampler]] [[vk::binding(8, 0)]] Texture2D<float3> dBackgroundTexture;

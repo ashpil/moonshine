@@ -1,4 +1,4 @@
-[[vk::binding(0, 0)]] RWStructuredBuffer<float> levels;
+[[vk::binding(0, 0)]] RWStructuredBuffer<float3> levels;
 
 struct PushConsts {
     uint srcLevelOffset;

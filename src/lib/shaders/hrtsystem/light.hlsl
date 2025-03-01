@@ -148,7 +148,7 @@ struct GeometryLight : Light {
         LightSample lightSample;
         lightSample.eval = LightEvaluation::empty();
 
-        if (integral() == 0.0) return lightSample;
+        if (integral(λ) == 0.0) return lightSample;
 
         const Mesh mesh = world.meshes[geometry.meshIndex];
         const Material material = world.materials[geometry.materialIndex];
@@ -162,8 +162,13 @@ struct GeometryLight : Light {
             Reservoir<uint> r = Reservoir<uint>::empty();
             for (uint i = 0; i < 2; i++) {
                 const uint coord = 2 * idx + i;
-                const float value = normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress + sizeof(float3) * ((1u << level) - 1 + coord))));
-                r.update(coord, value, rand.x);
+                const float3x3 power = vk::RawBufferLoad<float3x3>(geometry.trianglePowersAddress + sizeof(float3x3) * ((1u << level) - 1 + coord));
+                const float weight = Spectrum::sampleReflectance(λ, float3(
+                    normL1(mul(cofactor, power[0])),
+                    normL1(mul(cofactor, power[1])),
+                    normL1(mul(cofactor, power[2]))
+                ));
+                r.update(coord, weight, rand.x);
             }
             idx = r.selected;
         }
@@ -173,23 +178,33 @@ struct GeometryLight : Light {
         const TriangleLight inner = TriangleLight::create(tri, toWorld, toLocal, material);
 
         lightSample = inner.sample(λ, positionWs, rand);
-        lightSample.eval.pdf *= selectionPdf(triangleIndex);
-        lightSample.eval.radiance /= selectionPdf(triangleIndex);
+        lightSample.eval.pdf *= selectionPdf(λ, triangleIndex);
+        lightSample.eval.radiance /= selectionPdf(λ, triangleIndex);
         return lightSample;
     }
 
-    float selectionPdf(uint triangleIndex) {
-        if (integral() == 0.0) return 0.0; // no lights
+    float selectionPdf(float λ, uint triangleIndex) {
+        if (integral(λ) == 0.0) return 0.0; // no lights
         const uint64_t triangleCount = world.meshes[geometry.meshIndex].triangleCount;
         const uint levelOffset = uint(geometry.trianglePowersSize - (triangleCount > 1 ? (triangleCount + (triangleCount % 2)) : 1));
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
-        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress + sizeof(float3) * (levelOffset + triangleIndex)))) / integral();
+        const float3x3 power = vk::RawBufferLoad<float3x3>(geometry.trianglePowersAddress + sizeof(float3x3) * (levelOffset + triangleIndex));
+        return Spectrum::sampleReflectance(λ, float3(
+            normL1(mul(cofactor, power[0])),
+            normL1(mul(cofactor, power[1])),
+            normL1(mul(cofactor, power[2]))
+        )) / integral(λ);
     }
 
-    float integral() {
+    float integral(float λ) {
         if (world.meshes[geometry.meshIndex].triangleCount == 0) return 0;
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
-        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(geometry.trianglePowersAddress)));
+        const float3x3 power = vk::RawBufferLoad<float3x3>(geometry.trianglePowersAddress);
+        return Spectrum::sampleReflectance(λ, float3(
+            normL1(mul(cofactor, power[0])),
+            normL1(mul(cofactor, power[1])),
+            normL1(mul(cofactor, power[2]))
+        ));
     }
 };
 
@@ -213,7 +228,7 @@ struct ModelLight : Light {
         LightSample lightSample;
         lightSample.eval = LightEvaluation::empty();
 
-        if (integral() == 0.0) return lightSample;
+        if (integral(λ) == 0.0) return lightSample;
 
         const uint levelCount = log2IntCeil(uint(model.geometryCount)) + 1;
 
@@ -224,8 +239,13 @@ struct ModelLight : Light {
             Reservoir<uint> r = Reservoir<uint>::empty();
             for (uint i = 0; i < 2; i++) {
                 const uint coord = 2 * idx + i;
-                const float value = normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress + sizeof(float3) * ((1u << level) - 1 + coord))));
-                r.update(coord, value, rand.x);
+                const float3x3 power = vk::RawBufferLoad<float3x3>(model.geometryPowersAddress + sizeof(float3x3) * ((1u << level) - 1 + coord));
+                const float weight = Spectrum::sampleReflectance(λ, float3(
+                    normL1(mul(cofactor, power[0])),
+                    normL1(mul(cofactor, power[1])),
+                    normL1(mul(cofactor, power[2]))
+                ));
+                r.update(coord, weight, rand.x);
             }
             idx = r.selected;
         }
@@ -234,32 +254,42 @@ struct ModelLight : Light {
         const GeometryLight inner = GeometryLight::create(world, world.geometries[model.geometryOffset + geometryIndex], toWorld, toLocal);
 
         lightSample = inner.sample(λ, positionWs, rand);
-        lightSample.eval.pdf *= selectionPdf(geometryIndex);
-        lightSample.eval.radiance /= selectionPdf(geometryIndex);
+        lightSample.eval.pdf *= selectionPdf(λ, geometryIndex);
+        lightSample.eval.radiance /= selectionPdf(λ, geometryIndex);
         return lightSample;
     }
 
-    float selectionPdf(uint geometryIndex) {
-        if (integral() == 0.0) return 0.0; // no lights
+    float selectionPdf(float λ, uint geometryIndex) {
+        if (integral(λ) == 0.0) return 0.0; // no lights
         const uint levelOffset = uint(model.geometryPowersSize - (model.geometryCount > 1 ? (model.geometryCount + (model.geometryCount % 2)) : 1));
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
-        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress + sizeof(float3) * (levelOffset + geometryIndex)))) / integral();
+        const float3x3 power = vk::RawBufferLoad<float3x3>(model.geometryPowersAddress + sizeof(float3x3) * (levelOffset + geometryIndex));
+        return Spectrum::sampleReflectance(λ, float3(
+            normL1(mul(cofactor, power[0])),
+            normL1(mul(cofactor, power[1])),
+            normL1(mul(cofactor, power[2]))
+        )) / integral(λ);
     }
 
-    float integral() {
+    float integral(float λ) {
         if (model.geometryCount == 0) return 0;
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
-        return normL1(mul(cofactor, vk::RawBufferLoad<float3>(model.geometryPowersAddress)));
+        const float3x3 power = vk::RawBufferLoad<float3x3>(model.geometryPowersAddress);
+        return Spectrum::sampleReflectance(λ, float3(
+            normL1(mul(cofactor, power[0])),
+            normL1(mul(cofactor, power[1])),
+            normL1(mul(cofactor, power[2]))
+        ));
     }
 };
 
 // all instance lights in scene
 struct InstanceLights : Light {
-    StructuredBuffer<float> power;
+    StructuredBuffer<float3> power;
     uint count;
     World world;
 
-    static InstanceLights create(StructuredBuffer<float> power, uint count, World world) {
+    static InstanceLights create(StructuredBuffer<float3> power, uint count, World world) {
         InstanceLights lights;
         lights.power = power;
         lights.count = count;
@@ -271,7 +301,7 @@ struct InstanceLights : Light {
         LightSample lightSample;
         lightSample.eval = LightEvaluation::empty();
 
-        if (integral() == 0.0) return lightSample;
+        if (integral(λ) == 0.0) return lightSample;
 
         const uint levelCount = log2IntCeil(count) + 1;
         const uint bufferLevelCount = log2IntCeil((bufferDimensions(power) + 1) / 2) + 1;
@@ -281,7 +311,7 @@ struct InstanceLights : Light {
             Reservoir<uint> r = Reservoir<uint>::empty();
             for (uint i = 0; i < 2; i++) {
                 const uint coord = 2 * idx + i;
-                r.update(coord, power[(1u << level) - 1 + coord], rand.x);
+                r.update(coord, Spectrum::sampleReflectance(λ, power[(1u << level) - 1 + coord]), rand.x);
             }
             idx = r.selected;
         }
@@ -290,18 +320,18 @@ struct InstanceLights : Light {
         const ModelLight inner = ModelLight::create(world, model, world.toWorld(instanceIndex), world.toLocal(instanceIndex));
 
         lightSample = inner.sample(λ, positionWs, rand);
-        lightSample.eval.pdf *= selectionPdf(instanceIndex);
-        lightSample.eval.radiance /= selectionPdf(instanceIndex);
+        lightSample.eval.pdf *= selectionPdf(λ, instanceIndex);
+        lightSample.eval.radiance /= selectionPdf(λ, instanceIndex);
         return lightSample;
     }
 
-    float selectionPdf(uint instanceIndex) {
-        if (integral() == 0.0) return 0.0; // no lights
+    float selectionPdf(float λ, uint instanceIndex) {
+        if (integral(λ) == 0.0) return 0.0; // no lights
         const uint levelOffset = ((bufferDimensions(power) + 1) / 2) - 1;
-        return power[levelOffset + instanceIndex] / integral();
+        return Spectrum::sampleReflectance(λ, power[levelOffset + instanceIndex]) / integral(λ);
     }
 
-    float areaPdf(uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
+    float areaPdf(float λ, uint instanceIndex, uint geometryIndex, uint primitiveIndex) {
         const Model model = world.models[world.instances[instanceIndex].instanceCustomIndex];
         const Geometry geometry = world.geometries[model.geometryOffset + geometryIndex];
         const Mesh mesh = world.meshes[geometry.meshIndex];
@@ -311,11 +341,11 @@ struct InstanceLights : Light {
         const GeometryLight geometryLight = GeometryLight::create(world, geometry, world.toWorld(instanceIndex), world.toLocal(instanceIndex));
         const TriangleLight triangleLight = TriangleLight::create(mesh.triangleLocalSpace(primitiveIndex), world.toWorld(instanceIndex), world.toLocal(instanceIndex), material);
 
-        return selectionPdf(instanceIndex) * modelLight.selectionPdf(geometryIndex) * geometryLight.selectionPdf(primitiveIndex) * triangleLight.areaPdf();
+        return selectionPdf(λ, instanceIndex) * modelLight.selectionPdf(λ, geometryIndex) * geometryLight.selectionPdf(λ, primitiveIndex) * triangleLight.areaPdf();
     }
 
-    float integral() {
+    float integral(float λ) {
         if (count == 0) return 0;
-        return power[0];
+        return Spectrum::sampleReflectance(λ, power[0]);
     }
 };

@@ -5,7 +5,7 @@
 [[vk::binding(2, 0)]] StructuredBuffer<Model> dModels;
 
 // dst
-[[vk::binding(3, 0)]] RWStructuredBuffer<float> dstPower;
+[[vk::binding(3, 0)]] RWStructuredBuffer<float3> dstPower;
 
 struct PushConsts {
 	uint instanceCount;
@@ -26,6 +26,10 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     const float3x3 toLocal = (float3x3)dWorldToInstance[srcInstance];
 	const float3x3 cofactor = abs(transpose(toLocal) * determinant(toWorld));
 
-	const float3 modelPower = vk::RawBufferLoad<float3>(model.geometryPowersAddress);
-	dstPower[pushConsts.dstOffset + srcInstance] = normL1(mul(cofactor, modelPower));
+	const float3x3 modelPower = transpose(vk::RawBufferLoad<float3x3>(model.geometryPowersAddress));
+	dstPower[pushConsts.dstOffset + srcInstance] = float3(
+		normL1(mul(cofactor, modelPower[0])),
+		normL1(mul(cofactor, modelPower[1])),
+		normL1(mul(cofactor, modelPower[2]))
+	);
 }
