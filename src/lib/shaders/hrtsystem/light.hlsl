@@ -50,14 +50,14 @@ struct EnvMap : Light {
             for (uint i = 0; i < 2; i++) {
                 for (uint j = 0; j < 2; j++) {
                     const uint2 coords = 2 * idx + uint2(i, j);
-                    r.update(coords, Spectrum::sampleEmission(λ, texture.Load(uint3(coords, level))), rand.x);
+                    r.update(coords, Spectrum::sampleReflectance(λ, texture.Load(uint3(coords, level))), rand.x);
                 }
             }
             idx = r.selected;
         }
-        const float integral = Spectrum::sampleEmission(λ, texture.Load(uint3(0, 0, mipCount - 1)));
+        const float integral = Spectrum::sampleReflectance(λ, texture.Load(uint3(0, 0, mipCount - 1)));
 
-        const float discretePdf = Spectrum::sampleEmission(λ, texture[idx]) * float(size * size) / integral;
+        const float discretePdf = Spectrum::sampleReflectance(λ, texture[idx]) * float(size * size) / integral;
         const float2 uv = (float2(idx) + rand) / float2(size, size);
 
         LightSample lightSample;
@@ -73,13 +73,13 @@ struct EnvMap : Light {
     LightEvaluation evaluate(float λ, float3 dirWs) {
         const uint size = textureDimensions(texture).x;
         const uint mipCount = log2(size) + 1;
-        const float integral = Spectrum::sampleEmission(λ, texture.Load(uint3(0, 0, mipCount - 1)));
+        const float integral = Spectrum::sampleReflectance(λ, texture.Load(uint3(0, 0, mipCount - 1)));
 
         if (integral == 0) return LightEvaluation::empty();
 
         const float2 uv = squareToEqualAreaSphereInverse(dirWs);
         const uint2 idx = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
-        const float discretePdf = Spectrum::sampleEmission(λ, texture[idx]) * float(size * size) / integral;
+        const float discretePdf = Spectrum::sampleReflectance(λ, texture[idx]) * float(size * size) / integral;
 
         LightEvaluation eval;
         eval.pdf = discretePdf / (4.0 * PI);
