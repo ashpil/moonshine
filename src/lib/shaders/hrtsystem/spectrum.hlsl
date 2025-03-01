@@ -17,7 +17,7 @@ static const float CIE1931YIntegral = 106.85691710117189;
 namespace Spectrum {
     // exclusive range
     float sampleTabulated(const float λ, const float start, const float end, Texture1D<float> t) {
-        return t.SampleLevel(dTextureSampler, (λ - start) / (end - start), 0);
+        return t.SampleLevel(dSpectrumSampler, (λ - start) / (end - start), 0);
     }
 
     float sampleReflectance(const float λ, const float3 reflectance) {
