@@ -149,8 +149,14 @@ pub fn main() !void {
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Settings");
         if (imgui.collapsingHeader("Metrics")) {
+            imgui.separatorText("performance");
             try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
             try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
+            imgui.separatorText("scene");
+            try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
+            try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
+            try imgui.textFmt("Model count: {}", .{scene.world.models.models_host.len});
+            try imgui.textFmt("Instance count: {}", .{scene.world.accel.instance_count});
         }
         if (imgui.collapsingHeader("Sensor")) {
             if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
