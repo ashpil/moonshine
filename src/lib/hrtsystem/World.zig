@@ -263,11 +263,12 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
     // need to keep this sparse mapping as we may discard meshes that moonshine
     // does not support
-    var gltf_mesh_idx_to_model = std.AutoHashMap(Gltf.Index, struct {
+    var gltf_mesh_idx_to_model = try allocator.alloc(?struct {
         handle: ModelManager.Handle,
-        thin: bool,
-    }).init(allocator);
-    defer gltf_mesh_idx_to_model.deinit();
+        thin: bool
+    }, gltf.data.meshes.items.len);
+    defer allocator.free(gltf_mesh_idx_to_model);
+    @memset(gltf_mesh_idx_to_model, null);
 
     for (gltf.data.meshes.items, 0..) |mesh, mesh_idx| {
         var geometries = std.ArrayList(Geometry.Parameters).init(allocator);
@@ -396,10 +397,10 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
         if (geometries.items.len == 0) continue;
 
-        try gltf_mesh_idx_to_model.putNoClobber(mesh_idx, .{
+        gltf_mesh_idx_to_model[mesh_idx] = .{
             .handle = try models.upload(vc, allocator, encoder, meshes, materials, geometries.items),
             .thin = model_thin,
-        });
+        };
     }
 
     var accel = try Accel.createEmpty(vc, allocator, encoder);
@@ -409,7 +410,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     // that looking up transforms is not O(n^2)
     for (gltf.data.nodes.items) |node| {
         if (node.mesh) |mesh_idx| {
-            if (gltf_mesh_idx_to_model.get(mesh_idx)) |model| {
+            if (gltf_mesh_idx_to_model[mesh_idx]) |model| {
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
                 _ = try accel.uploadInstance(vc, encoder, models, Instance {
                     // convert to Z-up
