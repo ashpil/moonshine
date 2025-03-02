@@ -51,7 +51,7 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, vulkan, engine_options, target);
         const exe = b.addExecutable(.{
             .name = "online",
-            .root_source_file = b.path("src/bin/online.zig"),
+            .root_source_file = b.path("src/bin/online/online.zig"),
             .target = target,
             .optimize = optimize,
         });

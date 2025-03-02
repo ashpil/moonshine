@@ -2,17 +2,16 @@ const std = @import("std");
 const vk = @import("vulkan");
 const shaders = @import("shaders");
 
-const engine = @import("../engine.zig");
+const engine = @import("engine");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 
 const hrtsystem = engine.hrtsystem;
-const Pipeline = hrtsystem.pipeline.ObjectPickPipeline;
 const Sensor = hrtsystem.Sensor;
 const Camera = hrtsystem.CameraManager;
 
-const F32x2 = @import("../vector.zig").Vec2(f32);
+const F32x2 = engine.vector.Vec2(f32);
 
 const Self = @This();
 
@@ -42,6 +41,25 @@ pub const ClickedObject = struct {
     primitive_index: u32,
     barycentrics: F32x2,
 };
+
+pub const Pipeline = hrtsystem.pipeline.Pipeline(.{
+    .shader_path = "hrtsystem/input.hlsl",
+    .PushConstants = extern struct {
+        camera: Camera.Camera,
+        aspect_ratio: f32,
+        click_position: F32x2,
+    },
+    .PushSetBindings = struct {
+        tlas: vk.AccelerationStructureKHR,
+        output_image: core.pipeline.StorageImage,
+        click_data: core.mem.BufferSlice(ClickDataShader),
+    },
+    .stages = &.{
+        .{ .type = .raygen, .entrypoint = "raygen" },
+        .{ .type = .miss, .entrypoint = "miss" },
+        .{ .type = .closest_hit, .entrypoint = "closesthit" },
+    }
+});
 
 buffer: core.mem.Buffer(ClickDataShader, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }),
 pipeline: Pipeline,

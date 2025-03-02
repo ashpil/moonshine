@@ -2,12 +2,14 @@ const std = @import("std");
 
 const engine = @import("engine");
 
+const ObjectPicker = @import("ObjectPicker.zig");
+const SyncCopier = @import("SyncCopier.zig");
+
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
-const SyncCopier = core.SyncCopier;
 const TextureManager = core.Images.TextureManager;
 
 const hrtsystem = engine.hrtsystem;
@@ -17,7 +19,6 @@ const ModelManager = hrtsystem.ModelManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
 const Pipeline = hrtsystem.pipeline.StandardPipeline;
-const ObjectPicker = hrtsystem.ObjectPicker;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;

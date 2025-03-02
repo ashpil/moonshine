@@ -4,7 +4,6 @@ pub const MeshManager = @import("MeshManager.zig");
 pub const MaterialManager = @import("MaterialManager.zig");
 pub const ModelManager = @import("ModelManager.zig");
 pub const BackgroundManager = @import("BackgroundManager.zig");
-pub const ObjectPicker = @import("ObjectPicker.zig");
 pub const pipeline = @import("pipeline.zig");
 pub const World = @import("World.zig");
 pub const Scene = @import("Scene.zig");

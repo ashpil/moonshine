@@ -1,9 +1,11 @@
+// TODO: this should really be killed
+//
 // really stupid and inefficient way to get stuff from device-local buffers/images back to CPU
-// should not be used for "real" transfers that benefit from require efficiency
+// should not be used for "real" transfers that benefit from efficiency
 //
 // more-so designed for ease-of-use for debugging and inspecting stuff that doesn't usually need to be inspected
 
-const core = @import("core.zig");
+const core = @import("engine").core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const vk_helpers = core.vk_helpers;

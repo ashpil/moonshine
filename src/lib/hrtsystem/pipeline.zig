@@ -255,25 +255,6 @@ pub fn Pipeline(comptime options: struct {
     };
 }
 
-pub const ObjectPickPipeline = Pipeline(.{
-    .shader_path = "hrtsystem/input.hlsl",
-    .PushConstants = extern struct {
-        camera: Camera.Camera,
-        aspect_ratio: f32,
-        click_position: F32x2,
-    },
-    .PushSetBindings = struct {
-        tlas: vk.AccelerationStructureKHR,
-        output_image: core.pipeline.StorageImage,
-        click_data: core.mem.BufferSlice(engine.hrtsystem.ObjectPicker.ClickDataShader),
-    },
-    .stages = &[_]Stage {
-        .{ .type = .raygen, .entrypoint = "raygen" },
-        .{ .type = .miss, .entrypoint = "miss" },
-        .{ .type = .closest_hit, .entrypoint = "closesthit" },
-    }
-});
-
 pub const StandardBindings = struct {
     tlas: ?vk.AccelerationStructureKHR,
     instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
