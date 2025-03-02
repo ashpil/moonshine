@@ -153,6 +153,7 @@ pub fn main() !void {
             try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
             try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             imgui.separatorText("scene");
+            try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
             try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
             try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
             try imgui.textFmt("Model count: {}", .{scene.world.models.models_host.len});
