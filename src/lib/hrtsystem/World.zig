@@ -261,149 +261,167 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     var models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout);
     errdefer models.destroy(vc, allocator);
 
+    // need to keep this sparse mapping as we may discard meshes that moonshine
+    // does not support
+    var gltf_mesh_idx_to_model = std.AutoHashMap(Gltf.Index, struct {
+        handle: ModelManager.Handle,
+        thin: bool,
+    }).init(allocator);
+    defer gltf_mesh_idx_to_model.deinit();
+
+    for (gltf.data.meshes.items, 0..) |mesh, mesh_idx| {
+        var geometries = std.ArrayList(Geometry.Parameters).init(allocator);
+        defer geometries.deinit();
+        try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
+        var model_thin: bool = undefined;
+        for (mesh.primitives.items, 0..) |primitive, primitive_idx| {
+            std.debug.assert(primitive.mode == .triangles);
+
+            const material, const thin = if (primitive.material) |material_idx| blk: {
+                const material = gltf.data.materials.items[material_idx];
+                // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
+                // and ignoring them is a better approximation than making them exist but be opaque
+                if (material.alpha_mode != .@"opaque") continue;
+                const thin = material.thickness_factor == 0;
+                break :blk .{ material_idx, thin };
+            } else .{ (materials.material_count - 1), true };
+            if (primitive_idx != 0) {
+                // thickness in moonshine is on a per-instance basis, but gltf is per-material.
+                // currently, just assert all materials in an instance have same thickness.
+                // a better solution would be to break-up instances with non-same thickness.
+                std.debug.assert(model_thin == thin);
+            }
+            model_thin = thin;
+            // get indices
+            const indices = if (primitive.indices) |indices_index| blk2: {
+                const accessor = gltf.data.accessors.items[indices_index];
+                const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
+
+                break :blk2 switch (accessor.component_type) {
+                    .unsigned_byte => blk3: {
+                        var indices = std.ArrayList(u8).init(allocator);
+                        defer indices.deinit();
+
+                        gltf.getDataFromBufferView(u8, &indices, accessor, buffer);
+
+                        // convert to U32x3
+                        const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
+                        for (actual_indices, 0..) |*index, i| {
+                            index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                        }
+                        break :blk3 actual_indices;
+                    },
+                    .unsigned_short => blk3: {
+                        var indices = std.ArrayList(u16).init(allocator);
+                        defer indices.deinit();
+
+                        gltf.getDataFromBufferView(u16, &indices, accessor, buffer);
+
+                        // convert to U32x3
+                        const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
+                        for (actual_indices, 0..) |*index, i| {
+                            index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                        }
+                        break :blk3 actual_indices;
+                    },
+                    .unsigned_integer => blk3: {
+                        var indices = std.ArrayList(u32).init(encoder.uploadAllocator());
+                        defer indices.deinit();
+
+                        gltf.getDataFromBufferView(u32, &indices, accessor, buffer);
+
+                        break :blk3 std.mem.bytesAsSlice(U32x3, std.mem.sliceAsBytes(try indices.toOwnedSlice()));
+                    },
+                    else => unreachable,
+                };
+            } else null;
+            errdefer if (indices) |nonnull| encoder.uploadAllocator().free(nonnull);
+
+            const vertices = blk2: {
+                var positions = std.ArrayList(f32).init(encoder.uploadAllocator());
+                var texcoords = std.ArrayList(f32).init(encoder.uploadAllocator());
+                var normals = std.ArrayList(f32).init(encoder.uploadAllocator());
+
+                for (primitive.attributes.items) |attribute| {
+                    switch (attribute) {
+                        .position => |accessor_index| {
+                            const accessor = gltf.data.accessors.items[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &positions, accessor, buffer);
+                        },
+                        .texcoord => |accessor_index| {
+                            // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
+                            // so ignore any after the first
+                            if (texcoords.items.len != 0) continue;
+                            const accessor = gltf.data.accessors.items[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &texcoords, accessor, buffer);
+                        },
+                        .normal => |accessor_index| {
+                            const accessor = gltf.data.accessors.items[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &normals, accessor, buffer);
+                        },
+                        else => {},
+                    }
+                }
+
+                const positions_slice = try positions.toOwnedSlice();
+                const texcoords_slice = try texcoords.toOwnedSlice();
+                const normals_slice = try normals.toOwnedSlice();
+
+                // TODO: remove ptrcast workaround below once ptrcast works on slices
+                break :blk2 .{
+                    .positions = @as([*]F32x3, @ptrCast(positions_slice.ptr))[0..positions_slice.len / 3],
+                    .texcoords = @as([*]F32x2, @ptrCast(texcoords_slice.ptr))[0..texcoords_slice.len / 2],
+                    .normals = @as([*]F32x3, @ptrCast(normals_slice.ptr))[0..normals_slice.len / 3],
+                };
+            };
+            errdefer encoder.uploadAllocator().free(vertices.positions);
+            errdefer encoder.uploadAllocator().free(vertices.texcoords);
+
+            const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh.Parameters {
+                .name = mesh.name,
+                .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
+                .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,
+                .normals = if (vertices.normals.len != 0) encoder.upload_allocator.getBufferSlice(vertices.normals) else null,
+                .indices = if (indices) |i| encoder.upload_allocator.getBufferSlice(i) else null,
+            });
+
+            geometries.appendAssumeCapacity(Geometry.Parameters {
+                .mesh = mesh_handle,
+                .material = @intCast(material),
+            });
+        }
+
+        if (geometries.items.len == 0) continue;
+
+        try gltf_mesh_idx_to_model.putNoClobber(mesh_idx, .{
+            .handle = try models.upload(vc, allocator, encoder, meshes, materials, geometries.items),
+            .thin = model_thin,
+        });
+    }
+
     var accel = try Accel.createEmpty(vc, allocator, encoder);
     errdefer accel.destroy(vc);
 
+    // TODO: iterate over nodes in hierarchy order rather than flat so
+    // that looking up transforms is not O(n^2)
     for (gltf.data.nodes.items) |node| {
-        if (node.mesh) |model_idx| {
-            const mesh = gltf.data.meshes.items[model_idx];
-            var geometries = std.ArrayList(Geometry.Parameters).init(allocator);
-            defer geometries.deinit();
-            try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
-            var instance_thin: bool = undefined;
-            for (mesh.primitives.items, 0..) |primitive, primitive_idx| {
-                const material, const thin = if (primitive.material) |material_idx| blk: {
-                    const material = gltf.data.materials.items[material_idx];
-                    // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
-                    // and ignoring them is a better approximation than making them exist but be opaque
-                    if (material.alpha_mode != .@"opaque") continue;
-                    const thin = material.thickness_factor == 0;
-                    break :blk .{ material_idx, thin };
-                } else .{ (materials.material_count - 1), true };
-                if (primitive_idx != 0) {
-                    // thickness in moonshine is on a per-instance basis, but gltf is per-material.
-                    // currently, just assert all materials in an instance have same thickness.
-                    // a better solution would be to break-up instances with non-same thickness.
-                    std.debug.assert(instance_thin == thin);
-                }
-                instance_thin = thin;
-                // get indices
-                const indices = if (primitive.indices) |indices_index| blk2: {
-                    const accessor = gltf.data.accessors.items[indices_index];
-                    const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-
-                    break :blk2 switch (accessor.component_type) {
-                        .unsigned_byte => blk3: {
-                            var indices = std.ArrayList(u8).init(allocator);
-                            defer indices.deinit();
-
-                            gltf.getDataFromBufferView(u8, &indices, accessor, buffer);
-
-                            // convert to U32x3
-                            const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
-                            for (actual_indices, 0..) |*index, i| {
-                                index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
-                            }
-                            break :blk3 actual_indices;
-                        },
-                        .unsigned_short => blk3: {
-                            var indices = std.ArrayList(u16).init(allocator);
-                            defer indices.deinit();
-
-                            gltf.getDataFromBufferView(u16, &indices, accessor, buffer);
-
-                            // convert to U32x3
-                            const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
-                            for (actual_indices, 0..) |*index, i| {
-                                index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
-                            }
-                            break :blk3 actual_indices;
-                        },
-                        .unsigned_integer => blk3: {
-                            var indices = std.ArrayList(u32).init(encoder.uploadAllocator());
-                            defer indices.deinit();
-
-                            gltf.getDataFromBufferView(u32, &indices, accessor, buffer);
-
-                            break :blk3 std.mem.bytesAsSlice(U32x3, std.mem.sliceAsBytes(try indices.toOwnedSlice()));
-                        },
-                        else => unreachable,
-                    };
-                } else null;
-                errdefer if (indices) |nonnull| encoder.uploadAllocator().free(nonnull);
-
-                const vertices = blk2: {
-                    var positions = std.ArrayList(f32).init(encoder.uploadAllocator());
-                    var texcoords = std.ArrayList(f32).init(encoder.uploadAllocator());
-                    var normals = std.ArrayList(f32).init(encoder.uploadAllocator());
-
-                    for (primitive.attributes.items) |attribute| {
-                        switch (attribute) {
-                            .position => |accessor_index| {
-                                const accessor = gltf.data.accessors.items[accessor_index];
-                                const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                                gltf.getDataFromBufferView(f32, &positions, accessor, buffer);
-                            },
-                            .texcoord => |accessor_index| {
-                                // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
-                                // so ignore any after the first
-                                if (texcoords.items.len != 0) continue;
-                                const accessor = gltf.data.accessors.items[accessor_index];
-                                const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                                gltf.getDataFromBufferView(f32, &texcoords, accessor, buffer);
-                            },
-                            .normal => |accessor_index| {
-                                const accessor = gltf.data.accessors.items[accessor_index];
-                                const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                                gltf.getDataFromBufferView(f32, &normals, accessor, buffer);
-                            },
-                            else => {},
-                        }
-                    }
-
-                    const positions_slice = try positions.toOwnedSlice();
-                    const texcoords_slice = try texcoords.toOwnedSlice();
-                    const normals_slice = try normals.toOwnedSlice();
-
-                    // TODO: remove ptrcast workaround below once ptrcast works on slices
-                    break :blk2 .{
-                        .positions = @as([*]F32x3, @ptrCast(positions_slice.ptr))[0..positions_slice.len / 3],
-                        .texcoords = @as([*]F32x2, @ptrCast(texcoords_slice.ptr))[0..texcoords_slice.len / 2],
-                        .normals = @as([*]F32x3, @ptrCast(normals_slice.ptr))[0..normals_slice.len / 3],
-                    };
-                };
-                errdefer encoder.uploadAllocator().free(vertices.positions);
-                errdefer encoder.uploadAllocator().free(vertices.texcoords);
-
-                const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh.Parameters {
-                    .name = mesh.name,
-                    .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
-                    .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,
-                    .normals = if (vertices.normals.len != 0) encoder.upload_allocator.getBufferSlice(vertices.normals) else null,
-                    .indices = if (indices) |i| encoder.upload_allocator.getBufferSlice(i) else null,
-                });
-
-                geometries.appendAssumeCapacity(Geometry.Parameters {
-                    .mesh = mesh_handle,
-                    .material = @intCast(material),
+        if (node.mesh) |mesh_idx| {
+            if (gltf_mesh_idx_to_model.get(mesh_idx)) |model| {
+                const mat = Gltf.getGlobalTransform(&gltf.data, node);
+                _ = try accel.uploadInstance(vc, encoder, models, Instance {
+                    // convert to Z-up
+                    .transform = Mat3x4.fromRows(
+                        F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
+                        F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
+                        F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
+                    ),
+                    .model = model.handle,
+                    .thin = model.thin,
                 });
             }
-
-            if (geometries.items.len == 0) continue;
-
-            const model = try models.upload(vc, allocator, encoder, meshes, materials, geometries.items);
-
-            const mat = Gltf.getGlobalTransform(&gltf.data, node);
-            _ = try accel.uploadInstance(vc, encoder, models, Instance {
-                // convert to Z-up
-                .transform = Mat3x4.fromRows(
-                    F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                    F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-                ),
-                .model = model,
-                .thin = instance_thin,
-            });
         }
     }
 
