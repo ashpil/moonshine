@@ -6,7 +6,6 @@ on:
 
 env:
   ZIG_VERSION: 0.14.0-dev.1911+3bf89f55c
-  VULKAN_SDK_VERSION: 1.3.296.0
 
 jobs:
   build-linux:
@@ -22,11 +21,10 @@ jobs:
         sudo apt-get install wayland-protocols libwayland-dev libxkbcommon-dev # Wayland
         sudo apt-get install libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev # X11
 
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-      with:
-        version: ${{env.VULKAN_SDK_VERSION}}
-        cache: true
+    - name: Install DirectXShaderCompiler
+      run: |
+        curl https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/linux_dxc_2024_07_31.x86_64.tar.gz -L | tar -zx
+        echo "$PWD/bin" >> $GITHUB_PATH
 
     - name: Setup Zig
       uses: mlugg/setup-zig@v1
@@ -43,11 +41,11 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-      with:
-        version: ${{env.VULKAN_SDK_VERSION}}
-        cache: true
+    - name: Install DirectXShaderCompiler
+      run: |
+        Invoke-WebRequest -uri "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/dxc_2024_07_31.zip" -Method "GET" -OutFile dxc.zip
+        Expand-Archive dxc.zip
+        Add-Content $env:GITHUB_PATH ";.\dxc\bin\x86"
 
     - name: Setup Zig
       uses: mlugg/setup-zig@v1
