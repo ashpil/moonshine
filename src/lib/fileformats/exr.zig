@@ -61,7 +61,7 @@ pub fn RetType(comptime T: type) type {
 }
 
 pub fn handleError(func: anytype, args: anytype) TinyExrError!RetType(@TypeOf(func)) {
-    var err_message: [*c]u8 = undefined;
+    var err_message: [*c]const u8 = undefined;
     const ref = &err_message;
     const new_args = args ++ .{ ref };
     switch (@typeInfo(@TypeOf(func)).@"fn".return_type.?) {

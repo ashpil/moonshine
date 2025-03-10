@@ -128,7 +128,7 @@ fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) 
         field.* = .{
             .name = variant.name,
             .type = T,
-            .default_value = &T {},
+            .default_value_ptr = &T {},
             .is_comptime = false,
             .alignment = @alignOf(T),
         };

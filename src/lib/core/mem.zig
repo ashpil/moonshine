@@ -225,6 +225,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
                     .alloc = alloc,
                     .resize = std.mem.Allocator.noResize,
                     .free = free,
+                    .remap = std.mem.Allocator.noRemap,
                 },
             };
         }
@@ -233,14 +234,14 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             const T = @typeInfo(@TypeOf(data)).pointer.child;
 
             const ptr = switch (@typeInfo(@TypeOf(data)).pointer.size) {
-                .One => data,
-                .Slice => data.ptr,
+                .one => data,
+                .slice => data.ptr,
                 else => comptime unreachable,
             };
 
             const len = switch (@typeInfo(@TypeOf(data)).pointer.size) {
-                .One => 1,
-                .Slice => data.len,
+                .one => 1,
+                .slice => data.len,
                 else => comptime unreachable,
             };
 
@@ -253,10 +254,10 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             };
         }
 
-        fn alloc(ctx: *anyopaque, len: usize, alignment_log2: u8, ret_addr: usize) ?[*]u8 {
+        fn alloc(ctx: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
             _ = ret_addr;
             const self: *Self = @ptrCast(@alignCast(ctx));
-            const required_alignment = @as(usize, 1) << @as(std.mem.Allocator.Log2Align, @intCast(alignment_log2));
+            const required_alignment = alignment.toByteUnits();
 
             const worst_case_additional_memory_required = @max(@sizeOf(Allocations.Node), required_alignment);
 
@@ -303,8 +304,8 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             return ptr_aligned;
         }
 
-        fn free(ctx: *anyopaque, buf: []u8, alignment_log2: u8, ret_addr: usize) void {
-            _ = alignment_log2;
+        fn free(ctx: *anyopaque, buf: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
+            _ = alignment;
             _ = ret_addr;
 
             const self: *Self = @ptrCast(@alignCast(ctx));

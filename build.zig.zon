@@ -1,11 +1,11 @@
 .{
-    .name = "moonshine",
+    .name = .moonshine,
     .version = "0.0.0",
 
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/e43d635893de4c8b89d5ca8aa142984872b7e68f.tar.gz",
-            .hash = "122064f889ea10097a67fc28744fe95d0bfde9af252de147a9b90aa55cecfc30c01c",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/dcd538828c513919c3abf0bd55afacdce0576c61.tar.gz",
+            .hash = "1220129ea1652cc0f8578db3dcba254bc9fbc6fdd195b5e1021bf4da8592ea5dc9fb",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/d91597a82f881d473887b560a03a7edf2720b72c.tar.gz",
@@ -28,14 +28,16 @@
             .hash = "1220a8e86c279b89ae07dbb82585334a5c53ebc49a5681a4d7eb757fe8b30d7aeb38",
         },
         .zgltf = .{
-            .url = "https://github.com/ashpil/zgltf/archive/0387c78e7908399ab20628b51d368f8bfa05cae9.tar.gz",
-            .hash = "1220531a8e6b1e3f45fae01cda2621e1c714694dffd93c97f21b74bea277be479a11",
+            .url = "https://github.com/kooparse/zgltf/archive/ee153a493a773d1a8c4893f117d593ea21e4db93.tar.gz",
+            .hash = "12207f41bf1035f272bc654056ab07f0004c9b20ede8be03fc2cb0f2eb29cd1c897b",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
             .hash = "12206bf55111ad97343300f10dc376cc89c36993c5f7564c6948eaaf4514b060dbb0",
         },
     },
+    .fingerprint = 0xccaef4ce7dcdd508,
+    .minimum_zig_version = "0.14.0",
     .paths = .{
         "",
     },

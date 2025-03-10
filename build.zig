@@ -33,7 +33,10 @@ pub fn build(b: *std.Build) !void {
         const tests = b.addTest(.{
             .name = "tests",
             .root_source_file = b.path("src/lib/tests.zig"),
-            .test_runner = b.path("src/lib/test_runner.zig"),
+            .test_runner = .{
+                .path = b.path("src/lib/test_runner.zig"),
+                .mode = .simple,
+            },
             .target = target,
             .optimize = optimize,
         });
@@ -57,13 +60,13 @@ pub fn build(b: *std.Build) !void {
         });
         exe.root_module.addImport("vulkan", vulkan);
         exe.root_module.addImport("engine", engine);
-        glfw.add(&exe.root_module);
+        glfw.add(exe.root_module);
         glfw.add(engine);
-        tinyexr.add(&exe.root_module);
+        tinyexr.add(exe.root_module);
         tinyexr.add(engine);
-        cimgui.add(&exe.root_module);
+        cimgui.add(exe.root_module);
         cimgui.add(engine);
-        wuffs.add(&exe.root_module);
+        wuffs.add(exe.root_module);
         wuffs.add(engine);
 
         break :blk exe;
@@ -83,9 +86,9 @@ pub fn build(b: *std.Build) !void {
         });
         exe.root_module.addImport("vulkan", vulkan);
         exe.root_module.addImport("engine", engine);
-        tinyexr.add(&exe.root_module);
+        tinyexr.add(exe.root_module);
         tinyexr.add(engine);
-        wuffs.add(&exe.root_module);
+        wuffs.add(exe.root_module);
         wuffs.add(engine);
 
         break :blk exe;
@@ -129,6 +132,10 @@ pub fn build(b: *std.Build) !void {
                 "hydra/instancer.cpp",
                 "hydra/material.cpp",
             },
+            .flags = &.{
+                "-DTBB_USE_DEBUG=0",
+                "-DARCH_HAS_GNU_STL_EXTENSIONS",
+            }
         });
         lib.linkLibrary(zig_lib);
 
@@ -150,7 +157,6 @@ pub fn build(b: *std.Build) !void {
         // include headers necessary for usd
         lib.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "include/" }) });
         if (tbb_dir) |dir| lib.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ dir, "include/" }) });
-        lib.defineCMacro("TBB_USE_DEBUG", "0"); // not sure why we need this
 
         // might need python headers if USD built with python support
         {
@@ -162,9 +168,6 @@ pub fn build(b: *std.Build) !void {
         // deal with the fact that USD is not (supposed to be) compiled with clang
         // make nicer once https://github.com/ziglang/zig/issues/3936
         {
-            // configure necessary gnu macros
-            lib.defineCMacro("ARCH_HAS_GNU_STL_EXTENSIONS", null);
-
             // link against stdlibc++
             lib.addObjectFile(.{ .cwd_relative = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
 
@@ -473,7 +476,7 @@ fn makeWuffsLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
 
 fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
     const glfw = b.dependency("glfw", .{});
-    const lib = b.addStaticLibrary(.{
+    const lib = b.addSharedLibrary(.{ // can be made static once https://github.com/ziglang/zig/issues/20476 is fixed
         .name = "glfw",
         .target = target,
         .optimize = .ReleaseFast,
