@@ -476,10 +476,13 @@ fn makeWuffsLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
 
 fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
     const glfw = b.dependency("glfw", .{});
-    const lib = b.addSharedLibrary(.{ // can be made static once https://github.com/ziglang/zig/issues/20476 is fixed
+    const lib = b.addLibrary(.{
         .name = "glfw",
-        .target = target,
-        .optimize = .ReleaseFast,
+        .linkage = if (target.result.os.tag == .linux) .dynamic else .static, // can always be made static once https://github.com/ziglang/zig/issues/20476 is fixed
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = .ReleaseFast,
+        }),
     });
 
     const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
