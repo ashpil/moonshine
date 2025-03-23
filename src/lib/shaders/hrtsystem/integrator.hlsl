@@ -171,9 +171,7 @@ struct VolumePathTracingIntegrator : Integrator {
                 // attenuate throughput by transmittance, divided by P(t > tHit)
                 {
                     const float tHit = distance(path.ray.origin, surface.position);
-                    const float pMoreThanT = path.volumeTracker.currentVolume().medium.transmittance(tHit);
-                    const float transmittance = path.volumeTracker.currentVolume().medium.transmittance(tHit);
-                    path.throughput *= transmittance / pMoreThanT;
+                    path.throughput *= path.volumeTracker.currentVolume().medium.transmittance(tHit) / path.volumeTracker.currentVolume().medium.pMoreThanT(tHit);
                 }
 
                 // collect light from emissive meshes

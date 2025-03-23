@@ -36,6 +36,11 @@ struct Homogeneous : Medium {
         }
     }
 
+    // P(t > distance), integral of pdf beyond distance
+    float pMoreThanT(float distance) {
+        return transmittance(distance); // happens to be the same as transmittance for homogeneous media
+    }
+
     float pdf(float distance) {
         return exp(-σ_t() * distance) * σ_t();
     }
