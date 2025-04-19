@@ -3,11 +3,20 @@
 #include "../utils/math.hlsl"
 #include "ray.hlsl"
 
-struct [raypayload] Intersection {
-    uint instanceIndex : read(caller) : write(closesthit, miss);  // MAX_UINT for no hit
-    uint geometryIndex : read(caller) : write(closesthit);
-    uint primitiveIndex : read(caller) : write(closesthit);
-    float2 barycentrics : read(caller) : write(closesthit);
+struct Intersection {
+    uint instanceIndex;
+    uint geometryIndex;
+    uint primitiveIndex;
+    float2 barycentrics;
+
+    static Intersection create(uint instanceIndex, uint geometryIndex, uint primitiveIndex, float2 barycentrics) {
+        Intersection its;
+        its.instanceIndex = instanceIndex;
+        its.geometryIndex = geometryIndex;
+        its.primitiveIndex = primitiveIndex;
+        its.barycentrics = barycentrics;
+        return its;
+    }
 
     static Intersection createMiss() {
         Intersection its;
@@ -24,9 +33,22 @@ struct [raypayload] Intersection {
     }
 
     static Intersection find(RaytracingAccelerationStructure accel, Ray ray, float tmax, uint mask) {
-        Intersection its;
-        TraceRay(accel, RAY_FLAG_FORCE_OPAQUE, mask, 0, 0, 0, ray.desc(0, tmax), its);
-        return its;
+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> q;
+        q.TraceRayInline(accel, 0, mask, ray.desc(0, tmax));
+
+        while (q.Proceed()) {};
+
+        if (q.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+            return Intersection::createMiss();
+        }
+
+        // for some reason dxc won't let me put an else here :think:
+        return Intersection::create(
+            q.CommittedInstanceIndex(),
+            q.CommittedGeometryIndex(),
+            q.CommittedPrimitiveIndex(),
+            q.CommittedTriangleBarycentrics()
+        );
     }
 
     bool hit() {
@@ -34,20 +56,20 @@ struct [raypayload] Intersection {
     }
 };
 
-struct [raypayload] ShadowIntersection {
-    bool inShadow : read(caller) : write(miss);
+struct ShadowIntersection {
+    bool inShadow;
 
     static bool hit(RaytracingAccelerationStructure accel, Ray ray, float tmax) {
         return ShadowIntersection::hit(accel, ray, tmax, 0xFF);
     }
 
     static bool hit(RaytracingAccelerationStructure accel, Ray ray, float tmax, uint mask) {
-        const uint shadowTraceFlags = RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_CLOSEST_HIT_SHADER;
+        RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_FORCE_OPAQUE> q;
+        q.TraceRayInline(accel, 0, mask, ray.desc(0, tmax));
+        q.Proceed();
 
         ShadowIntersection its;
-        its.inShadow = true;
-        TraceRay(accel, shadowTraceFlags, mask, 0, 0, 1, ray.desc(0, tmax), its);
+        its.inShadow = q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
         return its.inShadow;
     }
 };
-

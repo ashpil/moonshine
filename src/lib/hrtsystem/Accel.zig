@@ -295,7 +295,7 @@ pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, inst
         .{
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
             .buffer = self.world_to_instance_device.handle,
             .offset = instance_idx * @sizeOf(vk.TransformMatrixKHR),
@@ -346,7 +346,7 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
         .{
             .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
-            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
         }
     };

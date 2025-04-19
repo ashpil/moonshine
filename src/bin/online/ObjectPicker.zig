@@ -15,13 +15,13 @@ const F32x2 = engine.vector.Vec2(f32);
 
 const Self = @This();
 
-pub const ClickDataShader = extern struct {
+pub const Intersection = extern struct {
     instance_index: i32, // -1 if clicked background
     geometry_index: u32,
     primitive_index: u32,
     barycentrics: F32x2,
 
-    pub fn toClickedObject(self: ClickDataShader) ?ClickedObject {
+    pub fn toClickedObject(self: Intersection) ?ClickedObject {
         if (self.instance_index == -1) {
             return null;
         } else {
@@ -42,7 +42,8 @@ pub const ClickedObject = struct {
     barycentrics: F32x2,
 };
 
-pub const Pipeline = hrtsystem.pipeline.Pipeline(.{
+pub const Pipeline = core.pipeline.Pipeline(.{
+    .local_size = vk.Extent3D { .width = 1, .height = 1, .depth = 1 },
     .shader_path = "hrtsystem/input.hlsl",
     .PushConstants = extern struct {
         camera: Camera.Camera,
@@ -52,26 +53,21 @@ pub const Pipeline = hrtsystem.pipeline.Pipeline(.{
     .PushSetBindings = struct {
         tlas: vk.AccelerationStructureKHR,
         output_image: core.pipeline.StorageImage,
-        click_data: core.mem.BufferSlice(ClickDataShader),
+        click_data: core.mem.BufferSlice(Intersection),
     },
-    .stages = &.{
-        .{ .type = .raygen, .entrypoint = "raygen" },
-        .{ .type = .miss, .entrypoint = "miss" },
-        .{ .type = .closest_hit, .entrypoint = "closesthit" },
-    }
 });
 
-buffer: core.mem.Buffer(ClickDataShader, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }),
+buffer: core.mem.Buffer(Intersection, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }),
 pipeline: Pipeline,
 
 encoder: Encoder,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, transfer_encoder: *Encoder) !Self {
-    const buffer = try core.mem.Buffer(ClickDataShader, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }).create(vc, 1, "object picker");
+pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
+    const buffer = try core.mem.Buffer(Intersection, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }).create(vc, 1, "object picker");
     errdefer buffer.destroy(vc);
 
-    var pipeline = try Pipeline.create(vc, allocator, transfer_encoder, .{}, .{}, .{});
+    var pipeline = try Pipeline.create(vc, allocator, .{}, .{}, .{});
     errdefer pipeline.destroy(vc);
 
     var encoder = try Encoder.create(vc, "object picker");
@@ -106,7 +102,7 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.Acceler
     self.pipeline.recordPushConstants(self.encoder.buffer, .{ .camera = camera, .aspect_ratio = sensor.aspectRatio(), .click_position = normalized_coords });
 
     // trace rays
-    self.pipeline.recordTraceRays(self.encoder.buffer, vk.Extent2D { .width = 1, .height = 1 });
+    self.pipeline.recordDispatchThreads1D(self.encoder.buffer, 1);
 
     // end
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });

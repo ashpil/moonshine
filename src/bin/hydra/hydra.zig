@@ -202,7 +202,7 @@ pub const HdMoonshine = struct {
                     .{
                         .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
                         .src_access_mask = .{ .transfer_write_bit = true },
-                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_stage_mask = .{ .compute_shader_bit = true },
                         .dst_access_mask = .{ .shader_storage_read_bit = true },
                         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -213,7 +213,7 @@ pub const HdMoonshine = struct {
                     .{
                         .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
                         .src_access_mask = .{ .transfer_write_bit = true },
-                        .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                        .dst_stage_mask = .{ .compute_shader_bit = true },
                         .dst_access_mask = .{ .shader_storage_read_bit = true },
                         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
                         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -253,7 +253,7 @@ pub const HdMoonshine = struct {
         //             .{
         //                 .src_stage_mask = .{ .copy_bit = true },
         //                 .src_access_mask = .{ .transfer_write_bit = true },
-        //                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+        //                 .dst_stage_mask = .{ .compute_shader_bit = true },
         //                 .dst_access_mask = .{ .shader_storage_read_bit = true },
         //                 .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         //                 .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -306,7 +306,7 @@ pub const HdMoonshine = struct {
         //             .{
         //                 .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
         //                 .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
-        //                 .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+        //                 .dst_stage_mask = .{ .compute_shader_bit = true },
         //                 .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
         //             }
         //         };
@@ -333,14 +333,14 @@ pub const HdMoonshine = struct {
                 .{
                     .src_stage_mask = .{ .compute_shader_bit = true },
                     .src_access_mask = .{ .shader_write_bit = true },
-                    .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                    .dst_stage_mask = .{ .compute_shader_bit = true },
                     .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
                 }
             },
         });
 
         // prepare our stuff
-        self.camera.sensors.items[sensor].recordPrepareForCapture(self.encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
+        self.camera.sensors.items[sensor].recordPrepareForCapture(self.encoder.buffer, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         self.pipeline.recordBindPipeline(self.encoder.buffer);
@@ -354,7 +354,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordTraceRays(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
 
         // copy our stuff
-        self.camera.sensors.items[sensor].recordPrepareForCopy(self.encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        self.camera.sensors.items[sensor].recordPrepareForCopy(self.encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         self.encoder.copyImageToBuffer(self.camera.sensors.items[sensor].image.handle, .transfer_src_optimal, self.camera.sensors.items[sensor].extent, self.output_buffers.items[sensor].handle);

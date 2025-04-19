@@ -103,14 +103,14 @@ pub fn main() !void {
 
     std.log.info("Loaded scene!", .{});
 
-    try encoder.begin();
-
-    var object_picker = try ObjectPicker.create(&context, allocator, &encoder);
+    var object_picker = try ObjectPicker.create(&context, allocator);
     defer object_picker.destroy(&context);
 
     var spec_constants = Pipeline.SpecConstants {};
-    var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, spec_constants, .{ scene.background.sampler });
+    var pipeline = try Pipeline.create(&context, allocator, spec_constants, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&context);
+
+    try encoder.begin();
 
     var gui = try Platform.create(&context, display.swapchain, window, window_extent, &encoder);
     defer gui.destroy(&context);
@@ -229,14 +229,12 @@ pub fn main() !void {
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
                 rebuild_error = false;
-                try encoder.begin();
-                if (pipeline.recreate(&context, allocator, &encoder, spec_constants)) |old_pipeline| {
+                if (pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
                     try frame_encoder.attachResource(old_pipeline);
                     scene.camera.sensors.items[active_sensor].clear();
                 } else |err| if (err == error.ShaderCompileFail) {
                     rebuild_error = true;
                 } else return err;
-                try encoder.submitAndIdleUntilDone(&context);
                 if (!rebuild_error) {
                     const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
@@ -376,13 +374,13 @@ pub fn main() !void {
 
         if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
-            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
             pipeline.recordBindPipeline(frame_encoder.buffer);
             pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
             pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
             pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0));
-            pipeline.recordTraceRays(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
-            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .blit_bit = true });
+            pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
+            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to

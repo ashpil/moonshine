@@ -56,7 +56,7 @@ const TestingContext = struct {
         try self.encoder.begin();
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(self.encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
+        scene.camera.sensors.items[0].recordPrepareForCapture(self.encoder.buffer, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(self.encoder.buffer);
@@ -68,7 +68,7 @@ const TestingContext = struct {
             pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(0, 0, 0));
 
             // trace our stuff
-            pipeline.recordTraceRays(self.encoder.buffer, scene.camera.sensors.items[0].extent);
+            pipeline.recordDispatchThreads2D(self.encoder.buffer, scene.camera.sensors.items[0].extent);
 
             // if not last invocation, need barrier cuz we write to images
             if (sample_count != spp) {
@@ -76,9 +76,9 @@ const TestingContext = struct {
                     .image_memory_barrier_count = 1,
                     .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
                         .{
-                            .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .src_stage_mask = .{ .compute_shader_bit = true },
                             .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .dst_stage_mask = .{ .compute_shader_bit = true },
                             .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                             .old_layout = .general,
                             .new_layout = .general,
@@ -100,7 +100,7 @@ const TestingContext = struct {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(self.encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(self.encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, self.output_buffer.handle);
@@ -364,24 +364,23 @@ test "white sphere on white background is white" {
     };
     defer scene.destroy(&tc.vc, allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
+    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
+
+    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.sampler });
+    }, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
-    try tc.encoder.begin();
-    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
+    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 1,
         .path_tracing_mesh_samples_per_bounce = 0,
     });
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
@@ -467,26 +466,25 @@ test "white volume on white background is white" {
     };
     defer scene.destroy(&tc.vc, allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
+    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
+
+    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 0,
         .volume_path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.sampler });
+    }, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
-    try tc.encoder.begin();
-    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
+    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 1,
         .volume_path_tracing_mesh_samples_per_bounce = 0,
     });
     defer tc.vc.device.destroyPipeline(other_pipeline, null);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
@@ -573,38 +571,34 @@ test "inside illuminating sphere is white" {
     };
     defer scene.destroy(&tc.vc, allocator);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, &tc.encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{
+    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
+
+    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.sampler });
+    }, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
-
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
-    try tc.encoder.begin();
     // do that again but with mesh sampling
-    const mesh_sampling_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
+    const mesh_sampling_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 1,
     });
     defer tc.vc.device.destroyPipeline(mesh_sampling_pipeline, null);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
-    try tc.encoder.begin();
     // do that again but with non-absorbing volume
-    const volume_pipeline = try pipeline.recreate(&tc.vc, allocator, &tc.encoder, .{
+    const volume_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 0,
         .volume_path_tracing_mesh_samples_per_bounce = 1,
     });
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
-    try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
     scene.global_volume = .{ .medium = .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) } };
     try tc.renderToOutput(&pipeline, &scene, 1024);

@@ -52,10 +52,12 @@ enum class IntegratorType : uint {
 [[vk::constant_id(8)]] const uint dVolumePathTracingEnvSamplesPerBounce = 1;  // how many times the environment map should be sampled per bounce for light
 [[vk::constant_id(9)]] const uint dVolumePathTracingMeshSamplesPerBounce = 1; // how many times emissive meshes should be sampled per bounce for light
 
-[shader("raygeneration")]
-void raygen() {
-    const uint2 imageCoords = DispatchRaysIndex().xy;
-    const uint2 imageSize = DispatchRaysDimensions().xy;
+[numthreads(8, 8, 1)]
+void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
+	const uint2 imageCoords = dispatchXYZ.xy;
+	const uint2 imageSize = textureDimensions(dOutputImage);
+
+	if (any(imageCoords >= imageSize)) return;
 
     World world;
     world.instances = dInstances;
@@ -107,27 +109,4 @@ void raygen() {
     const float3 newSample = Spectrum::toLinearSRGB(w.λ, radiance) / w.pdf;
     const float3 newAverage = accumulate(priorSampleAverage, newSample, pushConsts.sampleCount);
     dOutputImage[imageCoords] = float4(newAverage, 1);
-}
-
-struct Attributes
-{
-    float2 barycentrics;
-};
-
-[shader("closesthit")]
-void closesthit(inout Intersection its, in Attributes attribs) {
-    its.instanceIndex = InstanceIndex();
-    its.geometryIndex = GeometryIndex();
-    its.primitiveIndex = PrimitiveIndex();
-    its.barycentrics = attribs.barycentrics;
-}
-
-[shader("miss")]
-void miss(inout Intersection its) {
-    its = Intersection::createMiss();
-}
-
-[shader("miss")]
-void shadowmiss(inout ShadowIntersection its) {
-    its.inShadow = false;
 }

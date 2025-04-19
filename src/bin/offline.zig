@@ -101,10 +101,8 @@ pub fn main() !void {
 
     try logger.log("load world");
 
-    try encoder.begin();
-    var pipeline = try Pipeline.create(&context, allocator, &encoder, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle }, .{}, .{ scene.background.sampler });
+    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&context);
-    try encoder.submitAndIdleUntilDone(&context);
 
     try logger.log("create pipeline");
 
@@ -116,7 +114,7 @@ pub fn main() !void {
         try encoder.begin();
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{});
+        scene.camera.sensors.items[0].recordPrepareForCapture(encoder.buffer, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(encoder.buffer);
@@ -128,7 +126,7 @@ pub fn main() !void {
             pipeline.recordPushConstants(encoder.buffer, scene.pushConstants(0, 0, 0));
 
             // trace our stuff
-            pipeline.recordTraceRays(encoder.buffer, scene.camera.sensors.items[0].extent);
+            pipeline.recordDispatchThreads2D(encoder.buffer, scene.camera.sensors.items[0].extent);
 
             // if not last invocation, need barrier cuz we write to images
             if (sample_count != config.spp) {
@@ -136,9 +134,9 @@ pub fn main() !void {
                     .image_memory_barrier_count = 1,
                     .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
                         .{
-                            .src_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .src_stage_mask = .{ .compute_shader_bit = true },
                             .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+                            .dst_stage_mask = .{ .compute_shader_bit = true },
                             .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                             .old_layout = .general,
                             .new_layout = .general,
@@ -160,7 +158,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(encoder.buffer, .{ .ray_tracing_shader_bit_khr = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, output_buffer.handle);

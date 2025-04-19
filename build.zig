@@ -341,8 +341,8 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
     }) catch @panic("OOM");
 
     imports.appendSlice(&.{
-        compileShader(b, .ray_tracing, "hrtsystem/input.hlsl"),
-        compileShader(b, .ray_tracing, "hrtsystem/main.hlsl"),
+        compileShader(b, .compute, "hrtsystem/input.hlsl"),
+        compileShader(b, .compute, "hrtsystem/main.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/equirectangular_to_equal_area.hlsl"),
         compileShader(b, .compute, "hrtsystem/background/fold.hlsl"),
         compileShader(b, .compute, "hrtsystem/local_light/triangle_power.hlsl"),

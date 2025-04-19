@@ -219,7 +219,7 @@ pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.Com
         .p_buffer_memory_barriers = @ptrCast(&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
@@ -246,7 +246,7 @@ pub fn recordUpdateSingleVariant(self: *Self, comptime VariantType: type, comman
         .p_buffer_memory_barriers = @ptrCast(&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .ray_tracing_shader_bit_khr = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
