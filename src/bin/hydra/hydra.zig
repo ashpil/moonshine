@@ -137,7 +137,7 @@ pub const HdMoonshine = struct {
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         _ = self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
 
-        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), &self.encoder, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }, pipeline_settings, .{ self.background.sampler }) catch return null;
+        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
         self.output_buffers = .{};
@@ -351,7 +351,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(camera, sensor, 0));
 
         // trace our stuff
-        self.pipeline.recordTraceRays(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
+        self.pipeline.recordDispatchThreads2D(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
 
         // copy our stuff
         self.camera.sensors.items[sensor].recordPrepareForCopy(self.encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
