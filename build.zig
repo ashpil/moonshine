@@ -664,6 +664,10 @@ fn compileShader(b: *std.Build, shader_type: ShaderType, path: []const u8) std.B
     compile_shader.addArgs(&base_shader_compile_cmd);
     compile_shader.addArg("-T");
     compile_shader.addArg(shader_type.dxcProfile());
+    const include_shader_debug_info = false;
+    if (include_shader_debug_info) {
+        compile_shader.addArg("-Zi");
+    }
     compile_shader.addFileArg(input_file_path);
     compile_shader.addArg("-Fo");
     const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ path }));
