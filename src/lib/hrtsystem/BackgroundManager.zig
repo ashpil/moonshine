@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
+const toMany = engine.core.vk_helpers.toMany;
 const VulkanContext = engine.core.VulkanContext;
 const Encoder = engine.core.Encoder;
 const Image = engine.core.Image;
@@ -71,7 +72,7 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
 pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder) !Handle {
     var color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
     const rgba = Rgba2D {
-        .ptr = @ptrCast(&color),
+        .ptr = toMany(&color),
         .extent = .{
             .width = 1,
             .height = 1,

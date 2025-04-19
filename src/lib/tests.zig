@@ -29,6 +29,7 @@ const Mat3x4 = vector.Mat3x4(f32);
 const Mat3 = vector.Mat3(f32);
 
 const vk_helpers = engine.core.vk_helpers;
+const toMany = vk_helpers.toMany;
 
 const TestingContext = struct {
     vc: VulkanContext,
@@ -349,7 +350,7 @@ test "white sphere on white background is white" {
     var background = try Background.create(&tc.vc, allocator);
     var white = [4]f32 {1, 1, 1, 1};
     const image = Rgba2D {
-        .ptr = @ptrCast(&white),
+        .ptr = toMany(&white),
         .extent = .{
             .width = 1,
             .height = 1,
@@ -451,7 +452,7 @@ test "white volume on white background is white" {
     var background = try Background.create(&tc.vc, allocator);
     var white = [4]f32 {1, 1, 1, 1};
     const image = Rgba2D {
-        .ptr = @ptrCast(&white),
+        .ptr = toMany(&white),
         .extent = .{
             .width = 1,
             .height = 1,
@@ -556,7 +557,7 @@ test "inside illuminating sphere is white" {
     var background = try Background.create(&tc.vc, allocator);
     var black = [4]f32 {0, 0, 0, 1};
     const image = Rgba2D {
-        .ptr = @ptrCast(&black),
+        .ptr = toMany(&black),
         .extent = .{
             .width = 1,
             .height = 1,

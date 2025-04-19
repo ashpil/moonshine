@@ -8,6 +8,7 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const Image = core.Image;
 const vk_helpers = core.vk_helpers;
+const toMany = vk_helpers.toMany;
 
 const F32x2 = engine.vector.Vec2(f32);
 const F32x3 = engine.vector.Vec3(f32);
@@ -80,21 +81,19 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
 
     encoder.uploadDataToImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent, .shader_read_only_optimal);
 
-    vc.device.updateDescriptorSets(1, @ptrCast(&.{
-        vk.WriteDescriptorSet {
-            .dst_set = descriptor_set,
-            .dst_binding = dst_binding,
-            .dst_array_element = 0,
-            .descriptor_count = 1,
-            .descriptor_type = .sampled_image,
-            .p_image_info = @ptrCast(&vk.DescriptorImageInfo {
-                .image_layout = .shader_read_only_optimal,
-                .image_view = image.view,
-                .sampler = .null_handle,
-            }),
-            .p_buffer_info = undefined,
-            .p_texel_buffer_view = undefined,
-        },
+    vc.device.updateDescriptorSets(1, toMany(&vk.WriteDescriptorSet {
+        .dst_set = descriptor_set,
+        .dst_binding = dst_binding,
+        .dst_array_element = 0,
+        .descriptor_count = 1,
+        .descriptor_type = .sampled_image,
+        .p_image_info = toMany(&vk.DescriptorImageInfo {
+            .image_layout = .shader_read_only_optimal,
+            .image_view = image.view,
+            .sampler = .null_handle,
+        }),
+        .p_buffer_info = undefined,
+        .p_texel_buffer_view = undefined,
     }), 0, null);
 
     return image;
@@ -126,8 +125,8 @@ pub fn create(vc: *const VulkanContext, encoder: *Encoder) !Self {
     try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
         .descriptor_pool = descriptor_layout.pool,
         .descriptor_set_count = 1,
-        .p_set_layouts = @ptrCast(&descriptor_layout.handle),
-    }, @ptrCast(&descriptor_set));
+        .p_set_layouts = toMany(&descriptor_layout.handle),
+    }, toMany(&descriptor_set));
     try vk_helpers.setDebugName(vc.device, descriptor_set, "Constant Spectra");
 
     const cie_x = try createSpectrumImage(vc, encoder, descriptor_set, 1, &[_]f32 {

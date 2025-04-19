@@ -7,6 +7,7 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const Image = core.Image;
 const vk_helpers = core.vk_helpers;
+const toMany = vk_helpers.toMany;
 
 const MeshManager = @import("./MeshManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
@@ -184,7 +185,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
-        .p_geometries = @ptrCast(&vk.AccelerationStructureGeometryKHR {
+        .p_geometries = toMany(&vk.AccelerationStructureGeometryKHR {
             .geometry_type = .instances_khr,
             .flags = .{ .opaque_bit_khr = true },
             .geometry = .{
@@ -199,7 +200,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         .scratch_data = undefined,
     };
 
-    const size_info = getBuildSizesInfo(vc, &geometry_info, @ptrCast(&self.instance_count));
+    const size_info = getBuildSizesInfo(vc, &geometry_info, toMany(&self.instance_count));
 
     const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.build_scratch_size, "tlas scratch buffer");
     try encoder.attachResource(scratch_buffer);
@@ -222,7 +223,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
     self.tlas_update_scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.update_scratch_size, "tlas update scratch buffer");
     self.tlas_update_scratch_address = self.tlas_update_scratch_buffer.getAddress(vc);
 
-    encoder.buildAccelerationStructures(&.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ @ptrCast(&vk.AccelerationStructureBuildRangeInfoKHR {
+    encoder.buildAccelerationStructures(&.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ toMany(&vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = @intCast(self.instance_count),
         .first_vertex = 0,
         .primitive_offset = 0,
@@ -325,7 +326,7 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
         .src_acceleration_structure = self.tlas_handle,
         .dst_acceleration_structure = self.tlas_handle,
         .geometry_count = 1,
-        .p_geometries = @ptrCast(&geometry),
+        .p_geometries = toMany(&geometry),
         .scratch_data = .{
             .device_address = self.tlas_update_scratch_address,
         },
@@ -338,9 +339,9 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
         .transform_offset = 0,
     };
 
-    const build_info_ref = &build_info;
+    const build_info_ref = toMany(&build_info);
 
-    command_buffer.buildAccelerationStructuresKHR(1, @ptrCast(&geometry_info), @ptrCast(&build_info_ref));
+    command_buffer.buildAccelerationStructuresKHR(1, toMany(&geometry_info), toMany(&build_info_ref));
 
     const barriers = [_]vk.MemoryBarrier2 {
         .{

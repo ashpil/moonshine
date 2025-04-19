@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 const core = @import("../engine.zig").core;
 const vk_helpers = core.vk_helpers;
+const toMany = vk_helpers.toMany;
 const VulkanContext = core.VulkanContext;
 
 pub const Binding = struct {
@@ -54,7 +55,7 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
                 .flags = layout_flags,
                 .binding_count = bindings.len,
                 .p_bindings = &vk_bindings,
-                .p_next = @ptrCast(&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
+                .p_next = toMany(&vk.DescriptorSetLayoutBindingFlagsCreateInfo {
                     .binding_count = bindings.len,
                     .p_binding_flags = &vk_binding_flags,
                 }),
@@ -93,8 +94,8 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
                 try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
                     .descriptor_pool = self.pool,
                     .descriptor_set_count = 1,
-                    .p_set_layouts = @ptrCast(&self.handle),
-                }, @ptrCast(&descriptor_set));
+                    .p_set_layouts = toMany(&self.handle),
+                }, toMany(&descriptor_set));
 
                 // avoid writing descriptors in certain invalid states:
                 // 1. descriptor type is sampler (only immutable samplers are supported)

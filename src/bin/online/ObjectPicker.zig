@@ -6,6 +6,7 @@ const engine = @import("engine");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
+const toMany = core.vk_helpers.toMany;
 
 const hrtsystem = engine.hrtsystem;
 const Sensor = hrtsystem.Sensor;
@@ -107,8 +108,8 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.Acceler
     // end
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, @ptrCast(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
-    try vc.device.resetFences(1, @ptrCast(&self.ready_fence));
+    _ = try vc.device.waitForFences(1, toMany(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, toMany(&self.ready_fence));
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return self.buffer.hostSlice()[0].toClickedObject();

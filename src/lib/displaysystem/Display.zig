@@ -7,6 +7,7 @@ const VulkanContext = core.VulkanContext;
 const DestructionQueue = core.DestructionQueue;
 const Encoder = core.Encoder;
 const vk_helpers = core.vk_helpers;
+const toMany = vk_helpers.toMany;
 
 const Swapchain = engine.displaysystem.Swapchain;
 
@@ -48,7 +49,7 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
     inline for (&frames, 0..) |*frame, i| {
         frame.* = try Frame.create(vc, std.fmt.comptimePrint("frame {}", .{i}));
     }
-    try vc.device.resetFences(1, @ptrCast(&frames[0].fence));
+    try vc.device.resetFences(1, toMany(&frames[0].fence));
 
     const timestamp_period = if (metrics) blk: {
         var properties = vk.PhysicalDeviceProperties2 {
@@ -126,7 +127,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
 
     // wait for next frame to ensure CPU is not too far ahead of GPU
     var next_frame = &self.frames[self.frame_index];
-    _ = try vc.device.waitForFences(1, @ptrCast(&next_frame.fence), vk.TRUE, std.math.maxInt(u64));
+    _ = try vc.device.waitForFences(1, toMany(&next_frame.fence), vk.TRUE, std.math.maxInt(u64));
 
     // collect metrics if enabled
     if (metrics) {
@@ -184,7 +185,7 @@ const Frame = struct {
 
     // frame must not be in use
     fn reset(self: *Frame, vc: *const VulkanContext) !void {
-        try vc.device.resetFences(1, @ptrCast(&self.fence));
+        try vc.device.resetFences(1, toMany(&self.fence));
 
         if (metrics) {
             vc.device.resetQueryPool(self.query_pool, 0, 2);
