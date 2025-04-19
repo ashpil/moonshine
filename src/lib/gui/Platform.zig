@@ -102,11 +102,13 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
             .p_code = &vert_spv,
         }, null);
         defer vc.device.destroyShaderModule(vert_module, null);
+        try vk_helpers.setDebugName(vc.device, vert_module, "gui vertex");
         const frag_module = try vc.device.createShaderModule(&.{
             .code_size = frag_spv.len * @sizeOf(u32),
             .p_code = &frag_spv,
         }, null);
         defer vc.device.destroyShaderModule(frag_module, null);
+        try vk_helpers.setDebugName(vc.device, frag_module, "gui fragment");
 
         const shader_stage_create_info = [_]vk.PipelineShaderStageCreateInfo{
             .{
@@ -213,6 +215,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
                 .stencil_attachment_format = .undefined,
             },
         }), null, @ptrCast(&pipeline));
+        try vk_helpers.setDebugName(vc.device, pipeline, "gui");
         break :blk pipeline;
     };
 
