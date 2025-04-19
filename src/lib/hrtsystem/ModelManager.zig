@@ -47,7 +47,8 @@ pub const Geometry = struct {
     };
 };
 
-const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/triangle_power.hlsl",
+const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{.shader_path = "hrtsystem/local_light/triangle_power.hlsl",
+    .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         mesh: MeshManager.Handle,
         material: MaterialManager.Handle,
@@ -63,6 +64,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
 });
 
 const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/geometry_power.hlsl",
+    .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         geometry_count: u32,
         src_offset: u32,
@@ -75,6 +77,7 @@ const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
 });
 
 const PowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/fold3.hlsl",
+    .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         src_level_offset: u32,
         dst_level_offset: u32,
@@ -236,9 +239,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .triangle_count = primitive_count.*,
             .dst_offset = triangle_powers_size - last_level_size,
         });
-        const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
-        const dispatch_size = std.math.divCeil(u32, last_level_size, shader_local_size) catch unreachable;
-        self.triangle_power_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
+        self.triangle_power_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = last_level_size, .height = 1, .depth = 1 });
     }
 
     var build_geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
@@ -311,9 +312,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                     .max_src_index = triangle_count,
                 });
                 const dst_level_size = std.math.pow(u32, 2, src_level);
-                const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
-                const dispatch_size = std.math.divCeil(u32, dst_level_size, shader_local_size) catch unreachable;
-                self.power_fold_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
+                self.power_fold_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = dst_level_size, .height = 1, .depth = 1 });
             }
         }
     }
@@ -362,9 +361,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .geometry_count = @intCast(geometries.len),
             .dst_offset = @intCast(geometry_powers_size - geometry_powers_last_level_size),
         });
-        const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
-        const dispatch_size = std.math.divCeil(u32, @intCast(geometry_powers_last_level_size), shader_local_size) catch unreachable;
-        self.geometry_power_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
+        self.geometry_power_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = @intCast(geometry_powers_last_level_size), .height = 1, .depth = 1 });
     }
 
     if (geometry_powers_last_level_size > 1) {
@@ -399,9 +396,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .max_src_index = @intCast(geometries.len),
         });
         const dst_level_size = std.math.pow(u32, 2, src_level);
-        const shader_local_size = 32; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
-        const dispatch_size = std.math.divCeil(u32, dst_level_size, shader_local_size) catch unreachable;
-        self.power_fold_pipeline.recordDispatch(encoder.buffer, .{ .width = dispatch_size, .height = 1, .depth = 1 });
+        self.power_fold_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = dst_level_size, .height = 1, .depth = 1 });
     }
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{

@@ -248,12 +248,14 @@ pub fn PipelineBindings(
 
 pub fn Pipeline(comptime options: struct {
     shader_path: [:0]const u8,
+    local_size: vk.Extent3D, // TODO: should be able to extract this or set it via spec constants
     SpecConstants: type = extern struct {},
     PushConstants: type = extern struct {},
     PushSetBindings: type, // todo: should be specified in higher level types rather than raw vk ones
     additional_descriptor_layout_count: comptime_int = 0,
 }) type {
     if (@typeInfo(options.SpecConstants).@"struct".layout == .auto) @compileError("specialization constant struct layout is auto but must not be");
+    if (options.local_size.width == 0 or options.local_size.height == 0 or options.local_size.depth == 0) @compileError("all local size dimensions must be greater than zero");
 
     return struct {
         bindings: Bindings,
@@ -334,9 +336,20 @@ pub fn Pipeline(comptime options: struct {
             command_buffer.bindPipeline(.compute, self.handle);
         }
 
-        pub fn recordDispatch(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent3D) void {
+        pub fn recordDispatchWorkgroups(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent3D) void {
             _ = self;
             command_buffer.dispatch(extent.width, extent.height, extent.depth);
+        }
+
+        pub fn recordDispatchThreads(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent3D) void {
+            std.debug.assert(options.local_size.width != 0 and options.local_size.height != 0 and options.local_size.depth != 0);
+
+            const dispatch_extent = vk.Extent3D {
+                .width = std.math.divCeil(u32, extent.width, options.local_size.width) catch unreachable,
+                .height = std.math.divCeil(u32, extent.height, options.local_size.height) catch unreachable,
+                .depth = std.math.divCeil(u32, extent.depth, options.local_size.depth) catch unreachable,
+            };
+            self.recordDispatchWorkgroups(command_buffer, dispatch_extent);
         }
 
         pub usingnamespace if (options.additional_descriptor_layout_count != 0) struct {
