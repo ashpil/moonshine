@@ -5,35 +5,35 @@
     .dependencies = .{
         .vulkan_zig = .{
             .url = "https://github.com/Snektron/vulkan-zig/archive/57d587c8a4b6ff5493613b1cf0c64ce34461696e.tar.gz",
-            .hash = "1220480698d6e08a5df35162336e2ded4c655689ab1a4b9bcd6def8f8c3b49f1bd8c",
+            .hash = "vulkan-0.0.0-r7Ytx5GAAwBIBpjW4Ipd81FiM24t7UxlVomrGkubzW3v",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/d91597a82f881d473887b560a03a7edf2720b72c.tar.gz",
-            .hash = "12202a292251ee4089ba107bff1357ac705c004bf7546f9cb852a1fb5019ba36ca65",
+            .hash = "N-V-__8AAGtEsAEqKSJR7kCJuhB7_xNXrHBcAEv3VG-cuFKh",
         },
         .cimgui = .{
             .url = "https://github.com/ashpil/cimgui/archive/97684ddceec2e4b9d15c4d6aa67dd7230f94b513.tar.gz",
-            .hash = "1220c6cae6769d51e7e0b94b0a7e46dbca685b8a196ed3bb17d18b7e767f4c54e0ed",
+            .hash = "N-V-__8AAF1mPwDGyuZ2nVHn4LlLCn5G28poW4oZbtO7F9GL",
         },
         .imgui = .{
             .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.90.6.tar.gz",
-            .hash = "1220ff68019b489a1567e4ef5eca451cf135391f7052442a6f0cff78fbe5cde903da",
+            .hash = "N-V-__8AAJacXwD_aAGbSJoVZ-TvXspFHPE1OR9wUkQqbwz_",
         },
         .glfw = .{
             .url = "https://github.com/glfw/glfw/archive/b35641f4a3c62aa86a0b3c983d163bc0fe36026d.tar.gz",
-            .hash = "1220652aad4648a186946f8fe6ff678f71769ca41ec0db9d6c3bd976b443f9cbcfa7",
+            .hash = "N-V-__8AAPHKSwBlKq1GSKGGlG-P5v9nj3F2nKQewNudbDvZ",
         },
         .tinyexr = .{
             .url = "https://github.com/syoyo/tinyexr/archive/5fcb4dcb6e3abf96214b67e5c54db1ceec6a455c.tar.gz",
-            .hash = "1220a8e86c279b89ae07dbb82585334a5c53ebc49a5681a4d7eb757fe8b30d7aeb38",
+            .hash = "N-V-__8AAPCmnQGo6Gwnm4muB9u4JYUzSlxT68SaVoGk1-t1",
         },
         .zgltf = .{
             .url = "https://github.com/kooparse/zgltf/archive/ee153a493a773d1a8c4893f117d593ea21e4db93.tar.gz",
-            .hash = "12207f41bf1035f272bc654056ab07f0004c9b20ede8be03fc2cb0f2eb29cd1c897b",
+            .hash = "zgltf-0.1.0-sX6QAtwJAgB_Qb8QNfJyvGVAVqsH8ABMmyDt6L4D_Cyw",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
-            .hash = "12206bf55111ad97343300f10dc376cc89c36993c5f7564c6948eaaf4514b060dbb0",
+            .hash = "N-V-__8AALcpVQBr9VERrZc0MwDxDcN2zInDaZPF91ZMaUjq",
         },
     },
     .fingerprint = 0xccaef4ce7dcdd508,
