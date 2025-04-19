@@ -18,7 +18,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const uint srcIdx = dispatchXYZ.x;
 
 	if (srcIdx >= pushConsts.geometryCount) {
-		if (pushConsts.geometryCount % 2 == 1 && srcIdx == pushConsts.geometryCount + 1) {
+		if (pushConsts.geometryCount != 1 && pushConsts.geometryCount % 2 == 1 && srcIdx == pushConsts.geometryCount) {
 			// may be one element of padding, which should be zeroed
 			dstPower[pushConsts.dstOffset + srcIdx] = 0;
 		}

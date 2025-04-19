@@ -403,7 +403,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
         };
     }
 
-    var accel = try Accel.createEmpty(vc, allocator, encoder);
+    var accel = try Accel.createEmpty(vc, allocator);
     errdefer accel.destroy(vc);
 
     // TODO: iterate over nodes in hierarchy order rather than flat so
@@ -443,7 +443,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         .materials = materials,
         .meshes = .{},
         .models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout),
-        .accel = try Accel.createEmpty(vc, allocator, encoder),
+        .accel = try Accel.createEmpty(vc, allocator),
         .constant_specta = try ConstantSpectra.create(vc, encoder),
     };
 }

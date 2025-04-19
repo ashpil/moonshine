@@ -17,7 +17,13 @@ struct PushConsts {
 void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const uint srcInstance = dispatchXYZ.x;
 
-	if (any(srcInstance >= pushConsts.instanceCount)) return;
+	if (srcInstance >= pushConsts.instanceCount) {
+		if (pushConsts.instanceCount != 1 && pushConsts.instanceCount % 2 == 1 && srcInstance == pushConsts.instanceCount) {
+			// may be one element of padding, which should be zeroed
+			dstPower[pushConsts.dstOffset + srcInstance] = 0;
+		}
+		return;
+	}
 
 	const Instance instance = dInstances[srcInstance];
 	const Model model = dModels[instance.instanceCustomIndex];

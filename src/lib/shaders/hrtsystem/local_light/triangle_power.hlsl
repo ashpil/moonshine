@@ -20,7 +20,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 	const uint srcPrimitive = dispatchXYZ.x;
 
 	if (srcPrimitive >= pushConsts.triangleCount) {
-		if (pushConsts.triangleCount % 2 == 1 && srcPrimitive == pushConsts.triangleCount + 1) {
+		if (pushConsts.triangleCount != 1 && pushConsts.triangleCount % 2 == 1 && srcPrimitive == pushConsts.triangleCount) {
 			// may be one element of padding, which should be zeroed
 			dstPower[pushConsts.dstOffset + srcPrimitive] = 0;
 		}

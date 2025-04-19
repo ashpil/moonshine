@@ -82,7 +82,7 @@ const Self = @This();
 // TODO: resizable buffers
 const max_instances = std.math.pow(u32, 2, 12);
 
-pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder) !Self {
+pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     var instance_power_pipeline = try InstancePowerPipeline.create(vc, allocator, .{}, .{}, .{});
     errdefer instance_power_pipeline.destroy(vc);
 
@@ -105,18 +105,6 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     errdefer world_to_instance_device.destroy(vc);
     const world_to_instance_host = try core.mem.UploadBuffer(Mat3x4).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_host.destroy(vc);
-
-    encoder.fillBuffer(instance_powers.handle, instance_powers_element_count * F32x3.element_count, @as(f32, 0.0));
-
-    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
-        Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_transfer_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true, .ray_tracing_shader_bit_khr = true },
-            .dst_access_mask = .{ .memory_read_bit = true, .memory_write_bit = true },
-            .buffer = instance_powers.handle,
-        },
-    });
 
     return Self {
         .instance_power_pipeline = instance_power_pipeline,
