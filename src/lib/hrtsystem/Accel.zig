@@ -244,7 +244,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
             .instance_count = self.instance_count,
             .dst_offset = instance_powers_element_count - max_instances,
         });
-        self.instance_power_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = self.instance_count, .height = 1, .depth = 1 });
+        self.instance_power_pipeline.recordDispatchThreads1D(encoder.buffer, self.instance_count);
         self.instance_power_fold_pipeline.recordBindPipeline(encoder.buffer);
 
         for (1..instance_powers_level_count) |src_level_rev| {
@@ -267,7 +267,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
                 .dst_level_offset = std.math.pow(u32, 2, src_level - 1) - 1,
                 .max_src_index = max_instances,
             });
-            self.instance_power_fold_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = dst_level_size, .height = 1, .depth = 1 });
+            self.instance_power_fold_pipeline.recordDispatchThreads1D(encoder.buffer, dst_level_size);
         }
     }
 

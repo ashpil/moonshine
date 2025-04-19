@@ -341,15 +341,36 @@ pub fn Pipeline(comptime options: struct {
             command_buffer.dispatch(extent.width, extent.height, extent.depth);
         }
 
-        pub fn recordDispatchThreads(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent3D) void {
+        pub fn recordDispatchThreads3D(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent3D) void {
             std.debug.assert(options.local_size.width != 0 and options.local_size.height != 0 and options.local_size.depth != 0);
 
-            const dispatch_extent = vk.Extent3D {
+            const workgroups_extent = vk.Extent3D {
                 .width = std.math.divCeil(u32, extent.width, options.local_size.width) catch unreachable,
                 .height = std.math.divCeil(u32, extent.height, options.local_size.height) catch unreachable,
                 .depth = std.math.divCeil(u32, extent.depth, options.local_size.depth) catch unreachable,
             };
-            self.recordDispatchWorkgroups(command_buffer, dispatch_extent);
+            self.recordDispatchWorkgroups(command_buffer, workgroups_extent);
+        }
+
+        pub fn recordDispatchThreads2D(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent2D) void {
+            std.debug.assert(options.local_size.depth == 1);
+
+            const extent_3d = vk.Extent3D {
+                .width = extent.width,
+                .height = extent.height,
+                .depth = 1,
+            };
+            self.recordDispatchThreads3D(command_buffer, extent_3d);
+        }
+
+        pub fn recordDispatchThreads1D(self: *const Self, command_buffer: VulkanContext.CommandBuffer, extent: u32) void {
+            std.debug.assert(options.local_size.height == 1);
+
+            const extent_2d = vk.Extent2D {
+                .width = extent,
+                .height = 1,
+            };
+            self.recordDispatchThreads2D(command_buffer, extent_2d);
         }
 
         pub usingnamespace if (options.additional_descriptor_layout_count != 0) struct {

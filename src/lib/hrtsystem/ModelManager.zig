@@ -239,7 +239,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .triangle_count = primitive_count.*,
             .dst_offset = triangle_powers_size - last_level_size,
         });
-        self.triangle_power_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = last_level_size, .height = 1, .depth = 1 });
+        self.triangle_power_pipeline.recordDispatchThreads1D(encoder.buffer, last_level_size);
     }
 
     var build_geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
@@ -312,7 +312,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                     .max_src_index = triangle_count,
                 });
                 const dst_level_size = std.math.pow(u32, 2, src_level);
-                self.power_fold_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = dst_level_size, .height = 1, .depth = 1 });
+                self.power_fold_pipeline.recordDispatchThreads1D(encoder.buffer, dst_level_size);
             }
         }
     }
@@ -361,7 +361,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .geometry_count = @intCast(geometries.len),
             .dst_offset = @intCast(geometry_powers_size - geometry_powers_last_level_size),
         });
-        self.geometry_power_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = @intCast(geometry_powers_last_level_size), .height = 1, .depth = 1 });
+        self.geometry_power_pipeline.recordDispatchThreads1D(encoder.buffer, @intCast(geometry_powers_last_level_size));
     }
 
     if (geometry_powers_last_level_size > 1) {
@@ -396,7 +396,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .max_src_index = @intCast(geometries.len),
         });
         const dst_level_size = std.math.pow(u32, 2, src_level);
-        self.power_fold_pipeline.recordDispatchThreads(encoder.buffer, .{ .width = dst_level_size, .height = 1, .depth = 1 });
+        self.power_fold_pipeline.recordDispatchThreads1D(encoder.buffer, dst_level_size);
     }
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
