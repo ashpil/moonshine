@@ -69,9 +69,6 @@ struct VolumeTracker {
             ray.origin = surface.position + faceForward(surface.triangleFrame.n, ray.direction) * surface.spawnOffset;
         }
 
-        for (uint i = 0; i < VOLUME_PRIORITY_COUNT; i++) {
-            t.current[i] = t.current[i];
-        }
         t.other = t.current[t.activePriority()];
         return t;
     }
