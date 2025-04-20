@@ -150,11 +150,11 @@ pub fn main() !void {
         imgui.setNextWindowPos(50, 50);
         imgui.setNextWindowSize(250, 350);
         imgui.begin("Settings");
-        if (imgui.collapsingHeader("Metrics")) {
-            imgui.separatorText("performance");
+        if (imgui.collapsingHeader("Performance")) {
             try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
             try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
-            imgui.separatorText("scene");
+        }
+        if (imgui.collapsingHeader("Scene")) {
             try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
             try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
             try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
