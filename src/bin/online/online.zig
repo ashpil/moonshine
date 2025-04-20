@@ -160,6 +160,9 @@ pub fn main() !void {
             try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
             try imgui.textFmt("Model count: {}", .{scene.world.models.models_host.len});
             try imgui.textFmt("Instance count: {}", .{scene.world.accel.instance_count});
+            if (exposeToImguiRecursive(MaterialManager.Volume, &scene.global_volume, "Global volume")) {
+                scene.camera.sensors.items[active_sensor].clear();
+            }
         }
         if (imgui.collapsingHeader("Sensor")) {
             if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
