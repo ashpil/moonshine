@@ -14,7 +14,7 @@ const exr = engine.fileformats.exr;
 
 const vector = engine.vector;
 const F32x3 = vector.Vec3(f32);
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 const Config = struct {
     in_filepath: []const u8, // must be gltf/glb

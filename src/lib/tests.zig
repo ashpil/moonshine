@@ -25,8 +25,9 @@ const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
-const Mat3x4 = vector.Mat3x4(f32);
 const Mat3 = vector.Mat3(f32);
+const Mat4 = vector.Mat4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 const vk_helpers = engine.core.vk_helpers;
 const toMany = vk_helpers.toMany;
@@ -152,14 +153,14 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
         fn subdivide(self: *Self) std.mem.Allocator.Error!void {
             var next_triangles = std.ArrayListUnmanaged(U32x3) {};
             for (self.triangles.items) |triangle| {
-                const a = try self.get_midpoint(triangle.x, triangle.y);
-                const b = try self.get_midpoint(triangle.y, triangle.z);
-                const c = try self.get_midpoint(triangle.z, triangle.x);
+                const a = try self.get_midpoint(triangle.element(0), triangle.element(1));
+                const b = try self.get_midpoint(triangle.element(1), triangle.element(2));
+                const c = try self.get_midpoint(triangle.element(2), triangle.element(0));
 
-                try next_triangles.append(self.allocator, U32x3.new(triangle.x, a, c));
-                try next_triangles.append(self.allocator, U32x3.new(triangle.y, b, a));
-                try next_triangles.append(self.allocator, U32x3.new(triangle.z, c, b));
-                try next_triangles.append(self.allocator, U32x3.new(a, b, c));
+                try next_triangles.append(self.allocator, U32x3.new(.{triangle.element(0), a, c}));
+                try next_triangles.append(self.allocator, U32x3.new(.{triangle.element(1), b, a}));
+                try next_triangles.append(self.allocator, U32x3.new(.{triangle.element(2), c, b}));
+                try next_triangles.append(self.allocator, U32x3.new(.{a, b, c}));
             }
             self.triangles.deinit(self.allocator);
             self.triangles = next_triangles;
@@ -175,7 +176,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
             }  else {
                 const point1 = self.positions.items[index1];
                 const point2 = self.positions.items[index2];
-                const midpoint = point1.add(point2).scale(1.0 / 2.0);
+                const midpoint = point1.componentAdd(point2).scale(1.0 / 2.0);
                 try self.positions.append(self.allocator, midpoint);
 
                 const new_index: u32 = @intCast(self.positions.items.len - 1);
@@ -190,41 +191,41 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
     const t = (1.0 + std.math.sqrt(5.0)) / 2.0;
 
     const initial_positions = [12]F32x3 {
-        F32x3.new(-1,  t,  0),
-        F32x3.new( 1,  t,  0),
-        F32x3.new(-1, -t,  0),
-        F32x3.new( 1, -t,  0),
-        F32x3.new( 0, -1,  t),
-        F32x3.new( 0,  1,  t),
-        F32x3.new( 0, -1, -t),
-        F32x3.new( 0,  1, -t),
-        F32x3.new( t,  0, -1),
-        F32x3.new( t,  0,  1),
-        F32x3.new(-t,  0, -1),
-        F32x3.new(-t,  0,  1),
+        F32x3.new(.{-1,  t,  0}),
+        F32x3.new(.{ 1,  t,  0}),
+        F32x3.new(.{-1, -t,  0}),
+        F32x3.new(.{ 1, -t,  0}),
+        F32x3.new(.{ 0, -1,  t}),
+        F32x3.new(.{ 0,  1,  t}),
+        F32x3.new(.{ 0, -1, -t}),
+        F32x3.new(.{ 0,  1, -t}),
+        F32x3.new(.{ t,  0, -1}),
+        F32x3.new(.{ t,  0,  1}),
+        F32x3.new(.{-t,  0, -1}),
+        F32x3.new(.{-t,  0,  1}),
     };
 
     const initial_triangles = [20]U32x3 {
-        U32x3.new(0, 11, 5),
-        U32x3.new(0, 5, 1),
-        U32x3.new(0, 1, 7),
-        U32x3.new(0, 7, 10),
-        U32x3.new(0, 10, 11),
-        U32x3.new(1, 5, 9),
-        U32x3.new(5, 11, 4),
-        U32x3.new(11, 10, 2),
-        U32x3.new(10, 7, 6),
-        U32x3.new(7, 1, 8),
-        U32x3.new(3, 9, 4),
-        U32x3.new(3, 4, 2),
-        U32x3.new(3, 2, 6),
-        U32x3.new(3, 6, 8),
-        U32x3.new(3, 8, 9),
-        U32x3.new(4, 9, 5),
-        U32x3.new(2, 4, 11),
-        U32x3.new(6, 2, 10),
-        U32x3.new(8, 6, 7),
-        U32x3.new(9, 8, 1),
+        U32x3.new(.{0, 11, 5}),
+        U32x3.new(.{0, 5, 1}),
+        U32x3.new(.{0, 1, 7}),
+        U32x3.new(.{0, 7, 10}),
+        U32x3.new(.{0, 10, 11}),
+        U32x3.new(.{1, 5, 9}),
+        U32x3.new(.{5, 11, 4}),
+        U32x3.new(.{11, 10, 2}),
+        U32x3.new(.{10, 7, 6}),
+        U32x3.new(.{7, 1, 8}),
+        U32x3.new(.{3, 9, 4}),
+        U32x3.new(.{3, 4, 2}),
+        U32x3.new(.{3, 2, 6}),
+        U32x3.new(.{3, 6, 8}),
+        U32x3.new(.{3, 8, 9}),
+        U32x3.new(.{4, 9, 5}),
+        U32x3.new(.{2, 4, 11}),
+        U32x3.new(.{6, 2, 10}),
+        U32x3.new(.{8, 6, 7}),
+        U32x3.new(.{9, 8, 1}),
     };
 
     var subdivider = try Subdivider.init(allocator, &initial_positions, &initial_triangles);
@@ -243,7 +244,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
     const indices = try encoder.uploadAllocator().dupe(U32x3, subdivider.triangles.items);
     if (reverse_winding_order) {
         for (indices) |*index| {
-            index.* = U32x3.new(index.z, index.y, index.x);
+            index.* = U32x3.new(.{ index.element(2), index.element(1), index.element(0) });
         }
     }
 
@@ -303,11 +304,11 @@ test "white sphere on white background is white" {
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const albedo: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        albedo.* = F32x4.new(1, 1, 1, std.math.nan(f32));
+        albedo.* = F32x3.splat(1).append(std.math.nan(f32));
         const albedo_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(albedo), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const emissive: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        emissive.* = F32x4.new(0, 0, 0, std.math.nan(f32));
+        emissive.* = F32x3.splat(0).append(std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
@@ -332,14 +333,14 @@ test "white sphere on white background is white" {
 
         _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .visible = true,
-            .transform = Mat3x4.identity,
+            .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
     }
 
     var camera = Camera {};
     _ = try camera.appendCamera(allocator, Camera.Camera {
-        .transform = Mat3x4.fromTransformTranslation(Mat3.identity, F32x3.new(-3, 0, 0)),
+        .transform = Mat3.identity.appendCol(.new(.{-3, 0, 0})),
         .model = .thin_lens,
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 4.0,
@@ -405,7 +406,7 @@ test "white volume on white background is white" {
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const emissive: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        emissive.* = F32x4.new(0, 0, 0, std.math.nan(f32));
+        emissive.* = F32x3.splat(0).append(std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
@@ -417,7 +418,7 @@ test "white volume on white background is white" {
             },
             .volume = .{
                 .medium = .{
-                    .@"σ_s" = F32x3.new(1, 1, 1),
+                    .@"σ_s" = F32x3.splat(1),
                 }
             }
         });
@@ -434,14 +435,14 @@ test "white volume on white background is white" {
         _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .thin = false,
             .visible = true,
-            .transform = Mat3x4.identity,
+            .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
     }
 
     var camera = Camera {};
     _ = try camera.appendCamera(allocator, Camera.Camera {
-        .transform = Mat3x4.fromTransformTranslation(Mat3.identity, F32x3.new(-3, 0, 0)),
+        .transform = Mat3.identity.appendCol(.new(.{-3, 0, 0})),
         .model = .thin_lens,
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 4.0,
@@ -510,11 +511,11 @@ test "inside illuminating sphere is white" {
         const normal_texture = try world.materials.textures.upload(&tc.vc, F32x2, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(normal), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const albedo: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        albedo.* = F32x4.new(0.5, 0.5, 0.5, std.math.nan(f32));
+        albedo.* = F32x3.splat(0.5).append(std.math.nan(f32));
         const albedo_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(albedo), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const emissive: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        emissive.* = F32x4.new(0.5, 0.5, 0.5, std.math.nan(f32));
+        emissive.* = F32x3.splat(0.5).append(std.math.nan(f32));
         const emissive_texture = try world.materials.textures.upload(&tc.vc, F32x4, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(emissive), vk.Extent2D { .width = 1, .height = 1 }, "");
 
         const material_handle = try world.materials.upload(&tc.vc, allocator, &tc.encoder, MaterialManager.Material.Parameters {
@@ -539,14 +540,14 @@ test "inside illuminating sphere is white" {
 
         _ = try world.accel.uploadInstance(&tc.vc, &tc.encoder, world.models, Accel.Instance {
             .visible = true,
-            .transform = Mat3x4.identity,
+            .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
     }
 
     var camera = Camera {};
     _ = try camera.appendCamera(allocator, Camera.Camera {
-        .transform = Mat3x4.identity,
+        .transform = Mat4.identity.truncateRow(),
         .model = .thin_lens,
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 3.0,
@@ -601,7 +602,7 @@ test "inside illuminating sphere is white" {
     });
     defer tc.vc.device.destroyPipeline(volume_pipeline, null);
 
-    scene.global_volume = .{ .medium = .{ .@"σ_s" = F32x3.new(0.5, 0.5, 0.5) } };
+    scene.global_volume = .{ .medium = .{ .@"σ_s" = F32x3.splat(0.5) } };
     try tc.renderToOutput(&pipeline, &scene, 1024);
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 }

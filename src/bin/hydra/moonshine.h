@@ -30,9 +30,9 @@ typedef struct U32x3 {
     uint32_t x, y, z;
 } U32x3;
 
-typedef struct Mat3x4 {
+typedef struct Mat4x3 {
     F32x4 x, y, z;
-} Mat3x4;
+} Mat4x3;
 
 typedef struct Extent2D {
     uint32_t width;
@@ -82,9 +82,9 @@ extern "C" void HdMoonshineSetMaterialColor(HdMoonshine*, MaterialHandle, ImageH
 extern "C" void HdMoonshineSetMaterialMetalness(HdMoonshine*, MaterialHandle, ImageHandle);
 extern "C" void HdMoonshineSetMaterialRoughness(HdMoonshine*, MaterialHandle, ImageHandle);
 extern "C" void HdMoonshineSetMaterialIOR(HdMoonshine*, MaterialHandle, float);
-extern "C" InstanceHandle HdMoonshineCreateInstance(HdMoonshine*, Mat3x4, MeshHandle, MaterialHandle, bool);
+extern "C" InstanceHandle HdMoonshineCreateInstance(HdMoonshine*, Mat4x3, MeshHandle, MaterialHandle, bool);
 extern "C" void HdMoonshineDestroyInstance(HdMoonshine*, InstanceHandle);
-extern "C" void HdMoonshineSetInstanceTransform(HdMoonshine*, InstanceHandle, Mat3x4);
+extern "C" void HdMoonshineSetInstanceTransform(HdMoonshine*, InstanceHandle, Mat4x3);
 extern "C" void HdMoonshineSetInstanceVisibility(HdMoonshine*, InstanceHandle, bool);
 extern "C" SensorHandle HdMoonshineCreateSensor(HdMoonshine*, Extent2D);
 extern "C" float* HdMoonshineGetSensorData(const HdMoonshine*, SensorHandle);

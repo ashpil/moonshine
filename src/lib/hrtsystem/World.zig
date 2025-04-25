@@ -22,7 +22,7 @@ const Accel = engine.hrtsystem.Accel;
 const ConstantSpectra = engine.hrtsystem.ConstantSpectra;
 
 const vector = engine.vector;
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
@@ -68,11 +68,11 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         material.name = gltf_material.name;
 
         material.volume.medium = MaterialManager.Medium {
-            .@"σ_a" = F32x3.new(
+            .@"σ_a" = F32x3.new(.{
                 @log(gltf_material.attenuation_color[0]),
                 @log(gltf_material.attenuation_color[1]),
                 @log(gltf_material.attenuation_color[2]),
-            ).scale(-1 / gltf_material.attenuation_distance),
+            }).scale(-1 / gltf_material.attenuation_distance),
         };
 
         material.volume.phase.g = 0.0;
@@ -95,7 +95,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
             const rg = try encoder.uploadAllocator().alloc(U8x2, img.len);
             for (rg, img) |*dst, src| {
-                dst.* = U8x2.new(src.x, src.y);
+                dst.* = src.truncate();
             }
             const debug_name = try std.fmt.allocPrintZ(allocator, "{s} normal", .{ gltf_material.name });
             defer allocator.free(debug_name);
@@ -114,7 +114,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
             const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
             for (rgba, img) |*dst, src| {
-                dst.* = U8x4.new(src.x, src.y, src.z, 0);
+                dst.* = src.append(0);
             }
 
             const debug_name = try std.fmt.allocPrintZ(allocator, "{s} emissive", .{ gltf_material.name });
@@ -122,7 +122,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             break :emissive try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else emissive: {
             const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-            constant.* = F32x4.new(gltf_material.emissive_factor[0], gltf_material.emissive_factor[1], gltf_material.emissive_factor[2], std.math.nan(f32)).scale(gltf_material.emissive_strength);
+            constant.* = F32x3.new(gltf_material.emissive_factor).scale(gltf_material.emissive_strength).append(std.math.nan(f32));
             const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant emissive {}", .{ gltf_material.name, constant });
             defer allocator.free(debug_name);
             break :emissive try textures.upload(vc, F32x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(constant), vk.Extent2D { .width = 1, .height = 1 }, debug_name);
@@ -152,7 +152,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         defer allocator.free(img);
         const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
         for (rgba, img) |*dst, src| {
-            dst.* = U8x4.new(src.x, src.y, src.z, 0);
+            dst.* = src.append(0);
         }
 
         const debug_name = try std.fmt.allocPrintZ(allocator, "{s} color", .{ gltf_material.name });
@@ -160,7 +160,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         break :blk try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
     } else blk: {
         const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
-        constant.* = F32x4.new(gltf_material.metallic_roughness.base_color_factor[0], gltf_material.metallic_roughness.base_color_factor[1], gltf_material.metallic_roughness.base_color_factor[2], std.math.nan(f32));
+        constant.* = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0..3].*).append(std.math.nan(f32));
         const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant color {}", .{ gltf_material.name, constant });
         defer allocator.free(debug_name);
         break :blk try textures.upload(vc, F32x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(constant), vk.Extent2D { .width = 1, .height = 1 }, debug_name);
@@ -177,8 +177,8 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         const metalness = try encoder.uploadAllocator().alloc(u8, img.len);
         const roughness = try encoder.uploadAllocator().alloc(u8, img.len);
         for (metalness, roughness, img) |*dst1, *dst2, src| {
-            dst1.* = src.z;
-            dst2.* = src.y;
+            dst1.* = src.element(2);
+            dst2.* = src.element(1);
         }
         const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} metalness", .{ gltf_material.name });
         defer allocator.free(debug_name_metalness);
@@ -308,7 +308,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                         // convert to U32x3
                         const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
                         for (actual_indices, 0..) |*index, i| {
-                            index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                            index.* = U32x3.new(.{ indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2] });
                         }
                         break :blk3 actual_indices;
                     },
@@ -321,7 +321,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                         // convert to U32x3
                         const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
                         for (actual_indices, 0..) |*index, i| {
-                            index.* = U32x3.new(indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2]);
+                            index.* = U32x3.new(.{ indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2] });
                         }
                         break :blk3 actual_indices;
                     },
@@ -414,11 +414,11 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
                 _ = try accel.uploadInstance(vc, encoder, models, Instance {
                     // convert to Z-up
-                    .transform = Mat3x4.fromRows(
-                        F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                        F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-                        F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-                    ),
+                    .transform = Mat4x3.fromRows(.{
+                        .new(.{mat[0][0], mat[1][0], mat[2][0], mat[3][0]}),
+                        .new(.{mat[0][2], mat[1][2], mat[2][2], mat[3][2]}),
+                        .new(.{mat[0][1], mat[1][1], mat[2][1], mat[3][1]}),
+                    }),
                     .model = model.handle,
                     .thin = model.thin,
                 });
@@ -448,7 +448,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     };
 }
 
-pub fn updateTransform(self: *Self, index: u32, new_transform: Mat3x4) void {
+pub fn updateTransform(self: *Self, index: u32, new_transform: Mat4x3) void {
     self.accel.updateTransform(index, new_transform);
 }
 

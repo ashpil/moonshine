@@ -1,455 +1,436 @@
-// all matrices are row-major
-
 const std = @import("std");
 const math = std.math;
 
-fn checkValidVecT(comptime T: type) void {
-    if (!(@typeInfo(T) == .float or @typeInfo(T) == .int)) {
-        @compileError("You dum dum, you can't do addition over " ++ @typeName(T) ++ "!");
-    }
+fn MatrixProduct(Left: type, Right: type) type {
+    if (Left.ComponentType != Right.ComponentType) @compileError("Component types must be matching, but left is " ++ @typeName(Left.ComponentType) ++ " and right is " ++ @typeName(Right.ComponentType));
+    if (Left.col_count != Right.row_count) @compileError(std.fmt.comptimePrint("Left column count must match right row count, but left column count is {} and right row count is {}", .{ Left.col_count, Right.row_count }));
+    return Matrix(Left.ComponentType, Right.col_count, Left.row_count);
+}
+
+fn isNumberType(T: type) bool {
+    return isIntegerType(T) or isFloatType(T);
+}
+
+fn isFloatType(T: type) bool {
+    return switch (@typeInfo(T)) {
+       .comptime_float, .float => true,
+        else => false,
+    };
+}
+
+fn isIntegerType(T: type) bool {
+    return switch (@typeInfo(T)) {
+       .comptime_int, .int => true,
+        else => false,
+    };
+}
+
+// a major design goal here is that the storage medium is abstracted away from the API
+// internally this could be row major, column major, morton order, etc. shouldn't matter
+// to the user of the matrix
+pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_int) type {
+    if (c <= 0) @compileError(std.fmt.comptimePrint("Matrix must have positive column count, but has {} columns", .{ c }));
+    if (r <= 0) @compileError(std.fmt.comptimePrint("Matrix must have positive row count, but has {} rows", .{ r }));
+
+    // but technically... it has a well defined extern row-major layout so that it's easy
+    // to pass it around to extern places
+    return extern struct {
+        storage: [row_count][col_count]ComponentType,
+
+        const Self = @This();
+
+        pub const ComponentType = T;
+        pub const col_count = c;
+        pub const row_count = r;
+        pub const element_count = col_count * row_count;
+
+        pub const Transpose = Matrix(T, row_count, col_count);
+        pub const Col = Matrix(T, 1, row_count);
+        pub const Row = Matrix(T, col_count, 1);
+
+        pub const ColIndex = math.IntFittingRange(0, col_count);
+        pub const RowIndex = math.IntFittingRange(0, row_count);
+        pub const Index = if (col_count == 1 and row_count == 1) struct {
+            col: ColIndex = 0,
+            row: RowIndex = 0,
+        } else if (col_count == 1) struct {
+            col: ColIndex = 0,
+            row: RowIndex,
+        } else if (row_count == 1) struct {
+            col: ColIndex,
+            row: RowIndex = 0,
+        } else struct {
+            col: ColIndex,
+            row: RowIndex,
+        };
+
+        // this is the only method that has knowledge of the underlying storage -- it's abstracted away from everything else
+        pub fn at_mut(self: *Self, index: Index) *ComponentType {
+            std.debug.assert(index.col < col_count);
+            std.debug.assert(index.row < row_count);
+            return &self.storage[index.row][index.col];
+        }
+
+        pub fn at(self: Self, index: Index) ComponentType {
+            var mut = self;
+            return mut.at_mut(index).*;
+        }
+
+        pub fn transpose(self: Self) Transpose {
+            var out: Transpose = undefined;
+            inline for (0..col_count) |col_idx| {
+                inline for (0..row_count) |row_idx| {
+                    out.at_mut(.{ .col = row_idx, .row = col_idx }).* = self.at(.{ .row = row_idx, .col = col_idx });
+                }
+            }
+            return out;
+        }
+
+        pub fn col(self: Self, index: math.IntFittingRange(0, col_count)) Col {
+            var out: Col = undefined;
+            inline for (0..row_count) |row_idx| {
+                out.at_mut(.{ .row = row_idx }).* = self.at(.{ .col = index, .row = row_idx});
+            }
+            return out;
+        }
+
+        pub fn cols(self: Self) [col_count]Col {
+            var out: [col_count]Col = undefined;
+            inline for (0..col_count) |col_idx| {
+                out[col_idx] = self.col(col_idx);
+            }
+            return out;
+        }
+
+        pub fn row(self: Self, index: math.IntFittingRange(0, row_count)) Row {
+            var out: Row = undefined;
+            inline for (0..col_count) |col_idx| {
+                out.at_mut(.{ .col = col_idx }).* = self.at(.{ .row = index, .col = col_idx});
+            }
+            return out;
+        }
+
+        pub fn rows(self: Self) [row_count]Row {
+            var out: [row_count]Row = undefined;
+            inline for (0..row_count) |row_idx| {
+                out[row_idx] = self.row(row_idx);
+            }
+            return out;
+        }
+
+        pub fn fromCols(values: [col_count]Col) Self {
+            var out: Self = undefined;
+            inline for (0..col_count) |col_idx| {
+                inline for (0..row_count) |row_idx| {
+                    out.at_mut(.{ .col = col_idx, .row = row_idx }).* = values[col_idx].at(.{ .row = row_idx });
+                }
+            }
+            return out;
+        }
+
+        pub fn fromRows(values: [row_count]Row) Self {
+            var out: Self = undefined;
+            inline for (0..col_count) |col_idx| {
+                inline for (0..row_count) |row_idx| {
+                    out.at_mut(.{ .col = col_idx, .row = row_idx }).* = values[row_idx].at(.{ .col = col_idx });
+                }
+            }
+            return out;
+        }
+
+        pub fn splat(element: ComponentType) Self {
+            var out: Self = undefined;
+            inline for (0..col_count) |col_idx| {
+                inline for (0..row_count) |row_idx| {
+                    out.at_mut(.{ .col = col_idx, .row = row_idx }).* = element;
+                }
+            }
+            return out;
+        }
+
+        pub fn appendCol(self: Self, to_append: Col) Matrix(ComponentType, col_count + 1, row_count) {
+            return .fromCols(self.cols() ++ .{ to_append });
+        }
+
+        pub usingnamespace if (col_count > 1) struct {
+            pub fn withoutCol(self: Self, comptime index: ColIndex) Matrix(ComponentType, col_count - 1, row_count) {
+                return .fromCols(self.cols()[0..index].* ++ self.cols()[index + 1..].*);
+            }
+
+            pub fn truncateCol(self: Self) Matrix(ComponentType, col_count - 1, row_count) {
+                return self.withoutCol(col_count - 1);
+            }
+        } else struct {};
+
+        pub fn appendRow(self: Self, to_append: Row) Matrix(ComponentType, col_count, row_count + 1) {
+            return .fromRows(self.rows() ++ .{ to_append });
+        }
+
+        pub usingnamespace if (row_count > 1) struct {
+            pub fn withoutRow(self: Self, comptime index: RowIndex) Matrix(ComponentType, col_count, row_count - 1) {
+                return .fromRows(self.rows()[0..index].* ++ self.rows()[index + 1..].*);
+            }
+
+            pub fn truncateRow(self: Self) Matrix(ComponentType, col_count, row_count - 1) {
+                return self.withoutRow(row_count - 1);
+            }
+        } else struct {};
+
+        // math methods
+        pub usingnamespace if (isNumberType(ComponentType)) struct {
+            pub fn mul(self: Self, other: anytype) MatrixProduct(Self, @TypeOf(other)) {
+                const Product = MatrixProduct(Self, @TypeOf(other));
+                var out = Product.splat(0);
+                inline for (0..Product.row_count) |row_idx| {
+                    inline for (0..Product.col_count) |col_idx| {
+                        inline for (0..col_count) |element_idx| {
+                            out.at_mut(.{ .col = col_idx, .row = row_idx }).* +=
+                                self.at(.{ .col = element_idx, .row = row_idx }) * other.at(.{ .col = col_idx, .row = element_idx });
+                        }
+                    }
+                }
+                return out;
+            }
+
+            pub fn scale(self: Self, scalar: ComponentType) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* = self.at(.{ .col = col_idx, .row = row_idx }) * scalar;
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentMul(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            self.at(.{ .col = col_idx, .row = row_idx }) * other.at(.{ .col = col_idx, .row = row_idx });
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentDiv(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            self.at(.{ .col = col_idx, .row = row_idx }) / other.at(.{ .col = col_idx, .row = row_idx });
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentAdd(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            self.at(.{ .col = col_idx, .row = row_idx }) + other.at(.{ .col = col_idx, .row = row_idx });
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentSub(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            self.at(.{ .col = col_idx, .row = row_idx }) - other.at(.{ .col = col_idx, .row = row_idx });
+                    }
+                }
+                return out;
+            }
+        } else struct {};
+
+        // square matrix methods
+        pub usingnamespace if (col_count == row_count) struct {
+            pub const identity = Self.diagonal(.{ 1 } ** col_count);
+
+            pub fn diagonal(values: [col_count]ComponentType) Self {
+                var out: Self = Self.splat(0);
+                inline for (0..col_count) |element_idx| {
+                    out.at_mut(.{ .col = element_idx, .row = element_idx }).* = values[element_idx];
+                }
+                return out;
+            }
+
+            // square matrix math methods
+            pub usingnamespace if (isNumberType(ComponentType)) struct {
+                pub fn determinant(self: Self) ComponentType {
+                    return self.cofactor().row(0).dot(self.row(0));
+                }
+
+                pub fn cofactor(self: Self) Self {
+                    if (comptime col_count == 1) {
+                        return Self.identity;
+                    } else {
+                        var out: Self = undefined;
+                        inline for (0..row_count) |row_idx| {
+                            inline for (0..col_count) |col_idx| {
+                                out.at_mut(.{ .col = col_idx, .row = row_idx }).* = (if ((col_idx + row_idx) % 2 == 0) 1 else -1) * self.withoutCol(col_idx).withoutRow(row_idx).determinant();
+                            }
+                        }
+                        return out;
+                    }
+                }
+                pub fn adjugate(self: Self) Self {
+                    return self.cofactor().transpose();
+                }
+
+                pub usingnamespace if (isFloatType(ComponentType)) struct {
+                    pub fn inverse(self: Self) Self {
+                        const det = self.determinant();
+                        std.debug.assert(det != 0);
+                        return self.adjugate().scale(1 / det);
+                    }
+                } else struct {};
+            } else struct {};
+
+            pub usingnamespace if (col_count == 3 and isFloatType(ComponentType)) struct {
+                // TODO: this should be a member function of a rotor/quaternion, not of a matrix
+                pub fn fromAxisAngle(axis: Vec3(ComponentType), angle: ComponentType) Self {
+                    const sin, const cos = .{ math.sin(angle), math.cos(angle) };
+                    const x, const y, const z = .{ axis.element(0), axis.element(1), axis.element(2) };
+
+                    return Self.fromRows(.{
+                        .new(.{(1 - cos) * x * x + cos, (1 - cos) * x * y - sin * z, (1 - cos) * x * z + sin * y}),
+                        .new(.{(1 - cos) * x * y + sin * z, (1 - cos) * y * y + cos, (1 - cos) * y * z - sin * x}),
+                        .new(.{(1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos}),
+                    });
+                }
+            } else struct {};
+        } else struct {};
+
+        // vector methods
+        pub usingnamespace if (col_count == 1 or row_count == 1) struct {
+            pub fn element_mut(self: *Self, index: math.IntFittingRange(0, element_count)) *ComponentType {
+                return if (comptime col_count == 1) self.at_mut(.{ .row = index }) else self.at_mut(.{ .col = index });
+            }
+
+            pub fn element(self: Self, index: math.IntFittingRange(0, element_count)) ComponentType {
+                var mut = self;
+                return mut.element_mut(index).*;
+            }
+
+            pub fn new(array: [element_count]ComponentType) Self {
+                return Self.fromArray(array);
+            }
+
+            pub fn fromArray(array: [element_count]ComponentType) Self {
+                var out: Self = undefined;
+                inline for (0..element_count) |element_idx| {
+                    out.element_mut(element_idx).* = array[element_idx];
+                }
+                return out;
+            }
+
+            pub fn toArray(self: Self) [element_count]ComponentType {
+                var out: [element_count]ComponentType = undefined;
+                inline for (0..element_count) |element_idx| {
+                    out[element_idx] = self.element(element_idx);
+                }
+                return out;
+            }
+
+            pub fn append(self: Self, value: ComponentType) if (col_count != 1) Matrix(ComponentType, col_count + 1, 1) else Matrix(ComponentType, 1, row_count + 1) {
+                return .new(self.toArray() ++ .{ value });
+            }
+
+            pub fn truncate(self: Self) if (col_count != 1) Matrix(ComponentType, col_count - 1, 1) else Matrix(ComponentType, 1, row_count - 1) {
+                return .new(self.toArray()[0..element_count - 1].*);
+            }
+
+            // vector math methods
+            pub usingnamespace if (isNumberType(ComponentType)) struct {
+                pub fn dot(self: Self, other: Self) ComponentType {
+                    return (if (comptime col_count == 1) self.transpose().mul(other) else self.mul(other.transpose())).get();
+                }
+
+                pub fn normL1(self: Self) ComponentType {
+                    var out = 0;
+                    inline for (0..element_count) |element_idx| {
+                        out += @abs(self.element(element_idx));
+                    }
+                    return out;
+                }
+
+                pub fn normLinf(self: Self) ComponentType {
+                    var out = 0;
+                    inline for (0..element_count) |element_idx| {
+                        out = @max(out, @abs(self.element(element_idx)));
+                    }
+                    return out;
+                }
+
+                pub usingnamespace if (isFloatType(ComponentType)) struct {
+                    pub fn normL2(self: Self) ComponentType {
+                        return math.sqrt(self.dot(self));
+                    }
+
+                    pub fn unit(self: Self) Self {
+                        return self.scale(@as(ComponentType, 1) / self.normL2());
+                    }
+                } else struct {};
+
+                // TODO: generalize to full wedge product,
+                // don't want to specialize on three dimensions
+                pub usingnamespace if (element_count == 3) struct {
+                    pub fn cross(self: Self, other: Self) Self {
+                        const x = self.element(1) * other.element(2) - other.element(1) * self.element(2);
+                        const y = self.element(2) * other.element(0) - other.element(2) * self.element(0);
+                        const z = self.element(0) * other.element(1) - other.element(0) * self.element(1);
+                        return Self.new(.{ x, y, z });
+                    }
+                } else struct {};
+            } else struct {};
+        } else struct {};
+
+
+        pub usingnamespace if (col_count == 1 and row_count == 1) struct {
+            pub fn get(self: Self) ComponentType {
+                return self.at(.{});
+            }
+        } else struct {};
+    };
+}
+
+pub fn VecN(comptime T: type, comptime n: comptime_int) type {
+    return Matrix(T, 1, n);
 }
 
 pub fn Vec2(comptime T: type) type {
-    checkValidVecT(T);
-
-    const Vec3T = Vec3(T);
-
-    return extern struct {
-        x: T,
-        y: T,
-
-        pub const ComponentType = T;
-
-        pub const element_count = 2;
-
-        pub const zero = Self.new(0, 0);
-
-        pub const e_0 = Self.new(1, 0);
-        pub const e_1 = Self.new(0, 1);
-
-        const Self = @This();
-
-        pub fn new(x: T, y: T) Self {
-            return Self { .x = x, .y = y };
-        }
-
-        pub fn scale(self: Self, scalar: T) Self {
-            return Self.new(self.x * scalar, self.y * scalar);
-        }
-
-        pub fn componentMul(self: Self, other: Self) Self {
-            return Self.new(self.x * other.x, self.y * other.y);
-        }
-
-        pub fn componentDiv(self: Self, other: Self) Self {
-            return Self.new(self.x / other.x, self.y / other.y);
-        }
-
-        pub fn dot(self: Self, other: Self) T {
-            return self.componentMul(other).sum();
-        }
-
-        pub fn sub(self: Self, other: Self) Self {
-            return Self.new(self.x - other.x, self.y - other.y);
-        }
-
-        pub fn add(self: Self, other: Self) Self {
-            return Self.new(self.x + other.x, self.y + other.y);
-        }
-
-        pub fn sum(self: Self) T {
-            return self.x + self.y;
-        }
-
-        pub fn extend(self: Self, z: T) Vec3T {
-            return Vec3T.new(self.x, self.y, z);
-        }
-
-        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            try writer.writeAll("{ ");
-            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(" }");
-        }
-
-        pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn normL2(self: Self) T {
-                return math.sqrt(self.dot(self));
-            }
-
-            pub fn unit(self: Self) Self {
-                return self.scale(1 / self.normL2());
-            }
-        } else struct {};
-    };
-
+    return VecN(T, 2);
 }
 
 pub fn Vec3(comptime T: type) type {
-    checkValidVecT(T);
-
-    const Vec4T = Vec4(T);
-
-    return extern struct {
-        x: T,
-        y: T,
-        z: T,
-
-        const Self = @This();
-
-        pub const ComponentType = T;
-
-        pub const element_count = 3;
-
-        pub const zero = Self.new(0, 0, 0);
-
-        pub const e_0 = Self.new(1, 0, 0);
-        pub const e_1 = Self.new(0, 1, 0);
-        pub const e_2 = Self.new(0, 0, 1);
-
-        pub fn new(x: T, y: T, z: T) Self {
-            return Self { .x = x, .y = y, .z = z };
-        }
-
-        pub fn scale(self: Self, scalar: T) Self {
-            return Self.new(self.x * scalar, self.y * scalar, self.z * scalar);
-        }
-
-        pub fn componentMul(self: Self, other: Self) Self {
-            return Self.new(self.x * other.x, self.y * other.y, self.z * other.z);
-        }
-
-        pub fn componentDiv(self: Self, other: Self) Self {
-            return Self.new(self.x / other.x, self.y / other.y, self.z / other.z);
-        }
-
-        pub fn dot(self: Self, other: Self) T {
-            return self.componentMul(other).sum();
-        }
-
-        pub fn cross(self: Self, other: Self) Self {
-            const x = self.y * other.z - other.y * self.z;
-            const y = self.z * other.x - other.z * self.x;
-            const z = self.x * other.y - other.x * self.y;
-            return Self.new(x, y, z);
-        }
-
-        pub fn sub(self: Self, other: Self) Self {
-            return Self.new(self.x - other.x, self.y - other.y, self.z - other.z);
-        }
-
-        pub fn add(self: Self, other: Self) Self {
-            return Self.new(self.x + other.x, self.y + other.y, self.z + other.z);
-        }
-
-        pub fn sum(self: Self) T {
-            return self.x + self.y + self.z;
-        }
-
-        pub fn extend(self: Self, w: T) Vec4T {
-            return Vec4T.new(self.x, self.y, self.z, w);
-        }
-
-        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            try writer.writeAll("{ ");
-            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(" }");
-        }
-
-        pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn normL2(self: Self) T {
-                return math.sqrt(self.dot(self));
-            }
-
-            pub fn unit(self: Self) Self {
-                return self.scale(1 / self.normL2());
-            }
-        } else struct {};
-    };
+    return VecN(T, 3);
 }
 
 pub fn Vec4(comptime T: type) type {
-    checkValidVecT(T);
-
-    return extern struct {
-        x: T,
-        y: T,
-        z: T,
-        w: T,
-
-        const Self = @This();
-
-        pub const ComponentType = T;
-
-        pub const element_count = 4;
-
-        pub const zero = Self.new(0, 0, 0, 0);
-
-        pub const e_0 = Self.new(1, 0, 0, 0);
-        pub const e_1 = Self.new(0, 1, 0, 0);
-        pub const e_2 = Self.new(0, 0, 1, 0);
-        pub const e_3 = Self.new(0, 0, 0, 1);
-
-        pub fn new(x: T, y: T, z: T, w: T) Self {
-            return Self { .x = x, .y = y, .z = z, .w = w };
-        }
-
-        pub fn scale(self: Self, scalar: T) Self {
-            return Self.new(self.x * scalar, self.y * scalar, self.z * scalar, self.w * scalar);
-        }
-
-        pub fn componentMul(self: Self, other: Self) Self {
-            return Self.new(self.x * other.x, self.y * other.y, self.z * other.z, self.w * other.w);
-        }
-
-        pub fn componentDiv(self: Self, other: Self) Self {
-            return Self.new(self.x / other.x, self.y / other.y, self.z / other.z, self.w / other.w);
-        }
-
-        pub fn dot(self: Self, other: Self) T {
-            return self.componentMul(other).sum();
-        }
-
-        pub fn sum(self: Self) T {
-            return self.x + self.y + self.z + self.w;
-        }
-
-        pub fn truncate(self: Self) Vec3(T) {
-            return Vec3(T).new(self.x, self.y, self.z);
-        }
-
-        pub fn sub(self: Self, other: Self) Self {
-            return Self.new(self.x - other.x, self.y - other.y, self.z - other.z, self.w - other.w);
-        }
-
-        pub fn add(self: Self, other: Self) Self {
-            return Self.new(self.x + other.x, self.y + other.y, self.z + other.z, self.w + other.w);
-        }
-
-        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            try writer.writeAll("{ ");
-            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.w, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(" }");
-        }
-
-        pub usingnamespace if (@typeInfo(T) == .float) struct {
-            pub fn normL2(self: Self) T {
-                return math.sqrt(self.dot(self));
-            }
-
-            pub fn unit(self: Self) Self {
-                return self.scale(1 / self.normL2());
-            }
-        } else struct {};
-    };
+    return VecN(T, 4);
 }
 
-pub fn Mat3x4(comptime T: type) type {
-    checkValidVecT(T);
+pub fn MatN(comptime T: type, comptime n: comptime_int) type {
+    return Matrix(T, n, n);
+}
 
-    const Vec4T = Vec4(T);
-    const Vec3T = Vec3(T);
-    const Mat3T = Mat3(T);
-
-    return extern struct {
-        x: Vec4T,
-        y: Vec4T,
-        z: Vec4T,
-
-        const Self = @This();
-
-        pub const identity = Self.fromRows(Vec4T.e_0, Vec4T.e_1, Vec4T.e_2);
-
-        pub fn fromRows(x: Vec4T, y: Vec4T, z: Vec4T) Self {
-            return Self { .x = x, .y = y, .z = z };
-        }
-
-        pub fn fromColumns(x: Vec3T, y: Vec3T, z: Vec3T, w: Vec3T) Self {
-            return Self.fromRows(
-                Vec4T.new(x.x, y.x, z.x, w.x),
-                Vec4T.new(x.y, y.y, z.y, w.y),
-                Vec4T.new(x.z, y.z, z.z, w.z),
-            );
-        }
-
-        pub fn fromTranslation(v: Vec3T) Self {
-            return Self {
-                .x = Vec3T.e_0.extend(v.x),
-                .y = Vec3T.e_1.extend(v.y),
-                .z = Vec3T.e_2.extend(v.z),
-            };
-        }
-
-        pub fn mulPoint(self: Self, v: Vec3T) Vec3T {
-            const x = self.x.dot(v.extend(1.0));
-            const y = self.y.dot(v.extend(1.0));
-            const z = self.z.dot(v.extend(1.0));
-            return Vec3T.new(x, y, z);
-        }
-
-        pub fn mulVector(self: Self, v: Vec3T) Vec3T {
-            const x = self.x.dot(v.extend(0.0));
-            const y = self.y.dot(v.extend(0.0));
-            const z = self.z.dot(v.extend(0.0));
-            return Vec3T.new(x, y, z);
-        }
-
-        pub fn mul(self: Self, other: Self) Self {
-            const transposed_x = Vec3T.new(other.x.x, other.y.x, other.z.x).extend(0);
-            const transposed_y = Vec3T.new(other.x.y, other.y.y, other.z.y).extend(0);
-            const transposed_z = Vec3T.new(other.x.z, other.y.z, other.z.z).extend(0);
-            const transposed_w = Vec3T.new(other.x.w, other.y.w, other.z.w).extend(1);
-
-            return Self.fromRows(
-                Vec4T.new(self.x.dot(transposed_x), self.x.dot(transposed_y), self.x.dot(transposed_z), self.x.dot(transposed_w)),
-                Vec4T.new(self.y.dot(transposed_x), self.y.dot(transposed_y), self.y.dot(transposed_z), self.y.dot(transposed_w)),
-                Vec4T.new(self.z.dot(transposed_x), self.z.dot(transposed_y), self.z.dot(transposed_z), self.z.dot(transposed_w)),
-            );
-        }
-
-        pub fn extractTranslation(self: Self) Vec3T {
-            return Vec3T.new(self.x.w, self.y.w, self.z.w);
-        }
-
-        pub fn truncate(self: Self) Mat3T {
-            return Mat3T.fromRows(self.x.truncate(), self.y.truncate(), self.z.truncate());
-        }
-
-        pub fn withTranslation(self: Self, v: Vec3T) Self {
-            var self_mut = self;
-            self_mut.x.w = v.x;
-            self_mut.y.w = v.y;
-            self_mut.z.w = v.z;
-            return self_mut;
-        }
-
-        pub fn fromTransformTranslation(transform: Mat3T, translation: Vec3T) Self {
-            return Self.fromRows(
-                transform.x.extend(translation.x),
-                transform.y.extend(translation.y),
-                transform.z.extend(translation.z),
-            );
-        }
-
-        pub fn format(self: Self, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            try writer.writeAll("{ ");
-            try std.fmt.formatType(self.x, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.y, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(", ");
-            try std.fmt.formatType(self.z, fmt, options, writer, std.fmt.default_max_depth);
-            try writer.writeAll(" }");
-        }
-
-        pub usingnamespace if (@typeInfo(T) == .float) struct {
-            // https://math.stackexchange.com/a/152686
-            pub fn inverseAffine(self: Self) Self {
-                const p = self.truncate();
-                const v = self.extractTranslation();
-
-                const inv_p = p.inverse();
-                const neg_inv_p_v = inv_p.scale(-1).mulVector(v);
-
-                return Self.fromTransformTranslation(inv_p, neg_inv_p_v);
-            }
-        } else struct {};
-    };
+pub fn Mat2(comptime T: type) type {
+    return MatN(T, 2);
 }
 
 pub fn Mat3(comptime T: type) type {
-    checkValidVecT(T);
+    return MatN(T, 3);
+}
 
-    const Vec3T = Vec3(T);
+pub fn Mat4(comptime T: type) type {
+    return MatN(T, 4);
+}
 
-    return extern struct {
-        x: Vec3T,
-        y: Vec3T,
-        z: Vec3T,
-
-        const Self = @This();
-
-        pub const identity = Self.fromRows(Vec3T.e_0, Vec3T.e_1, Vec3T.e_2);
-
-        pub fn fromRows(x: Vec3T, y: Vec3T, z: Vec3T) Self {
-            return Self { .x = x, .y = y, .z = z };
-        }
-
-        pub fn mulVector(self: Self, v: Vec3T) Vec3T {
-            return Vec3T.new(
-                self.x.dot(v),
-                self.y.dot(v),
-                self.z.dot(v),
-            );
-        }
-
-        pub fn mul(self: Self, other: Self) Self {
-            const transposed = other.transpose();
-            return Self.fromRows(
-                Vec3T.new(self.x.dot(transposed.x), self.x.dot(transposed.y), self.x.dot(transposed.z)),
-                Vec3T.new(self.y.dot(transposed.x), self.y.dot(transposed.y), self.y.dot(transposed.z)),
-                Vec3T.new(self.z.dot(transposed.x), self.z.dot(transposed.y), self.z.dot(transposed.z)),
-            );
-        }
-
-        pub fn scale(self: Self, scalar: T) Self {
-            const x = self.x.scale(scalar);
-            const y = self.y.scale(scalar);
-            const z = self.z.scale(scalar);
-            return Self.fromRows(x, y, z);
-        }
-
-        pub fn determinant(self: Self) T {
-            return self.x.dot(self.y.cross(self.z));
-        }
-
-        pub fn transpose(self: Self) Self {
-            return Self.fromRows(
-                Vec3T.new(self.x.x, self.y.x, self.z.x),
-                Vec3T.new(self.x.y, self.y.y, self.z.y),
-                Vec3T.new(self.x.z, self.y.z, self.z.z),
-            );
-        }
-
-        pub fn cofactor(self: Self) Self {
-            const v1 = self.y.cross(self.z);
-            const v2 = self.z.cross(self.x);
-            const v3 = self.x.cross(self.y);
-            return Self.fromRows(v1, v2, v3);
-        }
-
-        pub fn adjugate(self: Self) Self {
-            return self.cofactor().transpose();
-        }
-
-        pub usingnamespace if (@typeInfo(T) == .float) struct {
-            // https://en.wikipedia.org/wiki/Invertible_matrix#Inversion_of_3_%C3%97_3_matrices
-            pub fn inverse(self: Self) Self {
-                const det = self.determinant();
-                std.debug.assert(det != 0);
-                return self.adjugate().scale(1 / det);
-            }
-
-            pub fn fromAxisAngle(axis: Vec3T, angle: T) Self {
-                const sin, const cos = .{ math.sin(angle), math.cos(angle) };
-                const x, const y, const z = .{ axis.x, axis.y, axis.z };
-
-                return Self.fromRows(
-                    Vec3T.new((1 - cos) * x * x + cos, (1 - cos) * x * y - sin * z, (1 - cos) * x * z + sin * y),
-                    Vec3T.new((1 - cos) * x * y + sin * z, (1 - cos) * y * y + cos, (1 - cos) * y * z - sin * x),
-                    Vec3T.new((1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos),
-                );
-            }
-        } else struct {};
-    };
+pub fn Mat4x3(comptime T: type) type {
+    return Matrix(T, 4, 3);
 }

@@ -105,7 +105,7 @@ pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
     return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
 }
 
-pub fn dragVector(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.ComponentType, max: T.ComponentType) bool {
+pub fn dragMatrix(comptime T: type, comptime label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.ComponentType, max: T.ComponentType) bool {
     const data_type = switch (T.ComponentType) {
         u32 => c.ImGuiDataType_U32,
         f32 => c.ImGuiDataType_Float,
@@ -116,9 +116,24 @@ pub fn dragVector(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
         f32 => "%.2f",
         else => unreachable, // TODO
     };
-    const component_count = T.element_count;
 
-    return c.igDragScalarN(label, data_type, p_data, component_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
+    var changed = false;
+    if (T.row_count > 1 and T.col_count > 1) {
+        text(label);
+        inline for (0..T.row_count) |row_idx| {
+            var row = p_data.row(row_idx).toArray();
+            changed = c.igDragScalarN(std.fmt.comptimePrint("##{s}{}", .{ label, row_idx }), data_type, &row, T.col_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
+            inline for (0..T.col_count) |col_idx| {
+                p_data.at_mut(.{ .row = row_idx, .col = col_idx}).* = row[col_idx];
+            }
+        }
+    } else {
+        var data = p_data.toArray();
+        changed = c.igDragScalarN(label, data_type, &data, T.element_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
+        p_data.* = .new(data);
+    }
+
+    return changed;
 }
 
 pub fn sliderAngle(label: [*:0]const u8, p_rad: *f32, degrees_min: f32, degrees_max: f32) bool {

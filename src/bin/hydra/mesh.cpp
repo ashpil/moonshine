@@ -172,7 +172,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         }
 
         VtVec3fArray normals = ComputePrimvar<GfVec3f>(sceneDelegate, indices, _tokens->normals);
-        
+
         // TODO: destroy mesh
         _mesh = HdMoonshineCreateMesh(msne, reinterpret_cast<const F32x3*>(points.cdata()),  reinterpret_cast<const F32x3*>(normals.cdata()), reinterpret_cast<const F32x2*>(texcoords.cdata()), points.size());
 
@@ -242,7 +242,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
 
         for (size_t i = 0; i < _instancesTransforms.size(); i++) {
             GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
-            const Mat3x4 matrix = Mat3x4 {
+            const Mat4x3 matrix = Mat4x3 {
                 .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
                 .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                 .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },
@@ -253,7 +253,7 @@ void HdMoonshineMesh::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRend
         if (transform_changed) {
             for (size_t i = 0; i < _instancesTransforms.size(); i++) {
                 GfMatrix4f instanceTransform = _transform * _instancesTransforms[i];
-                const Mat3x4 matrix = Mat3x4 {
+                const Mat4x3 matrix = Mat4x3 {
                     .x = F32x4 { .x = instanceTransform[0][0], .y = instanceTransform[1][0], .z = instanceTransform[2][0], .w = instanceTransform[3][0] },
                     .y = F32x4 { .x = instanceTransform[0][1], .y = instanceTransform[1][1], .z = instanceTransform[2][1], .w = instanceTransform[3][1] },
                     .z = F32x4 { .x = instanceTransform[0][2], .y = instanceTransform[1][2], .z = instanceTransform[2][2], .w = instanceTransform[3][2] },

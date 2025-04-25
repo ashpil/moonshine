@@ -16,12 +16,12 @@ const Material = @import("./MaterialManager.zig");
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 pub const StandardBindings = struct {
     tlas: ?vk.AccelerationStructureKHR,
     instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
-    world_to_instances: ?core.mem.BufferSlice(Mat3x4),
+    world_to_instances: ?core.mem.BufferSlice(Mat4x3),
     meshes: ?core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
     geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry.Device),
     models: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Model.Device),

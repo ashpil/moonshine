@@ -18,7 +18,7 @@ const F32x3 = engine.vector.Vec3(f32);
 pub const Material = struct {
     // on the host side, materials are represented as a regular tagged union
     pub const Parameters = struct {
-        pub const default_normal = F32x2.new(0.5, 0.5);
+        pub const default_normal = F32x2.new(.{ 0.5, 0.5 });
         const normal_components = @TypeOf(default_normal).element_count;
         const emissive_components = 3;
 
@@ -76,8 +76,8 @@ pub const HenyeyGreenstein = extern struct {
 };
 
 pub const Medium = extern struct {
-    @"σ_s": F32x3 = F32x3.new(0, 0, 0),
-    @"σ_a": F32x3 = F32x3.new(0, 0, 0),
+    @"σ_s": F32x3 = F32x3.new(.{0, 0, 0}),
+    @"σ_a": F32x3 = F32x3.new(.{0, 0, 0}),
 };
 
 pub const BSDF = enum(u32) {

@@ -32,7 +32,7 @@ const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const Mat3 = vector.Mat3(f32);
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 const vk = @import("vulkan");
 
@@ -130,7 +130,7 @@ pub fn main() !void {
     var rebuild_error = false;
     var has_clicked = false;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
-    var current_clicked_color = F32x3.new(0.0, 0.0, 0.0);
+    var current_clicked_color = F32x3.new(.{0.0, 0.0, 0.0});
 
     while (!window.shouldClose()) {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -199,10 +199,7 @@ pub fn main() !void {
                     changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera][1].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
                 },
             }
-            imgui.text("Transform");
-            changed = imgui.dragVector(F32x4, "##1", &scene.camera.cameras.items[active_camera][1].transform.x, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x4, "##2", &scene.camera.cameras.items[active_camera][1].transform.y, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            changed = imgui.dragVector(F32x4, "##3", &scene.camera.cameras.items[active_camera][1].transform.z, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+            changed = imgui.dragMatrix(Mat4x3, "Transform", &scene.camera.cameras.items[active_camera][1].transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
             if (changed) {
                 scene.camera.sensors.items[active_sensor].clear();
             }
@@ -229,7 +226,7 @@ pub fn main() !void {
                 }
             }
             const last_rebuild_failed = rebuild_error;
-            if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(1.0, 0.0, 0.0, 1));
+            if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(.{1.0, 0.0, 0.0, 1}));
             if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
                 const start = try std.time.Instant.now();
                 rebuild_error = false;
@@ -311,12 +308,9 @@ pub fn main() !void {
                     if (thin) imgui.beginDisabled();
                     changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
                     if (thin) imgui.endDisabled();
-                    var transform: Mat3x4 = @bitCast(instance.transform);
+                    var transform: Mat4x3 = @bitCast(instance.transform);
                     imgui.pushItemWidth(imgui.getFontSize() * -6);
-                    imgui.text("Transform");
-                    changed = imgui.dragVector(F32x4, "##1", &transform.x, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-                    changed = imgui.dragVector(F32x4, "##2", &transform.y, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-                    changed = imgui.dragVector(F32x4, "##3", &transform.z, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                    changed = imgui.dragMatrix(Mat4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                     if (changed) {
                         scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
                         try scene.world.accel.recordRebuild(frame_encoder.buffer);
@@ -330,26 +324,26 @@ pub fn main() !void {
         }
         imgui.end();
         if (!imgui.getIO().WantCaptureMouse) {
-            const window_size = F32x2.new(
+            const window_size = F32x2.new(.{
                 @as(f32, @floatFromInt(display.swapchain.extent.width)),
                 @as(f32, @floatFromInt(display.swapchain.extent.height))
-            );
+            });
             if (imgui.isMouseDragging(.right)) {
                 window.setCursorMode(.disabled);
                 const delta = imgui.getMouseDragDelta(.right).componentDiv(window_size);
                 imgui.resetMouseDragDelta(.right);
-                if (!std.meta.eql(delta, F32x2.new(0.0, 0.0))) {
-                    const left_right = Mat3.fromAxisAngle(F32x3.new(0, 0, 1), delta.x);
-                    const up_down = Mat3.fromAxisAngle(F32x3.new(0, -1, 0), delta.y);
+                if (!std.meta.eql(delta, F32x2.new(.{0.0, 0.0}))) {
+                    const left_right = Mat3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
+                    const up_down = Mat3.fromAxisAngle(.new(.{0, -1, 0}), delta.element(1));
                     const rotation = up_down.mul(left_right);
-                    scene.camera.cameras.items[active_camera][1].transform = scene.camera.cameras.items[active_camera][1].transform.mul(Mat3x4.fromTransformTranslation(rotation, F32x3.zero));
+                    scene.camera.cameras.items[active_camera][1].transform = scene.camera.cameras.items[active_camera][1].transform.appendRow(.new(.{0, 0, 0, 1})).mul(rotation.appendCol(.splat(0)).appendRow(.new(.{0, 0, 0, 1}))).truncateRow();
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
                     current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().componentDiv(window_size), scene.camera.cameras.items[active_camera][1], scene.camera.sensors.items[active_sensor]);
-                    const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().x), .y = @intFromFloat(imgui.getMousePos().y), .z = 0 });
+                    const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().element(0)), .y = @intFromFloat(imgui.getMousePos().element(1)), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;
                 }
@@ -359,16 +353,16 @@ pub fn main() !void {
         if (!imgui.getIO().WantCaptureKeyboard) {
             var transform = scene.camera.cameras.items[active_camera][1].transform;
 
-            const left = transform.mulVector(F32x3.new(0, -1, 0));
-            const forward = transform.mulVector(F32x3.new(1, 0, 0));
-            const origin = transform.extractTranslation();
+            const left = transform.truncateCol().mul(F32x3.new(.{0, -1, 0}));
+            const forward = transform.truncateCol().mul(F32x3.new(.{1, 0, 0}));
+            const origin = transform.col(3);
 
             const speed = imgui.getIO().DeltaTime;
 
-            if (imgui.isKeyDown(.w)) transform = transform.withTranslation(origin.add(forward.scale(speed * navigation_speed)));
-            if (imgui.isKeyDown(.s)) transform = transform.withTranslation(origin.sub(forward.scale(speed * navigation_speed)));
-            if (imgui.isKeyDown(.a)) transform = transform.withTranslation(origin.add(left.scale(speed * navigation_speed)));
-            if (imgui.isKeyDown(.d)) transform = transform.withTranslation(origin.sub(left.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.w)) transform = transform.truncateCol().appendCol(origin.componentAdd(forward.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.s)) transform = transform.truncateCol().appendCol(origin.componentSub(forward.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.a)) transform = transform.truncateCol().appendCol(origin.componentAdd(left.scale(speed * navigation_speed)));
+            if (imgui.isKeyDown(.d)) transform = transform.truncateCol().appendCol(origin.componentSub(left.scale(speed * navigation_speed)));
 
             if (!std.meta.eql(transform, scene.camera.cameras.items[active_camera][1].transform)) {
                 scene.camera.cameras.items[active_camera][1].transform = transform;
@@ -498,8 +492,8 @@ pub fn exposeToImguiRecursive(T: type, value: *T, name: [:0]const u8) bool {
                 f32 => imgui.dragScalar(f32, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, -std.math.inf(f32), std.math.inf(f32)),
                 u32 => imgui.dragScalar(u32, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
                 else => if (@hasDecl(struct_field.type, "ComponentType")) switch (struct_field.type.ComponentType) {
-                    f32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, -std.math.inf(f32), std.math.inf(f32)),
-                    u32 => imgui.dragVector(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
+                    f32 => imgui.dragMatrix(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 0.01, -std.math.inf(f32), std.math.inf(f32)),
+                    u32 => imgui.dragMatrix(struct_field.type, struct_field.name.ptr, &@field(value, struct_field.name), 1, 0, std.math.maxInt(u32)),
                     else => unreachable,
                 } else exposeToImguiRecursive(struct_field.type, &@field(value, struct_field.name), struct_field.name),
             } or changed;

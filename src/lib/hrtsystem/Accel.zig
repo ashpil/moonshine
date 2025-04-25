@@ -14,15 +14,16 @@ const MaterialManager = @import("./MaterialManager.zig");
 const ModelManager = @import("./ModelManager.zig");
 
 const vector = @import("../vector.zig");
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 const F32x3 = vector.Vec3(f32);
+const F32x4 = vector.Vec4(f32);
 
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
 // how all the meshes and materials fit together
 
 pub const Instance = struct {
-    transform: Mat3x4,
+    transform: Mat4x3,
     visible: bool = true,
     thin: bool = true,
     priority: u4 = 1, // 1-7 valid values
@@ -37,7 +38,7 @@ const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     },
     .PushSetBindings = struct {
         instances: core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
-        world_to_instances: core.mem.BufferSlice(Mat3x4),
+        world_to_instances: core.mem.BufferSlice(Mat4x3),
         models: core.mem.BufferSlice(ModelManager.Model.Device),
         dst_power: core.mem.BufferSlice(F32x3),
     },
@@ -68,8 +69,8 @@ instances_address: vk.DeviceAddress,
 // transforms provided by shader only in hit/intersection shaders but we need them
 // in raygen
 // ray queries provide them in any shader which would be a benefit of using them
-world_to_instance_device: core.mem.DeviceBuffer(Mat3x4, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
-world_to_instance_host: core.mem.UploadBuffer(Mat3x4),
+world_to_instance_device: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+world_to_instance_host: core.mem.UploadBuffer(Mat4x3),
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR = .null_handle,
@@ -102,9 +103,9 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self
     errdefer instances_host.destroy(vc);
     const instances_address = instances_device.getAddress(vc);
 
-    const world_to_instance_device = try core.mem.DeviceBuffer(Mat3x4, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_instances, "world to instances");
+    const world_to_instance_device = try core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_device.destroy(vc);
-    const world_to_instance_host = try core.mem.UploadBuffer(Mat3x4).create(vc, max_instances, "world to instances");
+    const world_to_instance_host = try core.mem.UploadBuffer(Mat4x3).create(vc, max_instances, "world to instances");
     errdefer world_to_instance_host.destroy(vc);
 
     return Self {
@@ -149,7 +150,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 
     // upload world_to_instance matrix
     {
-        self.world_to_instance_host.hostSlice()[self.instance_count] = instance.transform.inverseAffine();
+        self.world_to_instance_host.hostSlice()[self.instance_count] = instance.transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
         self.world_to_instance_device.uploadFrom(encoder, self.instance_count, self.world_to_instance_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
     }
 
@@ -277,10 +278,10 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
-pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat3x4, thin: bool, priority: u4, visible: bool) void {
+pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat4x3, thin: bool, priority: u4, visible: bool) void {
     self.instances_host.hostSlice()[instance_idx].instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
     self.instances_host.hostSlice()[instance_idx].transform = @bitCast(transform);
-    self.world_to_instance_host.hostSlice()[instance_idx] = @bitCast(transform.inverseAffine());
+    self.world_to_instance_host.hostSlice()[instance_idx] = @bitCast(transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow());
     self.instances_device.uploadFrom(encoder, instance_idx, self.instances_host.deviceSlice().slice(instance_idx, instance_idx + 1));
     self.world_to_instance_device.uploadFrom(encoder, instance_idx, self.world_to_instance_host.deviceSlice().slice(instance_idx, instance_idx + 1));
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {

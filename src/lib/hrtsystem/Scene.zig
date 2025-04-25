@@ -18,8 +18,9 @@ const exr = engine.fileformats.exr;
 const vector = @import("../vector.zig");
 const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
-const Mat3x4 = vector.Mat3x4(f32);
 const Mat3 = vector.Mat3(f32);
+const Mat4 = vector.Mat4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 const Self = @This();
 
@@ -51,24 +52,26 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     _ = try camera.appendSensor(vc, allocator, extent);
 
     {
-        const to_gltf = Mat3x4.fromTransformTranslation(Mat3.fromRows(
-            F32x3.new( 0, 1, 0),
-            F32x3.new( 0, 0,-1),
-            F32x3.new(-1, 0, 0),
-        ), F32x3.zero);
+        const to_gltf = Mat4.fromRows(.{
+            .new(.{ 0, 1, 0, 0}),
+            .new(.{ 0, 0,-1, 0}),
+            .new(.{-1, 0, 0, 0}),
+            .new(.{ 0, 0, 0, 1}),
+        });
 
         for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera_idx| {
                 const gltf_camera = gltf.data.cameras.items[camera_idx];
                 const mat = Gltf.getGlobalTransform(&gltf.data, node);
                 // convert to Z-up
-                const transform = Mat3x4.fromRows(
-                    F32x4.new(mat[0][0], mat[1][0], mat[2][0], mat[3][0]),
-                    F32x4.new(mat[0][2], mat[1][2], mat[2][2], mat[3][2]),
-                    F32x4.new(mat[0][1], mat[1][1], mat[2][1], mat[3][1]),
-                );
+                const transform = Mat4.fromRows(.{
+                    .new(.{mat[0][0], mat[1][0], mat[2][0], mat[3][0]}),
+                    .new(.{mat[0][2], mat[1][2], mat[2][2], mat[3][2]}),
+                    .new(.{mat[0][1], mat[1][1], mat[2][1], mat[3][1]}),
+                    .new(.{ 0, 0, 0, 1}),
+                });
                 _ = try camera.appendCamera(allocator, Camera.Camera {
-                    .transform = transform.mul(to_gltf),
+                    .transform = transform.mul(to_gltf).truncateRow(),
                     .model = switch (gltf_camera.type) {
                         .perspective => .thin_lens,
                         .orthographic => .orthographic,
@@ -85,13 +88,14 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
 
         // add default camera if none loaded
         if (camera.cameras.items.len == 0) {
-            const transform = Mat3x4.fromRows(
-                F32x4.new(1, 0, 0, 0),
-                F32x4.new(0, 0, 1, 5), // looking at origin
-                F32x4.new(0, 1, 0, 0),
-            );
+            const transform = Mat4.fromRows(.{
+                .new(.{1, 0, 0, 0}),
+                .new(.{0, 0, 1, 5}), // looking at origin
+                .new(.{0, 1, 0, 0}),
+                .new(.{0, 0, 0, 1}),
+            });
             _ = try camera.appendCamera(allocator, Camera.Camera {
-                .transform = transform.mul(to_gltf),
+                .transform = transform.mul(to_gltf).truncateRow(),
             }, try allocator.dupeZ(u8, "default"));
         }
     }

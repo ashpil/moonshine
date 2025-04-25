@@ -21,9 +21,7 @@ const Pipeline = hrtsystem.pipeline.StandardPipeline;
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
-const F32x4 = vector.Vec4(f32);
-const U32x3 = vector.Vec3(u32);
-const Mat3x4 = vector.Mat3x4(f32);
+const Mat4x3 = vector.Mat4x3(f32);
 
 pub const required_vulkan_functions = hrtsystem.required_vulkan_functions;
 
@@ -236,7 +234,7 @@ pub const HdMoonshine = struct {
         //         var actual_size_world_to_instance = self.world.accel.world_to_instance_host;
         //         actual_size_world_to_instance.data.len = self.world.accel.instance_count;
         //         self.encoder.uploadBuffer(vk.AccelerationStructureInstanceKHR, self.world.accel.instances_device, actual_size_instances);
-        //         self.encoder.uploadBuffer(Mat3x4, self.world.accel.world_to_instance_device, actual_size_world_to_instance);
+        //         self.encoder.uploadBuffer(Mat4x3, self.world.accel.world_to_instance_device, actual_size_world_to_instance);
 
         //         const update_barriers = [_]vk.BufferMemoryBarrier2 {
         //             .{
@@ -485,7 +483,7 @@ pub const HdMoonshine = struct {
     //     result.value_ptr.ior = ior;
     // }
 
-    // pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat3x4, mesh: MeshManager.Handle, material: MaterialManager.Handle, visible: bool) Accel.Handle {
+    // pub export fn HdMoonshineCreateInstance(self: *HdMoonshine, transform: Mat4x3, mesh: MeshManager.Handle, material: MaterialManager.Handle, visible: bool) Accel.Handle {
     //     self.mutex.lock();
     //     defer self.mutex.unlock();
     //     const instance = Accel.Instance {
@@ -519,11 +517,11 @@ pub const HdMoonshine = struct {
         self.camera.clearAllSensors();
     }
 
-    pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat3x4) void {
+    pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat4x3) void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const old_transform: Mat3x4 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
-        if (!std.math.approxEqRel(f32, @abs(old_transform.truncate().determinant()), @abs(new_transform.truncate().determinant()), 0.001)) {
+        const old_transform: Mat4x3 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
+        if (!std.math.approxEqRel(f32, @abs(old_transform.truncateCol().determinant()), @abs(new_transform.truncateCol().determinant()), 0.001)) {
             // should tell us if this matrix was scaled
             // though may run into precision issues and rotation might seem like a scale
             // TODO: this could theoretically slip away if an object is veeeerrry slowly scaled

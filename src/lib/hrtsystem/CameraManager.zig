@@ -9,7 +9,8 @@ const Encoder = core.Encoder;
 
 const Sensor = engine.hrtsystem.Sensor;
 
-const Mat3x4 = engine.vector.Mat3x4(f32);
+const Mat4 = engine.vector.Mat4(f32);
+const Mat4x3 = engine.vector.Mat4x3(f32);
 
 pub const Model = enum(u32) {
     thin_lens,
@@ -30,7 +31,7 @@ pub const Orthographic = extern struct {
 // 1. this way in interactive modes states of non-selected is saved
 // 2. can pass to spirv directly
 pub const Camera = extern struct {
-    transform: Mat3x4 = Mat3x4.identity,
+    transform: Mat4x3 = Mat4.identity.truncateRow(),
     model: Model = .thin_lens,
     thin_lens: ThinLens = .{},
     orthographic: Orthographic = .{},
