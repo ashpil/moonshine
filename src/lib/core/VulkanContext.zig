@@ -219,6 +219,72 @@ const Base = struct {
     }
 };
 
+// writes a stacktrace that has minimal clutter:
+// * strip beginning frames that do not have symbols
+// * strip beginning frames that are in vk.zig
+// * strip ending frames in zig setup
+fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_stream: anytype, tty_config: std.io.tty.Config) !void {
+    var memory = [1]usize { 0 } ** 32;
+    var stack_trace: std.builtin.StackTrace = .{
+        .index = undefined,
+        .instruction_addresses = &memory,
+    };
+    std.debug.captureStackTrace(address, &stack_trace);
+    stack_trace.instruction_addresses.len = stack_trace.index;
+
+    // skip frames from start until we get something that has zig-provided
+    // debug symbols, to avoid useless validation layer frames
+    var skipped_frame_count: usize = 0;
+    for (stack_trace.instruction_addresses) |addr| {
+        if (debug_info.getModuleForAddress(addr)) |_| {
+            break;
+        } else |_| {}
+        skipped_frame_count += 1;
+    }
+    stack_trace.instruction_addresses = stack_trace.instruction_addresses[skipped_frame_count..];
+    stack_trace.index = stack_trace.instruction_addresses.len;
+
+    // skip frames from start that are vk.zig frames, as
+    // they are pure wrappers and can be trusted
+    skipped_frame_count = 0;
+    for (stack_trace.instruction_addresses) |addr| {
+        if (debug_info.getModuleForAddress(addr)) |module| {
+            if (module.getSymbolAtAddress(debug_info.allocator, addr)) |symbol_info| {
+                if (symbol_info.source_location) |location| {
+                    if (std.mem.endsWith(u8, location.file_name, "vk.zig")) {
+                        skipped_frame_count += 1;
+                        continue;
+                    }
+                }
+            } else |_| {}
+        } else |_| {}
+        break;
+    }
+    stack_trace.instruction_addresses = stack_trace.instruction_addresses[skipped_frame_count..];
+    stack_trace.index = stack_trace.instruction_addresses.len;
+
+    // skip frames frames from end until we get to the our main,
+    // to avoid useless zig internal frames
+    skipped_frame_count = 0;
+    var seen_main = false;
+    for (0..stack_trace.instruction_addresses.len) |idx| {
+        const addr = stack_trace.instruction_addresses[stack_trace.instruction_addresses.len - idx - 1];
+        if (debug_info.getModuleForAddress(addr)) |module| {
+            if (module.getSymbolAtAddress(debug_info.allocator, addr)) |symbol_info| {
+                if (std.mem.eql(u8, symbol_info.name, "main")) {
+                    if (seen_main) break;
+                    seen_main = true;
+                }
+            } else |_| {}
+        } else |_| {}
+        skipped_frame_count += 1;
+    }
+    stack_trace.instruction_addresses = stack_trace.instruction_addresses[0..stack_trace.instruction_addresses.len - skipped_frame_count];
+    stack_trace.index = stack_trace.instruction_addresses.len;
+
+    try std.debug.writeStackTrace(stack_trace, out_stream, debug_info, tty_config);
+}
+
 fn debugCallback(
     message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk.DebugUtilsMessageTypeFlagsEXT,
@@ -231,15 +297,27 @@ fn debugCallback(
     const info_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .info_bit_ext = true }).toInt();
     const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
     const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_bit_ext = true }).toInt();
-    const color: u32 = switch (message_severity.toInt()) {
-        verbose_severity => 37,
-        info_severity => 32,
-        warning_severity => 33,
-        error_severity => 31,
+    const color: std.io.tty.Color = switch (message_severity.toInt()) {
+        verbose_severity => .dim,
+        info_severity => .green,
+        warning_severity => .yellow,
+        error_severity => .red,
         else => unreachable,
     };
-    std.debug.print("\x1b[{}m{s}\x1b[0m\n", .{ color, callback_data.?.p_message.? });
-    return 0;
+
+    const out_stream = std.io.getStdErr().writer();
+    const tty_config = std.io.tty.detectConfig(std.io.getStdErr());
+
+    tty_config.setColor(out_stream, color) catch {};
+    out_stream.print("{s}\n", .{ callback_data.?.p_message.? }) catch @panic("unable to write validation error to stderr");
+    tty_config.setColor(out_stream, .reset) catch {};
+
+    // write stack trace for validation error
+    if (std.debug.getSelfDebugInfo()) |debug_info| {
+        writeMinimalStacktrace(@returnAddress(), debug_info, out_stream, tty_config) catch @panic("unable to write validation error stack trace to stderr");
+    } else |_| {}
+
+    return vk.FALSE;
 }
 
 const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
