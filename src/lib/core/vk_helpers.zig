@@ -22,7 +22,11 @@ pub fn typeToObjectType(comptime in: type) vk.ObjectType {
 }
 
 pub fn setDebugName(device: VulkanContext.Device, object: anytype, name: [*:0]const u8) !void {
-    if ((comptime build_options.vk_validation) and object != .null_handle) {
+    // TODO: this does not make sense, debug names can be needed separately from validation
+    // for other types of debugging/profiling
+    const want_debug_names = build_options.vk_validation != .ignore;
+
+    if ((comptime want_debug_names) and object != .null_handle) {
         try device.setDebugUtilsObjectNameEXT(&.{
             .object_type = comptime typeToObjectType(@TypeOf(object)),
             .object_handle = @intFromEnum(object),

@@ -4,7 +4,7 @@ const builtin = @import("builtin");
 
 const vk_helpers = @import("../engine.zig").core.vk_helpers;
 
-const validate = @import("build_options").vk_validation;
+const validate = @import("build_options").vk_validation != .ignore;
 
 const root = @import("root");
 
@@ -313,9 +313,15 @@ fn debugCallback(
     tty_config.setColor(out_stream, .reset) catch {};
 
     // write stack trace for validation error
-    if (std.debug.getSelfDebugInfo()) |debug_info| {
-        writeMinimalStacktrace(@returnAddress(), debug_info, out_stream, tty_config) catch @panic("unable to write validation error stack trace to stderr");
-    } else |_| {}
+    switch (@import("build_options").vk_validation) {
+        .print => {
+            if (std.debug.getSelfDebugInfo()) |debug_info| {
+                writeMinimalStacktrace(@returnAddress(), debug_info, out_stream, tty_config) catch @panic("unable to write validation error stack trace to stderr");
+            } else |_| {}
+        },
+        .panic => @panic("validation error encountered"),
+        .ignore => unreachable,
+    }
 
     return vk.FALSE;
 }

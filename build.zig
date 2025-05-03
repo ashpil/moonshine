@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) !void {
     // TODO: make custom test runner parallel + share some state across tests
     try compiles.append(blk: {
         var engine_options = default_engine_options;
+        engine_options.vk_validation = .panic;
         engine_options.window = false;
         engine_options.gui = false;
         const engine = makeEngineModule(b, vulkan, engine_options, target);
@@ -282,12 +283,18 @@ const ShaderSource = enum {
     load,  // dynamically load shader and compile to SPIRV at runtime (but also check build-time correctness)
 };
 
+const VulkanValidationMode = enum {
+    ignore,
+    print,
+    panic,
+};
+
 pub const EngineOptions = struct {
     const rt_shader_args = [_][]const u8 { "-T", ShaderType.ray_tracing.dxcProfile() };
     const compute_shader_args = [_][]const u8 { "-T", ShaderType.compute.dxcProfile() };
     const stdout_shader_args = [_][]const u8{ "-Fo", "/dev/stdout" }; // TODO: windows
 
-    vk_validation: bool = false,
+    vk_validation: VulkanValidationMode = .ignore,
     vk_metrics: bool = false,
     shader_source: ShaderSource = .embed,
     rt_shader_compile_cmd: []const []const u8 = &(base_shader_compile_cmd ++ rt_shader_args ++ stdout_shader_args),
@@ -302,7 +309,7 @@ pub const EngineOptions = struct {
         var options = EngineOptions {};
 
         if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
-            options.vk_validation = vk_validation;
+            options.vk_validation = if (vk_validation) .print else .ignore;
         }
 
         return options;
@@ -314,7 +321,7 @@ fn makeEngineModule(b: *std.Build, vk: *std.Build.Module, options: EngineOptions
 
     // actual engine
     const build_options = b.addOptions();
-    build_options.addOption(bool, "vk_validation", options.vk_validation);
+    build_options.addOption(VulkanValidationMode, "vk_validation", options.vk_validation);
     build_options.addOption(bool, "vk_metrics", options.vk_metrics);
     build_options.addOption(ShaderSource, "shader_source", if (target.result.os.tag == .linux) options.shader_source else .embed); // hot reload currently only supported on linux
     build_options.addOption([]const []const u8, "rt_shader_compile_cmd", options.rt_shader_compile_cmd);  // shader compilation command to use if shaders are to be loaded at runtime
