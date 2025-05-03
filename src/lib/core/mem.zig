@@ -272,11 +272,19 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             };
 
             const memory = self.device.allocateMemory(&allocate_info, null) catch return null;
-            if (comptime @import("build_options").vk_validation) {
-                var debug_name_buf: [128]u8 = undefined;
-                const debug_name = std.fmt.bufPrintZ(&debug_name_buf, "[{}]align({})", .{ len, required_alignment }) catch |err| std.debug.panic("{s}", .{ @errorName(err) });
-                vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{s}", .{ @errorName(err) });
-            }
+            const debug_name = blk: {
+                const hex_bytes_per_bit = std.math.log2(16);
+                const usize_hex_print_size =  @bitSizeOf(usize) / hex_bytes_per_bit;
+                const alignment_hex_print_size =  @bitSizeOf(std.mem.Alignment) / hex_bytes_per_bit;
+                const prefix = "[0x";
+                const len_fmt = "{x:0>" ++ std.fmt.comptimePrint("{}", .{ usize_hex_print_size }) ++ "}";
+                const infix = "]align(0x";
+                const alignment_fmt = "{x:0>" ++ std.fmt.comptimePrint("{}", .{ alignment_hex_print_size }) ++ "}";
+                const suffix = ")";
+                var buf: [prefix.len + usize_hex_print_size + infix.len + alignment_hex_print_size + suffix.len + 1]u8 = undefined;
+                break :blk std.fmt.bufPrintZ(&buf, prefix ++ len_fmt ++ infix ++ alignment_fmt ++ suffix, .{ len, required_alignment }) catch unreachable;
+            };
+            vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{}", .{ err });
 
             const ptr_unaligned: [*]align(vk_map_memory_minimum_guaranteed_alignment) u8 = @alignCast(@ptrCast(self.device.mapMemory(memory, 0, vk.WHOLE_SIZE, .{}) catch return null));
             const ptr_aligned = std.mem.alignPointer(ptr_unaligned + @sizeOf(Allocations.Node), required_alignment).?;
@@ -286,11 +294,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
                 .usage = usage,
                 .sharing_mode = .exclusive,
             }, null) catch return null;
-            if (comptime @import("build_options").vk_validation) {
-                var debug_name_buf: [128]u8 = undefined;
-                const debug_name = std.fmt.bufPrintZ(&debug_name_buf, "[{}]align({})", .{ len, required_alignment }) catch |err| std.debug.panic("{s}", .{ @errorName(err) });
-                vk_helpers.setDebugName(self.device, buffer, debug_name) catch |err| std.debug.panic("{s}", .{ @errorName(err) });
-            }
+            vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{}", .{ err });
 
             self.device.bindBufferMemory(buffer, memory, 0) catch return null;
 
