@@ -11,57 +11,50 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const descriptor = core.descriptor;
 
-pub const supports_hot_reload = build_options.shader_source == .load;
+const ShaderSource = @import("shader_source");
 
-pub const ShaderType = enum {
-    ray_tracing,
-    compute,
-};
-
-// creates shader modules, respecting build option to statically embed or dynamically load shader code
-pub fn createShaderModule(vc: *const VulkanContext, comptime shader_path: [:0]const u8, allocator: std.mem.Allocator, comptime shader_type: ShaderType) !vk.ShaderModule {
+pub fn createShaderModule(vc: *const VulkanContext, comptime shader_source: ShaderSource, allocator: std.mem.Allocator) !vk.ShaderModule {
     var to_free: []const u8 = undefined;
-    defer if (supports_hot_reload) allocator.free(to_free);
-    const embedded_shader = @embedFile(shader_path).*;
-    const shader_code = if (!supports_hot_reload) embedded_shader else blk: {
-        const compile_cmd = switch (shader_type) {
-            .ray_tracing => build_options.rt_shader_compile_cmd,
-            .compute => build_options.compute_shader_compile_cmd,
-        };
-        var compile_process = std.process.Child.init(compile_cmd ++ &[_][]const u8 { "src/lib/shaders/" ++ shader_path }, allocator);
-        compile_process.stdout_behavior = .Pipe;
-        try compile_process.spawn();
-        const stdout = blk_inner: {
-            var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
-            defer poller.deinit();
+    defer if (shader_source.type == .command) allocator.free(to_free);
 
-            while (try poller.poll()) {}
+    const code = switch (shader_source.type) {
+        .code => |code| code,
+        .command => |command| @as([]const u32, @ptrCast(@alignCast(blk: {
+            var compile_process = std.process.Child.init(command, allocator);
+            compile_process.stdout_behavior = .Pipe;
+            try compile_process.spawn();
+            const stdout = blk_inner: {
+                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
+                defer poller.deinit();
 
-            var fifo = poller.fifo(.stdout);
-            if (fifo.head > 0) {
-                @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
-            }
+                while (try poller.poll()) {}
 
-            to_free = fifo.buf;
-            const stdout = fifo.buf[0..fifo.count];
-            fifo.* = std.io.PollFifo.init(allocator);
+                var fifo = poller.fifo(.stdout);
+                if (fifo.head > 0) {
+                    @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
+                }
 
-            break :blk_inner stdout;
-        };
+                to_free = fifo.buf;
+                const stdout = fifo.buf[0..fifo.count];
+                fifo.* = std.io.PollFifo.init(allocator);
 
-        const term = try compile_process.wait();
-        if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
-        break :blk stdout;
+                break :blk_inner stdout;
+            };
+
+            const term = try compile_process.wait();
+            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
+            break :blk stdout;
+        }))),
     };
     const module = try vc.device.createShaderModule(&.{
-        .code_size = shader_code.len,
-        .p_code = @as([*]const u32, @ptrCast(@alignCast(if (!supports_hot_reload) &shader_code else shader_code.ptr))),
+        .code_size = code.len * @sizeOf(u32),
+        .p_code = code.ptr,
     }, null);
-    try core.vk_helpers.setDebugName(vc.device, module, shader_path);
+    try core.vk_helpers.setDebugName(vc.device, module, shader_source.name);
     return module;
 }
 
-pub const StorageImage= struct {
+pub const StorageImage = struct {
     pub const descriptor_type: vk.DescriptorType = .storage_image;
 
     view: vk.ImageView,
@@ -248,7 +241,7 @@ pub fn PipelineBindings(
 }
 
 pub fn Pipeline(comptime options: struct {
-    shader_path: [:0]const u8,
+    shader_source: ShaderSource,
     local_size: vk.Extent3D, // TODO: should be able to extract this or set it via spec constants
     SpecConstants: type = extern struct {},
     PushConstants: type = extern struct {},
@@ -264,7 +257,7 @@ pub fn Pipeline(comptime options: struct {
 
         const Self = @This();
 
-        const Bindings = PipelineBindings(options.shader_path, .{ .compute_bit = true }, options.PushConstants, options.PushSetBindings, options.additional_descriptor_layout_count);
+        const Bindings = PipelineBindings(options.shader_source.name, .{ .compute_bit = true }, options.PushConstants, options.PushSetBindings, options.additional_descriptor_layout_count);
 
         pub const SpecConstants = options.SpecConstants;
         pub const PushSetBindings = options.PushSetBindings;
@@ -285,7 +278,7 @@ pub fn Pipeline(comptime options: struct {
 
         // returns old handle which must be cleaned up
         pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, constants: SpecConstants) !vk.Pipeline {
-            const module = try createShaderModule(vc, options.shader_path, allocator, .compute);
+            const module = try createShaderModule(vc, options.shader_source, allocator);
             defer vc.device.destroyShaderModule(module, null);
 
             var stage = vk.PipelineShaderStageCreateInfo {
@@ -323,7 +316,7 @@ pub fn Pipeline(comptime options: struct {
             const old_handle = self.handle;
             _ = try vc.device.createComputePipelines(.null_handle, 1, toMany(&create_info), null, toMany(&self.handle));
             errdefer vc.device.destroyPipeline(self.handle, null);
-            try core.vk_helpers.setDebugName(vc.device, self.handle, options.shader_path);
+            try core.vk_helpers.setDebugName(vc.device, self.handle, options.shader_source.name);
 
             return old_handle;
         }

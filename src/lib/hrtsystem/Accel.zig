@@ -18,6 +18,8 @@ const Mat4x3 = vector.Mat4x3(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x4 = vector.Vec4(f32);
 
+const shaders = @import("hrtsystem_shaders");
+
 // "accel" perhaps the wrong name for this struct at this point, maybe "heirarchy" would be better
 // the acceleration structure is the primary world heirarchy, and controls
 // how all the meshes and materials fit together
@@ -30,7 +32,7 @@ pub const Instance = struct {
     model: ModelManager.Handle,
 };
 
-const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/instance_power.hlsl",
+const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_source = shaders.instance_power,
     .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         instance_count: u32,
@@ -44,7 +46,7 @@ const InstancePowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     },
 });
 
-const InstancePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/fold1.hlsl",
+const InstancePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_source = shaders.fold1,
     .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         src_level_offset: u32,

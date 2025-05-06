@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../utils/mappings.hlsl"
-#include "../utils/helpers.hlsl"
+#include "../../shaders/utils/mappings.hlsl"
+#include "../../shaders/utils/helpers.hlsl"
 #include "ray.hlsl"
 
 // in camera space, cameras are oriented:

@@ -1,5 +1,5 @@
-#include "camera.hlsl"
-#include "intersection.hlsl"
+#include "../../lib/hrtsystem/shaders/camera.hlsl"
+#include "../../lib/hrtsystem/shaders/intersection.hlsl"
 
 [[vk::binding(0, 0)]] RaytracingAccelerationStructure TLAS;
 [[vk::binding(1, 0)]] RWTexture2D<float4> dOutputImage;

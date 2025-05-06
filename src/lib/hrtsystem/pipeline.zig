@@ -1,4 +1,4 @@
-const shaders = @import("shaders");
+const shaders = @import("hrtsystem_shaders");
 const vk = @import("vulkan");
 const std = @import("std");
 const build_options = @import("build_options");
@@ -47,7 +47,7 @@ pub const Integrator = enum(u32) {
 
 pub const StandardPipeline = Pipeline(.{
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
-    .shader_path = "hrtsystem/main.hlsl",
+    .shader_source = shaders.main,
     .SpecConstants = extern struct {
         integrator: Integrator = .path_tracing,
         direct_lighting_env_samples: u32 = 1,

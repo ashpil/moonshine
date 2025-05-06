@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../utils/math.hlsl"
+#include "../../shaders/utils/math.hlsl"
 #include "ray.hlsl"
 
 struct Intersection {

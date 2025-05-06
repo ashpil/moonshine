@@ -9,8 +9,8 @@
 [[vk::binding(6, 2)]] Texture1D<float> dSpectrumB;
 [[vk::binding(7, 2)]] Texture1D<float> dSpectrumD65;
 
-#include "../utils/random.hlsl"
-#include "../utils/math.hlsl"
+#include "../../shaders/utils/random.hlsl"
+#include "../../shaders/utils/math.hlsl"
 
 static const float CIE1931YIntegral = 106.85691710117189;
 

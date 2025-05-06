@@ -1,4 +1,4 @@
-#include "../../utils/helpers.hlsl"
+#include "../../../shaders/utils/helpers.hlsl"
 
 [[vk::binding(0, 0)]] Texture2D<float4> srcMip;
 [[vk::binding(1, 0)]] RWTexture2D<float4> dstMip;

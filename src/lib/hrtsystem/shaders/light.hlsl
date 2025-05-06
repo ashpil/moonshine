@@ -3,7 +3,7 @@
 #include "world.hlsl"
 #include "material.hlsl"
 #include "spectrum.hlsl"
-#include "../utils/reservoir.hlsl"
+#include "../../shaders/utils/reservoir.hlsl"
 
 struct LightEvaluation {
     float radiance;

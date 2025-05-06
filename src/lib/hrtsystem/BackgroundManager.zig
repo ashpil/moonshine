@@ -7,6 +7,8 @@ const VulkanContext = engine.core.VulkanContext;
 const Encoder = engine.core.Encoder;
 const Image = engine.core.Image;
 
+const shaders = @import("hrtsystem_shaders");
+
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
 images: std.ArrayListUnmanaged(Image),
@@ -17,7 +19,7 @@ fold_pipeline: FoldPipeline,
 const Self = @This();
 
 const EquirectangularToEqualAreaPipeline = engine.core.pipeline.Pipeline(.{
-    .shader_path = "hrtsystem/background/equirectangular_to_equal_area.hlsl",
+    .shader_source = shaders.equirectangular_to_equal_area,
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
     .PushSetBindings = struct {
         src_texture: engine.core.pipeline.CombinedImageSampler,
@@ -26,7 +28,7 @@ const EquirectangularToEqualAreaPipeline = engine.core.pipeline.Pipeline(.{
 });
 
 const FoldPipeline = engine.core.pipeline.Pipeline(.{
-    .shader_path = "hrtsystem/background/fold.hlsl",
+    .shader_source = shaders.background_fold,
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
     .PushSetBindings = struct {
         src_mip: engine.core.pipeline.SampledImage,

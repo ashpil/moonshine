@@ -45,7 +45,7 @@ pub const ClickedObject = struct {
 
 pub const Pipeline = core.pipeline.Pipeline(.{
     .local_size = vk.Extent3D { .width = 1, .height = 1, .depth = 1 },
-    .shader_path = "hrtsystem/input.hlsl",
+    .shader_source = shaders.input,
     .PushConstants = extern struct {
         camera: Camera.Camera,
         aspect_ratio: f32,

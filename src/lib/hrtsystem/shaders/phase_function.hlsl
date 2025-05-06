@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../utils/mappings.hlsl"
+#include "../../shaders/utils/mappings.hlsl"
 #include "bsdf.hlsl"
 
 struct Isotropic : BSDF {

@@ -7,6 +7,8 @@ const toMany = core.vk_helpers.toMany;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 
+const shaders = @import("hrtsystem_shaders");
+
 const MeshManager = @import("./MeshManager.zig");
 const MaterialManager = @import("./MaterialManager.zig");
 
@@ -48,7 +50,7 @@ pub const Geometry = struct {
     };
 };
 
-const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{.shader_path = "hrtsystem/local_light/triangle_power.hlsl",
+const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{.shader_source = shaders.triangle_power,
     .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         mesh: MeshManager.Handle,
@@ -64,7 +66,7 @@ const TrianglePowerPipeline = engine.core.pipeline.Pipeline(.{.shader_path = "hr
     .additional_descriptor_layout_count = 1,
 });
 
-const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/geometry_power.hlsl",
+const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_source = shaders.geometry_power,
     .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         geometry_count: u32,
@@ -77,7 +79,7 @@ const GeometryPowerPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "h
     },
 });
 
-const PowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_path = "hrtsystem/local_light/fold3.hlsl",
+const PowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_source = shaders.fold3,
     .local_size = vk.Extent3D { .width = 32, .height = 1, .depth = 1 },
     .PushConstants = extern struct {
         src_level_offset: u32,

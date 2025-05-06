@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../utils/mappings.hlsl"
-#include "../utils/math.hlsl"
+#include "../../shaders/utils/mappings.hlsl"
+#include "../../shaders/utils/math.hlsl"
 #include "spectrum.hlsl"
 
 // most material code below expects stuff to be in the reflection frame

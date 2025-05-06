@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../utils/math.hlsl"
-#include "../utils/random.hlsl"
+#include "../../shaders/utils/math.hlsl"
+#include "../../shaders/utils/random.hlsl"
 #include "material.hlsl"
 #include "medium.hlsl"
 #include "phase_function.hlsl"

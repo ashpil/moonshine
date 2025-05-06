@@ -243,7 +243,6 @@ pub fn main() !void {
                     rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
                 }
             }
-            if (!core.pipeline.supports_hot_reload) imgui.setItemTooltip("Shader hot reload not available");
             if (last_rebuild_failed) imgui.popStyleColor();
             imgui.popItemWidth();
         }
