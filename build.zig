@@ -15,10 +15,10 @@ pub fn build(b: *std.Build) !void {
 
     // packages/libraries we'll need below
     const vulkan = makeVulkanModule(b, target);
-    const glfw = try makeGlfwLibrary(b, target);
-    const cimgui = makeCImguiLibrary(b, target, glfw);
-    const tinyexr = makeTinyExrLibrary(b, target);
-    const wuffs = makeWuffsLibrary(b, target);
+    const glfw = try makeGlfwModule(b, vulkan, target);
+    const cimgui = makeCImguiModule(b, glfw, target);
+    const tinyexr = makeTinyExrModule(b, target);
+    const wuffs = makeWuffsModule(b, target);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
@@ -36,13 +36,15 @@ pub fn build(b: *std.Build) !void {
 
         const tests = b.addTest(.{
             .name = "tests",
-            .root_source_file = b.path("src/lib/tests.zig"),
             .test_runner = .{
                 .path = b.path("src/lib/test_runner.zig"),
                 .mode = .simple,
             },
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/lib/tests.zig"),
+                .target = target,
+                .optimize = optimize,
+            })
         });
         tests.root_module.addImport("vulkan", vulkan);
         tests.root_module.addImport("engine", engine);
@@ -57,23 +59,21 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, vulkan, shader_source, if (target.result.os.tag == .linux) .load else .embed, engine_options);
         const exe = b.addExecutable(.{
             .name = "online",
-            .root_source_file = b.path("src/bin/online/online.zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/bin/online/online.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         exe.root_module.addImport("vulkan", vulkan);
         exe.root_module.addImport("engine", engine);
         exe.root_module.addImport("shaders", makeShadersModule(b, shader_source, &[_]Shader {
             Shader { .type = .compute, .source = .embed, .path = "src/bin/online/input.hlsl", .name = "input", },
         }));
-        glfw.add(exe.root_module);
-        glfw.add(engine);
-        tinyexr.add(exe.root_module);
-        tinyexr.add(engine);
-        cimgui.add(exe.root_module);
-        cimgui.add(engine);
-        wuffs.add(exe.root_module);
-        wuffs.add(engine);
+        engine.addImport("glfw", glfw);
+        engine.addImport("tinyexr", tinyexr);
+        engine.addImport("imgui", cimgui);
+        engine.addImport("wuffs", wuffs);
 
         break :blk exe;
     });
@@ -86,16 +86,16 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, vulkan, shader_source, .embed, engine_options);
         const exe = b.addExecutable(.{
             .name = "offline",
-            .root_source_file = b.path("src/bin/offline.zig"),
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/bin/offline.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         exe.root_module.addImport("vulkan", vulkan);
         exe.root_module.addImport("engine", engine);
-        tinyexr.add(exe.root_module);
-        tinyexr.add(engine);
-        wuffs.add(exe.root_module);
-        wuffs.add(engine);
+        engine.addImport("tinyexr", tinyexr);
+        engine.addImport("wuffs", wuffs);
 
         break :blk exe;
     });
@@ -111,10 +111,12 @@ pub fn build(b: *std.Build) !void {
         // wont need to make own header
         const zig_lib = b.addSharedLibrary(.{
             .name = "moonshine",
+            .root_module = b.createModule(.{
             .root_source_file = b.path("src/bin/hydra/hydra.zig"),
-            .target = target,
-            .optimize = optimize,
-            .pic = true,
+                .target = target,
+                .optimize = optimize,
+                .pic = true,
+            }),
         });
         zig_lib.root_module.addImport("vulkan", vulkan);
         zig_lib.root_module.addImport("engine", engine);
@@ -425,34 +427,45 @@ fn makeVulkanModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.
     });
 }
 
-const CLibrary = struct {
-    include_path: std.Build.LazyPath,
-    library: *std.Build.Step.Compile,
-
-    fn add(self: CLibrary, module: *std.Build.Module) void {
-        module.linkLibrary(self.library);
-        module.addIncludePath(self.include_path);
-    }
-};
-
-fn makeCImguiLibrary(b: *std.Build, target: std.Build.ResolvedTarget, glfw: CLibrary) CLibrary {
+fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.ResolvedTarget) *std.Build.Module {
     const cimgui = b.dependency("cimgui", .{});
     const imgui = b.dependency("imgui", .{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "cimgui",
-        .target = target,
+    const write_files_step = b.addWriteFiles();
+    const root = write_files_step.add("imgui.zig",
+        \\pub usingnamespace @cImport({
+        \\    @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", {});
+        \\    @cInclude("cimgui.h");
+        \\});
+        \\
+        \\const glfw = @import("glfw");
+        \\
+        \\pub extern fn ImGui_ImplGlfw_InitForVulkan(*glfw.GLFWwindow, bool) bool;
+        \\pub extern fn ImGui_ImplGlfw_Shutdown() void;
+        \\pub extern fn ImGui_ImplGlfw_NewFrame() void;
+    );
+
+    const module = b.createModule(.{
+        .root_source_file = root,
+        .link_libcpp = true,
         .optimize = .ReleaseFast,
+        .target = target,
+        .imports = &[_]std.Build.Module.Import {
+            .{
+                .name = "glfw",
+                .module = glfw,
+            },
+        }
     });
-    lib.linkLibCpp();
-    lib.addCSourceFiles(.{
+
+    module.addCSourceFiles(.{
         .root = cimgui.path(""),
         .files = &.{
             "cimgui.cpp",
         }
     });
-    lib.addIncludePath(imgui.path(""));
-    lib.addCSourceFiles(.{
+    module.addIncludePath(cimgui.path(""));
+    module.addCSourceFiles(.{
         .root = imgui.path(""),
         .files = &.{
             "imgui.cpp",
@@ -466,26 +479,32 @@ fn makeCImguiLibrary(b: *std.Build, target: std.Build.ResolvedTarget, glfw: CLib
             "-DIMGUI_IMPL_API=extern \"C\"",
         }
     });
-    lib.addIncludePath(glfw.include_path);
+    module.addIncludePath(imgui.path(""));
+    for (glfw.include_dirs.items) |dir| {
+        module.include_dirs.append(b.allocator, dir) catch @panic("OOM");
+    }
 
-    return CLibrary {
-        .include_path = cimgui.path(""),
-        .library = lib,
-    };
+    return module;
 }
 
-fn makeTinyExrLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
+fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const tinyexr = b.dependency("tinyexr", .{});
     const miniz_path = "deps/miniz/";
 
-    const lib = b.addStaticLibrary(.{
-        .name = "tinyexr",
-        .target = target,
+    const write_files_step = b.addWriteFiles();
+    const root = write_files_step.add("tinyexr.zig",
+        \\pub usingnamespace @cImport(@cInclude("tinyexr.h"));
+    );
+
+    const module = b.createModule(.{
+        .root_source_file = root,
+        .link_libcpp = true,
         .optimize = .ReleaseFast,
+        .target = target,
+        .sanitize_c = false, // fails :( https://github.com/syoyo/tinyexr/issues/187
     });
-    lib.linkLibCpp();
-    lib.addIncludePath(tinyexr.path(miniz_path));
-    lib.addCSourceFiles(.{
+
+    module.addCSourceFiles(.{
         .root = tinyexr.path(""),
         .files = &.{
             "tinyexr.cc",
@@ -493,46 +512,69 @@ fn makeTinyExrLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary 
         },
     });
 
-    return CLibrary {
-        .include_path = tinyexr.path(""),
-        .library = lib,
-    };
+    module.addIncludePath(tinyexr.path(""));
+    module.addIncludePath(tinyexr.path(miniz_path));
+
+    return module;
 }
 
-fn makeWuffsLibrary(b: *std.Build, target: std.Build.ResolvedTarget) CLibrary {
+fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const base = b.dependency("wuffs", .{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "wuffs",
-        .target = target,
+    const write_files_step = b.addWriteFiles();
+    const root = write_files_step.add("wuffs.zig",
+        \\pub usingnamespace @cImport(@cInclude("wuffs-v0.4.c"));
+    );
+
+    const module = b.createModule(.{
+        .root_source_file = root,
+        .link_libc = true,
         .optimize = .ReleaseFast,
+        .target = target,
     });
-    lib.linkLibC();
-    lib.addCSourceFiles(.{
-        .root = base.path(""),
-        .files = &.{
-            "release/c/wuffs-v0.4.c",
-        },
+
+    module.addCSourceFile(.{
+        .file = base.path("release/c/wuffs-v0.4.c"),
         .flags = &.{
             "-DWUFFS_IMPLEMENTATION",
-        }
+        },
     });
 
-    return CLibrary {
-        .include_path = base.path("release/c/"),
-        .library = lib,
-    };
+    module.addIncludePath(base.path("release/c/"));
+
+    return module;
 }
 
-fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
+fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.ResolvedTarget) !*std.Build.Module {
     const glfw = b.dependency("glfw", .{});
-    const lib = b.addLibrary(.{
-        .name = "glfw",
-        .linkage = if (target.result.os.tag == .linux) .dynamic else .static, // can always be made static once https://github.com/ziglang/zig/issues/20476 is fixed
-        .root_module = b.createModule(.{
-            .target = target,
-            .optimize = .ReleaseFast,
-        }),
+
+    const write_files_step = b.addWriteFiles();
+    const root = write_files_step.add("imgui.zig",
+        \\pub usingnamespace @cImport({
+        \\    @cDefine("GLFW_INCLUDE_NONE", {});
+        \\    @cInclude("GLFW/glfw3.h");
+        \\});
+        \\
+        \\const vk = @import("vulkan");
+        \\const c = @This();
+        \\
+        \\pub extern fn glfwGetInstanceProcAddress(vk.Instance, [*:0]const u8) vk.PfnVoidFunction;
+        \\pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
+        \\pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
+        \\pub extern fn glfwInitVulkanLoader(vk.PfnGetInstanceProcAddr) void;
+    );
+
+    const module = b.createModule(.{
+        .root_source_file = root,
+        .link_libc = true,
+        .optimize = .ReleaseFast,
+        .target = target,
+        .imports = &[_]std.Build.Module.Import {
+            .{
+                .name = "vulkan",
+                .module = vulkan,
+            },
+        }
     });
 
     const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
@@ -542,7 +584,7 @@ fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
 
     if (target.result.os.tag == .linux and build_wayland) {
         const wayland_include_path = generateWaylandHeaders(b, glfw.path(""));
-        lib.addIncludePath(wayland_include_path);
+        module.addIncludePath(wayland_include_path);
     }
 
     // collect source files
@@ -622,24 +664,19 @@ fn makeGlfwLibrary(b: *std.Build, target: std.Build.ResolvedTarget) !CLibrary {
         break :blk flags.items;
     };
 
-    lib.addCSourceFiles(.{
+    module.addCSourceFiles(.{
         .root = glfw.path(""),
         .files = sources,
         .flags = flags,
     });
-
-    // link and include necessary deps
-    lib.linkLibC();
+    module.addIncludePath(glfw.path("include"));
 
     if (target.result.os.tag == .linux) {
-        if (build_wayland) lib.linkSystemLibrary("wayland-client");
-        if (build_x11) lib.linkSystemLibrary("X11");
-    } else if (target.result.os.tag == .windows) lib.linkSystemLibrary("gdi32");
+        if (build_wayland) module.linkSystemLibrary("wayland-client", .{});
+        if (build_x11) module.linkSystemLibrary("X11", .{});
+    } else if (target.result.os.tag == .windows) module.linkSystemLibrary("gdi32", .{});
 
-    return CLibrary {
-        .include_path = glfw.path("include"),
-        .library = lib,
-    };
+    return module;
 }
 
 fn generateWaylandHeaders(b: *std.Build, path: std.Build.LazyPath) std.Build.LazyPath {
