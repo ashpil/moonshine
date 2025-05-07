@@ -14,11 +14,12 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     // packages/libraries we'll need below
-    const vulkan = makeVulkanModule(b, target);
+    const vulkan = makeVulkanModule(b);
     const glfw = try makeGlfwModule(b, vulkan, target);
-    const cimgui = makeCImguiModule(b, glfw, target);
-    const tinyexr = makeTinyExrModule(b, target);
-    const wuffs = makeWuffsModule(b, target);
+    const imgui = makeCImguiModule(b, glfw);
+    const tinyexr = makeTinyExrModule(b);
+    const wuffs = makeWuffsModule(b);
+    const zgltf = makeZgltfModule(b);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
@@ -34,7 +35,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
 
         const tests = b.addTest(.{
             .name = "tests",
@@ -46,10 +47,12 @@ pub fn build(b: *std.Build) !void {
                 .root_source_file = b.path("src/lib/tests.zig"),
                 .target = target,
                 .optimize = optimize,
+                .imports = &[_]std.Build.Module.Import {
+                    .{ .name = "vulkan", .module = vulkan },
+                    .{ .name = "engine", .module = engine },
+                },
             })
         });
-        tests.root_module.addImport("vulkan", vulkan);
-        tests.root_module.addImport("engine", engine);
 
         break :blk tests;
     });
@@ -59,24 +62,22 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
         const exe = b.addExecutable(.{
             .name = "online",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/bin/online/online.zig"),
                 .target = target,
                 .optimize = optimize,
+                .imports = &[_]std.Build.Module.Import {
+                    .{ .name = "vulkan", .module = vulkan },
+                    .{ .name = "engine", .module = engine },
+                    .{ .name = "shaders", .module = makeShadersModule(b, shader_source, &[_]ShaderImport {
+                        ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/input.hlsl", }, .name = "input" },
+                    }) },
+                },
             }),
         });
-        exe.root_module.addImport("vulkan", vulkan);
-        exe.root_module.addImport("engine", engine);
-        exe.root_module.addImport("shaders", makeShadersModule(b, shader_source, &[_]ShaderImport {
-            ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/input.hlsl", }, .name = "input", },
-        }));
-        engine.addImport("glfw", glfw);
-        engine.addImport("tinyexr", tinyexr);
-        engine.addImport("imgui", cimgui);
-        engine.addImport("wuffs", wuffs);
 
         break :blk exe;
     });
@@ -87,19 +88,19 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/bin/offline.zig"),
                 .target = target,
                 .optimize = optimize,
+                .imports = &[_]std.Build.Module.Import {
+                    .{ .name = "vulkan", .module = vulkan },
+                    .{ .name = "engine", .module = engine },
+                },
             }),
         });
-        exe.root_module.addImport("vulkan", vulkan);
-        exe.root_module.addImport("engine", engine);
-        engine.addImport("tinyexr", tinyexr);
-        engine.addImport("wuffs", wuffs);
 
         break :blk exe;
     });
@@ -110,7 +111,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
@@ -120,12 +121,14 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("src/bin/hydra/hydra.zig"),
                 .target = target,
                 .optimize = optimize,
+                .imports = &[_]std.Build.Module.Import {
+                    .{ .name = "vulkan", .module = vulkan },
+                    .{ .name = "engine", .module = engine },
+                },
                 .pic = true,
+                .link_libc = true,
             }),
         });
-        zig_lib.root_module.addImport("vulkan", vulkan);
-        zig_lib.root_module.addImport("engine", engine);
-        zig_lib.linkLibC();
         try compiles.append(zig_lib);
 
         const lib = b.addSharedLibrary(.{
@@ -341,10 +344,7 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
     ) catch @panic("OOM");
 
     for (shader_imports) |shader_import| {
-        imports.append(std.Build.Module.Import {
-            .name = shader_import.name,
-            .module = shader_import.shader.compile(b),
-        }) catch @panic("OOM");
+        imports.append(std.Build.Module.Import { .name = shader_import.name, .module = shader_import.shader.compile(b) }) catch @panic("OOM");
         contents.appendSlice(b.fmt(
             \\pub const {0s} = ShaderSource {{
             \\    .name = "{0s}",
@@ -359,10 +359,7 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
         , .{ shader_import.name, std.mem.join(b.allocator, "\", \"", std.mem.concat(b.allocator, []const u8, &[_][]const []const u8{ &shader_import.shader.compileCommand(), &[1][]const u8{ shader_import.shader.path }, &stdout_shader_args }) catch @panic("OOM")) catch @panic("OOM") })) catch @panic("OOM");
     }
 
-    imports.append(std.Build.Module.Import {
-        .name = "shader_source",
-        .module = shader_source,
-    }) catch @panic("OOM");
+    imports.append(std.Build.Module.Import { .name = "shader_source", .module = shader_source }) catch @panic("OOM");
 
     const write_files_step = b.addWriteFiles();
     const root = write_files_step.add("shaders.zig", contents.items);
@@ -386,40 +383,58 @@ fn makeHrtsystemShaders(b: *std.Build, shader_source: *std.Build.Module) *std.Bu
     });
 }
 
-fn makeEngineModule(b: *std.Build, vulkan: *std.Build.Module, shader_source: *std.Build.Module, hrtsystem_shaders: *std.Build.Module, options: EngineOptions) *std.Build.Module {
-    const zgltf = b.dependency("zgltf", .{}).module("zgltf");
+fn makeEngineModule(b: *std.Build, options: EngineOptions,
+    shader_source: *std.Build.Module,
+    hrtsystem_shaders: *std.Build.Module,
+    vulkan: *std.Build.Module,
+    zgltf: *std.Build.Module,
+    tinyexr: *std.Build.Module,
+    wuffs: *std.Build.Module,
+    glfw: *std.Build.Module,
+    imgui: *std.Build.Module,
+) *std.Build.Module {
+    var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
+    defer imports.deinit();
+
+    imports.appendSlice(&[_]std.Build.Module.Import {
+        .{ .name = "build_options", .module = options.toBuildOptions(b).createModule() },
+        .{ .name = "vulkan", .module = vulkan },
+        .{ .name = "shader_source", .module = shader_source },
+    }) catch @panic("OOM");
+
+    if (options.hrtsystem) {
+        imports.appendSlice(&[_]std.Build.Module.Import {
+            .{ .name = "wuffs", .module = wuffs },
+            .{ .name = "tinyexr", .module = tinyexr },
+            .{ .name = "zgltf", .module = zgltf },
+            .{ .name = "hrtsystem_shaders", .module = hrtsystem_shaders },
+        }) catch @panic("OOM");
+    }
+
+    if (options.window) {
+        imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
+    }
+
+    if (options.gui) {
+        imports.append(std.Build.Module.Import { .name = "imgui", .module = imgui }) catch @panic("OOM");
+    }
 
     const module = b.createModule(.{
         .root_source_file = b.path("src/lib/engine.zig"),
-        .imports = &[_]std.Build.Module.Import {
-            .{
-                .name = "vulkan",
-                .module = vulkan,
-            },
-            .{
-                .name = "zgltf",
-                .module = zgltf,
-            },
-            .{
-                .name = "build_options",
-                .module = options.toBuildOptions(b).createModule(),
-            },
-            .{
-                .name = "hrtsystem_shaders",
-                .module = hrtsystem_shaders,
-            },
-            .{
-                .name = "shader_source",
-                .module = shader_source,
-            }
-        },
+        .imports = imports.items,
         .link_libc = true, // always needed to load vulkan
     });
 
     return module;
 }
 
-fn makeVulkanModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
+fn makeZgltfModule(b: *std.Build) *std.Build.Module {
+    const zgltf = b.dependency("zgltf", .{}).module("zgltf");
+    zgltf.optimize = .ReleaseFast;
+    return zgltf;
+}
+
+fn makeVulkanModule(b: *std.Build) *std.Build.Module {
     const vulkan_zig = b.dependency("vulkan_zig", .{});
     const vulkan_headers = b.dependency("vulkan_headers", .{});
     const vk_generate_cmd = b.addRunArtifact(vulkan_zig.artifact("vulkan-zig-generator"));
@@ -427,12 +442,11 @@ fn makeVulkanModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.
     const vk_zig = vk_generate_cmd.addOutputFileArg("vk.zig");
     return b.addModule("vulkan-zig", .{
         .root_source_file = vk_zig,
-        .target = target,
         .optimize = .ReleaseFast,
     });
 }
 
-fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.ResolvedTarget) *std.Build.Module {
+fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
     const cimgui = b.dependency("cimgui", .{});
     const imgui = b.dependency("imgui", .{});
 
@@ -454,12 +468,8 @@ fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.Re
         .root_source_file = root,
         .link_libcpp = true,
         .optimize = .ReleaseFast,
-        .target = target,
         .imports = &[_]std.Build.Module.Import {
-            .{
-                .name = "glfw",
-                .module = glfw,
-            },
+            .{ .name = "glfw", .module = glfw },
         }
     });
 
@@ -492,7 +502,7 @@ fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.Re
     return module;
 }
 
-fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
+fn makeTinyExrModule(b: *std.Build) *std.Build.Module {
     const tinyexr = b.dependency("tinyexr", .{});
     const miniz_path = "deps/miniz/";
 
@@ -505,7 +515,6 @@ fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build
         .root_source_file = root,
         .link_libcpp = true,
         .optimize = .ReleaseFast,
-        .target = target,
         .sanitize_c = false, // fails :( https://github.com/syoyo/tinyexr/issues/187
     });
 
@@ -523,7 +532,7 @@ fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build
     return module;
 }
 
-fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
+fn makeWuffsModule(b: *std.Build) *std.Build.Module {
     const base = b.dependency("wuffs", .{});
 
     const write_files_step = b.addWriteFiles();
@@ -535,7 +544,6 @@ fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.M
         .root_source_file = root,
         .link_libc = true,
         .optimize = .ReleaseFast,
-        .target = target,
     });
 
     module.addCSourceFile(.{
@@ -575,10 +583,7 @@ fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.Re
         .optimize = .ReleaseFast,
         .target = target,
         .imports = &[_]std.Build.Module.Import {
-            .{
-                .name = "vulkan",
-                .module = vulkan,
-            },
+            .{ .name = "vulkan", .module = vulkan },
         }
     });
 
