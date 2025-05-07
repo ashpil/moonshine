@@ -29,7 +29,7 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
             break :blk count;
         };
 
-        const is_push_descriptor = layout_flags.contains(.{ .push_descriptor_bit_khr = true });
+        const is_push_descriptor = layout_flags.contains(.{ .push_descriptor_bit = true });
 
         pub fn create(vc: *const VulkanContext, samplers: [sampler_count]vk.Sampler) !Self {
             var vk_bindings: [bindings.len]vk.DescriptorSetLayoutBinding = undefined;

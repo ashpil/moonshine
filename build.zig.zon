@@ -8,8 +8,8 @@
             .hash = "vulkan-0.0.0-r7Ytx5GAAwBIBpjW4Ipd81FiM24t7UxlVomrGkubzW3v",
         },
         .vulkan_headers = .{
-            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/d91597a82f881d473887b560a03a7edf2720b72c.tar.gz",
-            .hash = "N-V-__8AAGtEsAEqKSJR7kCJuhB7_xNXrHBcAEv3VG-cuFKh",
+            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/9c77de5c3dd216f28e407eec65ed9c0a296c1f74.tar.gz",
+            .hash = "N-V-__8AAHwr7wGgESDREQVGeJWFvErxgAnCu78GY5gT5-Cc",
         },
         .cimgui = .{
             .url = "https://github.com/ashpil/cimgui/archive/97684ddceec2e4b9d15c4d6aa67dd7230f94b513.tar.gz",
@@ -20,16 +20,16 @@
             .hash = "N-V-__8AAJacXwD_aAGbSJoVZ-TvXspFHPE1OR9wUkQqbwz_",
         },
         .glfw = .{
-            .url = "https://github.com/glfw/glfw/archive/b35641f4a3c62aa86a0b3c983d163bc0fe36026d.tar.gz",
-            .hash = "N-V-__8AAPHKSwBlKq1GSKGGlG-P5v9nj3F2nKQewNudbDvZ",
+            .url = "https://github.com/glfw/glfw/archive/e7ea71be039836da3a98cea55ae5569cb5eb885c.tar.gz",
+            .hash = "N-V-__8AAMrJSwAUGb9-vTzkNR-5LXS81MR__ZRVfF3tWgG6",
         },
         .tinyexr = .{
-            .url = "https://github.com/syoyo/tinyexr/archive/5fcb4dcb6e3abf96214b67e5c54db1ceec6a455c.tar.gz",
-            .hash = "N-V-__8AAPCmnQGo6Gwnm4muB9u4JYUzSlxT68SaVoGk1-t1",
+            .url = "https://github.com/syoyo/tinyexr/archive/735ff73ce5959cf005eb99ce517c9bcecab89dfb.tar.gz",
+            .hash = "N-V-__8AAGC4nQHVa2CJUUb6saSEtcSR7c3wMfzHy9oF6m1g",
         },
         .zgltf = .{
-            .url = "https://github.com/kooparse/zgltf/archive/ee153a493a773d1a8c4893f117d593ea21e4db93.tar.gz",
-            .hash = "zgltf-0.1.0-sX6QAtwJAgB_Qb8QNfJyvGVAVqsH8ABMmyDt6L4D_Cyw",
+            .url = "https://github.com/kooparse/zgltf/archive/b6579c3887c7ab0eef5f1eda09abbbc1f04d76ce.tar.gz",
+            .hash = "zgltf-0.1.0-sX6QAqIKAgAfb7yQlVrdsLwCNc6Fx8wFOLIQRaEGJnVC",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",

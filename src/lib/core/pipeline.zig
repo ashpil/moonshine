@@ -197,7 +197,7 @@ pub fn PipelineBindings(
     if (@typeInfo(PushConstants).@"struct".layout == .auto) @compileError("push constant struct layout is auto but must not be");
 
     const push_set_bindings = createPushDescriptorBindings(PushSetBindings, stages);
-    const PushSetLayout = descriptor.DescriptorLayout(&push_set_bindings, .{ .push_descriptor_bit_khr = true }, 1, name ++ " push descriptor");
+    const PushSetLayout = descriptor.DescriptorLayout(&push_set_bindings, .{ .push_descriptor_bit = true }, 1, name ++ " push descriptor");
 
     return struct {
         push_set_layout: PushSetLayout,
