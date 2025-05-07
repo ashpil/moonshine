@@ -2,7 +2,7 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const c = @import("../c.zig");
+const c = @import("imgui");
 const Window = @import("../Window.zig");
 
 const vector = @import("../vector.zig");

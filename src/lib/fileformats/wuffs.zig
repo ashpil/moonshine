@@ -1,4 +1,4 @@
-const c = @import("../c.zig");
+const c = @import("wuffs");
 const std = @import("std");
 
 fn ToWuffsSliceType(comptime T: type) type {

@@ -1,6 +1,6 @@
 // Thin wrapper for GLFW atm
 
-const c = @import("./c.zig");
+const c = @import("glfw");
 const vk = @import("vulkan");
 const std = @import("std");
 
@@ -162,7 +162,7 @@ pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32
     const Callback = struct {
         fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
             _ = scancode;
-            
+
             const window = Self {
                 .handle = handle.?,
             };
