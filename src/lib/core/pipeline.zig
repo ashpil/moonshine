@@ -20,7 +20,7 @@ pub fn createShaderModule(vc: *const VulkanContext, shader_source: ShaderSource,
     const code = switch (build_options.shader_source_type) {
         .embed => shader_source.code,
         .load => @as([]const u32, @ptrCast(@alignCast(blk: {
-            var compile_process = std.process.Child.init(shader_source.code, allocator);
+            var compile_process = std.process.Child.init(shader_source.command, allocator);
             compile_process.stdout_behavior = .Pipe;
             try compile_process.spawn();
             const stdout = blk_inner: {
