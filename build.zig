@@ -22,6 +22,7 @@ pub fn build(b: *std.Build) !void {
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
+    const hrtsystem_shaders = makeHrtsystemShaders(b, shader_source);
     const default_engine_options = EngineOptions.fromCli(b);
 
     var compiles = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
@@ -32,7 +33,8 @@ pub fn build(b: *std.Build) !void {
         engine_options.vk_validation = .panic;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vulkan, shader_source, .embed, engine_options);
+        engine_options.shader_source_type = .embed;
+        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
 
         const tests = b.addTest(.{
             .name = "tests",
@@ -56,7 +58,8 @@ pub fn build(b: *std.Build) !void {
     try compiles.append(blk: {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
-        const engine = makeEngineModule(b, vulkan, shader_source, if (target.result.os.tag == .linux) .load else .embed, engine_options);
+        engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
+        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
         const exe = b.addExecutable(.{
             .name = "online",
             .root_module = b.createModule(.{
@@ -67,8 +70,8 @@ pub fn build(b: *std.Build) !void {
         });
         exe.root_module.addImport("vulkan", vulkan);
         exe.root_module.addImport("engine", engine);
-        exe.root_module.addImport("shaders", makeShadersModule(b, shader_source, &[_]Shader {
-            Shader { .type = .compute, .source = .embed, .path = "src/bin/online/input.hlsl", .name = "input", },
+        exe.root_module.addImport("shaders", makeShadersModule(b, shader_source, &[_]ShaderImport {
+            ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/input.hlsl", }, .name = "input", },
         }));
         engine.addImport("glfw", glfw);
         engine.addImport("tinyexr", tinyexr);
@@ -83,7 +86,8 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vulkan, shader_source, .embed, engine_options);
+        engine_options.shader_source_type = .embed;
+        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_module = b.createModule(.{
@@ -105,7 +109,8 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
-        const engine = makeEngineModule(b, vulkan, shader_source, if (target.result.os.tag == .linux) .load else .embed, engine_options);
+        engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
+        const engine = makeEngineModule(b, vulkan, shader_source, hrtsystem_shaders, engine_options);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
@@ -298,6 +303,7 @@ pub const EngineOptions = struct {
     hrtsystem: bool = true,
     window: bool = true,
     gui: bool = true,
+    shader_source_type: ShaderImport.SourceType = .embed,
 
     fn fromCli(b: *std.Build) EngineOptions {
         var options = EngineOptions {};
@@ -316,12 +322,13 @@ pub const EngineOptions = struct {
         build_options.addOption(bool, "window", self.window);
         build_options.addOption(bool, "gui", self.gui);
         build_options.addOption(bool, "hrtsystem", self.hrtsystem);
+        build_options.addOption(ShaderImport.SourceType, "shader_source_type", self.shader_source_type);
 
         return build_options;
     }
 };
 
-fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shaders: []const Shader) *std.Build.Module {
+fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imports: []const ShaderImport) *std.Build.Module {
     const stdout_shader_args = [_][]const u8{ "-Fo", "/dev/stdout" }; // TODO: windows
 
     var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
@@ -333,29 +340,23 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shaders: [
         \\
     ) catch @panic("OOM");
 
-    for (shaders) |shader| {
-        imports.append(compileShader(b, shader)) catch @panic("OOM");
-        switch (shader.source) {
-            .embed => contents.appendSlice(b.fmt(
-                \\pub const {0s} = ShaderSource {{
-                \\    .name = "{0s}",
-                \\    .type = .{{ .code = blk: {{
-                \\        const bytes align(4) = @embedFile("{0s}").*;
-                \\        break :blk @ptrCast(&bytes);
-                \\    }}}},
-                \\}};
-                \\
-                \\
-            , .{ shader.name })) catch @panic("OOM"),
-            .load => contents.appendSlice(b.fmt(
-                \\pub const {0s} = ShaderSource {{
-                \\    .name = "{0s}",
-                \\    .type = .{{ .command = &[_][]const u8 {{ "{1s}" }} }},
-                \\}};
-                \\
-                \\
-            , .{ shader.name, std.mem.join(b.allocator, "\", \"", std.mem.concat(b.allocator, []const u8, &[_][]const []const u8{ &shader.compileCommand(), &[1][]const u8{ shader.path }, &stdout_shader_args }) catch @panic("OOM")) catch @panic("OOM")})) catch @panic("OOM"),
-        }
+    for (shader_imports) |shader_import| {
+        imports.append(std.Build.Module.Import {
+            .name = shader_import.name,
+            .module = shader_import.shader.compile(b),
+        }) catch @panic("OOM");
+        contents.appendSlice(b.fmt(
+            \\pub const {0s} = ShaderSource {{
+            \\    .name = "{0s}",
+            \\    .code = blk: {{
+            \\        const bytes align(4) = @embedFile("{0s}").*;
+            \\        break :blk @ptrCast(&bytes);
+            \\    }},
+            \\    .command = &[_][]const u8 {{ "{1s}" }},
+            \\}};
+            \\
+            \\
+        , .{ shader_import.name, std.mem.join(b.allocator, "\", \"", std.mem.concat(b.allocator, []const u8, &[_][]const []const u8{ &shader_import.shader.compileCommand(), &[1][]const u8{ shader_import.shader.path }, &stdout_shader_args }) catch @panic("OOM")) catch @panic("OOM") })) catch @panic("OOM");
     }
 
     imports.append(std.Build.Module.Import {
@@ -372,7 +373,20 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shaders: [
     });
 }
 
-fn makeEngineModule(b: *std.Build, vulkan: *std.Build.Module, shader_source: *std.Build.Module, shader_source_type: Shader.SourceType, options: EngineOptions) *std.Build.Module {
+fn makeHrtsystemShaders(b: *std.Build, shader_source: *std.Build.Module) *std.Build.Module {
+    return makeShadersModule(b, shader_source, &[_]ShaderImport {
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/main.hlsl" }, .name = "main", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/equirectangular_to_equal_area.hlsl" }, .name = "equirectangular_to_equal_area", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/fold.hlsl" }, .name = "background_fold", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/triangle_power.hlsl" }, .name = "triangle_power", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/geometry_power.hlsl" }, .name = "geometry_power", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/instance_power.hlsl" }, .name = "instance_power", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/fold3.hlsl" }, .name = "fold3", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/fold1.hlsl" }, .name = "fold1", },
+    });
+}
+
+fn makeEngineModule(b: *std.Build, vulkan: *std.Build.Module, shader_source: *std.Build.Module, hrtsystem_shaders: *std.Build.Module, options: EngineOptions) *std.Build.Module {
     const zgltf = b.dependency("zgltf", .{}).module("zgltf");
 
     const module = b.createModule(.{
@@ -392,18 +406,9 @@ fn makeEngineModule(b: *std.Build, vulkan: *std.Build.Module, shader_source: *st
             },
             .{
                 .name = "hrtsystem_shaders",
-                .module = makeShadersModule(b, shader_source, &[_]Shader {
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/main.hlsl", .name = "main", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/background/equirectangular_to_equal_area.hlsl", .name = "equirectangular_to_equal_area", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/background/fold.hlsl", .name = "background_fold", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/local_light/triangle_power.hlsl", .name = "triangle_power", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/local_light/geometry_power.hlsl", .name = "geometry_power", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/local_light/instance_power.hlsl", .name = "instance_power", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/local_light/fold3.hlsl", .name = "fold3", },
-                    Shader { .type = .compute, .source = shader_source_type, .path = "src/lib/hrtsystem/shaders/local_light/fold1.hlsl", .name = "fold1", },
-                }),
+                .module = hrtsystem_shaders,
             },
-            std.Build.Module.Import {
+            .{
                 .name = "shader_source",
                 .module = shader_source,
             }
@@ -714,14 +719,14 @@ fn generateWaylandHeader(b: *std.Build, write_file_step: *std.Build.Step.WriteFi
     _ = write_file_step.addCopyFile(out_header, out_header_name);
 }
 
-const base_shader_compile_cmd = [_][]const u8 {
-    "dxc",
-    "-HV", "2021",
-    "-spirv",
-    "-fspv-target-env=vulkan1.3",
-    "-fvk-use-scalar-layout",
-    "-Ges", // strict mode
-    "-WX", // treat warnings as errors
+const ShaderImport = struct {
+    const SourceType = enum {
+        embed, // embed SPIRV shaders into binary at compile time
+        load,  // dynamically load shader and compile to SPIRV at runtime (but also check build-time correctness)
+    };
+
+    shader: Shader,
+    name: []const u8,
 };
 
 const Shader = struct {
@@ -737,46 +742,44 @@ const Shader = struct {
         }
     };
 
-    const SourceType = enum {
-        embed, // embed SPIRV shaders into binary at compile time
-        load,  // dynamically load shader and compile to SPIRV at runtime (but also check build-time correctness)
-    };
-
-    name: []const u8,
     path: []const u8,
     type: ShaderType,
-    source: SourceType,
 
     const include_shader_debug_info = false;
-    fn compileCommand(self: Shader) [base_shader_compile_cmd.len + 2 + @intFromBool(include_shader_debug_info)][]const u8 {
-        return base_shader_compile_cmd
-            ++ [_][]const u8{ "-T", self.type.dxcProfile() }
-            ++ (if (include_shader_debug_info) [_][]const u8{ "-Zi" } else [_][]const u8{});
+    const shader_compile_cmd = [_][]const u8 {
+        "dxc",
+        "-HV", "2021",
+        "-spirv",
+        "-fspv-target-env=vulkan1.3",
+        "-fvk-use-scalar-layout",
+        "-Ges", // strict mode
+        "-WX", // treat warnings as errors
+    } ++ (if (include_shader_debug_info) [_][]const u8{ "-Zi" } else [_][]const u8{});
+
+    fn compileCommand(self: Shader) [shader_compile_cmd.len + 2][]const u8 {
+        return shader_compile_cmd ++ [_][]const u8{ "-T", self.type.dxcProfile() };
+    }
+
+    fn compile(self: Shader, b: *std.Build) *std.Build.Module {
+        const input_file_path = b.path(self.path);
+
+        const get_dependendies = std.Build.Step.Run.create(b, b.fmt("get dependencies of {s}", .{ self.path }));
+        get_dependendies.addArgs(&self.compileCommand());
+        get_dependendies.addFileArg(input_file_path);
+        get_dependendies.addArg("-MF");
+        _ = get_dependendies.addDepFileOutputArg(b.fmt("{s}.d", .{ self.path }));
+
+        const compile_shader = std.Build.Step.Run.create(b, b.fmt("compile {s}", .{ self.path }));
+        compile_shader.addArgs(&self.compileCommand());
+        compile_shader.addFileArg(input_file_path);
+        compile_shader.addArg("-Fo");
+        const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ self.path }));
+
+        compile_shader.step.dependOn(&get_dependendies.step);
+        compile_shader.dep_output_file = get_dependendies.argv.getLast().output_file;
+
+        return b.createModule(.{
+            .root_source_file = spv_file,
+        });
     }
 };
-
-fn compileShader(b: *std.Build, shader: Shader) std.Build.Module.Import {
-    const input_file_path = b.path(shader.path);
-
-    const get_dependendies = std.Build.Step.Run.create(b, b.fmt("get dependencies of {s}", .{ shader.path }));
-    get_dependendies.addArgs(&shader.compileCommand());
-    get_dependendies.addFileArg(input_file_path);
-    get_dependendies.addArg("-MF");
-    _ = get_dependendies.addDepFileOutputArg(b.fmt("{s}.d", .{ shader.path }));
-
-    const compile_shader = std.Build.Step.Run.create(b, b.fmt("compile {s}", .{ shader.path }));
-    compile_shader.addArgs(&shader.compileCommand());
-    compile_shader.addFileArg(input_file_path);
-    compile_shader.addArg("-Fo");
-    const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ shader.path }));
-
-    compile_shader.step.dependOn(&get_dependendies.step);
-    compile_shader.dep_output_file = get_dependendies.argv.getLast().output_file;
-
-    return std.Build.Module.Import {
-        .name = shader.name,
-        .module = b.createModule(.{
-            .root_source_file = spv_file,
-        }),
-    };
-}

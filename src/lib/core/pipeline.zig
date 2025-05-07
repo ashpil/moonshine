@@ -13,14 +13,14 @@ const descriptor = core.descriptor;
 
 const ShaderSource = @import("shader_source");
 
-pub fn createShaderModule(vc: *const VulkanContext, comptime shader_source: ShaderSource, allocator: std.mem.Allocator) !vk.ShaderModule {
+pub fn createShaderModule(vc: *const VulkanContext, shader_source: ShaderSource, allocator: std.mem.Allocator) !vk.ShaderModule {
     var to_free: []const u8 = undefined;
-    defer if (shader_source.type == .command) allocator.free(to_free);
+    defer if (build_options.shader_source_type == .load) allocator.free(to_free);
 
-    const code = switch (shader_source.type) {
-        .code => |code| code,
-        .command => |command| @as([]const u32, @ptrCast(@alignCast(blk: {
-            var compile_process = std.process.Child.init(command, allocator);
+    const code = switch (build_options.shader_source_type) {
+        .embed => shader_source.code,
+        .load => @as([]const u32, @ptrCast(@alignCast(blk: {
+            var compile_process = std.process.Child.init(shader_source.code, allocator);
             compile_process.stdout_behavior = .Pipe;
             try compile_process.spawn();
             const stdout = blk_inner: {
