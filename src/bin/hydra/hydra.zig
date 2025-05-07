@@ -23,8 +23,6 @@ const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
-pub const required_vulkan_functions = hrtsystem.required_vulkan_functions;
-
 const Allocator = std.heap.GeneralPurposeAllocator(.{});
 
 comptime {

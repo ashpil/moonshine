@@ -22,21 +22,6 @@ const F32x3 = vector.Vec3(f32);
 const imgui = @import("./imgui.zig");
 const Window = @import("../Window.zig");
 
-pub const required_vulkan_functions = [_]vk.ApiInfo {
-    .{
-        .device_commands = .{
-            .createGraphicsPipelines = true,
-            .cmdBindVertexBuffers = true,
-            .cmdBindIndexBuffer = true,
-            .cmdSetViewport = true,
-            .cmdSetScissor = true,
-            .cmdDrawIndexed = true,
-            .cmdBeginRendering = true,
-            .cmdEndRendering = true,
-        },
-    },
-};
-
 const frames_in_flight = Display.frames_in_flight;
 const Self = @This();
 

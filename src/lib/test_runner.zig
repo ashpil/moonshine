@@ -3,8 +3,6 @@ const builtin = @import("builtin");
 
 const engine = @import("engine");
 
-pub const required_vulkan_functions = engine.hrtsystem.required_vulkan_functions;
-
 pub fn main() void {
     const enable_print = true;
     const print_all = true;

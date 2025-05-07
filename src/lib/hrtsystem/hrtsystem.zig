@@ -24,19 +24,3 @@ pub const required_device_features = vk.PhysicalDeviceRayQueryFeaturesKHR {
     }),
     .ray_query = vk.TRUE,
 };
-
-pub const required_vulkan_functions = [_]vk.ApiInfo {
-    .{
-        .device_commands = .{
-            .cmdBuildAccelerationStructuresKHR = true,
-            .destroyAccelerationStructureKHR = true,
-            .createAccelerationStructureKHR = true,
-            .getAccelerationStructureBuildSizesKHR = true,
-            .getAccelerationStructureDeviceAddressKHR = true,
-            .cmdWriteAccelerationStructuresPropertiesKHR = true,
-            .cmdCopyAccelerationStructureKHR = true,
-            .cmdClearColorImage = true,
-            .cmdFillBuffer = true,
-        },
-    },
-};

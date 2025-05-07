@@ -8,8 +8,6 @@ const validate = @import("build_options").vk_validation != .ignore;
 
 const root = @import("root");
 
-const additional_vulkan_functions = if (@hasDecl(root, "required_vulkan_functions")) root.required_vulkan_functions else [_]vk.ApiInfo {};
-
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
 const VulkanContextError = error {
@@ -21,115 +19,15 @@ const VulkanContextError = error {
     UnavailableQueues,
 };
 
-const core_vulkan_functions = vk.ApiInfo {
-    .base_commands = vk.BaseCommandFlags {
-        .createInstance = true,
-        .enumerateInstanceLayerProperties = true,
-        .enumerateInstanceExtensionProperties = true,
-    },
-    .instance_commands = vk.InstanceCommandFlags {
-        .destroyInstance = true,
-        .enumeratePhysicalDevices = true,
-        .enumerateDeviceExtensionProperties = true,
-        .getPhysicalDeviceQueueFamilyProperties = true,
-        .getDeviceProcAddr = true,
-        .createDevice = true,
-        .getPhysicalDeviceMemoryProperties = true,
-        .getPhysicalDeviceProperties2 = true,
-    },
-    .device_commands = vk.DeviceCommandFlags {
-        .getDeviceQueue = true,
-        .createImageView = true,
-        .destroyDevice = true,
-        .destroyImageView = true,
-        .createBuffer = true,
-        .getBufferMemoryRequirements = true,
-        .allocateMemory = true,
-        .bindBufferMemory = true,
-        .destroyBuffer = true,
-        .freeMemory = true,
-        .mapMemory = true,
-        .unmapMemory = true,
-        .createCommandPool = true,
-        .destroyCommandPool = true,
-        .allocateCommandBuffers = true,
-        .freeCommandBuffers = true,
-        .beginCommandBuffer = true,
-        .cmdCopyBuffer = true,
-        .endCommandBuffer = true,
-        .queueWaitIdle = true,
-        .destroyPipeline = true,
-        .createPipelineLayout = true,
-        .destroyPipelineLayout = true,
-        .createShaderModule = true,
-        .destroyShaderModule = true,
-        .createDescriptorSetLayout = true,
-        .destroyDescriptorSetLayout = true,
-        .cmdBindPipeline = true,
-        .cmdBindDescriptorSets = true,
-        .resetCommandPool = true,
-        .getBufferDeviceAddress = true,
-        .createSemaphore = true,
-        .destroySemaphore = true,
-        .allocateDescriptorSets = true,
-        .createDescriptorPool = true,
-        .destroyDescriptorPool = true,
-        .updateDescriptorSets = true,
-        .createImage = true,
-        .destroyImage = true,
-        .getImageMemoryRequirements = true,
-        .bindImageMemory = true,
-        .cmdPipelineBarrier2 = true,
-        .cmdBlitImage = true,
-        .deviceWaitIdle = true,
-        .createFence = true,
-        .destroyFence = true,
-        .waitForFences = true,
-        .resetFences = true,
-        .queueSubmit2 = true,
-        .cmdPushConstants = true,
-        .cmdCopyBufferToImage = true,
-        .createSampler = true,
-        .destroySampler = true,
-        .createQueryPool = true,
-        .resetQueryPool = true,
-        .getQueryPoolResults = true,
-        .destroyQueryPool = true,
-        .cmdCopyImageToBuffer = true,
-        .cmdUpdateBuffer = true,
-        .createComputePipelines = true,
-        .cmdDispatch = true,
-        .cmdPushDescriptorSetKHR = true,
-        .getDeviceBufferMemoryRequirements = true,
-    }
-};
-
-const validation_vulkan_functions = if (validate) vk.ApiInfo {
-    .instance_commands = vk.InstanceCommandFlags {
-        .createDebugUtilsMessengerEXT = true,
-        .destroyDebugUtilsMessengerEXT = true,
-    },
-    .device_commands = vk.DeviceCommandFlags {
-        .setDebugUtilsObjectNameEXT = true,
-    },
-} else vk.ApiInfo {};
-
-const all_vulkan_commands = [_]vk.ApiInfo { core_vulkan_functions, validation_vulkan_functions } ++ additional_vulkan_functions;
-
-const InstanceDispatch = vk.InstanceWrapper(&all_vulkan_commands);
-const DeviceDispatch = vk.DeviceWrapper(&all_vulkan_commands);
-
-pub const Instance = vk.InstanceProxy(&all_vulkan_commands);
-pub const Device = vk.DeviceProxy(&all_vulkan_commands);
-pub const Queue = vk.QueueProxy(&all_vulkan_commands);
-pub const CommandBuffer = vk.CommandBufferProxy(&all_vulkan_commands);
+pub const Instance = vk.InstanceProxy;
+pub const Device = vk.DeviceProxy;
+pub const Queue = vk.QueueProxy;
+pub const CommandBuffer = vk.CommandBufferProxy;
 
 const Base = struct {
     vulkan_lib: std.DynLib,
     pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
-    dispatch: BaseDispatch,
-
-    const BaseDispatch = vk.BaseWrapper(&all_vulkan_commands);
+    dispatch: vk.BaseWrapper,
 
     fn new() !Base {
         const vulkan_lib_name = if (builtin.os.tag == .windows) "vulkan-1.dll" else "libvulkan.so.1";
@@ -138,7 +36,7 @@ const Base = struct {
         return Base {
             .vulkan_lib = vulkan_lib,
             .pfn_get_instance_proc_addr = pfn_get_instance_proc_addr,
-            .dispatch = try BaseDispatch.load(pfn_get_instance_proc_addr),
+            .dispatch = vk.BaseWrapper.load(pfn_get_instance_proc_addr),
         };
     }
 
@@ -187,7 +85,7 @@ const Base = struct {
     }
 
     fn validationLayersAvailable(self: Base, allocator: std.mem.Allocator) !bool {
-        const available_layers = try vk_helpers.getVkSlice(allocator, BaseDispatch.enumerateInstanceLayerProperties, .{ self.dispatch });
+        const available_layers = try vk_helpers.getVkSlice(allocator, vk.BaseWrapper.enumerateInstanceLayerProperties, .{ self.dispatch });
         defer allocator.free(available_layers);
 
         for (validation_layers) |layer_name| {
@@ -203,7 +101,7 @@ const Base = struct {
     }
 
     fn instanceExtensionsAvailable(self: Base, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        const available_extensions = try vk_helpers.getVkSlice(allocator, BaseDispatch.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
+        const available_extensions = try vk_helpers.getVkSlice(allocator, vk.BaseWrapper.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
         defer allocator.free(available_extensions);
 
         for (extensions) |extension_name| {
@@ -333,8 +231,8 @@ const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
 };
 
 base: Base,
-instance_dispatch: *InstanceDispatch,
-device_dispatch: *DeviceDispatch,
+instance_dispatch: *vk.InstanceWrapper,
+device_dispatch: *vk.DeviceWrapper,
 instance: Instance,
 device: Device,
 
@@ -360,8 +258,8 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, instance_ex
     errdefer base.destroy();
 
     const instance_handle = try base.createInstance(allocator, app_name, instance_extensions);
-    const instance_dispatch = try allocator.create(InstanceDispatch);
-    instance_dispatch.* = try InstanceDispatch.load(instance_handle, base.pfn_get_instance_proc_addr);
+    const instance_dispatch = try allocator.create(vk.InstanceWrapper);
+    instance_dispatch.* = vk.InstanceWrapper.load(instance_handle, base.pfn_get_instance_proc_addr);
     const instance = Instance.init(instance_handle, instance_dispatch);
     errdefer instance.destroyInstance(null);
 
@@ -372,8 +270,8 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, instance_ex
     defer allocator.free(all_device_extensions);
     const physical_device = try PhysicalDevice.pick(instance, allocator, if (queueFamilyAcceptable) |acc| acc else returnsTrue, all_device_extensions);
     const device_handle = try physical_device.createLogicalDevice(instance, all_device_extensions, features);
-    const device_dispatch = try allocator.create(DeviceDispatch);
-    device_dispatch.* = try DeviceDispatch.load(device_handle, instance_dispatch.dispatch.vkGetDeviceProcAddr);
+    const device_dispatch = try allocator.create(vk.DeviceWrapper);
+    device_dispatch.* = vk.DeviceWrapper.load(device_handle, instance_dispatch.dispatch.vkGetDeviceProcAddr.?);
     const device = Device.init(device_handle, device_dispatch);
     errdefer device.destroyDevice(null);
 
