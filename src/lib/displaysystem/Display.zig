@@ -47,9 +47,8 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
 
     var frames: [frames_in_flight]Frame = undefined;
     inline for (&frames, 0..) |*frame, i| {
-        frame.* = try Frame.create(vc, std.fmt.comptimePrint("frame {}", .{i}));
+        frame.* = try Frame.create(vc, std.fmt.comptimePrint("frame {}", .{i}), i != 0);
     }
-    try vc.device.resetFences(1, toMany(&frames[0].fence));
 
     const timestamp_period = if (metrics) blk: {
         var properties = vk.PhysicalDeviceProperties2 {
@@ -151,7 +150,7 @@ const Frame = struct {
 
     query_pool: if (metrics) vk.QueryPool else void,
 
-    fn create(vc: *const VulkanContext, name: [*:0]const u8) !Frame {
+    fn create(vc: *const VulkanContext, name: [*:0]const u8, fence_initially_signaled: bool) !Frame {
         const image_acquired = try vc.device.createSemaphore(&.{}, null);
         errdefer vc.device.destroySemaphore(image_acquired, null);
 
@@ -159,7 +158,7 @@ const Frame = struct {
         errdefer vc.device.destroySemaphore(command_completed, null);
 
         const fence = try vc.device.createFence(&.{
-            .flags = .{ .signaled_bit = true },
+            .flags = if (fence_initially_signaled) .{ .signaled_bit = true } else .{},
         }, null);
 
         var encoder = try Encoder.create(vc, name);
