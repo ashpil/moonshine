@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
 
         const tests = b.addTest(.{
-            .name = "tests",
+            .name = "gpu-tests",
             .test_runner = .{
                 .path = b.path("src/lib/test_runner.zig"),
                 .mode = .simple,
@@ -52,6 +52,19 @@ pub fn build(b: *std.Build) !void {
                     .{ .name = "engine", .module = engine },
                 },
             })
+        });
+
+        break :blk tests;
+    });
+
+    try compiles.append(blk: {
+        const tests = b.addTest(.{
+            .name = "vector-tests",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/lib/vector.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
         });
 
         break :blk tests;

@@ -396,16 +396,20 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     return (if (comptime col_count == 1) self.transpose().mul(other) else self.mul(other.transpose())).get();
                 }
 
-                pub fn normL1(self: Self) ComponentType {
-                    var out = 0;
+                const PossiblyIntNorm = if (isFloatType(ComponentType) or ComponentType == comptime_int) ComponentType else @Type(std.builtin.Type {
+                    .int = .{ .bits = @typeInfo(ComponentType).int.bits, .signedness = .unsigned }
+                });
+
+                pub fn normL1(self: Self) PossiblyIntNorm {
+                    var out: PossiblyIntNorm = 0;
                     inline for (0..element_count) |element_idx| {
-                        out += @abs(self.element(element_idx));
+                        out += @intCast(@abs(self.element(element_idx)));
                     }
                     return out;
                 }
 
-                pub fn normLinf(self: Self) ComponentType {
-                    var out = 0;
+                pub fn normLInf(self: Self) PossiblyIntNorm {
+                    var out: PossiblyIntNorm = 0;
                     inline for (0..element_count) |element_idx| {
                         out = @max(out, @abs(self.element(element_idx)));
                     }
@@ -422,8 +426,6 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     }
                 } else struct {};
 
-                // TODO: generalize to full wedge product,
-                // don't want to specialize on three dimensions
                 pub usingnamespace if (element_count == 3) struct {
                     pub fn cross(self: Self, other: Self) Self {
                         const x = self.element(1) * other.element(2) - other.element(1) * self.element(2);
@@ -434,7 +436,6 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 } else struct {};
             } else struct {};
         } else struct {};
-
 
         pub usingnamespace if (col_count == 1 and row_count == 1) struct {
             pub fn get(self: Self) ComponentType {
@@ -478,4 +479,93 @@ pub fn Mat4(comptime T: type) type {
 
 pub fn Mat4x3(comptime T: type) type {
     return Matrix(T, 4, 3);
+}
+
+test "vector algebra" {
+    const v0 = Vec3(i32).new(.{ 4, 1, 3 });
+    const v1 = Vec3(i32).new(.{ 2, 9, 8 });
+    const v2 = Vec3(i32).new(.{ 7, 0, 1 });
+
+    try std.testing.expectEqual(v0.componentAdd(v1), Vec3(i32).new(.{ 6, 10, 11 }));
+    try std.testing.expectEqual(v1.componentAdd(v2), Vec3(i32).new(.{ 9, 9, 9 }));
+    try std.testing.expectEqual(v0.componentAdd(v2), Vec3(i32).new(.{ 11, 1, 4 }));
+
+    try std.testing.expectEqual(v0.componentSub(v1), Vec3(i32).new(.{ 2, -8, -5 }));
+    try std.testing.expectEqual(v1.componentSub(v2), Vec3(i32).new(.{ -5, 9, 7 }));
+    try std.testing.expectEqual(v0.componentSub(v2), v2.componentSub(v0).scale(-1));
+
+    try std.testing.expectEqual(v0.componentMul(v1), Vec3(i32).new(.{ 8, 9, 24 }));
+    try std.testing.expectEqual(v1.componentMul(v2), Vec3(i32).new(.{ 14, 0, 8 }));
+    try std.testing.expectEqual(v0.componentMul(v2), Vec3(i32).new(.{ 28, 0, 3 }));
+
+    try std.testing.expectEqual(v0.scale(0), Vec3(i32).splat(0));
+    try std.testing.expectEqual(v0.scale(1), v0);
+    try std.testing.expectEqual(v0.scale(2), v0.componentAdd(v0));
+}
+
+test "vector products" {
+    const v0 = Vec3(i32).new(.{ 8, 5, 9 });
+    const v1 = Vec3(i32).new(.{ 0,-4, 1 });
+    const v2 = Vec3(i32).new(.{ 1, 0, 2 });
+
+    // symmetric
+    try std.testing.expectEqual(v0.dot(v1), v1.dot(v0));
+    try std.testing.expectEqual(v1.dot(v2), v2.dot(v1));
+    try std.testing.expectEqual(v0.dot(v2), v2.dot(v0));
+
+    try std.testing.expectEqual(v0.dot(v1), -11);
+    try std.testing.expectEqual(v1.dot(v2), 2);
+    try std.testing.expectEqual(v0.dot(v2), 26);
+
+    // antisymmetric
+    try std.testing.expectEqual(v0.cross(v1), v1.cross(v0).scale(-1));
+    try std.testing.expectEqual(v1.cross(v2), v2.cross(v1).scale(-1));
+    try std.testing.expectEqual(v0.cross(v2), v2.cross(v0).scale(-1));
+
+    try std.testing.expectEqual(v0.cross(v1), Vec3(i32).new(.{ 41, -8, -32 }));
+    try std.testing.expectEqual(v1.cross(v2), Vec3(i32).new(.{ -8, 1, 4 }));
+    try std.testing.expectEqual(v0.cross(v2), Vec3(i32).new(.{  10, -7, -5 }));
+}
+
+test "vector norms" {
+    const v0 = Vec3(i32).new(.{ 3, 4, 5 });
+    const v1 = Vec3(i32).new(.{ 0,-4, -2 });
+    const v2 = Vec3(i32).new(.{ 0, 0, 0 });
+
+    try std.testing.expectEqual(v0.normL1(), 12);
+    try std.testing.expectEqual(v1.normL1(), 6);
+    try std.testing.expectEqual(v2.normL1(), 0);
+
+    try std.testing.expectEqual(v0.normLInf(), 5);
+    try std.testing.expectEqual(v1.normLInf(), 4);
+    try std.testing.expectEqual(v2.normLInf(), 0);
+
+    try std.testing.expectApproxEqRel(v0.floatFromInt(f64).normL2(), 5.0 * std.math.sqrt(2.0), std.math.sqrt(std.math.floatEps(f64)));
+    try std.testing.expectApproxEqRel(v1.floatFromInt(f64).normL2(), 2.0 * std.math.sqrt(5.0), std.math.sqrt(std.math.floatEps(f64)));
+    try std.testing.expectEqual(v2.floatFromInt(f64).normL2(), 0.0);
+}
+
+test "matrix products" {
+    const m0 = Mat3(i32).fromRows(.{
+        .new(.{ 3, -2, 5 }),
+        .new(.{ 3, 0, 7 }),
+        .new(.{ 1, 4, -9 }),
+    });
+    const m1 = Mat3(i32).fromRows(.{
+        .new(.{ 9, 2, 5 }),
+        .new(.{ 3, 3, 1 }),
+        .new(.{ 8, 4, 8 }),
+    });
+
+    try std.testing.expectEqual(m0.mul(m1), Mat3(i32).fromRows(.{
+        .new(.{ 61, 20, 53 }),
+        .new(.{ 83, 34, 71 }),
+        .new(.{ -51, -22, -63 }),
+    }));
+
+    try std.testing.expectEqual(m1.mul(m0), Mat3(i32).fromRows(.{
+        .new(.{ 38, 2, 14 }),
+        .new(.{ 19, -2, 27 }),
+        .new(.{ 44, 16, -4 }),
+    }));
 }
