@@ -245,6 +245,51 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 }
                 return out;
             }
+
+            // number type conversion methods
+            pub usingnamespace if (isIntegerType(T)) struct {
+                pub fn intCast(self: Self, Target: type) Matrix(Target, col_count, row_count) {
+                    var out: Matrix(Target, col_count, row_count) = undefined;
+                    inline for (0..row_count) |row_idx| {
+                        inline for (0..col_count) |col_idx| {
+                            out.at_mut(.{ .col = col_idx, .row = row_idx }).* = @intCast(self.at(.{ .col = col_idx, .row = row_idx }));
+                        }
+                    }
+                    return out;
+                }
+
+                pub fn floatFromInt(self: Self, Target: type) Matrix(Target, col_count, row_count) {
+                    var out: Matrix(Target, col_count, row_count) = undefined;
+                    inline for (0..row_count) |row_idx| {
+                        inline for (0..col_count) |col_idx| {
+                            out.at_mut(.{ .col = col_idx, .row = row_idx }).* = @floatFromInt(self.at(.{ .col = col_idx, .row = row_idx }));
+                        }
+                    }
+                    return out;
+                }
+            } else struct {};
+
+            pub usingnamespace if (isFloatType(T)) struct {
+                pub fn floatCast(self: Self, Target: type) Matrix(Target, col_count, row_count) {
+                    var out: Matrix(Target, col_count, row_count) = undefined;
+                    inline for (0..row_count) |row_idx| {
+                        inline for (0..col_count) |col_idx| {
+                            out.at_mut(.{ .col = col_idx, .row = row_idx }).* = @floatCast(self.at(.{ .col = col_idx, .row = row_idx }));
+                        }
+                    }
+                    return out;
+                }
+
+                pub fn intFromFloat(self: Self, Target: type) Matrix(Target, col_count, row_count) {
+                    var out: Matrix(Target, col_count, row_count) = undefined;
+                    inline for (0..row_count) |row_idx| {
+                        inline for (0..col_count) |col_idx| {
+                            out.at_mut(.{ .col = col_idx, .row = row_idx }).* = @intFromFloat(self.at(.{ .col = col_idx, .row = row_idx }));
+                        }
+                    }
+                    return out;
+                }
+            } else struct {};
         } else struct {};
 
         // square matrix methods
