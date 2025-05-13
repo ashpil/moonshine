@@ -22,6 +22,7 @@ const Accel = engine.hrtsystem.Accel;
 const ConstantSpectra = engine.hrtsystem.ConstantSpectra;
 
 const vector = engine.vector;
+const Mat4 = vector.Mat4(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
@@ -219,6 +220,14 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     }
 }
 
+// convert to Z-up
+pub const gltf_to_msne = Mat4.fromRows(.{
+    .new(.{ 1, 0, 0, 0}),
+    .new(.{ 0, 0, 1, 0}),
+    .new(.{ 0, 1, 0, 0}),
+    .new(.{ 0, 0, 0, 1}),
+});
+
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8) !Self {
@@ -411,14 +420,10 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     for (gltf.data.nodes.items) |node| {
         if (node.mesh) |mesh_idx| {
             if (gltf_mesh_idx_to_model[mesh_idx]) |model| {
-                const mat = Gltf.getGlobalTransform(&gltf.data, node);
+                const mat_array = Gltf.getGlobalTransform(&gltf.data, node);
+                const transform = Mat4.fromCols(.{ .new(mat_array[0]), .new(mat_array[1]), .new(mat_array[2]), .new(mat_array[3]) });
                 _ = try accel.uploadInstance(vc, encoder, models, Instance {
-                    // convert to Z-up
-                    .transform = Mat4x3.fromRows(.{
-                        .new(.{mat[0][0], mat[1][0], mat[2][0], mat[3][0]}),
-                        .new(.{mat[0][2], mat[1][2], mat[2][2], mat[3][2]}),
-                        .new(.{mat[0][1], mat[1][1], mat[2][1], mat[3][1]}),
-                    }),
+                    .transform = gltf_to_msne.mul(transform).truncateRow(),
                     .model = model.handle,
                     .thin = model.thin,
                 });

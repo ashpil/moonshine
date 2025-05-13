@@ -52,7 +52,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     _ = try camera.appendSensor(vc, allocator, extent);
 
     {
-        const to_gltf = Mat4.fromRows(.{
+        const msne_camera_to_gltf_camera = Mat4.fromRows(.{
             .new(.{ 0, 1, 0, 0}),
             .new(.{ 0, 0,-1, 0}),
             .new(.{-1, 0, 0, 0}),
@@ -62,16 +62,10 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         for (gltf.data.nodes.items) |node| {
             if (node.camera) |camera_idx| {
                 const gltf_camera = gltf.data.cameras.items[camera_idx];
-                const mat = Gltf.getGlobalTransform(&gltf.data, node);
-                // convert to Z-up
-                const transform = Mat4.fromRows(.{
-                    .new(.{mat[0][0], mat[1][0], mat[2][0], mat[3][0]}),
-                    .new(.{mat[0][2], mat[1][2], mat[2][2], mat[3][2]}),
-                    .new(.{mat[0][1], mat[1][1], mat[2][1], mat[3][1]}),
-                    .new(.{ 0, 0, 0, 1}),
-                });
+                const mat_array = Gltf.getGlobalTransform(&gltf.data, node);
+                const transform = Mat4.fromCols(.{ .new(mat_array[0]), .new(mat_array[1]), .new(mat_array[2]), .new(mat_array[3]) });
                 _ = try camera.appendCamera(allocator, Camera.Camera {
-                    .transform = transform.mul(to_gltf).truncateRow(),
+                    .transform = World.gltf_to_msne.mul(transform).mul(msne_camera_to_gltf_camera).truncateRow(),
                     .model = switch (gltf_camera.type) {
                         .perspective => .thin_lens,
                         .orthographic => .orthographic,
@@ -90,12 +84,12 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         if (camera.cameras.items.len == 0) {
             const transform = Mat4.fromRows(.{
                 .new(.{1, 0, 0, 0}),
-                .new(.{0, 0, 1, 5}), // looking at origin
                 .new(.{0, 1, 0, 0}),
+                .new(.{0, 0, 1, 5}), // looking at origin
                 .new(.{0, 0, 0, 1}),
             });
             _ = try camera.appendCamera(allocator, Camera.Camera {
-                .transform = transform.mul(to_gltf).truncateRow(),
+                .transform = World.gltf_to_msne.mul(transform).mul(msne_camera_to_gltf_camera).truncateRow(),
             }, try allocator.dupeZ(u8, "default"));
         }
     }
