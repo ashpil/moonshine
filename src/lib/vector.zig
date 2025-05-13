@@ -333,6 +333,20 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                         std.debug.assert(det != 0);
                         return self.adjugate().scale(1 / det);
                     }
+
+                    pub usingnamespace if (col_count == 3) struct {
+                        // TODO: remove this once everything is migrated to rotors
+                        pub fn fromAxisAngle(axis: Vec3(ComponentType), angle: ComponentType) Self {
+                            const sin, const cos = .{ math.sin(angle), math.cos(angle) };
+                            const x, const y, const z = .{ axis.element(0), axis.element(1), axis.element(2) };
+
+                            return Self.fromRows(.{
+                                .new(.{(1 - cos) * x * x + cos, (1 - cos) * x * y - sin * z, (1 - cos) * x * z + sin * y}),
+                                .new(.{(1 - cos) * x * y + sin * z, (1 - cos) * y * y + cos, (1 - cos) * y * z - sin * x}),
+                                .new(.{(1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos}),
+                            });
+                        }
+                    } else struct {};
                 } else struct {};
             } else struct {};
         } else struct {};
