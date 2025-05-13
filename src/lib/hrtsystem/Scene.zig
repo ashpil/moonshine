@@ -52,6 +52,10 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     _ = try camera.appendSensor(vc, allocator, extent);
 
     {
+        // gltf spec:
+        // > The camera is defined such that the local +X axis is to the right,
+        // > the “lens” looks towards the local -Z axis,
+        // > and the top of the camera is aligned with the local +Y axis.
         const msne_camera_to_gltf_camera = Mat4.fromRows(.{
             .new(.{ 0, 1, 0, 0}),
             .new(.{ 0, 0,-1, 0}),

@@ -7,7 +7,7 @@
 // in camera space, cameras are oriented:
 // * forward along +X
 // * right along +Y
-// * up along +Z
+// * down along +Z
 
 enum class CameraModel : uint {
     ThinLens,
