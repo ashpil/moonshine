@@ -501,6 +501,7 @@ pub fn Mat4x3(comptime T: type) type {
 // this generalized well to N dimensions, but in order to do that ergonomically I'd need to
 // have proper support for n-vectors and multivectors and even subspaces and I don't want to
 // do that right now
+// WARNING: this ended up never going into use so it hasn't been properly tested
 pub fn Rotor3(comptime T: type) type {
     if (!isNumberType(T)) @compileError("Rotor inner type must be a number type, but is " ++ @typeName(T));
 
@@ -520,7 +521,14 @@ pub fn Rotor3(comptime T: type) type {
         }
 
         pub fn mul(self: Self, other: Self) Self {
-            return Self.new(other.bivector.scale(self.scalar).componentAdd(self.bivector.scale(other.scalar)).componentAdd(self.bivector.wedge(other.bivector)), self.scalar * other.scalar - self.bivector.dot(other.bivector));
+            return Self.new(
+                other.bivector.scale(self.scalar).componentAdd(self.bivector.scale(other.scalar)).componentAdd(Vec3(T).new(.{
+                    self.bivector.element(2) * other.bivector.element(1) - self.bivector.element(1) * other.bivector.element(2),
+                    - self.bivector.element(2) * other.bivector.element(0) + self.bivector.element(0) * other.bivector.element(2),
+                    self.bivector.element(1) * other.bivector.element(0) - self.bivector.element(0) * other.bivector.element(1),
+                })),
+                self.scalar * other.scalar - self.bivector.dot(other.bivector)
+            );
         }
 
         pub fn reverse(self: Self) Self {
@@ -559,19 +567,39 @@ pub fn Rotor3(comptime T: type) type {
             }
 
             // plane must be normalized
-            pub fn fromAnglePlane(plane: Vec3(T), angle: T) Self {
+            pub fn fromPlaneAngle(plane: Vec3(T), angle: T) Self {
                 const sin = math.sin(angle / 2.0);
                 const cos = math.cos(angle / 2.0);
                 return Self.new(plane.scale(-sin), cos).unit();
+            }
+
+            pub fn fromMatrix(m: Mat3(T)) Self {
+                std.debug.assert(std.math.approxEqRel(T, m.determinant(), 1, std.math.sqrt(std.math.floatEps(f32))));
+
+                var bivector: Vec3(T) = .splat(0);
+                var scalar: T = 1;
+
+                inline for (0..Mat3(T).col_count) |col_idx| {
+                    bivector = bivector.componentAdd(Mat3(T).identity.col(col_idx).wedge(m.col(col_idx)));
+                    scalar += Mat3(T).identity.col(col_idx).dot(m.col(col_idx));
+                }
+
+                return Self.new(bivector, scalar).unit();
+            }
+
+            pub fn fromXYZ(v: Vec3(T)) Self {
+                return Self.fromPlaneAngle(Vec3(T).new(.{1, 0, 0}).wedge(Vec3(T).new(.{0, 1, 0})), v.element(2))
+                    .mul(Self.fromPlaneAngle(Vec3(T).new(.{1, 0, 0}).wedge(Vec3(T).new(.{0, 0, 1})), v.element(1)))
+                    .mul(Self.fromPlaneAngle(Vec3(T).new(.{0, 1, 0}).wedge(Vec3(T).new(.{0, 0, 1})), v.element(0)));
             }
         } else struct {};
 
         pub fn toMatrix(self: Self) Mat3(T) {
             return Mat3(T).fromCols(.{
-                self.rotateVector(Vec3(T).new(.{ 1, 0, 0 })),
-                self.rotateVector(Vec3(T).new(.{ 0, 1, 0 })),
-                self.rotateVector(Vec3(T).new(.{ 0, 0, 1 })),
-            });
+                self.rotateVector(Mat3(T).identity.col(0)),
+                self.rotateVector(Mat3(T).identity.col(1)),
+                self.rotateVector(Mat3(T).identity.col(2)),
+            }).transpose();
         }
     };
 }
@@ -686,8 +714,8 @@ test "rotor" {
     try std.testing.expectEqual(Rotor3(i32).identity, Rotor3(i32).identity.rotateRotor(Rotor3(i32).identity));
 
     const xy_plane = Vec3(f64).new(.{ 1, 0, 0 }).wedge(Vec3(f64).new(.{ 0, 1, 0}));
-    const x_to_neg_x = Rotor3(f64).fromAnglePlane(xy_plane, std.math.pi);
-    const x_to_y = Rotor3(f64).fromAnglePlane(xy_plane, std.math.pi / 2.0);
+    const x_to_neg_x = Rotor3(f64).fromPlaneAngle(xy_plane, std.math.pi);
+    const x_to_y = Rotor3(f64).fromPlaneAngle(xy_plane, std.math.pi / 2.0);
 
     const x = Vec3(f64).new(.{ 1, 0, 0 });
     const neg_x = x.scale(-1);
@@ -709,5 +737,11 @@ test "rotor" {
 
     inline for (0..Vec3(f64).element_count) |i| {
         try std.testing.expectApproxEqAbs(neg_x.element(i), x_to_y.rotateVector(y).element(i), 2.0 * std.math.floatEps(f64));
+    }
+
+    const x_to_y_reconstructed = Rotor3(f64).fromMatrix(x_to_y.toMatrix());
+    try std.testing.expectApproxEqAbs(x_to_y.scalar, x_to_y_reconstructed.scalar, 2.0 * std.math.floatEps(f64));
+    inline for (0..Vec3(f64).element_count) |i| {
+        try std.testing.expectApproxEqAbs(x_to_y.bivector.element(i), x_to_y_reconstructed.bivector.element(i), 2.0 * std.math.floatEps(f64));
     }
 }
