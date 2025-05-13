@@ -426,6 +426,23 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     }
                 } else struct {};
 
+                pub usingnamespace if (element_count > 1) struct {
+                    // technically this returns a bivector rather than a vector,
+                    // but currently there's no way to destinguish these
+                    const Bivector = if (col_count != 1) Matrix(ComponentType, col_count * (col_count - 1) / 2, 1) else Matrix(ComponentType, 1, row_count * (row_count - 1) / 2);
+                    pub fn wedge(self: Self, other: Self) Bivector {
+                        var out: Bivector = undefined;
+                        comptime var out_idx = 0;
+                        inline for (0..element_count) |j| {
+                            inline for (0..j) |i| {
+                                out.element_mut(out_idx).* = self.element(i) * other.element(j) - self.element(j) * other.element(i);
+                                out_idx += 1;
+                            }
+                        }
+                        return out;
+                    }
+                } else struct {};
+
                 pub usingnamespace if (element_count == 3) struct {
                     pub fn cross(self: Self, other: Self) Self {
                         const x = self.element(1) * other.element(2) - other.element(1) * self.element(2);
@@ -525,6 +542,15 @@ test "vector products" {
     try std.testing.expectEqual(v0.cross(v1), Vec3(i32).new(.{ 41, -8, -32 }));
     try std.testing.expectEqual(v1.cross(v2), Vec3(i32).new(.{ -8, 1, 4 }));
     try std.testing.expectEqual(v0.cross(v2), Vec3(i32).new(.{  10, -7, -5 }));
+
+    // antisymmetric
+    try std.testing.expectEqual(v0.wedge(v1), v1.wedge(v0).scale(-1));
+    try std.testing.expectEqual(v1.wedge(v2), v2.wedge(v1).scale(-1));
+    try std.testing.expectEqual(v0.wedge(v2), v2.wedge(v0).scale(-1));
+
+    try std.testing.expectEqual(Vec2(i32).new(.{ 2, 3 }).wedge(Vec2(i32).new(.{ -1, 4 })), VecN(i32, 1).new(.{ 11 }));
+    try std.testing.expectEqual(Vec3(i32).new(.{ 1, 3, -2 }).wedge(Vec3(i32).new(.{ 5, 2, 8 })), Vec3(i32).new(.{ -13, 18, 28 }));
+    try std.testing.expectEqual(Vec4(i32).new(.{ 2, 3, 4, 5 }).wedge(Vec4(i32).new(.{ 6, 7, 8, 9 })), VecN(i32, 6).new(.{ -4, -8, -4, -12, -8, -4 }));
 }
 
 test "vector norms" {
