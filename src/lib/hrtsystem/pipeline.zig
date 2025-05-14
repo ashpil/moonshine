@@ -39,6 +39,7 @@ pub const StandardPushConstants = extern struct {
     sample_count: u32,
     global_volume: Material.Volume,
     background_to_world: Mat3,
+    seed: u32,
 };
 
 pub const Integrator = enum(u32) {

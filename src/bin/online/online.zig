@@ -128,6 +128,7 @@ pub fn main() !void {
     var has_clicked = false;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
     var current_clicked_color = F32x3.new(.{0.0, 0.0, 0.0});
+    var frame_index: u32 = 0;
 
     while (!window.shouldClose()) {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -381,7 +382,7 @@ pub fn main() !void {
             pipeline.recordBindPipeline(frame_encoder.buffer);
             pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
             pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
-            pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0));
+            pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
             pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
             scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
         }
@@ -483,6 +484,7 @@ pub fn main() !void {
         } else return err;
 
         window.pollEvents();
+        frame_index += 1;
     }
     try context.device.deviceWaitIdle();
 

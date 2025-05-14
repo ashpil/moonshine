@@ -137,7 +137,7 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
     };
 }
 
-pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardPushConstants {
+pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u32, seed: u32) engine.hrtsystem.pipeline.StandardPushConstants {
     return engine.hrtsystem.pipeline.StandardPushConstants {
         .instance_count = self.world.accel.instance_count,
         .camera = self.camera.cameras.items[camera][1],
@@ -145,6 +145,7 @@ pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u3
         .sample_count = self.camera.sensors.items[sensor].sample_count,
         .global_volume = self.global_volume,
         .background_to_world = self.background.backgrounds.items[background].transform,
+        .seed = seed,
     };
 }
 

@@ -121,7 +121,7 @@ pub fn main() !void {
 
         for (0..config.spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(encoder.buffer, scene.pushConstants(0, 0, 0));
+            pipeline.recordPushConstants(encoder.buffer, scene.pushConstants(0, 0, 0, scene.camera.sensors.items[0].sample_count));
 
             // trace our stuff
             pipeline.recordDispatchThreads2D(encoder.buffer, scene.camera.sensors.items[0].extent);

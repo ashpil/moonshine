@@ -344,7 +344,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(camera, sensor, 0));
 
         // push our stuff
-        self.pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(camera, sensor, 0));
+        self.pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(camera, sensor, 0, scene.camera.sensors.items[0].sample_count));
 
         // trace our stuff
         self.pipeline.recordDispatchThreads2D(self.encoder.buffer, self.camera.sensors.items[sensor].extent);

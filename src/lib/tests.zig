@@ -66,7 +66,7 @@ const TestingContext = struct {
 
         for (0..spp) |sample_count| {
             // push our stuff
-            pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(0, 0, 0));
+            pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(0, 0, 0, scene.camera.sensors.items[0].sample_count));
 
             // trace our stuff
             pipeline.recordDispatchThreads2D(self.encoder.buffer, scene.camera.sensors.items[0].extent);

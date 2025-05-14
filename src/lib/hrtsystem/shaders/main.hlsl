@@ -33,6 +33,7 @@ struct PushConsts {
     uint sampleCount;
     ChromaticVolume globalVolume;
     float3x3 backgroundToWorld;
+    uint seed;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -75,7 +76,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     scene.instanceLights = InstanceLights::create(dInstancePower, pushConsts.instanceCount, world);
     scene.globalVolume = pushConsts.globalVolume;
 
-    Rng rng = Rng::fromSeed(uint3(pushConsts.sampleCount, imageCoords.x, imageCoords.y));
+    Rng rng = Rng::fromSeed(uint3(pushConsts.seed, imageCoords.x, imageCoords.y));
 
     // set up initial ray
     const float2 jitter = float2(rng.getFloat(), rng.getFloat());
