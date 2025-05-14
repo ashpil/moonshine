@@ -14,7 +14,6 @@
 * Testing
   * Proper statistical tests GPU sampling routines
   * Proper statistical tests to make sure images have expected mean/variance
-  * Should ensure validation layers are clean during tests
 * Resource management
   * Make sure we have all necessary `errdefers`
   * GPU resource arrays should be resizable
