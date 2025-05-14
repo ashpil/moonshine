@@ -336,6 +336,15 @@ pub fn main() !void {
                     scene.camera.cameras.items[active_camera][1].transform = scene.camera.cameras.items[active_camera][1].transform.appendRow(.new(.{0, 0, 0, 1})).mul(rotation.appendCol(.splat(0)).appendRow(.new(.{0, 0, 0, 1}))).truncateRow();
                     scene.camera.sensors.items[active_sensor].clear();
                 }
+            } else if (imgui.isMouseDragging(.middle)) {
+                window.setCursorMode(.disabled);
+                const delta = imgui.getMouseDragDelta(.middle).componentDiv(window_size);
+                imgui.resetMouseDragDelta(.middle);
+                if (!std.meta.eql(delta, F32x2.new(.{0.0, 0.0}))) {
+                    const left_right = Mat3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
+                    scene.background.backgrounds.items[0].transform = scene.background.backgrounds.items[0].transform.mul(left_right);
+                    scene.camera.sensors.items[active_sensor].clear();
+                }
             } else {
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {

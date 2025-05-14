@@ -357,7 +357,7 @@ test "white sphere on white background is white" {
             .height = 1,
         }
     };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, "white");
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "white");
 
     var scene = Scene {
         .world = world,
@@ -459,7 +459,7 @@ test "white volume on white background is white" {
             .height = 1,
         }
     };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, "white");
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "white");
 
     var scene = Scene {
         .world = world,
@@ -564,7 +564,7 @@ test "inside illuminating sphere is white" {
             .height = 1,
         }
     };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, "black");
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "black");
 
     var scene = Scene {
         .world = world,

@@ -26,3 +26,6 @@
 * Tonemapping
 * HDR display
   * A satisfying implementation is blocked by [HDR display metadata querying in Vulkan](https://github.com/KhronosGroup/Vulkan-Docs/issues/1787)
+* Make all objects scale-invariant
+  * You should get the exact same image no matter what the root transform is, even if it is non-orthogonal
+  * Cameras and backgrounds are currently missing this

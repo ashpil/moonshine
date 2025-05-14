@@ -16,6 +16,7 @@ const Material = @import("./MaterialManager.zig");
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
+const Mat3 = vector.Mat3(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
 pub const StandardBindings = struct {
@@ -36,7 +37,8 @@ pub const StandardPushConstants = extern struct {
     camera: Camera.Camera,
     aspect_ratio: f32,
     sample_count: u32,
-    global_volume: Material.Volume = .{},
+    global_volume: Material.Volume,
+    background_to_world: Mat3,
 };
 
 pub const Integrator = enum(u32) {

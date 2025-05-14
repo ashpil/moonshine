@@ -32,6 +32,7 @@ struct PushConsts {
     Camera camera;
     uint sampleCount;
     ChromaticVolume globalVolume;
+    float3x3 backgroundToWorld;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -70,7 +71,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     Scene scene;
     scene.tlas = dTLAS;
     scene.world = world;
-    scene.envMap = EnvMap::create(dBackgroundTexture, dBackgroundSampler);
+    scene.envMap = EnvMap::create(pushConsts.backgroundToWorld, dBackgroundTexture, dBackgroundSampler);
     scene.instanceLights = InstanceLights::create(dInstancePower, pushConsts.instanceCount, world);
     scene.globalVolume = pushConsts.globalVolume;
 

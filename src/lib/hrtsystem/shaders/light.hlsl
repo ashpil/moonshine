@@ -30,11 +30,14 @@ interface Light {
 };
 
 struct EnvMap : Light {
+    float3x3 toWorld;
     SamplerState sampler;
     Texture2D<float3> texture;
 
-    static EnvMap create(Texture2D<float3> texture, SamplerState sampler) {
+    // toWorld must be orthogonal
+    static EnvMap create(float3x3 toWorld, Texture2D<float3> texture, SamplerState sampler) {
         EnvMap map;
+        map.toWorld = toWorld;
         map.sampler = sampler;
         map.texture = texture;
         return map;
@@ -61,7 +64,7 @@ struct EnvMap : Light {
         const float2 uv = (float2(idx) + rand) / float2(size, size);
 
         LightSample lightSample;
-        lightSample.dirWs = squareToEqualAreaSphere(uv);
+        lightSample.dirWs = normalize(mul(toWorld, squareToEqualAreaSphere(uv)));
         lightSample.distance = 1.#INF;
         lightSample.eval.pdf = discretePdf / (4.0 * PI);
         lightSample.eval.radiance = Spectrum::sampleEmission(λ, texture[idx]) / lightSample.eval.pdf;
@@ -77,7 +80,8 @@ struct EnvMap : Light {
 
         if (integral == 0) return LightEvaluation::empty();
 
-        const float2 uv = squareToEqualAreaSphereInverse(dirWs);
+        const float3x3 toLocal = transpose(toWorld);
+        const float2 uv = squareToEqualAreaSphereInverse(normalize(mul(toLocal, dirWs)));
         const uint2 idx = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
         const float discretePdf = Spectrum::sampleReflectance(λ, texture[idx]) * float(size * size) / integral;
 

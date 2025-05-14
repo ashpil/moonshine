@@ -106,7 +106,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     {
         const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
         defer allocator.free(skybox_image.asSlice());
-        _ = try background.addBackground(vc, allocator, encoder, skybox_image, "exr");
+        _ = try background.addBackground(vc, allocator, encoder, skybox_image, Mat3.identity, "exr");
     }
 
     return Self {
@@ -127,19 +127,19 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
         .models = self.world.models.models_device.deviceSlice(),
         .materials = self.world.materials.materials.deviceSlice(),
         .instance_powers = self.world.accel.instance_powers.deviceSlice(),
-        .background_image = .{ .view = self.background.images.items[background].view },
+        .background_image = .{ .view = self.background.backgrounds.items[background].image.view },
         .output_image = .{ .view = self.camera.sensors.items[sensor].image.view },
     };
 }
 
 pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u32) engine.hrtsystem.pipeline.StandardPushConstants {
-    _ = background;
     return engine.hrtsystem.pipeline.StandardPushConstants {
         .instance_count = self.world.accel.instance_count,
         .camera = self.camera.cameras.items[camera][1],
         .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(),
         .sample_count = self.camera.sensors.items[sensor].sample_count,
         .global_volume = self.global_volume,
+        .background_to_world = self.background.backgrounds.items[background].transform,
     };
 }
 

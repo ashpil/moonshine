@@ -7,11 +7,18 @@ const VulkanContext = engine.core.VulkanContext;
 const Encoder = engine.core.Encoder;
 const Image = engine.core.Image;
 
+const vector = @import("../vector.zig");
 const shaders = @import("hrtsystem_shaders");
 
 const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
+const Mat3 = vector.Mat3(f32);
 
-images: std.ArrayListUnmanaged(Image),
+pub const Background = struct {
+    image: Image,
+    transform: Mat3,
+};
+
+backgrounds: std.ArrayListUnmanaged(Background),
 sampler: vk.Sampler,
 equirectangular_to_equal_area_pipeline: EquirectangularToEqualAreaPipeline,
 fold_pipeline: FoldPipeline,
@@ -64,7 +71,7 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     errdefer fold_pipeline.destroy(vc);
 
     return Self {
-        .images = .{},
+        .backgrounds = .{},
         .sampler = sampler,
         .equirectangular_to_equal_area_pipeline = equirectangular_to_equal_area_pipeline,
         .fold_pipeline = fold_pipeline,
@@ -80,7 +87,7 @@ pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, allocator: st
             .height = 1,
         }
     };
-    return try self.addBackground(vc, allocator, encoder, rgba, "default white");
+    return try self.addBackground(vc, allocator, encoder, rgba, Mat3.identity, "default white");
 }
 
 // this should probably be a parameter, or should infer proper value for this
@@ -98,7 +105,7 @@ pub const Handle = u32;
 // only using equal area for importance sampling.
 // I tried that here but it seems to produce noisier results for e.g., sunny skies
 // compared to just keeping everything in the same parameterization.
-pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, color_image: Rgba2D, name: []const u8) !Handle {
+pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, color_image: Rgba2D, transform: Mat3, name: []const u8) !Handle {
     const equirectangular_extent = color_image.extent;
 
     const texture_name_equirectangular = try std.fmt.allocPrintZ(allocator, "background {s} equirectangular", .{ name });
@@ -223,16 +230,19 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
         },
     }, &.{});
 
-    try self.images.append(allocator, equal_area_image);
+    try self.backgrounds.append(allocator, Background {
+        .image = equal_area_image,
+        .transform = transform,
+    });
 
-    return @intCast(self.images.items.len - 1);
+    return @intCast(self.backgrounds.items.len - 1);
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
-    for (self.images.items) |image| {
-        image.destroy(vc);
+    for (self.backgrounds.items) |background| {
+        background.image.destroy(vc);
     }
-    self.images.deinit(allocator);
+    self.backgrounds.deinit(allocator);
     self.equirectangular_to_equal_area_pipeline.destroy(vc);
     self.fold_pipeline.destroy(vc);
     vc.device.destroySampler(self.sampler, null);
