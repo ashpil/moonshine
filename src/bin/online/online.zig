@@ -365,7 +365,8 @@ pub fn main() !void {
             const forward = transform.truncateCol().mul(F32x3.new(.{1, 0, 0}));
             const origin = transform.col(3);
 
-            const speed = imgui.getIO().DeltaTime;
+            const boost: f32 = if (imgui.getIO().KeyShift) 5.0 else 1.0;
+            const speed = imgui.getIO().DeltaTime * boost;
 
             if (imgui.isKeyDown(.w)) transform = transform.truncateCol().appendCol(origin.componentAdd(forward.scale(speed * navigation_speed)));
             if (imgui.isKeyDown(.s)) transform = transform.truncateCol().appendCol(origin.componentSub(forward.scale(speed * navigation_speed)));
