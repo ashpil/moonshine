@@ -54,7 +54,7 @@ const Config = struct {
         return Config{
             .in_filepath = try allocator.dupe(u8, in_filepath),
             .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
-            .extent = vk.Extent2D{ .width = 1280, .height = 720 }, // TODO: cli
+            .extent = vk.Extent2D{ .width = 1600, .height = 900 }, // TODO: cli
         };
     }
 
