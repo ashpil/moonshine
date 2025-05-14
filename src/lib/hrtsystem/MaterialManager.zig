@@ -8,7 +8,6 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const Image = core.Image;
 const vk_helpers = core.vk_helpers;
-const toMany = vk_helpers.toMany;
 
 const F32x2 = engine.vector.Vec2(f32);
 const F32x3 = engine.vector.Vec3(f32);
@@ -217,7 +216,7 @@ pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.Com
 
     command_buffer.pipelineBarrier2(&vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = toMany(&vk.BufferMemoryBarrier2 {
+        .p_buffer_memory_barriers = (&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
@@ -227,7 +226,7 @@ pub fn recordUpdateSingleMaterial(self: *Self, command_buffer: VulkanContext.Com
             .buffer = self.materials.handle,
             .offset = offset,
             .size = size,
-        }),
+        })[0..1],
     });
 }
 
@@ -244,7 +243,7 @@ pub fn recordUpdateSingleVariant(self: *Self, comptime VariantType: type, comman
 
     command_buffer.pipelineBarrier2(&vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = toMany(&vk.BufferMemoryBarrier2 {
+        .p_buffer_memory_barriers = (&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
@@ -254,7 +253,7 @@ pub fn recordUpdateSingleVariant(self: *Self, comptime VariantType: type, comman
             .buffer = @field(self.variant_buffers, variant_name).buffer.handle,
             .offset = offset,
             .size = size,
-        }),
+        })[0..1],
     });
 }
 
@@ -297,8 +296,8 @@ pub const TextureManager = struct {
         try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
             .descriptor_pool = descriptor_layout.pool,
             .descriptor_set_count = 1,
-            .p_set_layouts = toMany(&descriptor_layout.handle),
-        }, toMany(&descriptor_set));
+            .p_set_layouts = (&descriptor_layout.handle)[0..1],
+        }, (&descriptor_set)[0..1]);
         try vk_helpers.setDebugName(vc.device, descriptor_set, "textures");
 
         return TextureManager {
@@ -327,20 +326,20 @@ pub const TextureManager = struct {
 
         encoder.uploadDataToImage(T, src, image.handle, extent, .shader_read_only_optimal);
 
-        vc.device.updateDescriptorSets(1, toMany(&vk.WriteDescriptorSet {
+        vc.device.updateDescriptorSets(1, (&vk.WriteDescriptorSet {
             .dst_set = self.descriptor_set,
             .dst_binding = 0,
             .dst_array_element = texture_index,
             .descriptor_count = 1,
             .descriptor_type = .sampled_image,
-            .p_image_info = toMany(&vk.DescriptorImageInfo {
+            .p_image_info = (&vk.DescriptorImageInfo {
                 .image_layout = .shader_read_only_optimal,
                 .image_view = image.view,
                 .sampler = .null_handle,
-            }),
+            })[0..1],
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
-        }), 0, null);
+        })[0..1], 0, null);
 
         return texture_index;
     }

@@ -283,7 +283,7 @@ pub const HdMoonshine = struct {
         //             .src_acceleration_structure = self.world.accel.tlas_handle,
         //             .dst_acceleration_structure = self.world.accel.tlas_handle,
         //             .geometry_count = 1,
-        //             .p_geometries = toMany(&geometry),
+        //             .p_geometries = (&geometry)[0..1],
         //             .scratch_data = .{
         //                 .device_address = self.world.accel.tlas_update_scratch_address,
         //             },
@@ -296,7 +296,7 @@ pub const HdMoonshine = struct {
         //             .transform_offset = 0,
         //         };
 
-        //         self.encoder.buildAccelerationStructures(&.{ geometry_info }, &.{ toMany(&build_info) });
+        //         self.encoder.buildAccelerationStructures(&.{ geometry_info }, &.{ (&build_info)[0..1] });
 
         //         const ray_trace_barriers = [_]vk.MemoryBarrier2 {
         //             .{

@@ -6,7 +6,6 @@ const build_options = @import("build_options");
 
 const engine = @import("../engine.zig");
 const core = engine.core;
-const toMany = core.vk_helpers.toMany;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const descriptor = core.descriptor;
@@ -116,11 +115,11 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .descriptor_count = 1,
                 .descriptor_type = descriptor_type,
                 .p_image_info = undefined,
-                .p_buffer_info = toMany(&vk.DescriptorBufferInfo {
+                .p_buffer_info = (&vk.DescriptorBufferInfo {
                     .buffer = binding_value.handle,
                     .offset = binding_value.asBytes().offset,
                     .range = binding_value.asBytes().len,
-                }),
+                })[0..1],
                 .p_texel_buffer_view = undefined,
             },
             .acceleration_structure_khr => vk.WriteDescriptorSet {
@@ -134,7 +133,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .p_texel_buffer_view = undefined,
                 .p_next = &vk.WriteDescriptorSetAccelerationStructureKHR {
                     .acceleration_structure_count = 1,
-                    .p_acceleration_structures = toMany(&binding_value),
+                    .p_acceleration_structures = (&binding_value)[0..1],
                 },
             },
             .storage_image => vk.WriteDescriptorSet {
@@ -143,11 +142,11 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .dst_array_element = 0,
                 .descriptor_count = 1,
                 .descriptor_type = descriptor_type,
-                .p_image_info = toMany(&vk.DescriptorImageInfo {
+                .p_image_info = (&vk.DescriptorImageInfo {
                     .sampler = .null_handle,
                     .image_view = binding_value.view,
                     .image_layout = .general,
-                }),
+                })[0..1],
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
             },
@@ -157,11 +156,11 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .dst_array_element = 0,
                 .descriptor_count = 1,
                 .descriptor_type = descriptor_type,
-                .p_image_info = toMany(&vk.DescriptorImageInfo {
+                .p_image_info = (&vk.DescriptorImageInfo {
                     .sampler = .null_handle,
                     .image_view = binding_value.view,
                     .image_layout = .shader_read_only_optimal,
-                }),
+                })[0..1],
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
             },
@@ -314,7 +313,7 @@ pub fn Pipeline(comptime options: struct {
             };
 
             const old_handle = self.handle;
-            _ = try vc.device.createComputePipelines(.null_handle, 1, toMany(&create_info), null, toMany(&self.handle));
+            _ = try vc.device.createComputePipelines(.null_handle, 1, (&create_info)[0..1], null, (&self.handle)[0..1]);
             errdefer vc.device.destroyPipeline(self.handle, null);
             try core.vk_helpers.setDebugName(vc.device, self.handle, options.shader_source.name);
 

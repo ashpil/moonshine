@@ -8,8 +8,6 @@
 const core = @import("engine").core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
-const vk_helpers = core.vk_helpers;
-const toMany = vk_helpers.toMany;
 
 const std = @import("std");
 const vk = @import("vulkan");
@@ -50,8 +48,8 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     });
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, toMany(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
-    try vc.device.resetFences(1, toMany(&self.ready_fence));
+    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.mapped))).*;
@@ -61,7 +59,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     std.debug.assert(@sizeOf(PixelType) <= self.buffer.len);
 
     try self.encoder.begin();
-    self.encoder.buffer.copyImageToBuffer(src_image, src_layout, self.buffer.handle, 1, toMany(&vk.BufferImageCopy {
+    self.encoder.buffer.copyImageToBuffer(src_image, src_layout, self.buffer.handle, 1, (&vk.BufferImageCopy {
         .buffer_offset = 0,
         .buffer_row_length = 0,
         .buffer_image_height = 0,
@@ -77,11 +75,11 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
             .height = 1,
             .depth = 1,
         }
-    }));
+    })[0..1]);
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, toMany(&self.ready_fence), vk.TRUE, std.math.maxInt(u64));
-    try vc.device.resetFences(1, toMany(&self.ready_fence));
+    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], vk.TRUE, std.math.maxInt(u64));
+    try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return @as(*PixelType, @ptrCast(@alignCast(self.buffer.mapped))).*;

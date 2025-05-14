@@ -10,7 +10,6 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
-const toMany = vk_helpers.toMany;
 const TextureManager = core.Images.TextureManager;
 
 const hrtsystem = engine.hrtsystem;
@@ -434,7 +433,7 @@ pub fn main() !void {
             },
         };
 
-        frame_encoder.buffer.blitImage(scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, toMany(&region), .nearest);
+        frame_encoder.buffer.blitImage(scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, (&region)[0..1], .nearest);
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
                 .src_stage_mask = .{ .blit_bit = true },

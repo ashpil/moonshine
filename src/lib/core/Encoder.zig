@@ -9,7 +9,6 @@ const vk = @import("vulkan");
 const core = @import("./core.zig");
 const VulkanContext = core.VulkanContext;
 const vk_helpers = core.vk_helpers;
-const toMany = vk_helpers.toMany;
 
 pool: vk.CommandPool,
 buffer: VulkanContext.CommandBuffer,
@@ -33,7 +32,7 @@ pub fn create(vc: *const VulkanContext, name: [*:0]const u8) !Self {
         .level = vk.CommandBufferLevel.primary,
         .command_pool = pool,
         .command_buffer_count = 1,
-    }, toMany(&buffer));
+    }, (&buffer)[0..1]);
 
     try vk_helpers.setDebugName(vc.device, buffer, name);
 
@@ -92,17 +91,17 @@ pub fn submit(self: Self, queue: VulkanContext.Queue, sync: struct {
 
     const submit_info = vk.SubmitInfo2 {
         .command_buffer_info_count = 1,
-        .p_command_buffer_infos = toMany(&vk.CommandBufferSubmitInfo {
+        .p_command_buffer_infos = (&vk.CommandBufferSubmitInfo {
             .command_buffer = self.buffer.handle,
             .device_mask = 0,
-        }),
+        })[0..1],
         .wait_semaphore_info_count = @intCast(sync.wait_semaphore_infos.len),
         .p_wait_semaphore_infos = sync.wait_semaphore_infos.ptr,
         .signal_semaphore_info_count = @intCast(sync.signal_semaphore_infos.len),
         .p_signal_semaphore_infos = sync.signal_semaphore_infos.ptr,
     };
 
-    try queue.submit2(1, toMany(&submit_info), sync.fence);
+    try queue.submit2(1, (&submit_info)[0..1], sync.fence);
 }
 
 pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
@@ -115,7 +114,7 @@ pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
 pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.BufferSlice(T), dst_image: vk.Image, dst_image_extent: vk.Extent2D, dst_layout: vk.ImageLayout) void {
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = toMany(&vk.ImageMemoryBarrier2 {
+        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .undefined,
@@ -130,12 +129,12 @@ pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.Buffer
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        }),
+        })[0..1],
     });
     self.copyBufferToImage(src_data.handle, src_data.offset, dst_image, .transfer_dst_optimal, dst_image_extent);
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = toMany(&vk.ImageMemoryBarrier2 {
+        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .transfer_dst_optimal,
@@ -150,7 +149,7 @@ pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.Buffer
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        }),
+        })[0..1],
     });
 }
 
@@ -204,7 +203,7 @@ pub fn copyImageToBuffer(self: Self, src: vk.Image, layout: vk.ImageLayout, exte
             .depth = 1,
         },
     };
-    self.buffer.copyImageToBuffer(src, layout, dst, 1, toMany(&copy));
+    self.buffer.copyImageToBuffer(src, layout, dst, 1, (&copy)[0..1]);
 }
 
 pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, dst: vk.Image, layout: vk.ImageLayout, extent: vk.Extent2D) void {
@@ -229,7 +228,7 @@ pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, 
             .depth = 1,
         },
     };
-    self.buffer.copyBufferToImage(src, dst, layout, 1, toMany(&copy));
+    self.buffer.copyBufferToImage(src, dst, layout, 1, (&copy)[0..1]);
 }
 
 // meant to be same as vk.ImageMemoryBarrier2 but sane defaults
@@ -288,11 +287,11 @@ pub fn barrier(self: Self, images: []const ImageBarrier, buffers: []const Buffer
 pub fn global_barrier(self: Self) void {
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .memory_barrier_count = 1,
-        .p_memory_barriers = toMany(&vk.MemoryBarrier2 {
+        .p_memory_barriers = (&vk.MemoryBarrier2 {
             .src_stage_mask = .{ .all_commands_bit = true },
             .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
             .dst_stage_mask = .{ .all_commands_bit = true },
             .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-        })
+        })[0..1]
     });
 }

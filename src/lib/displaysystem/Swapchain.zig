@@ -4,7 +4,6 @@ const vk = @import("vulkan");
 const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
 const vk_helpers = engine.core.vk_helpers;
-const toMany = vk_helpers.toMany;
 
 const SwapchainError = error {
     InvalidSurfaceDimensions,
@@ -88,10 +87,10 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
 pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
     return try vc.queue.presentKHR(&vk.PresentInfoKHR {
         .wait_semaphore_count = 1,
-        .p_wait_semaphores = toMany(&semaphore),
+        .p_wait_semaphores = (&semaphore)[0..1],
         .swapchain_count = 1,
-        .p_swapchains = toMany(&self.handle),
-        .p_image_indices = toMany(&self.image_index),
+        .p_swapchains = (&self.handle)[0..1],
+        .p_image_indices = (&self.image_index)[0..1],
     });
 }
 

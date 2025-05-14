@@ -35,19 +35,6 @@ pub fn setDebugName(device: VulkanContext.Device, object: anytype, name: [*:0]co
     }
 }
 
-pub fn ToManyReturn(T: type) type {
-    const pointer = @typeInfo(T).pointer;
-    if (pointer.size != .one) @compileError(@typeName(T) ++ " must be single item pointer, but is not!");
-    return if (pointer.is_const) [*]const pointer.child else [*]pointer.child;
-}
-
-// normal @ptrCast is a little too general, this is a type safe wrapper that ensures a cast
-// is only from single item pointer to many
-// zig should really just coerce this... https://github.com/ziglang/zig/issues/8197
-pub fn toMany(ptr: anytype) ToManyReturn(@TypeOf(ptr)) {
-    return @as(ToManyReturn(@TypeOf(ptr)), @ptrCast(ptr));
-}
-
 pub fn texelBlockSize(format: vk.Format) vk.DeviceSize {
     return switch (format) {
         .r8_unorm => 1,

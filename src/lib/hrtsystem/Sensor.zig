@@ -5,7 +5,6 @@ const engine = @import("../engine.zig");
 const VulkanContext =  engine.core.VulkanContext;
 const Encoder =  engine.core.Encoder;
 const Image = engine.core.Image;
-const toMany = engine.core.vk_helpers.toMany;
 
 image: Image,
 extent: vk.Extent2D,
@@ -37,7 +36,7 @@ pub fn aspectRatio(self: Self) f32 {
 pub fn recordPrepareForCapture(self: *const Self, command_buffer: VulkanContext.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
     command_buffer.pipelineBarrier2(&vk.DependencyInfo{
         .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = toMany(&vk.ImageMemoryBarrier2{
+        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2{
             .src_stage_mask = copy_stage,
             .src_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
             .dst_stage_mask = capture_stage,
@@ -54,14 +53,14 @@ pub fn recordPrepareForCapture(self: *const Self, command_buffer: VulkanContext.
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        }),
+        })[0..1],
     });
 }
 
 pub fn recordPrepareForCopy(self: *const Self, command_buffer: VulkanContext.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
     command_buffer.pipelineBarrier2(&vk.DependencyInfo{
         .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = toMany(&vk.ImageMemoryBarrier2 {
+        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
             .src_stage_mask = capture_stage,
             .src_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .dst_stage_mask = copy_stage,
@@ -78,7 +77,7 @@ pub fn recordPrepareForCopy(self: *const Self, command_buffer: VulkanContext.Com
                 .base_array_layer = 0,
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
-        }),
+        })[0..1],
     });
 }
 

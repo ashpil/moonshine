@@ -3,7 +3,6 @@ const std = @import("std");
 const core = @import("../engine.zig").core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
-const toMany = vk_helpers.toMany;
 const vk_helpers = core.vk_helpers;
 
 const vk_map_memory_minimum_guaranteed_alignment = 64; // https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-minmax may as well commuincate this to the compiler
@@ -98,7 +97,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
                     .size = src.asBytes().len,
                 };
 
-                encoder.buffer.copyBuffer(src.handle, self.handle, 1, toMany(&region));
+                encoder.buffer.copyBuffer(src.handle, self.handle, 1, (&region)[0..1]);
             }
         } else struct {};
 

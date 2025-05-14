@@ -3,7 +3,6 @@ const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
 const core = engine.core;
-const toMany = core.vk_helpers.toMany;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 
@@ -457,7 +456,7 @@ pub fn recordUpdateSingleMaterial(self: Self, command_buffer: VulkanContext.Comm
     command_buffer.updateBuffer(self.geometries_device.handle, offset, size, &new_material);
     command_buffer.pipelineBarrier2(&vk.DependencyInfo {
         .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = toMany(&vk.BufferMemoryBarrier2 {
+        .p_buffer_memory_barriers = (&vk.BufferMemoryBarrier2 {
             .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
@@ -467,7 +466,7 @@ pub fn recordUpdateSingleMaterial(self: Self, command_buffer: VulkanContext.Comm
             .buffer = self.geometries_device.handle,
             .offset = offset,
             .size = size,
-        }),
+        })[0..1],
     });
 }
 
