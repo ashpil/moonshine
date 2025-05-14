@@ -129,6 +129,7 @@ pub fn main() !void {
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
     var current_clicked_color = F32x3.new(.{0.0, 0.0, 0.0});
     var frame_index: u32 = 0;
+    var gui_open: bool = true;
 
     while (!window.shouldClose()) {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -145,181 +146,184 @@ pub fn main() !void {
         };
 
         gui.startFrame();
-        imgui.setNextWindowPos(50, 50);
-        imgui.setNextWindowSize(250, 350);
-        imgui.begin("Settings");
-        if (imgui.collapsingHeader("Performance")) {
-            try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
-            try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
-        }
-        if (imgui.collapsingHeader("Scene")) {
-            try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
-            try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
-            try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
-            try imgui.textFmt("Model count: {}", .{scene.world.models.models_host.len});
-            try imgui.textFmt("Instance count: {}", .{scene.world.accel.instance_count});
-            if (exposeToImguiRecursive(MaterialManager.Volume, &scene.global_volume, "Global volume")) {
-                scene.camera.sensors.items[active_sensor].clear();
+
+        if (gui_open) {
+            imgui.setNextWindowPos(50, 50);
+            imgui.setNextWindowSize(250, 350);
+            imgui.begin("Settings");
+            if (imgui.collapsingHeader("Performance")) {
+                try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
+                try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             }
-        }
-        if (imgui.collapsingHeader("Sensor")) {
-            if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
-                scene.camera.sensors.items[active_sensor].clear();
+            if (imgui.collapsingHeader("Scene")) {
+                try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
+                try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
+                try imgui.textFmt("Mesh count: {}", .{scene.world.meshes.host.len});
+                try imgui.textFmt("Model count: {}", .{scene.world.models.models_host.len});
+                try imgui.textFmt("Instance count: {}", .{scene.world.accel.instance_count});
+                if (exposeToImguiRecursive(MaterialManager.Volume, &scene.global_volume, "Global volume")) {
+                    scene.camera.sensors.items[active_sensor].clear();
+                }
             }
-            imgui.sameLine();
-            try imgui.textFmt("Sample count: {}", .{scene.camera.sensors.items[active_sensor].sample_count});
-            imgui.pushItemWidth(imgui.getFontSize() * -10);
-            _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
-            imgui.popItemWidth();
-        }
-        if (imgui.collapsingHeader("Camera")) {
-            imgui.pushItemWidth(imgui.getFontSize() * -7.5);
-            var changed = blk: {
-                const before = active_camera;
-                if (imgui.beginCombo("Active Camera", scene.camera.cameras.items[active_camera][0])) {
-                    for (0..scene.camera.cameras.items.len) |camera| {
-                        const selected = active_camera == camera;
-                        if (imgui.selectable(scene.camera.cameras.items[camera][0], selected)) active_camera = @intCast(camera);
-                        if (selected) imgui.setItemDefaultFocus();
+            if (imgui.collapsingHeader("Sensor")) {
+                if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
+                    scene.camera.sensors.items[active_sensor].clear();
+                }
+                imgui.sameLine();
+                try imgui.textFmt("Sample count: {}", .{scene.camera.sensors.items[active_sensor].sample_count});
+                imgui.pushItemWidth(imgui.getFontSize() * -10);
+                _ = imgui.inputScalar(u32, "Max sample count", &max_sample_count, 1, 100);
+                imgui.popItemWidth();
+            }
+            if (imgui.collapsingHeader("Camera")) {
+                imgui.pushItemWidth(imgui.getFontSize() * -7.5);
+                var changed = blk: {
+                    const before = active_camera;
+                    if (imgui.beginCombo("Active Camera", scene.camera.cameras.items[active_camera][0])) {
+                        for (0..scene.camera.cameras.items.len) |camera| {
+                            const selected = active_camera == camera;
+                            if (imgui.selectable(scene.camera.cameras.items[camera][0], selected)) active_camera = @intCast(camera);
+                            if (selected) imgui.setItemDefaultFocus();
+                        }
+                        imgui.endCombo();
                     }
-                    imgui.endCombo();
+                    break :blk before != active_camera;
+                };
+                changed = imgui.enumCombo(Camera.Model, "Camera Model", &scene.camera.cameras.items[active_camera][1].model) or changed;
+                switch (scene.camera.cameras.items[active_camera][1].model) {
+                    .thin_lens => {
+                        changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera][1].thin_lens.vfov, 1, 179) or changed;
+                        changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera][1].thin_lens.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                        changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera][1].thin_lens.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
+                    },
+                    .orthographic => {
+                        changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera][1].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
+                    },
                 }
-                break :blk before != active_camera;
-            };
-            changed = imgui.enumCombo(Camera.Model, "Camera Model", &scene.camera.cameras.items[active_camera][1].model) or changed;
-            switch (scene.camera.cameras.items[active_camera][1].model) {
-                .thin_lens => {
-                    changed = imgui.sliderAngle("Vertical FOV", &scene.camera.cameras.items[active_camera][1].thin_lens.vfov, 1, 179) or changed;
-                    changed = imgui.dragScalar(f32, "Focus distance", &scene.camera.cameras.items[active_camera][1].thin_lens.focus_distance, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-                    changed = imgui.dragScalar(f32, "Aperture size", &scene.camera.cameras.items[active_camera][1].thin_lens.aperture, 0.01, 0.0, std.math.inf(f32)) or changed;
-                },
-                .orthographic => {
-                    changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera][1].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
-                },
-            }
-            changed = imgui.dragMatrix(Mat4x3, "Transform", &scene.camera.cameras.items[active_camera][1].transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-            if (changed) {
-                scene.camera.sensors.items[active_sensor].clear();
-            }
-            imgui.popItemWidth();
-        }
-        if (imgui.collapsingHeader("Integrator")) {
-            imgui.pushItemWidth(imgui.getFontSize() * -14.2);
-            _ = imgui.enumCombo(hrtsystem.pipeline.Integrator, "Type", &spec_constants.integrator);
-            switch (spec_constants.integrator) {
-                .direct_lighting => {
-                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.direct_lighting_env_samples, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.direct_lighting_mesh_samples, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "BRDF Samples", &spec_constants.direct_lighting_brdf_samples, 1.0, 0, std.math.maxInt(u32));
-                },
-                .path_tracing => {
-                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
-                },
-                .volume_path_tracing => {
-                    _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.volume_path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.volume_path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
-                    _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.volume_path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
-                }
-            }
-            const last_rebuild_failed = rebuild_error;
-            if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(.{1.0, 0.0, 0.0, 1}));
-            if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
-                const start = try std.time.Instant.now();
-                rebuild_error = false;
-                if (pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
-                    try frame_encoder.attachResource(old_pipeline);
-                    scene.camera.sensors.items[active_sensor].clear();
-                } else |err| if (err == error.ShaderCompileFail) {
-                    rebuild_error = true;
-                } else return err;
-                if (!rebuild_error) {
-                    const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
-                    rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
-                } else {
-                    rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
-                }
-            }
-            if (last_rebuild_failed) imgui.popStyleColor();
-            imgui.popItemWidth();
-        }
-        imgui.end();
-        imgui.setNextWindowPos(@as(f32, @floatFromInt(@max(display.swapchain.extent.width, 50) - 50)) - 350, 50);
-        imgui.setNextWindowSize(350, 450);
-        imgui.begin("Click");
-        if (has_clicked) {
-            imgui.separatorText("pixel");
-            _ = imgui.colorEdit("Pixel color", &current_clicked_color, .{ .no_inputs = true, .no_options = true, .no_picker = true });
-            imgui.pushItemWidth(imgui.getFontSize() * -12);
-            if (current_clicked_object) |object| {
-                imgui.separatorText("data");
-                try imgui.textFmt("Instance index: {d}", .{object.instance_index});
-                try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
-                // TODO: all of the copying below should be done once, on object pick
-                const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
-                const model = try sync_copier.copyBufferItem(&context, ModelManager.Model.Device, scene.world.models.models_device.handle, instance.instance_custom_index_and_mask.instance_custom_index);
-                const accel_geometry_index = model.geometry_offset + object.geometry_index;
-                var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry.Device, scene.world.models.geometries_device.handle, accel_geometry_index);
-                var material = try sync_copier.copyBufferItem(&context, MaterialManager.Material.Device, scene.world.materials.materials.handle, geometry.material);
-                try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
-                if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
-                    scene.world.models.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
+                changed = imgui.dragMatrix(Mat4x3, "Transform", &scene.camera.cameras.items[active_camera][1].transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                if (changed) {
                     scene.camera.sensors.items[active_sensor].clear();
                 }
-                imgui.separatorText("mesh");
-                const mesh = scene.world.meshes.host.get(geometry.mesh);
-                try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
-                try imgui.textFmt("Index count: {d}", .{mesh.index_count});
-                try imgui.textFmt("Has texcoords: {}", .{!mesh.texcoord_buffer.isNull()});
-                try imgui.textFmt("Has normals: {}", .{!mesh.normal_buffer.isNull()});
-                imgui.separatorText("material");
-                {
-                    var changed = false;
-                    changed = imgui.dragScalar(u32, "normal", &material.normal, 1, 0, std.math.maxInt(u32)) or changed;
-                    changed = imgui.dragScalar(u32, "emissive", &material.emissive, 1, 0, std.math.maxInt(u32)) or changed;
-                    changed = exposeToImguiRecursive(MaterialManager.Volume, &material.volume, "volume") or changed;
-                    if (changed) {
-                        scene.world.materials.recordUpdateSingleMaterial(frame_encoder.buffer, geometry.material, material);
+                imgui.popItemWidth();
+            }
+            if (imgui.collapsingHeader("Integrator")) {
+                imgui.pushItemWidth(imgui.getFontSize() * -14.2);
+                _ = imgui.enumCombo(hrtsystem.pipeline.Integrator, "Type", &spec_constants.integrator);
+                switch (spec_constants.integrator) {
+                    .direct_lighting => {
+                        _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.direct_lighting_env_samples, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.direct_lighting_mesh_samples, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "BRDF Samples", &spec_constants.direct_lighting_brdf_samples, 1.0, 0, std.math.maxInt(u32));
+                    },
+                    .path_tracing => {
+                        _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
+                    },
+                    .volume_path_tracing => {
+                        _ = imgui.dragScalar(u32, "Environment Map Samples", &spec_constants.volume_path_tracing_env_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "Mesh Samples", &spec_constants.volume_path_tracing_mesh_samples_per_bounce, 1.0, 0, std.math.maxInt(u32));
+                        _ = imgui.dragScalar(u32, "Russian Roulette Depth", &spec_constants.volume_path_tracing_russian_roulette_depth, 1.0, 0, std.math.maxInt(u32));
+                    }
+                }
+                const last_rebuild_failed = rebuild_error;
+                if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(.{1.0, 0.0, 0.0, 1}));
+                if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
+                    const start = try std.time.Instant.now();
+                    rebuild_error = false;
+                    if (pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
+                        try frame_encoder.attachResource(old_pipeline);
+                        scene.camera.sensors.items[active_sensor].clear();
+                    } else |err| if (err == error.ShaderCompileFail) {
+                        rebuild_error = true;
+                    } else return err;
+                    if (!rebuild_error) {
+                        const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
+                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
+                    } else {
+                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
+                    }
+                }
+                if (last_rebuild_failed) imgui.popStyleColor();
+                imgui.popItemWidth();
+            }
+            imgui.end();
+            imgui.setNextWindowPos(@as(f32, @floatFromInt(@max(display.swapchain.extent.width, 50) - 50)) - 350, 50);
+            imgui.setNextWindowSize(350, 450);
+            imgui.begin("Click");
+            if (has_clicked) {
+                imgui.separatorText("pixel");
+                _ = imgui.colorEdit("Pixel color", &current_clicked_color, .{ .no_inputs = true, .no_options = true, .no_picker = true });
+                imgui.pushItemWidth(imgui.getFontSize() * -12);
+                if (current_clicked_object) |object| {
+                    imgui.separatorText("data");
+                    try imgui.textFmt("Instance index: {d}", .{object.instance_index});
+                    try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
+                    // TODO: all of the copying below should be done once, on object pick
+                    const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
+                    const model = try sync_copier.copyBufferItem(&context, ModelManager.Model.Device, scene.world.models.models_device.handle, instance.instance_custom_index_and_mask.instance_custom_index);
+                    const accel_geometry_index = model.geometry_offset + object.geometry_index;
+                    var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry.Device, scene.world.models.geometries_device.handle, accel_geometry_index);
+                    var material = try sync_copier.copyBufferItem(&context, MaterialManager.Material.Device, scene.world.materials.materials.handle, geometry.material);
+                    try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
+                    if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
+                        scene.world.models.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
                         scene.camera.sensors.items[active_sensor].clear();
                     }
-                }
-                inline for (@typeInfo(MaterialManager.BSDF).@"enum".fields, @typeInfo(MaterialManager.PolymorphicBSDF).@"union".fields) |enum_field, union_field| {
-                    const VariantType = union_field.type;
-                    if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
-                        const variant_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
-                        var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer.handle, variant_idx);
-                        if (exposeToImguiRecursive(VariantType, &material_variant, @tagName(material.type))) {
-                            scene.world.materials.recordUpdateSingleVariant(VariantType, frame_encoder.buffer, variant_idx, material_variant);
+                    imgui.separatorText("mesh");
+                    const mesh = scene.world.meshes.host.get(geometry.mesh);
+                    try imgui.textFmt("Vertex count: {d}", .{mesh.vertex_count});
+                    try imgui.textFmt("Index count: {d}", .{mesh.index_count});
+                    try imgui.textFmt("Has texcoords: {}", .{!mesh.texcoord_buffer.isNull()});
+                    try imgui.textFmt("Has normals: {}", .{!mesh.normal_buffer.isNull()});
+                    imgui.separatorText("material");
+                    {
+                        var changed = false;
+                        changed = imgui.dragScalar(u32, "normal", &material.normal, 1, 0, std.math.maxInt(u32)) or changed;
+                        changed = imgui.dragScalar(u32, "emissive", &material.emissive, 1, 0, std.math.maxInt(u32)) or changed;
+                        changed = exposeToImguiRecursive(MaterialManager.Volume, &material.volume, "volume") or changed;
+                        if (changed) {
+                            scene.world.materials.recordUpdateSingleMaterial(frame_encoder.buffer, geometry.material, material);
+                            scene.camera.sensors.items[active_sensor].clear();
+                        }
+                    }
+                    inline for (@typeInfo(MaterialManager.BSDF).@"enum".fields, @typeInfo(MaterialManager.PolymorphicBSDF).@"union".fields) |enum_field, union_field| {
+                        const VariantType = union_field.type;
+                        if (VariantType != void and enum_field.value == @intFromEnum(material.type)) {
+                            const variant_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
+                            var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer.handle, variant_idx);
+                            if (exposeToImguiRecursive(VariantType, &material_variant, @tagName(material.type))) {
+                                scene.world.materials.recordUpdateSingleVariant(VariantType, frame_encoder.buffer, variant_idx, material_variant);
+                                scene.camera.sensors.items[active_sensor].clear();
+                            }
+                        }
+                    }
+                    {
+                        imgui.separatorText("instance");
+                        const visible = instance.instance_custom_index_and_mask.mask != 0b00000000;
+                        var thin = instance.instance_custom_index_and_mask.mask == 0b10000000;
+                        var priority: u8 = @intCast(if (thin) 1 else @ctz(instance.instance_custom_index_and_mask.mask) + 1);
+                        var changed = false;
+                        changed = imgui.checkbox("Thin", &thin) or changed;
+                        if (thin) imgui.beginDisabled();
+                        changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
+                        if (thin) imgui.endDisabled();
+                        var transform: Mat4x3 = @bitCast(instance.transform);
+                        imgui.pushItemWidth(imgui.getFontSize() * -6);
+                        changed = imgui.dragMatrix(Mat4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                        if (changed) {
+                            scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
+                            try scene.world.accel.recordRebuild(frame_encoder.buffer);
                             scene.camera.sensors.items[active_sensor].clear();
                         }
                     }
                 }
-                {
-                    imgui.separatorText("instance");
-                    const visible = instance.instance_custom_index_and_mask.mask != 0b00000000;
-                    var thin = instance.instance_custom_index_and_mask.mask == 0b10000000;
-                    var priority: u8 = @intCast(if (thin) 1 else @ctz(instance.instance_custom_index_and_mask.mask) + 1);
-                    var changed = false;
-                    changed = imgui.checkbox("Thin", &thin) or changed;
-                    if (thin) imgui.beginDisabled();
-                    changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
-                    if (thin) imgui.endDisabled();
-                    var transform: Mat4x3 = @bitCast(instance.transform);
-                    imgui.pushItemWidth(imgui.getFontSize() * -6);
-                    changed = imgui.dragMatrix(Mat4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
-                    if (changed) {
-                        scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
-                        try scene.world.accel.recordRebuild(frame_encoder.buffer);
-                        scene.camera.sensors.items[active_sensor].clear();
-                    }
-                }
+                imgui.popItemWidth();
+            } else {
+                imgui.text("Go click something!");
             }
-            imgui.popItemWidth();
-        } else {
-            imgui.text("Go click something!");
+            imgui.end();
         }
-        imgui.end();
         if (!imgui.getIO().WantCaptureMouse) {
             const window_size = F32x2.new(.{
                 @as(f32, @floatFromInt(display.swapchain.extent.width)),
@@ -376,6 +380,10 @@ pub fn main() !void {
             if (!std.meta.eql(transform, scene.camera.cameras.items[active_camera][1].transform)) {
                 scene.camera.cameras.items[active_camera][1].transform = transform;
                 scene.camera.sensors.items[active_sensor].clear();
+            }
+
+            if (imgui.isKeyReleased(.escape)) {
+                gui_open = !gui_open;
             }
         }
 

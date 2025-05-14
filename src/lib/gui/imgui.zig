@@ -258,10 +258,53 @@ pub const Key = enum(c_uint) {
     x = c.ImGuiKey_X,
     y = c.ImGuiKey_Y,
     z = c.ImGuiKey_Z,
+    tab = c.ImGuiKey_Tab,
+    left_arrow = c.ImGuiKey_LeftArrow,
+    right_arrow = c.ImGuiKey_RightArrow,
+    up_arrow = c.ImGuiKey_UpArrow,
+    down_arrow = c.ImGuiKey_DownArrow,
+    page_up = c.ImGuiKey_PageUp,
+    page_down = c.ImGuiKey_PageDown,
+    home = c.ImGuiKey_Home,
+    end = c.ImGuiKey_End,
+    insert = c.ImGuiKey_Insert,
+    delete = c.ImGuiKey_Delete,
+    backspace = c.ImGuiKey_Backspace,
+    space = c.ImGuiKey_Space,
+    enter = c.ImGuiKey_Enter,
+    escape = c.ImGuiKey_Escape,
+    left_ctrl = c.ImGuiKey_LeftCtrl,
+    left_shift = c.ImGuiKey_LeftShift,
+    left_alt = c.ImGuiKey_LeftAlt,
+    left_super = c.ImGuiKey_LeftSuper,
+    right_ctrl = c.ImGuiKey_RightCtrl,
+    right_shift = c.ImGuiKey_RightShift,
+    right_alt = c.ImGuiKey_RightAlt,
+    right_super = c.ImGuiKey_RightSuper,
+    menu = c.ImGuiKey_Menu,
+    @"0" = c.ImGuiKey_0,
+    @"1" = c.ImGuiKey_1,
+    @"2" = c.ImGuiKey_2,
+    @"3" = c.ImGuiKey_3,
+    @"4" = c.ImGuiKey_4,
+    @"5" = c.ImGuiKey_5,
+    @"6" = c.ImGuiKey_6,
+    @"7" = c.ImGuiKey_7,
+    @"8" = c.ImGuiKey_8,
+    @"9" = c.ImGuiKey_9,
     _,
 };
+
 pub fn isKeyDown(key: Key) bool {
     return c.igIsKeyDown_Nil(@intFromEnum(key));
+}
+
+pub fn isKeyPressed(key: Key) bool {
+    return c.igIsKeyPressed_Bool(@intFromEnum(key), false);
+}
+
+pub fn isKeyReleased(key: Key) bool {
+    return c.igIsKeyReleased_Nil(@intFromEnum(key));
 }
 
 pub const MouseCursor = enum(c_int) {
