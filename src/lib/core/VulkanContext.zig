@@ -68,7 +68,7 @@ const Base = struct {
             .application_version = 0,
             .p_engine_name = "moonshine",
             .engine_version = 0,
-            .api_version = @bitCast(vk.API_VERSION_1_3),
+            .api_version = @bitCast(vk.API_VERSION_1_4),
         };
 
         return try self.dispatch.createInstance(

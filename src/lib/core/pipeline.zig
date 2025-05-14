@@ -192,7 +192,7 @@ pub fn PipelineBindings(
     comptime PushSetBindings: type,
     comptime additional_descriptor_layout_count: comptime_int,
 ) type {
-    const min_vk_spec_max_push_constants_size = 128; // https://registry.khronos.org/vulkan/specs/latest/man/html/Required_Limits.html could be 256 if we require vulkan 1.4
+    const min_vk_spec_max_push_constants_size = 256 ; // https://registry.khronos.org/vulkan/specs/latest/man/html/Required_Limits.html
     if (@sizeOf(PushConstants) > min_vk_spec_max_push_constants_size) @compileError(std.fmt.comptimePrint("push constant size is {}, but must be less max push constant size {} ", .{ @sizeOf(PushConstants), min_vk_spec_max_push_constants_size }));
     if (@typeInfo(PushConstants).@"struct".layout == .auto) @compileError("push constant struct layout is auto but must not be");
 
