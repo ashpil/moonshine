@@ -30,6 +30,11 @@ interface Light {
 };
 
 struct EnvMap : Light {
+    // if you're inside an environment map:
+    // * you'll find the center of the 2D image in +X
+    // * the right of the 2D image in +Y
+    // * the top of the 2D image in +Z
+
     float3x3 toWorld;
     SamplerState sampler;
     Texture2D<float3> texture;
