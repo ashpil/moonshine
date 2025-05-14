@@ -69,7 +69,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                 const mat_array = Gltf.getGlobalTransform(&gltf.data, node);
                 const transform = Mat4.fromCols(.{ .new(mat_array[0]), .new(mat_array[1]), .new(mat_array[2]), .new(mat_array[3]) });
                 _ = try camera.appendCamera(allocator, Camera.Camera {
-                    .transform = World.gltf_to_msne.mul(transform).mul(msne_camera_to_gltf_camera).truncateRow(),
+                    .transform = transform.mul(msne_camera_to_gltf_camera).truncateRow(),
                     .model = switch (gltf_camera.type) {
                         .perspective => .thin_lens,
                         .orthographic => .orthographic,
@@ -93,7 +93,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                 .new(.{0, 0, 0, 1}),
             });
             _ = try camera.appendCamera(allocator, Camera.Camera {
-                .transform = World.gltf_to_msne.mul(transform).mul(msne_camera_to_gltf_camera).truncateRow(),
+                .transform = transform.mul(msne_camera_to_gltf_camera).truncateRow(),
             }, try allocator.dupeZ(u8, "default"));
         }
     }
@@ -106,7 +106,12 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     {
         const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
         defer allocator.free(skybox_image.asSlice());
-        _ = try background.addBackground(vc, allocator, encoder, skybox_image, Mat3.identity, "exr");
+        _ = try background.addBackground(vc, allocator, encoder, skybox_image, Mat3.fromRows(.{
+            // glTF assets have +Y as up, but our environment maps have +Z as up. swap the two.
+            .new(.{ 1, 0, 0}),
+            .new(.{ 0, 0, 1}),
+            .new(.{ 0, 1, 0}),
+        }), "exr");
     }
 
     return Self {

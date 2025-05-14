@@ -220,14 +220,6 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     }
 }
 
-// convert to Z-up
-pub const gltf_to_msne = Mat4.fromRows(.{
-    .new(.{ 1, 0, 0, 0}),
-    .new(.{ 0, 0, 1, 0}),
-    .new(.{ 0, 1, 0, 0}),
-    .new(.{ 0, 0, 0, 1}),
-});
-
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8) !Self {
@@ -423,7 +415,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 const mat_array = Gltf.getGlobalTransform(&gltf.data, node);
                 const transform = Mat4.fromCols(.{ .new(mat_array[0]), .new(mat_array[1]), .new(mat_array[2]), .new(mat_array[3]) });
                 _ = try accel.uploadInstance(vc, encoder, models, Instance {
-                    .transform = gltf_to_msne.mul(transform).truncateRow(),
+                    .transform = transform.truncateRow(),
                     .model = model.handle,
                     .thin = model.thin,
                 });
