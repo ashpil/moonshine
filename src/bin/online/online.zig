@@ -330,10 +330,12 @@ pub fn main() !void {
                 const delta = imgui.getMouseDragDelta(.right).componentDiv(window_size);
                 imgui.resetMouseDragDelta(.right);
                 if (!std.meta.eql(delta, F32x2.new(.{0.0, 0.0}))) {
-                    const left_right = Mat3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
-                    const up_down = Mat3.fromAxisAngle(.new(.{0, -1, 0}), delta.element(1));
-                    const rotation = up_down.mul(left_right);
-                    scene.camera.cameras.items[active_camera][1].transform = scene.camera.cameras.items[active_camera][1].transform.appendRow(.new(.{0, 0, 0, 1})).mul(rotation.appendCol(.splat(0)).appendRow(.new(.{0, 0, 0, 1}))).truncateRow();
+                    const transform = scene.camera.cameras.items[active_camera][1].transform;
+                    const transform_linear = transform.truncateCol();
+                    const transform_translation = transform.col(3);
+                    const left_right = Mat3.fromAxisAngle(F32x3.new(.{0, 1, 0}), -delta.element(0)); // should be global. assumes glTF which has +Y as up
+                    const up_down = Mat3.fromAxisAngle(.new(.{0, 1, 0}), -delta.element(1)); // should be local
+                    scene.camera.cameras.items[active_camera][1].transform = left_right.mul(transform_linear).mul(up_down).appendCol(transform_translation);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else if (imgui.isMouseDragging(.middle)) {
