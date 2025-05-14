@@ -342,7 +342,7 @@ pub fn main() !void {
                 imgui.resetMouseDragDelta(.middle);
                 if (!std.meta.eql(delta, F32x2.new(.{0.0, 0.0}))) {
                     const left_right = Mat3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
-                    scene.background.backgrounds.items[0].transform = scene.background.backgrounds.items[0].transform.mul(left_right);
+                    scene.background.backgrounds.items[0].transform = left_right.mul(scene.background.backgrounds.items[0].transform);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else {
