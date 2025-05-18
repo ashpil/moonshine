@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) !void {
     // packages/libraries we'll need below
     const vulkan = makeVulkanModule(b);
     const glfw = try makeGlfwModule(b, vulkan, target);
-    const imgui = makeCImguiModule(b, glfw);
+    const imgui = makeDCImguiModule(b, glfw);
     const tinyexr = makeTinyExrModule(b);
     const wuffs = makeWuffsModule(b);
     const zgltf = makeZgltfModule(b);
@@ -459,15 +459,14 @@ fn makeVulkanModule(b: *std.Build) *std.Build.Module {
     });
 }
 
-fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
-    const cimgui = b.dependency("cimgui", .{});
+fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
+    const dcimgui = b.dependency("dcimgui", .{});
     const imgui = b.dependency("imgui", .{});
 
     const write_files_step = b.addWriteFiles();
     const root = write_files_step.add("imgui.zig",
         \\pub usingnamespace @cImport({
-        \\    @cDefine("CIMGUI_DEFINE_ENUMS_AND_STRUCTS", {});
-        \\    @cInclude("cimgui.h");
+        \\    @cInclude("dcimgui.h");
         \\});
         \\
         \\const glfw = @import("glfw");
@@ -487,12 +486,12 @@ fn makeCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
     });
 
     module.addCSourceFiles(.{
-        .root = cimgui.path(""),
+        .root = dcimgui.path(""),
         .files = &.{
-            "cimgui.cpp",
+            "dcimgui.cpp",
         }
     });
-    module.addIncludePath(cimgui.path(""));
+    module.addIncludePath(dcimgui.path(""));
     module.addCSourceFiles(.{
         .root = imgui.path(""),
         .files = &.{

@@ -18,48 +18,48 @@ pub const DrawData = c.ImDrawData;
 pub const Vec2 = c.ImVec2;
 
 pub fn createContext() void {
-    _ = c.igCreateContext(null);
+    _ = c.ImGui_CreateContext(null);
 }
 
 pub fn destroyContext() void {
-    c.igDestroyContext(null);
+    c.ImGui_DestroyContext(null);
 }
 
 pub fn getCurrentContext() ?*Context {
-    return c.igGetCurrentContext();
+    return c.ImGui_GetCurrentContext();
 }
 
 pub fn getIO() *IO {
-    return c.igGetIO();
+    return c.ImGui_GetIO();
 }
 
 pub fn getDrawData() *DrawData {
-    const draw_data = c.igGetDrawData();
+    const draw_data = c.ImGui_GetDrawData();
     std.debug.assert(draw_data != null); // if fails, didn't call `Render` prior to this
     return draw_data;
 }
 
 pub fn render() void {
-    c.igRender();
+    c.ImGui_Render();
 }
 
 pub fn newFrame() void {
-    c.igNewFrame();
+    c.ImGui_NewFrame();
 }
 
 pub fn showDemoWindow() void {
-    c.igShowDemoWindow(null);
+    c.ImGui_ShowDemoWindow(null);
 }
 
 pub fn setNextWindowSize(width: f32, height: f32) void {
-    _ = c.igSetNextWindowSize(c.ImVec2{
+    _ = c.ImGui_SetNextWindowSize(c.ImVec2{
         .x = width,
         .y = height,
     }, c.ImGuiCond_FirstUseEver);
 }
 
 pub fn setNextWindowPos(x: f32, y: f32) void {
-    _ = c.igSetNextWindowPos(c.ImVec2{
+    _ = c.ImGui_SetNextWindowPos(c.ImVec2{
         .x = x,
         .y = y,
     }, c.ImGuiCond_FirstUseEver, c.ImVec2{
@@ -69,25 +69,25 @@ pub fn setNextWindowPos(x: f32, y: f32) void {
 }
 
 pub fn text(msg: [*:0]const u8) void {
-    c.igTextUnformatted(msg, null);
+    c.ImGui_TextUnformatted(msg, null);
 }
 
 pub fn textFmt(comptime fmt: []const u8, args: anytype) !void {
     var buf: [256]u8 = undefined;
     const str = try std.fmt.bufPrintZ(&buf, fmt, args);
-    c.igTextUnformatted(str, null);
+    c.ImGui_TextUnformatted(str, null);
 }
 
 pub fn separator() void {
-    c.igSeparator();
+    c.ImGui_Separator();
 }
 
 pub fn separatorText(msg: [*:0]const u8) void {
-    c.igSeparatorText(msg);
+    c.ImGui_SeparatorText(msg);
 }
 
 pub fn checkbox(label: [*:0]const u8, value: *bool) bool {
-    return c.igCheckbox(label, value);
+    return c.ImGui_Checkbox(label, value);
 }
 
 pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f32, min: T, max: T) bool {
@@ -102,7 +102,7 @@ pub fn dragScalar(comptime T: type, label: [*:0]const u8, p_data: *T, v_speed: f
         f32 => "%.2f",
         else => unreachable, // TODO
     };
-    return c.igDragScalar(label, data_type, p_data, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
+    return c.ImGui_DragScalar(label, data_type, p_data, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp);
 }
 
 pub fn dragMatrix(comptime T: type, comptime label: [*:0]const u8, p_data: *T, v_speed: f32, min: T.ComponentType, max: T.ComponentType) bool {
@@ -122,14 +122,14 @@ pub fn dragMatrix(comptime T: type, comptime label: [*:0]const u8, p_data: *T, v
         text(label);
         inline for (0..T.row_count) |row_idx| {
             var row = p_data.row(row_idx).toArray();
-            changed = c.igDragScalarN(std.fmt.comptimePrint("##{s}{}", .{ label, row_idx }), data_type, &row, T.col_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
+            changed = c.ImGui_DragScalarN(std.fmt.comptimePrint("##{s}{}", .{ label, row_idx }), data_type, &row, T.col_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
             inline for (0..T.col_count) |col_idx| {
                 p_data.at_mut(.{ .row = row_idx, .col = col_idx}).* = row[col_idx];
             }
         }
     } else {
         var data = p_data.toArray();
-        changed = c.igDragScalarN(label, data_type, &data, T.element_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
+        changed = c.ImGui_DragScalarN(label, data_type, &data, T.element_count, v_speed, &min, &max, format, c.ImGuiSliderFlags_AlwaysClamp) or changed;
         p_data.* = .new(data);
     }
 
@@ -137,7 +137,7 @@ pub fn dragMatrix(comptime T: type, comptime label: [*:0]const u8, p_data: *T, v
 }
 
 pub fn sliderAngle(label: [*:0]const u8, p_rad: *f32, degrees_min: f32, degrees_max: f32) bool {
-    return c.igSliderAngle(label, p_rad, degrees_min, degrees_max, "%.0f deg", c.ImGuiSliderFlags_AlwaysClamp);
+    return c.ImGui_SliderAngle(label, p_rad, degrees_min, degrees_max, "%.0f deg", c.ImGuiSliderFlags_AlwaysClamp);
 }
 
 pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T, step_fast: ?T) bool {
@@ -145,23 +145,23 @@ pub fn inputScalar(comptime T: type, label: [*:0]const u8, p_data: *T, step: ?T,
         u32 => c.ImGuiDataType_U32,
         else => unreachable, // TODO
     };
-    return c.igInputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
+    return c.ImGui_InputScalar(label, data_type, p_data, if (step) |s| &s else null, if (step_fast) |s| &s else null, "%d", 0);
 }
 
 pub fn beginCombo(label: [*:0]const u8, preview_value: [*:0]const u8) bool {
-    return c.igBeginCombo(label, preview_value, 0);
+    return c.ImGui_BeginCombo(label, preview_value, 0);
 }
 
 pub fn endCombo() void {
-    c.igEndCombo();
+    c.ImGui_EndCombo();
 }
 
 pub fn selectable(label: [*:0]const u8, selected: bool) bool {
-    return c.igSelectable_Bool(label, selected, 0, c.ImVec2{ .x = 0, .y = 0 });
+    return c.ImGui_Selectable(label, selected, 0, c.ImVec2{ .x = 0, .y = 0 });
 }
 
 pub fn setItemDefaultFocus() void {
-    c.igSetItemDefaultFocus();
+    c.ImGui_SetItemDefaultFocus();
 }
 
 pub fn enumCombo(comptime T: type, label: [*:0]const u8, data: *T) bool {
@@ -183,11 +183,11 @@ const Col = enum(c_int) {
 };
 
 pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
-    c.igPushStyleColor_Vec4(@intFromEnum(idx), @bitCast(color));
+    c.ImGui_PushStyleColorImVec4(@intFromEnum(idx), @bitCast(color));
 }
 
 pub fn popStyleColor() void {
-    c.igPopStyleColor(1);
+    c.ImGui_PopStyleColor(1);
 }
 
 const ColorEditFlags = packed struct(c_int) {
@@ -228,10 +228,10 @@ const ColorEditFlags = packed struct(c_int) {
 };
 
 pub fn colorEdit(label: [*:0]const u8, color: *F32x3, flags: ColorEditFlags) bool {
-    return c.igColorEdit4(label, @ptrCast(color), @bitCast(flags));
+    return c.ImGui_ColorEdit4(label, @ptrCast(color), @bitCast(flags));
 }
 
-pub const Key = enum(c_uint) {
+pub const Key = enum(c_int) {
     a = c.ImGuiKey_A,
     b = c.ImGuiKey_B,
     c = c.ImGuiKey_C,
@@ -296,15 +296,15 @@ pub const Key = enum(c_uint) {
 };
 
 pub fn isKeyDown(key: Key) bool {
-    return c.igIsKeyDown_Nil(@intFromEnum(key));
+    return c.ImGui_IsKeyDown(@intFromEnum(key));
 }
 
 pub fn isKeyPressed(key: Key) bool {
-    return c.igIsKeyPressed_Bool(@intFromEnum(key), false);
+    return c.ImGui_IsKeyPressed(@intFromEnum(key), false);
 }
 
 pub fn isKeyReleased(key: Key) bool {
-    return c.igIsKeyReleased_Nil(@intFromEnum(key));
+    return c.ImGui_IsKeyReleased(@intFromEnum(key));
 }
 
 pub const MouseCursor = enum(c_int) {
@@ -320,7 +320,7 @@ pub const MouseCursor = enum(c_int) {
     not_allowed = c.ImGuiMouseCursor_NotAllowed,
 };
 pub fn setMouseCursor(cursor: MouseCursor) void {
-    c.igSetMouseCursor(@intFromEnum(cursor));
+    c.ImGui_SetMouseCursor(@intFromEnum(cursor));
 }
 
 pub const MouseButton = enum(c_int) {
@@ -329,97 +329,91 @@ pub const MouseButton = enum(c_int) {
     middle = c.ImGuiMouseButton_Middle,
 };
 pub fn getMouseDragDelta(mouse_button: MouseButton) F32x2 {
-    var out: Vec2 = undefined;
-    c.igGetMouseDragDelta(&out, @intFromEnum(mouse_button), -1);
-    return @bitCast(out);
+    return @bitCast(c.ImGui_GetMouseDragDelta(@intFromEnum(mouse_button), -1));
 }
 
 pub fn resetMouseDragDelta(mouse_button: MouseButton) void {
-    c.igResetMouseDragDelta(@intFromEnum(mouse_button));
+    c.ImGui_ResetMouseDragDelta(@intFromEnum(mouse_button));
 }
 
 pub fn isMouseDragging(mouse_button: MouseButton) bool {
-    return c.igIsMouseDragging(@intFromEnum(mouse_button), -1);
+    return c.ImGui_IsMouseDragging(@intFromEnum(mouse_button), -1);
 }
 
 pub fn isMouseClicked(mouse_button: MouseButton) bool {
-    return c.igIsMouseClicked_Bool(@intFromEnum(mouse_button), false);
+    return c.ImGui_IsMouseClicked(@intFromEnum(mouse_button), false);
 }
 
 pub fn isMouseReleased(mouse_button: MouseButton) bool {
-    return c.igIsMouseReleased_Nil(@intFromEnum(mouse_button));
+    return c.ImGui_IsMouseReleased(@intFromEnum(mouse_button));
 }
 
 pub fn getMousePos() F32x2 {
-    var out: Vec2 = undefined;
-    c.igGetMousePos(&out);
-    return @bitCast(out);
+    return @bitCast(c.ImGui_GetMousePos());
 }
 
 pub fn getFontSize() f32 {
-    return c.igGetFontSize();
+    return c.ImGui_GetFontSize();
 }
 
 pub fn pushItemWidth(width: f32) void {
-    c.igPushItemWidth(width);
+    c.ImGui_PushItemWidth(width);
 }
 
 pub fn popItemWidth() void {
-    c.igPopItemWidth();
+    c.ImGui_PopItemWidth();
 }
 
 pub fn alignTextToFramePadding() void {
-    c.igAlignTextToFramePadding();
+    c.ImGui_AlignTextToFramePadding();
 }
 
 pub fn treeNode(label: [*:0]const u8) bool {
-    return c.igTreeNode_Str(label);
+    return c.ImGui_TreeNode(label);
 }
 
 pub fn treePop() void {
-    c.igTreePop();
+    c.ImGui_TreePop();
 }
 
 pub fn button(label: [*:0]const u8, size: Vec2) bool {
-    return c.igButton(label, size);
+    return c.ImGui_Button(label, size);
 }
 
 pub fn smallButton(label: [*:0]const u8) bool {
-    return c.igSmallButton(label);
+    return c.ImGui_SmallButton(label);
 }
 
 pub fn beginDisabled() void {
-    c.igBeginDisabled(true);
+    c.ImGui_BeginDisabled(true);
 }
 
 pub fn endDisabled() void {
-    c.igEndDisabled();
+    c.ImGui_EndDisabled();
 }
 
 pub fn setItemTooltip(str: [*:0]const u8) void {
-    c.igSetItemTooltip(str);
+    c.ImGui_SetItemTooltip(str);
 }
 
 pub fn getContentRegionAvail() Vec2 {
-    var vec2: c.ImVec2 = undefined;
-    c.igGetContentRegionAvail(&vec2);
-    return vec2;
+    return c.ImGui_GetContentRegionAvail();
 }
 
 pub fn sameLine() void {
-    c.igSameLine(0.0, -1.0);
+    c.ImGui_SameLine(0.0, -1.0);
 }
 
 pub fn collapsingHeader(label: [*:0]const u8) bool {
-    return c.igCollapsingHeader_TreeNodeFlags(label, 0);
+    return c.ImGui_CollapsingHeader(label, 0);
 }
 
 pub fn begin(name: [*:0]const u8) void {
-    _ = c.igBegin(name, null, 0);
+    _ = c.ImGui_Begin(name, null, 0);
 }
 
 pub fn end() void {
-    c.igEnd();
+    c.ImGui_End();
 }
 
 pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.Extent2D }) {

@@ -11,13 +11,13 @@
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/9c77de5c3dd216f28e407eec65ed9c0a296c1f74.tar.gz",
             .hash = "N-V-__8AAHwr7wGgESDREQVGeJWFvErxgAnCu78GY5gT5-Cc",
         },
-        .cimgui = .{
-            .url = "https://github.com/ashpil/cimgui/archive/97684ddceec2e4b9d15c4d6aa67dd7230f94b513.tar.gz",
-            .hash = "N-V-__8AAF1mPwDGyuZ2nVHn4LlLCn5G28poW4oZbtO7F9GL",
+        .dcimgui = .{
+            .url = "https://github.com/dearimgui/dear_bindings/releases/download/master_nogeneratedefaultargfunctions_2025-05-18T04-48-54/AllBindingFiles.zip",
+            .hash = "N-V-__8AAP5AVwBNhUwp0cB7zotClmmctA8_Tx5Xaqw7x2LN",
         },
         .imgui = .{
-            .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.90.6.tar.gz",
-            .hash = "N-V-__8AAJacXwD_aAGbSJoVZ-TvXspFHPE1OR9wUkQqbwz_",
+            .url = "https://github.com/ocornut/imgui/archive/cdb5cbe6f8786ced227624a71bc8a677618e5327.tar.gz",
+            .hash = "N-V-__8AAFMPawC25cFqglS-ARiXPjNMkV56NJmokWQJQApN",
         },
         .glfw = .{
             .url = "https://github.com/glfw/glfw/archive/e7ea71be039836da3a98cea55ae5569cb5eb885c.tar.gz",
