@@ -583,10 +583,8 @@ fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.Re
         \\const vk = @import("vulkan");
         \\const c = @This();
         \\
-        \\pub extern fn glfwGetInstanceProcAddress(vk.Instance, [*:0]const u8) vk.PfnVoidFunction;
         \\pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
         \\pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
-        \\pub extern fn glfwInitVulkanLoader(vk.PfnGetInstanceProcAddr) void;
     );
 
     const module = b.createModule(.{

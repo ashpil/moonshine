@@ -12,8 +12,6 @@ const Error = error {
 
 const Self = @This();
 
-pub const getInstanceProcAddress = c.glfwGetInstanceProcAddress;
-
 handle: *c.GLFWwindow,
 
 pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
@@ -42,10 +40,6 @@ pub fn getPhysicalDevicePresentationSupport(instance: vk.Instance, device: vk.Ph
     return c.glfwGetPhysicalDevicePresentationSupport(instance, device, idx) == c.GLFW_TRUE;
 }
 
-pub fn initVulkanLoader(loader: vk.PfnGetInstanceProcAddr) void {
-    return c.glfwInitVulkanLoader(loader);
-}
-
 // abusing the fact a little bit that we know that glfw always asks for two extensions
 pub fn getRequiredInstanceExtensions(self: *const Self) [2][*:0]const u8 {
     _ = self; // ensure we're initialized
@@ -61,58 +55,6 @@ pub fn shouldClose(self: *const Self) bool {
     return c.glfwWindowShouldClose(self.handle) == c.GLFW_TRUE;
 }
 
-pub fn setUserPointer(self: *const Self, ptr: *anyopaque) void {
-    c.glfwSetWindowUserPointer(self.handle, ptr);
-}
-
-pub fn getUserPointer(self: *const Self) ?*anyopaque {
-    return c.glfwGetWindowUserPointer(self.handle).?;
-}
-
-pub fn setAspectRatio(self: *const Self, numer: u32, denom: u32) void {
-    c.glfwSetWindowAspectRatio(self.handle, @intCast(numer), @intCast(denom));
-}
-
-pub fn setResizeCallback(self: *const Self, comptime callback: fn (*const Self, vk.Extent2D) void) void {
-    const Callback = struct {
-        fn resizeCallback(handle: ?*c.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
-            const extent = vk.Extent2D {
-                .width = @intCast(width),
-                .height = @intCast(height),
-            };
-            const window = Self {
-                .handle = handle.?,
-            };
-            callback(&window, extent);
-        }
-    };
-    _ = c.glfwSetFramebufferSizeCallback(self.handle, Callback.resizeCallback);
-}
-
-pub fn setCursorPosCallback(self: *const Self, comptime callback: fn (*const Self, f64, f64) void) void {
-    const Callback = struct {
-        fn cursorPosCallback(handle: ?*c.GLFWwindow, xpos: f64, ypos: f64) callconv(.C) void {
-            const window = Self {
-                .handle = handle.?,
-            };
-            callback(&window, xpos, ypos);
-        }
-    };
-    _ = c.glfwSetCursorPosCallback(self.handle, Callback.cursorPosCallback);
-}
-
-pub fn getCursorPos(self: *const Self) struct { x: f64, y: f64 } {
-    var xpos: f64 = undefined;
-    var ypos: f64 = undefined;
-
-    c.glfwGetCursorPos(self.handle, &xpos, &ypos);
-
-    return .{
-        .x = xpos,
-        .y = ypos,
-    };
-}
-
 pub const Mode = enum(c_int) {
     normal = c.GLFW_CURSOR_NORMAL,
     hidden = c.GLFW_CURSOR_HIDDEN,
@@ -120,56 +62,6 @@ pub const Mode = enum(c_int) {
 };
 pub fn setCursorMode(self: *const Self, value: Mode) void {
     c.glfwSetInputMode(self.handle, c.GLFW_CURSOR, @intFromEnum(value));
-}
-
-pub const Action = enum(c_int) {
-    release = c.GLFW_RELEASE,
-    press = c.GLFW_PRESS,
-    repeat = c.GLFW_REPEAT,
-    _,
-};
-
-pub const MouseButton = enum(c_int) {
-    left = c.GLFW_MOUSE_BUTTON_LEFT,
-    right = c.GLFW_MOUSE_BUTTON_RIGHT,
-    middle = c.GLFW_MOUSE_BUTTON_MIDDLE,
-    _,
-};
-
-pub const ModifierKeys = packed struct(c_int) {
-    shift: bool,
-    control: bool,
-    alt: bool,
-    super: bool,
-    caps_lock: bool,
-    num_lock: bool,
-    _unused: u26,
-};
-
-pub fn setMouseButtonCallback(self: *const Self, comptime callback: fn (*const Self, MouseButton, Action, ModifierKeys) void) void {
-    const Callback = struct {
-        fn mouseButtonCallback(handle: ?*c.GLFWwindow, button: c_int, action: c_int, mods: c_int) callconv(.C) void {
-            const window = Self {
-                .handle = handle.?,
-            };
-            callback(&window, @enumFromInt(button), @enumFromInt(action), @bitCast(mods));
-        }
-    };
-    _ = c.glfwSetMouseButtonCallback(self.handle, Callback.mouseButtonCallback);
-}
-
-pub fn setKeyCallback(self: *const Self, comptime callback: fn (*const Self, u32, Action, ModifierKeys) void) void {
-    const Callback = struct {
-        fn keyCallback(handle: ?*c.GLFWwindow, key: c_int, scancode: c_int, action: c_int, mods: c_int) callconv(.C) void {
-            _ = scancode;
-
-            const window = Self {
-                .handle = handle.?,
-            };
-            callback(&window, @intCast(key), @enumFromInt(action), @bitCast(mods));
-        }
-    };
-    _ = c.glfwSetKeyCallback(self.handle, Callback.keyCallback);
 }
 
 pub fn pollEvents(self: *const Self) void {
