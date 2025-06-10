@@ -189,8 +189,11 @@ pub fn build(b: *std.Build) !void {
         // might need python headers if USD built with python support
         {
             var out_code: u8 = undefined;
-            var iter = std.mem.splitScalar(u8, b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .Inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "", ' ');
-            while (iter.next()) |include_dir| lib.addSystemIncludePath(.{ .cwd_relative = include_dir[2..] });
+            const paths =  b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .Inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "";
+            if (paths.len != 0) {
+                var iter = std.mem.splitScalar(u8, paths, ' ');
+                while (iter.next()) |include_dir| lib.addSystemIncludePath(.{ .cwd_relative = include_dir[2..] });
+            }
         }
 
         // deal with the fact that USD is not (supposed to be) compiled with clang
