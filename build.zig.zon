@@ -12,12 +12,12 @@
             .hash = "N-V-__8AAHwr7wGgESDREQVGeJWFvErxgAnCu78GY5gT5-Cc",
         },
         .dcimgui = .{
-            .url = "https://github.com/dearimgui/dear_bindings/releases/download/master_nogeneratedefaultargfunctions_2025-05-18T04-48-54/AllBindingFiles.zip",
-            .hash = "N-V-__8AAP5AVwBNhUwp0cB7zotClmmctA8_Tx5Xaqw7x2LN",
+            .url = "https://github.com/dearimgui/dear_bindings/releases/download/DearBindings_v0.13_ImGui_v1.91.9b/DearBindings_v0.13_ImGui_v1.91.9b.zip",
+            .hash = "N-V-__8AAElztAAVXCDJG7uMbFRYYqc4GkWPQ_2-rLLcg5iI",
         },
         .imgui = .{
-            .url = "https://github.com/ocornut/imgui/archive/cdb5cbe6f8786ced227624a71bc8a677618e5327.tar.gz",
-            .hash = "N-V-__8AAFMPawC25cFqglS-ARiXPjNMkV56NJmokWQJQApN",
+            .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.9b.tar.gz",
+            .hash = "N-V-__8AANpOagDObvZHjSGqw8P-8zqOHVAJff5T-ZD_3Kzj",
         },
         .glfw = .{
           .url = "https://github.com/ashpil/glfw/archive/47c3b8ffae967d61ac02412c098f2a7f5d527a3d.tar.gz",

@@ -469,7 +469,7 @@ fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
     const write_files_step = b.addWriteFiles();
     const root = write_files_step.add("imgui.zig",
         \\pub usingnamespace @cImport({
-        \\    @cInclude("dcimgui.h");
+        \\    @cInclude("dcimgui_nodefaultargfunctions.h");
         \\});
         \\
         \\const glfw = @import("glfw");
@@ -491,7 +491,7 @@ fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
     module.addCSourceFiles(.{
         .root = dcimgui.path(""),
         .files = &.{
-            "dcimgui.cpp",
+            "dcimgui_nodefaultargfunctions.cpp",
         }
     });
     module.addIncludePath(dcimgui.path(""));
