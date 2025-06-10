@@ -248,12 +248,12 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         .buffer = undefined,
         .len = swapchain.images.len,
     };
-    inline for (&views.buffer, 0..) |*view, i| {
-        if (i > views.len) {
+    inline for (&views.buffer, swapchain.images.buffer, 0..) |*view, image, i| {
+        if (i >= views.len) {
             break;
         }
         view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo{
-            .image = swapchain.images.slice()[i],
+            .image = image,
             .view_type = .@"2d",
             .format = swapchain.image_format,
             .components = vk.ComponentMapping{
