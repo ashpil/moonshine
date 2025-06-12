@@ -9,7 +9,7 @@ const SwapchainError = error {
     InvalidSurfaceDimensions,
 };
 
-pub const max_image_count = 3;
+pub const max_image_count = 4;
 
 surface: vk.SurfaceKHR,
 handle: vk.SwapchainKHR,
