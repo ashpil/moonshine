@@ -83,7 +83,7 @@ pub fn main() !void {
     defer context.destroy(allocator);
 
     const window_extent = window.getExtent();
-    var display = try Display.create(&context, window_extent, try window.createSurface(context.instance.handle));
+    var display = try Display.create(&context, window_extent, try window.createSurface(context.instance.handle), allocator);
     defer display.destroy(&context);
 
     var encoder = try Encoder.create(&context, "main");
@@ -135,7 +135,7 @@ pub fn main() !void {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
                 const new_extent = window.getExtent();
-                context.device.destroySwapchainKHR(try display.recreate(&context, new_extent), null);
+                context.device.destroySwapchainKHR(try display.recreate(&context, new_extent, allocator), null);
                 try gui.resize(&context, display.swapchain);
                 scene.camera.sensors.items[active_sensor].destroy(&context);
                 scene.camera.sensors.items.len -= 1;
@@ -479,7 +479,7 @@ pub fn main() !void {
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 const new_extent = window.getExtent();
-                try frame_encoder.attachResource(try display.recreate(&context, new_extent));
+                try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
                 try gui.resize(&context, display.swapchain);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 scene.camera.sensors.items.len -= 1;
@@ -487,7 +487,7 @@ pub fn main() !void {
             }
         } else |err| if (err == error.OutOfDateKHR) {
             const new_extent = window.getExtent();
-            try frame_encoder.attachResource(try display.recreate(&context, new_extent));
+            try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
             try gui.resize(&context, display.swapchain);
             try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
             scene.camera.sensors.items.len -= 1;

@@ -21,12 +21,12 @@ image_format: vk.Format,
 const Self = @This();
 
 // takes ownership of surface
-pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR) !Self {
-    return try createFromOld(vc, ideal_extent, surface, .null_handle);
+pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !Self {
+    return try createFromOld(vc, ideal_extent, surface, transient_allocator, .null_handle);
 }
 
-fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, old_handle: vk.SwapchainKHR) !Self {
-    const settings = try SwapSettings.find(vc, ideal_extent, surface);
+fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator, old_handle: vk.SwapchainKHR) !Self {
+    const settings = try SwapSettings.find(vc, ideal_extent, surface, transient_allocator);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
@@ -66,9 +66,9 @@ pub fn currentImage(self: *const Self) vk.Image {
 }
 
 // returns old handle
-pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D) !vk.SwapchainKHR {
+pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !vk.SwapchainKHR {
     const old = self.handle;
-    self.* = try createFromOld(vc, extent, self.surface, self.handle);
+    self.* = try createFromOld(vc, extent, self.surface, transient_allocator, self.handle);
     return old;
 }
 
@@ -108,11 +108,11 @@ const SwapSettings = struct {
     extent: vk.Extent2D,
 
     // updates mutable extent
-    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, surface: vk.SurfaceKHR) !SwapSettings {
+    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, surface);
 
         return SwapSettings {
-            .format = try findFormat(vc, surface),
+            .format = try findFormat(vc, surface, transient_allocator),
             .present_mode = try findPresentMode(vc, surface),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else @min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = .exclusive,
@@ -135,13 +135,14 @@ const SwapSettings = struct {
         return present_modes[0];
     }
 
-    pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.SurfaceFormatKHR {
+    pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !vk.SurfaceFormatKHR {
         const ideal = vk.SurfaceFormatKHR {
             .format = .b8g8r8a8_srgb,
             .color_space = .srgb_nonlinear_khr,
         };
 
-        const formats = (try vk_helpers.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfaceFormatsKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
+        const formats = try vc.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(vc.physical_device.handle, surface, transient_allocator);
+        defer transient_allocator.free(formats);
 
         for (formats) |format| {
             if (std.meta.eql(format, ideal)) {

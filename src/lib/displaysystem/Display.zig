@@ -40,8 +40,8 @@ last_frame_time_ns: if (metrics) f64 else void,
 
 // uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
 // then during rendering the render buffer is blitted into the swapchain images
-pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk.SurfaceKHR) !Self {
-    var swapchain = try Swapchain.create(vc, initial_extent, surface);
+pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !Self {
+    var swapchain = try Swapchain.create(vc, initial_extent, surface, transient_allocator);
     errdefer swapchain.destroy(vc);
 
     var frames: [frames_in_flight]Frame = undefined;
@@ -88,8 +88,8 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
     return &frame.encoder;
 }
 
-pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D) !vk.SwapchainKHR {
-    return try self.swapchain.recreate(vc, new_extent);
+pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !vk.SwapchainKHR {
+    return try self.swapchain.recreate(vc, new_extent, transient_allocator);
 }
 
 pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
