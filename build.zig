@@ -637,7 +637,6 @@ fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.Re
             source_path ++ "posix_thread.c",
             source_path ++ "posix_module.c",
             source_path ++ "posix_poll.c",
-            source_path ++ "xkb_unicode.c",
             source_path ++ "linux_joystick.c",
         };
 
@@ -645,6 +644,7 @@ fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.Re
             source_path ++ "x11_init.c",
             source_path ++ "x11_monitor.c",
             source_path ++ "x11_window.c",
+            source_path ++ "xkb_unicode.c",
             source_path ++ "glx_context.c",
         };
 

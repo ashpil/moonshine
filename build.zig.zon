@@ -20,8 +20,8 @@
             .hash = "N-V-__8AANpOagDObvZHjSGqw8P-8zqOHVAJff5T-ZD_3Kzj",
         },
         .glfw = .{
-          .url = "https://github.com/ashpil/glfw/archive/47c3b8ffae967d61ac02412c098f2a7f5d527a3d.tar.gz",
-            .hash = "N-V-__8AAOPJSwB2crlbW0UJZ7fuaTgbmw9hn1wcCyetKn6-",
+            .url = "https://github.com/glfw/glfw/archive/e7ea71be039836da3a98cea55ae5569cb5eb885c.tar.gz",
+            .hash = "N-V-__8AAMrJSwAUGb9-vTzkNR-5LXS81MR__ZRVfF3tWgG6",
         },
         .tinyexr = .{
             .url = "https://github.com/syoyo/tinyexr/archive/735ff73ce5959cf005eb99ce517c9bcecab89dfb.tar.gz",
