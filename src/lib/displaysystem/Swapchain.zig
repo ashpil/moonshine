@@ -122,7 +122,7 @@ const SwapSettings = struct {
     }
 
     pub fn findPresentMode(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.PresentModeKHR {
-        const ideal = vk.PresentModeKHR.immediate_khr;
+        const ideal = vk.PresentModeKHR.fifo_khr;
 
         const present_modes = (try vk_helpers.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
 
