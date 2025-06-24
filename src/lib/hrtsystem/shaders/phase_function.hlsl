@@ -48,7 +48,8 @@ struct HenyeyGreenstein : BSDF {
         if (abs(g) < 1e-3f) {
             cosTheta = 1 - 2 * square.x;
         } else {
-            cosTheta = -1 / (2 * g) * (1 + g * g - (1 - g * g) * (1 - g * g) / (1 + g - 2 * g * square.x));
+            const float inner = (1 - g * g) / (1 + g - 2 * g * square.x);
+            cosTheta = -(1 + g * g - inner * inner) / (2 * g);
         }
         const float sinTheta = sqrt(1 - cosTheta * cosTheta);
         const float phi = 2 * PI * square.y;
