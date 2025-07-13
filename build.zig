@@ -577,7 +577,7 @@ fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.Re
     const glfw = b.dependency("glfw", .{});
 
     const write_files_step = b.addWriteFiles();
-    const root = write_files_step.add("imgui.zig",
+    const root = write_files_step.add("glfw.zig",
         \\pub usingnamespace @cImport({
         \\    @cDefine("GLFW_INCLUDE_NONE", {});
         \\    @cInclude("GLFW/glfw3.h");
