@@ -133,7 +133,7 @@ pub const HdMoonshine = struct {
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         _ = self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
 
-        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }) catch return null;
+        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
         self.output_buffers = .{};

@@ -18,7 +18,8 @@ pub const Background = struct {
 };
 
 backgrounds: std.ArrayListUnmanaged(Background),
-sampler: vk.Sampler,
+equirectangular_sampler: vk.Sampler,
+equal_area_sampler: vk.Sampler,
 equirectangular_to_equal_area_pipeline: EquirectangularToEqualAreaPipeline,
 fold_pipeline: FoldPipeline,
 
@@ -43,7 +44,7 @@ const FoldPipeline = engine.core.pipeline.Pipeline(.{
 });
 
 pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
-    const sampler = try vc.device.createSampler(&.{
+    const equal_area_sampler = try vc.device.createSampler(&.{
         .flags = .{},
         .mag_filter = .linear,
         .min_filter = .linear,
@@ -61,9 +62,29 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
         .border_color = .float_opaque_white,
         .unnormalized_coordinates = vk.FALSE,
     }, null);
-    errdefer vc.device.destroySampler(sampler, null);
+    errdefer vc.device.destroySampler(equal_area_sampler, null);
 
-    var equirectangular_to_equal_area_pipeline = try EquirectangularToEqualAreaPipeline.create(vc, allocator, .{}, .{ sampler }, .{});
+    const equirectangular_sampler = try vc.device.createSampler(&.{
+        .flags = .{},
+        .mag_filter = .linear,
+        .min_filter = .linear,
+        .mipmap_mode = .nearest,
+        .address_mode_u = .repeat,
+        .address_mode_v = .mirrored_repeat,
+        .address_mode_w = .mirrored_repeat,
+        .mip_lod_bias = 0.0,
+        .anisotropy_enable = vk.FALSE,
+        .max_anisotropy = 0.0,
+        .compare_enable = vk.FALSE,
+        .compare_op = .always,
+        .min_lod = 0.0,
+        .max_lod = 0.0,
+        .border_color = .float_opaque_white,
+        .unnormalized_coordinates = vk.FALSE,
+    }, null);
+    errdefer vc.device.destroySampler(equirectangular_sampler, null);
+
+    var equirectangular_to_equal_area_pipeline = try EquirectangularToEqualAreaPipeline.create(vc, allocator, .{}, .{ equirectangular_sampler }, .{});
     errdefer equirectangular_to_equal_area_pipeline.destroy(vc);
 
     var fold_pipeline = try FoldPipeline.create(vc, allocator, .{}, .{}, .{});
@@ -71,7 +92,8 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
 
     return Self {
         .backgrounds = .{},
-        .sampler = sampler,
+        .equal_area_sampler = equal_area_sampler,
+        .equirectangular_sampler = equirectangular_sampler,
         .equirectangular_to_equal_area_pipeline = equirectangular_to_equal_area_pipeline,
         .fold_pipeline = fold_pipeline,
     };
@@ -244,5 +266,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.backgrounds.deinit(allocator);
     self.equirectangular_to_equal_area_pipeline.destroy(vc);
     self.fold_pipeline.destroy(vc);
-    vc.device.destroySampler(self.sampler, null);
+    vc.device.destroySampler(self.equal_area_sampler, null);
+    vc.device.destroySampler(self.equirectangular_sampler, null);
 }

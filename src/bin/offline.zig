@@ -99,7 +99,7 @@ pub fn main() !void {
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&context);
 
     try logger.log("create pipeline");

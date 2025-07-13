@@ -105,7 +105,7 @@ pub fn main() !void {
     defer object_picker.destroy(&context);
 
     var spec_constants = Pipeline.SpecConstants {};
-    var pipeline = try Pipeline.create(&context, allocator, spec_constants, .{ scene.background.sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    var pipeline = try Pipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
     defer pipeline.destroy(&context);
 
     try encoder.begin();
