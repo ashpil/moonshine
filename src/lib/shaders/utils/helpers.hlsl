@@ -1,3 +1,5 @@
+#pragma once
+
 template<typename T>
 uint2 textureDimensions(Texture2D<T> texture) {
     uint2 dimensions;

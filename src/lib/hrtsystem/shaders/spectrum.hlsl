@@ -11,18 +11,22 @@
 
 #include "../../shaders/utils/random.hlsl"
 #include "../../shaders/utils/math.hlsl"
+#include "../../shaders/utils/helpers.hlsl"
 
 static const float CIE1931YIntegral = 106.85691710117189;
 
 namespace Spectrum {
-    // exclusive range
-    float sampleTabulated(const float λ, const float start, const float end, Texture1D<float> t) {
-        return t.SampleLevel(dSpectrumSampler, (λ - start) / (end - start), 0);
+    float sampleTabulated(const float λ, const float start, const float end, Texture1D<float> texture) {
+        // correctly handles LUT insetting: https://docs.vulkan.org/spec/latest/_images/vulkantexture0-ll.svg need samples to be on the dots
+        const float size = end - start;
+        const float spacing = size / textureDimensions(texture);
+        const float t = (λ - start + (spacing / 2.0)) / (size + spacing);
+        return texture.SampleLevel(dSpectrumSampler, t, 0);
     }
 
     float sampleReflectance(const float λ, const float3 reflectance) {
         const float samplesStart = 360;
-        const float samplesEnd = 831;
+        const float samplesEnd = 830;
         const float3 rgb = float3(
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumR),
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumG),
@@ -34,13 +38,13 @@ namespace Spectrum {
     // a somewhat roundabout way of doing this but I believe it's correct
     float sampleEmission(const float λ, const float3 emission) {
         const float sampledReflectance = sampleReflectance(λ, emission);
-        const float sampledD65 = sampleTabulated(λ, 300, 831, dSpectrumD65);
+        const float sampledD65 = sampleTabulated(λ, 300, 830, dSpectrumD65);
         return sampledReflectance * sampledD65;
     }
 
     float3 toXYZ(const float λ, const float s) {
         const float samplesStart = 360;
-        const float samplesEnd = 831;
+        const float samplesEnd = 830;
         const float3 rgb = float3(
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumCIEX),
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumCIEY),
