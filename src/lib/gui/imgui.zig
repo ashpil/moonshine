@@ -8,6 +8,7 @@ const Window = @import("../Window.zig");
 const vector = @import("../vector.zig");
 const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
+const U8x4 = vector.Vec4(u8);
 
 pub const DrawVert = c.ImDrawVert;
 pub const DrawIdx = c.ImDrawIdx;
@@ -66,6 +67,46 @@ pub fn setNextWindowPos(x: f32, y: f32) void {
         .x = 0.0,
         .y = 0.0,
     });
+}
+
+pub fn getWindowDrawList() *c.ImDrawList {
+    return c.ImGui_GetWindowDrawList();
+}
+
+pub fn getCursorScreenPos() F32x2 {
+    return @bitCast(c.ImGui_GetCursorScreenPos());
+}
+
+pub fn setCursorScreenPos(pos: F32x2) void {
+    return c.ImGui_SetCursorScreenPos(@bitCast(pos));
+}
+
+pub fn addPolyline(draw_list: *c.ImDrawList, points: []const F32x2, color: U8x4) void {
+    c.ImDrawList_AddPolyline(draw_list, @ptrCast(points.ptr), @intCast(points.len), @bitCast(color), 0, 1.0);
+}
+
+pub fn addTriangle(draw_list: *c.ImDrawList, p1: F32x2, p2: F32x2, p3: F32x2, color: U8x4) void {
+    c.ImDrawList_AddTriangle(draw_list, @bitCast(p1), @bitCast(p2), @bitCast(p3), @bitCast(color), 1.0);
+}
+
+pub fn addCircle(draw_list: *c.ImDrawList, center: F32x2, radius: f32, color: U8x4) void {
+    c.ImDrawList_AddCircle(draw_list, @bitCast(center), radius, @bitCast(color), 0, 1.0);
+}
+
+pub fn addRect(draw_list: *c.ImDrawList, min: F32x2, max: F32x2, color: U8x4, rounding: f32, flags: c.ImDrawFlags, thickness: f32) void {
+    c.ImDrawList_AddRect(draw_list, @bitCast(min), @bitCast(max), @bitCast(color), rounding, flags, thickness);
+}
+
+pub fn primReserve(draw_list: *c.ImDrawList, idx_count: usize, vtx_count: usize) void {
+    c.ImDrawList_PrimReserve(draw_list, @intCast(idx_count), @intCast(vtx_count));
+}
+
+pub fn primWriteVtx(draw_list: *c.ImDrawList, pos: F32x2, uv: F32x2, col: U8x4) void {
+    c.ImDrawList_PrimWriteVtx(draw_list, @bitCast(pos), @bitCast(uv), @bitCast(col));
+}
+
+pub fn primWriteIdx(draw_list: *c.ImDrawList, idx: c.ImDrawIdx) void {
+    c.ImDrawList_PrimWriteIdx(draw_list, idx);
 }
 
 pub fn text(msg: [*:0]const u8) void {
@@ -181,6 +222,10 @@ const Col = enum(c_int) {
     text,
     _,
 };
+
+pub fn getStyle() *c.ImGuiStyle {
+    return c.ImGui_GetStyle();
+}
 
 pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
     c.ImGui_PushStyleColorImVec4(@intFromEnum(idx), @bitCast(color));
@@ -396,8 +441,8 @@ pub fn setItemTooltip(str: [*:0]const u8) void {
     c.ImGui_SetItemTooltip(str);
 }
 
-pub fn getContentRegionAvail() Vec2 {
-    return c.ImGui_GetContentRegionAvail();
+pub fn getContentRegionAvail() F32x2 {
+    return @bitCast(c.ImGui_GetContentRegionAvail());
 }
 
 pub fn sameLine() void {

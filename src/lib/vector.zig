@@ -246,6 +246,32 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 return out;
             }
 
+            pub fn componentMax(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            @max(self.at(.{ .col = col_idx, .row = row_idx }), other.at(.{ .col = col_idx, .row = row_idx }));
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentMin(self: Self, other: Self) Self {
+                var out: Self = undefined;
+                inline for (0..row_count) |row_idx| {
+                    inline for (0..col_count) |col_idx| {
+                        out.at_mut(.{ .col = col_idx, .row = row_idx }).* =
+                            @min(self.at(.{ .col = col_idx, .row = row_idx }), other.at(.{ .col = col_idx, .row = row_idx }));
+                    }
+                }
+                return out;
+            }
+
+            pub fn componentClamp(self: Self, min: Self, max: Self) Self {
+                return self.componentMax(min).componentMin(max);
+            }
+
             // number type conversion methods
             pub usingnamespace if (isIntegerType(T)) struct {
                 pub fn intCast(self: Self, Target: type) Matrix(Target, col_count, row_count) {
@@ -403,7 +429,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 pub fn normL1(self: Self) PossiblyIntNorm {
                     var out: PossiblyIntNorm = 0;
                     inline for (0..element_count) |element_idx| {
-                        out += @intCast(@abs(self.element(element_idx)));
+                        out += @abs(self.element(element_idx));
                     }
                     return out;
                 }

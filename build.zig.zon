@@ -23,6 +23,18 @@
             .url = "https://github.com/glfw/glfw/archive/e7ea71be039836da3a98cea55ae5569cb5eb885c.tar.gz",
             .hash = "N-V-__8AAMrJSwAUGb9-vTzkNR-5LXS81MR__ZRVfF3tWgG6",
         },
+        .wayland_zig = .{
+            .url = "https://github.com/ifreund/zig-wayland/archive/f3c5d503e540ada8cbcb056420de240af0c094f7.tar.gz",
+            .hash = "wayland-0.4.0-dev-lQa1kjfIAQCmhhQu3xF0KH-94-TzeMXOqfnP0-Dg6Wyy",
+        },
+        .wayland = .{
+            .url = "https://gitlab.freedesktop.org/wayland/wayland/-/archive/e35f1efb5957e78dd61d36186c4ed64ea423cf7a/wayland.tar.gz",
+            .hash = "N-V-__8AABMWGQDuHGzgjD9EX5V1w0hXzioHbj8Y27JVFC8N",
+        },
+        .wayland_protocols = .{
+            .url = "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/archive/0091197f5c1b1f2c131f1410e99f9c95d50646be/wayland-protocols.tar.gz",
+            .hash = "N-V-__8AAIKCDgBX6hRMzFmvC-WAwrOH_ewvZgAzPGbBvavk",
+        },
         .tinyexr = .{
             .url = "https://github.com/syoyo/tinyexr/archive/735ff73ce5959cf005eb99ce517c9bcecab89dfb.tar.gz",
             .hash = "N-V-__8AAGC4nQHVa2CJUUb6saSEtcSR7c3wMfzHy9oF6m1g",

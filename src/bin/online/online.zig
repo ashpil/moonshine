@@ -30,7 +30,10 @@ const vector = engine.vector;
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
+const U8x4 = vector.Vec4(u8);
+const U8x3 = vector.Vec3(u8);
 const Mat3 = vector.Mat3(f32);
+const Mat2 = vector.Mat2(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
 const vk = @import("vulkan");
@@ -78,6 +81,9 @@ pub fn main() !void {
 
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
+
+    const maybe_color_manager = Window.ColorManager.create(&window, allocator) catch null;
+    defer if (maybe_color_manager) |color_manager| color_manager.destroy(allocator);
 
     const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ hrtsystem.required_device_extensions), &hrtsystem.required_device_features, queueFamilyAcceptable);
     defer context.destroy(allocator);
@@ -155,6 +161,20 @@ pub fn main() !void {
                 try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
                 try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             }
+            if (imgui.collapsingHeader("Display")) {
+                if (maybe_color_manager) |color_manager| {
+                    const image_description = color_manager.getImageDescription();
+                    try imgui.textFmt("Minimum luminance: {d}cd/m^2", .{image_description.minimum_luminance});
+                    try imgui.textFmt("Maximum luminance: {d}cd/m^2", .{image_description.maximum_luminance});
+                    try imgui.textFmt("Reference luminance: {d}cd/m^2", .{image_description.reference_luminance});
+                    if (image_description.primaries == .named) {
+                        try imgui.textFmt("Color space: {s}", .{@tagName(image_description.primaries.named)});
+                    }
+                    drawChromaticityDiagram(image_description.primaries.getParametric());
+                } else {
+                    imgui.text("Unable to create color manager; assuming sRGB");
+                }
+            }
             if (imgui.collapsingHeader("Scene")) {
                 try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
                 try imgui.textFmt("Material count: {}", .{scene.world.materials.material_count});
@@ -166,7 +186,7 @@ pub fn main() !void {
                 }
             }
             if (imgui.collapsingHeader("Sensor")) {
-                if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().x - imgui.getFontSize() * 10, .y = 0 })) {
+                if (imgui.button("Reset", imgui.Vec2{ .x = imgui.getContentRegionAvail().element(0) - imgui.getFontSize() * 10, .y = 0 })) {
                     scene.camera.sensors.items[active_sensor].clear();
                 }
                 imgui.sameLine();
@@ -228,7 +248,7 @@ pub fn main() !void {
                 }
                 const last_rebuild_failed = rebuild_error;
                 if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(.{1.0, 0.0, 0.0, 1}));
-                if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().x, .y = 0.0 })) {
+                if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().element(0), .y = 0.0 })) {
                     const start = try std.time.Instant.now();
                     rebuild_error = false;
                     if (pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
@@ -519,4 +539,73 @@ pub fn exposeToImguiRecursive(T: type, value: *T, name: [:0]const u8) bool {
         imgui.treePop();
     }
     return changed;
+}
+
+// the shape here is correct, but the inner fill colors are terrible
+// doing better would require creating a texture, which is annoying,
+// or a custom draw shader, also annoying
+fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
+    const color = engine.color;
+
+    const samples_start = 435;
+    const samples_end = 645;
+    const sample_count = 200;
+
+    var spectral_line: [sample_count]F32x3 = undefined;
+
+    for (0..sample_count) |i| {
+        const t = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(sample_count));
+        const lambda = samples_start + t * (samples_end - samples_start);
+        spectral_line[i] = color.wavelengthToXYZ(lambda);
+    }
+
+    const available_size = imgui.getContentRegionAvail();
+    const canvas_size = F32x2.splat(available_size.element(0));
+
+    const canvas_start = imgui.getCursorScreenPos();
+    const canvas_end = canvas_start.componentAdd(canvas_size);
+
+    const draw_list = imgui.getWindowDrawList();
+
+    imgui.addRect(draw_list, canvas_start, canvas_end, U8x4.splat(255), 0, 0, 1);
+
+    imgui.primReserve(draw_list, spectral_line.len * 3, spectral_line.len + 1);
+
+    var points_max = F32x2.splat(0);
+    for (spectral_line) |point| {
+        points_max = points_max.componentMax(color.XYZToxyY(point).truncate());
+    }
+
+    const padding = F32x2.splat(0.01);
+    const normalize_mat = Mat2.diagonal(F32x2.splat(1).componentDiv(points_max.componentAdd(padding)).toArray()).appendCol(.splat(0)).appendRow(.new(.{0, 0, 1}));
+    const flip_mat = Mat2.diagonal([2]f32{1, -1}).appendCol(.new(.{0, 1})).appendRow(.new(.{0, 0, 1}));
+    const scale_mat = Mat2.diagonal(canvas_size.toArray()).appendCol(canvas_start).appendRow(.new(.{0, 0, 1}));
+    const xy_to_view = scale_mat.mul(flip_mat).mul(normalize_mat);
+
+    for (0..spectral_line.len) |i| {
+    const start: imgui.DrawIdx = @intCast(draw_list._VtxCurrentIdx);
+        imgui.primWriteIdx(draw_list, start + @as(imgui.DrawIdx, @intCast(i + 0)));
+        imgui.primWriteIdx(draw_list, start + @as(imgui.DrawIdx, @intCast((i + 1) % spectral_line.len)));
+        imgui.primWriteIdx(draw_list, start + @as(imgui.DrawIdx, @intCast(spectral_line.len)));
+    }
+
+    const points = spectral_line ++ [_]F32x3 { F32x3.splat(0.8) };
+    for (points) |point| {
+        const rgb = color.XYZToBT709(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
+        const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));
+        const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
+
+        const xy = color.XYZToxyY(point).truncate();
+        imgui.primWriteVtx(draw_list, xy_to_view.mul(xy.append(1)).truncate(), @bitCast(imgui.getIO().Fonts.*.TexUvWhitePixel), rgb_u8);
+    }
+
+    imgui.addTriangle(draw_list,
+        xy_to_view.mul(primaries.red.append(1)).truncate(),
+        xy_to_view.mul(primaries.green.append(1)).truncate(),
+        xy_to_view.mul(primaries.blue.append(1)).truncate(),
+    U8x3.splat(0).append(255));
+
+    imgui.addCircle(draw_list, xy_to_view.mul(primaries.white.append(1)).truncate(), xy_to_view.mul(F32x2.splat(1.0 / 64.0).append(0)).element(0), U8x3.splat(0).append(255));
+
+    imgui.setCursorScreenPos(F32x2.new(.{canvas_start.element(0), canvas_end.element(1) + imgui.getStyle().FramePadding.x}));
 }
