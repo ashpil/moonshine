@@ -116,7 +116,7 @@ pub fn main() !void {
 
     try encoder.begin();
 
-    var gui = try Platform.create(&context, display.swapchain, window, window_extent, &encoder);
+    var gui = try Platform.create(&context, display.swapchain, window, &encoder);
     defer gui.destroy(&context);
 
     try encoder.submitAndIdleUntilDone(&context);
@@ -142,7 +142,6 @@ pub fn main() !void {
             error.OutOfDateKHR => blk: {
                 const new_extent = window.getExtent();
                 context.device.destroySwapchainKHR(try display.recreate(&context, new_extent, allocator), null);
-                try gui.resize(&context, display.swapchain);
                 scene.camera.sensors.items[active_sensor].destroy(&context);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
@@ -430,7 +429,7 @@ pub fn main() !void {
                 .dst_access_mask = .{ .transfer_write_bit = true },
                 .old_layout = .undefined,
                 .new_layout = .transfer_dst_optimal,
-                .image = display.swapchain.currentImage(),
+                .image = display.swapchain.currentImage().handle,
             }
         }, &.{});
 
@@ -468,7 +467,7 @@ pub fn main() !void {
             },
         };
 
-        frame_encoder.buffer.blitImage(scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage(), .transfer_dst_optimal, 1, (&region)[0..1], .nearest);
+        frame_encoder.buffer.blitImage(scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage().handle, .transfer_dst_optimal, 1, (&region)[0..1], .nearest);
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
                 .src_stage_mask = .{ .blit_bit = true },
@@ -477,11 +476,11 @@ pub fn main() !void {
                 .dst_access_mask = .{ .color_attachment_read_bit = true },
                 .old_layout = .transfer_dst_optimal,
                 .new_layout = .color_attachment_optimal,
-                .image = display.swapchain.currentImage(),
+                .image = display.swapchain.currentImage().handle,
             }
         }, &.{});
 
-        gui.endFrame(frame_encoder.buffer, display.swapchain.image_index, display.frame_index);
+        gui.endFrame(frame_encoder.buffer, display.swapchain.extent, display.swapchain.currentImage().view, display.frame_index);
 
         // transition swapchain back to present mode
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
@@ -492,7 +491,7 @@ pub fn main() !void {
                 .dst_access_mask = .{},
                 .old_layout = .color_attachment_optimal,
                 .new_layout = .present_src_khr,
-                .image = display.swapchain.currentImage(),
+                .image = display.swapchain.currentImage().handle,
             }
         }, &.{});
 
@@ -503,7 +502,6 @@ pub fn main() !void {
             if (ok == vk.Result.suboptimal_khr) {
                 const new_extent = window.getExtent();
                 try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
-                try gui.resize(&context, display.swapchain);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
@@ -511,7 +509,6 @@ pub fn main() !void {
         } else |err| if (err == error.OutOfDateKHR) {
             const new_extent = window.getExtent();
             try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
-            try gui.resize(&context, display.swapchain);
             try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
             scene.camera.sensors.items.len -= 1;
             active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);

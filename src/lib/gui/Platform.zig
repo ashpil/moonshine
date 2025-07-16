@@ -27,8 +27,6 @@ const Self = @This();
 const VertexBuffer = core.mem.Buffer(imgui.DrawVert, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .vertex_buffer_bit =  true });
 const IndexBuffer = core.mem.Buffer(imgui.DrawIdx, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .index_buffer_bit =  true });
 
-extent: vk.Extent2D,
-
 descriptor_set_layout: GuiDescriptorLayout,
 pipeline_layout: vk.PipelineLayout,
 pipeline: vk.Pipeline,
@@ -40,9 +38,7 @@ font_image_set: vk.DescriptorSet,
 vertex_buffers: [frames_in_flight]VertexBuffer,
 index_buffers: [frames_in_flight]IndexBuffer,
 
-views: std.BoundedArray(vk.ImageView, Swapchain.max_image_count),
-
-pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, extent: vk.Extent2D, encoder: *Encoder) !Self {
+pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, encoder: *Encoder) !Self {
     if (imgui.getCurrentContext()) |_| @panic("cannot create more than one Gui");
 
     imgui.createContext();
@@ -244,37 +240,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
         buffer.* = try IndexBuffer.create(vc, std.math.maxInt(imgui.DrawIdx), "imgui index buffer");
     }
 
-    var views = std.BoundedArray(vk.ImageView, Swapchain.max_image_count){
-        .buffer = undefined,
-        .len = swapchain.images.len,
-    };
-    inline for (&views.buffer, swapchain.images.buffer, 0..) |*view, image, i| {
-        if (i >= views.len) {
-            break;
-        }
-        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo{
-            .image = image,
-            .view_type = .@"2d",
-            .format = swapchain.image_format,
-            .components = vk.ComponentMapping{
-                .r = .identity,
-                .g = .identity,
-                .b = .identity,
-                .a = .identity,
-            },
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = 1,
-            },
-        }, null);
-        try vk_helpers.setDebugName(vc.device, view.*, std.fmt.comptimePrint("swapchain image view {}", .{ i }));
-    }
-
     return Self{
-        .extent = extent,
 
         .descriptor_set_layout = descriptor_set_layout,
         .pipeline_layout = pipeline_layout,
@@ -286,40 +252,10 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, ex
 
         .vertex_buffers = vertex_buffers,
         .index_buffers = index_buffers,
-
-        .views = views,
     };
 }
 
-pub fn resize(self: *Self, vc: *const VulkanContext, swapchain: Swapchain) !void {
-    for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
-
-    for (self.views.slice(), 0..) |*view, i| {
-        view.* = try vc.device.createImageView(&vk.ImageViewCreateInfo{
-            .image = swapchain.images.slice()[i],
-            .view_type = .@"2d",
-            .format = swapchain.image_format,
-            .components = vk.ComponentMapping{
-                .r = .identity,
-                .g = .identity,
-                .b = .identity,
-                .a = .identity,
-            },
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = 1,
-            },
-        }, null);
-    }
-    self.extent = swapchain.extent;
-}
-
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    for (self.views.slice()) |view| vc.device.destroyImageView(view, null);
-
     self.descriptor_set_layout.destroy(vc);
     vc.device.destroyPipelineLayout(self.pipeline_layout, null);
     vc.device.destroyPipeline(self.pipeline, null);
@@ -340,7 +276,7 @@ pub fn startFrame(self: *Self) void {
     imgui.newFrame();
 }
 
-pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, swapchain_image_index: usize, display_image_index: usize) void {
+pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent: vk.Extent2D, image_view: vk.ImageView, display_image_index: usize) void {
     imgui.render();
     const draw_data = imgui.getDrawData();
 
@@ -368,13 +304,13 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, swapch
                 .x = 0.0,
                 .y = 0.0,
             },
-            .extent = self.extent,
+            .extent = extent,
         },
         .layer_count = 1,
         .view_mask = 0,
         .color_attachment_count = 1,
         .p_color_attachments = (&vk.RenderingAttachmentInfo{
-            .image_view = self.views.slice()[swapchain_image_index],
+            .image_view = image_view,
             .image_layout = .color_attachment_optimal,
             .resolve_mode = .{},
             .resolve_image_layout = .undefined,
@@ -389,8 +325,8 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, swapch
     command_buffer.setViewport(0, 1, (&vk.Viewport{
         .x = 0,
         .y = 0,
-        .width = @floatFromInt(self.extent.width),
-        .height = @floatFromInt(self.extent.height),
+        .width = @floatFromInt(extent.width),
+        .height = @floatFromInt(extent.height),
         .min_depth = 0.0,
         .max_depth = 1.0,
     })[0..1]);

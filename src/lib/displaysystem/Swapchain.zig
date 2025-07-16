@@ -11,9 +11,14 @@ const SwapchainError = error {
 
 pub const max_image_count = 4;
 
+const Image = struct {
+    handle: vk.Image,
+    view: vk.ImageView,
+};
+
 surface: vk.SurfaceKHR,
 handle: vk.SwapchainKHR,
-images: std.BoundedArray(vk.Image, max_image_count),
+images: std.BoundedArray(Image, max_image_count),
 image_index: u32,
 extent: vk.Extent2D,
 image_format: vk.Format,
@@ -49,7 +54,39 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
-    const images = try vk_helpers.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
+    const image_handles = try vk_helpers.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
+
+    var images = std.BoundedArray(Image, max_image_count) {
+        .buffer = undefined,
+        .len = image_handles.len,
+    };
+
+    inline for (&images.buffer, image_handles.buffer, 0..) |*image, image_handle, i| {
+        if (i >= images.len) {
+            break;
+        }
+        image.view = try vc.device.createImageView(&vk.ImageViewCreateInfo{
+            .image = image_handle,
+            .view_type = .@"2d",
+            .format = settings.format.format,
+            .components = vk.ComponentMapping{
+                .r = .identity,
+                .g = .identity,
+                .b = .identity,
+                .a = .identity,
+            },
+            .subresource_range = .{
+                .aspect_mask = .{ .color_bit = true },
+                .base_mip_level = 0,
+                .level_count = 1,
+                .base_array_layer = 0,
+                .layer_count = 1,
+            },
+        }, null);
+        image.handle = image_handle;
+        try vk_helpers.setDebugName(vc.device, image.view, std.fmt.comptimePrint("swapchain image view {}", .{ i }));
+    }
+
 
     return Self {
         .surface = surface,
@@ -61,7 +98,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
     };
 }
 
-pub fn currentImage(self: *const Self) vk.Image {
+pub fn currentImage(self: *const Self) Image {
     return self.images.get(self.image_index);
 }
 
@@ -69,6 +106,7 @@ pub fn currentImage(self: *const Self) vk.Image {
 pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !vk.SwapchainKHR {
     const old = self.handle;
     self.* = try createFromOld(vc, extent, self.surface, transient_allocator, self.handle);
+    for (self.images.slice()) |image| vc.device.destroyImageView(image.view, null);
     return old;
 }
 
@@ -95,6 +133,7 @@ pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaph
 }
 
 pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
+    for (self.images.slice()) |image| vc.device.destroyImageView(image.view, null);
     vc.device.destroySwapchainKHR(self.handle, null);
     vc.instance.destroySurfaceKHR(self.surface, null);
 }
