@@ -90,8 +90,8 @@ pub fn build(b: *std.Build) !void {
                     .{ .name = "vulkan", .module = vulkan },
                     .{ .name = "engine", .module = engine },
                     .{ .name = "shaders", .module = makeShadersModule(b, shader_source, &[_]ShaderImport {
-                        ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/input.hlsl", }, .name = "input" },
-                        ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/post_process.hlsl" }, .name = "post_process", },
+                        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/bin/online/input.hlsl", }, .name = "input" },
+                        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/bin/online/post_process.hlsl" }, .name = "post_process", },
                     }) },
                 },
             }),
@@ -384,6 +384,11 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
 
     for (shader_imports) |shader_import| {
         imports.append(std.Build.Module.Import { .name = shader_import.name, .module = shader_import.shader.compile(b) }) catch @panic("OOM");
+        const compile_cmd = switch (shader_import.shader.language) {
+            .hlsl => std.mem.concat(b.allocator, []const u8, &[_][]const []const u8{ &Shader.Hlsl.compile_cmd, &[1][]const u8{ shader_import.shader.path }, &stdout_shader_args }) catch @panic("OOM"),
+            .zig => &.{}, // TODO: zig hot reload, should probably just be done as part of the build system
+        };
+        const compile_cmd_str = b.fmt("\"{s}\"", .{ std.mem.join(b.allocator, "\", \"", compile_cmd) catch @panic("OOM") });
         contents.appendSlice(b.fmt(
             \\pub const {0s} = ShaderSource {{
             \\    .name = "{0s}",
@@ -391,11 +396,11 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
             \\        const bytes align(4) = @embedFile("{0s}").*;
             \\        break :blk @ptrCast(&bytes);
             \\    }},
-            \\    .command = &[_][]const u8 {{ "{1s}" }},
+            \\    .command = &[_][]const u8 {{ {1s} }},
             \\}};
             \\
             \\
-        , .{ shader_import.name, std.mem.join(b.allocator, "\", \"", std.mem.concat(b.allocator, []const u8, &[_][]const []const u8{ &shader_import.shader.compileCommand(), &[1][]const u8{ shader_import.shader.path }, &stdout_shader_args }) catch @panic("OOM")) catch @panic("OOM") })) catch @panic("OOM");
+        , .{ shader_import.name, compile_cmd_str })) catch @panic("OOM");
     }
 
     imports.append(std.Build.Module.Import { .name = "shader_source", .module = shader_source }) catch @panic("OOM");
@@ -411,14 +416,14 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
 
 fn makeHrtsystemShaders(b: *std.Build, shader_source: *std.Build.Module) *std.Build.Module {
     return makeShadersModule(b, shader_source, &[_]ShaderImport {
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/render.hlsl" }, .name = "render", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/equirectangular_to_equal_area.hlsl" }, .name = "equirectangular_to_equal_area", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/fold.hlsl" }, .name = "background_fold", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/triangle_power.hlsl" }, .name = "triangle_power", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/geometry_power.hlsl" }, .name = "geometry_power", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/instance_power.hlsl" }, .name = "instance_power", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/fold3.hlsl" }, .name = "fold3", },
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/fold1.hlsl" }, .name = "fold1", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/render.hlsl" }, .name = "render", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/background/equirectangular_to_equal_area.hlsl" }, .name = "equirectangular_to_equal_area", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/background/fold.hlsl" }, .name = "background_fold", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/local_light/triangle_power.hlsl" }, .name = "triangle_power", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/local_light/geometry_power.hlsl" }, .name = "geometry_power", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/local_light/instance_power.hlsl" }, .name = "instance_power", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/local_light/fold3.hlsl" }, .name = "fold3", },
+        ShaderImport { .shader = Shader { .language = .hlsl, .path = "src/lib/hrtsystem/shaders/local_light/fold1.hlsl" }, .name = "fold1", },
     });
 }
 
@@ -453,6 +458,10 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
 
     if (options.window) {
         imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
+        imports.append(std.Build.Module.Import { .name = "platform_shaders", .module = makeShadersModule(b, shader_source, &[_]ShaderImport {
+            ShaderImport { .shader = Shader { .language = .zig, .path = "src/lib/gui/vertex.zig" }, .name = "vertex", },
+            ShaderImport { .shader = Shader { .language = .zig, .path = "src/lib/gui/fragment.zig" }, .name = "fragment", },
+        })}) catch @panic("OOM");
     }
 
     if (options.gui) {
@@ -749,56 +758,86 @@ const ShaderImport = struct {
 };
 
 const Shader = struct {
-    const ShaderType = enum {
-        compute,
-        ray_tracing,
-
-        fn dxcProfile(self: ShaderType) []const u8 {
-            return switch (self) {
-                .compute => "cs_6_7",
-                .ray_tracing => "lib_6_7",
-            };
-        }
+    const Hlsl = struct {
+        const compile_cmd = [_][]const u8 {
+            "dxc",
+            "-HV", "2021",
+            "-spirv",
+            "-fspv-target-env=vulkan1.3",
+            "-fvk-use-scalar-layout",
+            "-Ges", // strict mode
+            "-WX", // treat warnings as errors
+            "-T",
+            "cs_6_7", // assume compute
+        };
     };
 
+    const SourceLanguage = enum {
+        zig,
+        hlsl,
+    };
+
+    language: SourceLanguage,
     path: []const u8,
-    type: ShaderType,
-
-    const shader_compile_cmd = [_][]const u8 {
-        "dxc",
-        "-HV", "2021",
-        "-spirv",
-        "-fspv-target-env=vulkan1.3",
-        "-fvk-use-scalar-layout",
-        "-Ges", // strict mode
-        "-WX", // treat warnings as errors
-    };
-
-    fn compileCommand(self: Shader) [shader_compile_cmd.len + 2][]const u8 {
-        return shader_compile_cmd ++ [_][]const u8{ "-T", self.type.dxcProfile() };
-    }
 
     fn compile(self: Shader, b: *std.Build) *std.Build.Module {
         const input_file_path = b.path(self.path);
 
-        const get_dependendies = std.Build.Step.Run.create(b, b.fmt("get dependencies of {s}", .{ self.path }));
-        get_dependendies.addArgs(&self.compileCommand());
-        get_dependendies.addFileArg(input_file_path);
-        get_dependendies.addArg("-MF");
-        _ = get_dependendies.addDepFileOutputArg(b.fmt("{s}.d", .{ self.path }));
+        const spv_file_path = switch (self.language) {
+            .zig => blk: {
+                const target = b.resolveTargetQuery(.{
+                    .cpu_arch = .spirv64,
+                    .os_tag = .vulkan,
+                    .cpu_model = .{ .explicit = &std.Target.spirv.cpu.vulkan_v1_2 },
+                    .ofmt = .spirv,
+                });
 
-        const compile_shader = std.Build.Step.Run.create(b, b.fmt("compile {s}", .{ self.path }));
-        compile_shader.addArgs(&self.compileCommand());
-        compile_shader.addFileArg(input_file_path);
-        compile_shader.addArg("-Zi"); // include debug info
-        compile_shader.addArg("-Fo"); // output file after this
-        const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ self.path }));
+                const zig_extension = ".zig";
+                const object = b.addObject(.{
+                    .name = std.fs.path.basename(self.path[0..self.path.len - zig_extension.len]),
+                    .root_module = b.createModule(.{
+                        .root_source_file = input_file_path,
+                        .target = target,
+                    }),
+                });
 
-        compile_shader.step.dependOn(&get_dependendies.step);
-        compile_shader.dep_output_file = get_dependendies.argv.getLast().output_file;
+                const spv_file = object.getEmittedBin();
+
+                // spirv-opt pass to remove illegal dead code that zig sometimes emits
+                const compile_shader = std.Build.Step.Run.create(b, b.fmt("spirv-opt {s}", .{ self.path }));
+                compile_shader.addArg("spirv-opt");
+                compile_shader.addArg("--relax-logical-pointer"); // currently fails
+                compile_shader.addArg("--trim-capabilities"); // zig adds unused ones
+                compile_shader.addArg("-O");
+                compile_shader.addFileArg(spv_file);
+                compile_shader.addArg("-o");
+                const spv_file_opt = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ self.path }));
+
+                break :blk spv_file_opt;
+            },
+            .hlsl => blk: {
+                const get_dependendies = std.Build.Step.Run.create(b, b.fmt("get dependencies of {s}", .{ self.path }));
+                get_dependendies.addArgs(&Hlsl.compile_cmd);
+                get_dependendies.addFileArg(input_file_path);
+                get_dependendies.addArg("-MF");
+                _ = get_dependendies.addDepFileOutputArg(b.fmt("{s}.d", .{ self.path }));
+
+                const compile_shader = std.Build.Step.Run.create(b, b.fmt("compile {s}", .{ self.path }));
+                compile_shader.addArgs(&Hlsl.compile_cmd);
+                compile_shader.addFileArg(input_file_path);
+                compile_shader.addArg("-Zi"); // include debug info
+                compile_shader.addArg("-Fo"); // output file after this
+                const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ self.path }));
+
+                compile_shader.step.dependOn(&get_dependendies.step);
+                compile_shader.dep_output_file = get_dependendies.argv.getLast().output_file;
+
+                break :blk spv_file;
+            },
+        };
 
         return b.createModule(.{
-            .root_source_file = spv_file,
+            .root_source_file = spv_file_path,
         });
     }
 };

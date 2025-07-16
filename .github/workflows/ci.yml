@@ -17,7 +17,7 @@ jobs:
         sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list https://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
         sudo apt-get update
         sudo apt-get install wayland-protocols libwayland-dev libxkbcommon-dev # Wayland
-        sudo apt-get install vulkan-validationlayers mesa-vulkan-drivers # Vulkan
+        sudo apt-get install vulkan-sdk mesa-vulkan-drivers # Vulkan
 
     - name: Install DirectXShaderCompiler
       run: |
@@ -49,11 +49,12 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Install DirectXShaderCompiler
+    - name: Install Vulkan SDK
       run: |
-        Invoke-WebRequest -uri "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/dxc_2024_07_31.zip" -Method "GET" -OutFile dxc.zip
-        Expand-Archive dxc.zip
-        Add-Content $env:GITHUB_PATH ";.\dxc\bin\x86"
+        $ver = "1.4.341.1"
+        Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkan-sdk.exe" -OutFile vulkan-sdk.exe
+        .\vulkan-sdk.exe --accept-licenses --default-answer --confirm-command install
+        Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$ver\Bin"
 
     - name: Setup Zig
       uses: mlugg/setup-zig@v2

@@ -726,6 +726,7 @@ const PhysicalDevice = struct {
             .descriptor_binding_partially_bound = .true,
             .host_query_reset = .true,
             .descriptor_binding_update_unused_while_pending = .true,
+            .shader_int_8 = .true, // zig shaders pull this in for some reason
         };
 
         const device_address_binding_report_features = vk.PhysicalDeviceAddressBindingReportFeaturesEXT {
