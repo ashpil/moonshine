@@ -217,3 +217,19 @@ pub const Primaries = union(enum) {
     };
 };
 
+pub const TransferFunction = enum {
+    bt1886,
+    gamma22,
+    gamma28,
+    st240,
+    ext_linear,
+    log_100,
+    log_316,
+    xvycc,
+    srgb,
+    ext_srgb,
+    st2084_pq,
+    st428,
+    hlg,
+};
+

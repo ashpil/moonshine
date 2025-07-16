@@ -168,7 +168,10 @@ pub fn main() !void {
                     try imgui.textFmt("Maximum luminance: {d}cd/m^2", .{image_description.maximum_luminance});
                     try imgui.textFmt("Reference luminance: {d}cd/m^2", .{image_description.reference_luminance});
                     if (image_description.primaries == .named) {
-                        try imgui.textFmt("Color space: {s}", .{@tagName(image_description.primaries.named)});
+                        try imgui.textFmt("Primaries: {s}", .{@tagName(image_description.primaries.named)});
+                    }
+                    if (image_description.transfer_function) |transfer_function| {
+                        try imgui.textFmt("Transfer function: {s}", .{@tagName(transfer_function)});
                     }
                     drawChromaticityDiagram(image_description.primaries.getParametric());
                 } else {

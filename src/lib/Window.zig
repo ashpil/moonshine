@@ -101,6 +101,8 @@ pub const ImageDescription = struct {
     reference_luminance: f32,
 
     primaries: color.Primaries,
+
+    transfer_function: ?color.TransferFunction,
 };
 
 pub const ColorManager = if (@import("builtin").os.tag == .linux and @import("build_options").has_wayland) WaylandColorManager else NullColorManager;
@@ -144,6 +146,8 @@ const WaylandColorManager = struct {
         green: Vec2(i32),
         blue: Vec2(i32),
 
+	transfer_function: wp.ColorManagerV1.TransferFunction,
+
         fn toImageDescription(self: WaylandImageDescription) ImageDescription {
             return ImageDescription {
                 .minimum_luminance = @as(f32, @floatFromInt(self.min_lum)) / 10_000,
@@ -168,6 +172,22 @@ const WaylandColorManager = struct {
 
                         .white = self.white.floatFromInt(f32).scale(1.0 / 1_000_000.0),
                     }},
+                },
+                .transfer_function = switch (self.transfer_function) {
+                    .bt1886 => .bt1886,
+                    .gamma22 => .gamma22,
+                    .gamma28 => .gamma28,
+                    .st240 => .st240,
+                    .ext_linear => .ext_linear,
+                    .log_100 => .log_100,
+                    .log_316 => .log_316,
+                    .xvycc => .xvycc,
+                    .srgb => .srgb,
+                    .ext_srgb => .ext_srgb,
+                    .st2084_pq => .st2084_pq,
+                    .st428 => .st428,
+                    .hlg => .hlg,
+                    _ => null,
                 },
             };
         }
@@ -256,6 +276,9 @@ const WaylandColorManager = struct {
                 },
                 .primaries_named => |primaries_named| {
                     context.image_description.primaries_named = primaries_named.primaries;
+                },
+                .tf_named => |tf_named| {
+                    context.image_description.transfer_function = tf_named.tf;
                 },
                 .done => {
                     info.destroy();
