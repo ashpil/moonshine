@@ -19,36 +19,13 @@ const F32x3 = vector.Vec3(f32);
 const Mat3 = vector.Mat3(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
-pub const RenderBindings = struct {
-    tlas: ?vk.AccelerationStructureKHR,
-    instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
-    world_to_instances: ?core.mem.BufferSlice(Mat4x3),
-    meshes: ?core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
-    geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry.Device),
-    models: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Model.Device),
-    materials: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
-    instance_powers: core.mem.BufferSlice(F32x3),
-    background_image: core.pipeline.CombinedImageSampler,
-    output_image: core.pipeline.StorageImage,
-};
-
-pub const RenderPushConstants = extern struct {
-    instance_count: u32,
-    camera: Camera.Camera,
-    aspect_ratio: f32,
-    sample_count: u32,
-    global_volume: Material.Volume,
-    background_to_world: Mat3,
-    seed: u32,
-};
-
 pub const Integrator = enum(u32) {
     direct_lighting,
     path_tracing,
     volume_path_tracing,
 };
 
-pub const RenderPipeline = Pipeline(.{
+pub const Render = Pipeline(.{
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
     .shader_source = shaders.render,
     .SpecConstants = extern struct {
@@ -63,8 +40,27 @@ pub const RenderPipeline = Pipeline(.{
         volume_path_tracing_env_samples_per_bounce: u32 = 1,
         volume_path_tracing_mesh_samples_per_bounce: u32 = 1,
     },
-    .PushConstants = RenderPushConstants,
+    .PushConstants = extern struct {
+        instance_count: u32,
+        camera: Camera.Camera,
+        aspect_ratio: f32,
+        sample_count: u32,
+        global_volume: Material.Volume,
+        background_to_world: Mat3,
+        seed: u32,
+    },
+    .PushSetBindings = struct {
+        tlas: ?vk.AccelerationStructureKHR,
+        instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
+        world_to_instances: ?core.mem.BufferSlice(Mat4x3),
+        meshes: ?core.mem.BufferSlice(engine.hrtsystem.MeshManager.Mesh.Device),
+        geometries: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Geometry.Device),
+        models: ?core.mem.BufferSlice(engine.hrtsystem.ModelManager.Model.Device),
+        materials: ?core.mem.BufferSlice(engine.hrtsystem.MaterialManager.Material.Device),
+        instance_powers: core.mem.BufferSlice(F32x3),
+        background_image: core.pipeline.CombinedImageSampler,
+        output_image: core.pipeline.StorageImage,
+    },
     .additional_descriptor_layout_count = 2,
-    .PushSetBindings = RenderBindings,
 });
 

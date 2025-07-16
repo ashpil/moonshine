@@ -16,7 +16,7 @@ const MeshManager = hrtsystem.MeshManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const TextureManager = MaterialManager.TextureManager;
 const Accel = hrtsystem.Accel;
-const Pipeline = hrtsystem.pipeline.RenderPipeline;
+const Pipeline = hrtsystem.pipeline.Render;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);

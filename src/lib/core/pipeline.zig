@@ -244,7 +244,7 @@ pub fn Pipeline(comptime options: struct {
     local_size: vk.Extent3D, // TODO: should be able to extract this or set it via spec constants
     SpecConstants: type = extern struct {},
     PushConstants: type = extern struct {},
-    PushSetBindings: type, // todo: should be specified in higher level types rather than raw vk ones
+    PushSetBindings: type,
     additional_descriptor_layout_count: comptime_int = 0,
 }) type {
     if (@typeInfo(options.SpecConstants).@"struct".layout == .auto) @compileError("specialization constant struct layout is auto but must not be");
@@ -259,6 +259,7 @@ pub fn Pipeline(comptime options: struct {
         const Bindings = PipelineBindings(options.shader_source.name, .{ .compute_bit = true }, options.PushConstants, options.PushSetBindings, options.additional_descriptor_layout_count);
 
         pub const SpecConstants = options.SpecConstants;
+        pub const PushConstants = options.PushConstants;
         pub const PushSetBindings = options.PushSetBindings;
 
         pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, constants: SpecConstants, samplers: [Bindings.sampler_count]vk.Sampler, additional_descriptor_layouts: [options.additional_descriptor_layout_count]vk.DescriptorSetLayout) !Self {
@@ -379,9 +380,11 @@ pub fn Pipeline(comptime options: struct {
             }
         } else struct {};
 
-        pub fn recordPushDescriptors(self: *const Self, command_buffer: VulkanContext.CommandBuffer, bindings: options.PushSetBindings) void {
-            const writes = pushDescriptorDataToWriteDescriptor(options.PushSetBindings, bindings);
-            command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), &writes.buffer);
-        }
+        pub usingnamespace if (@sizeOf(options.PushSetBindings) != 0) struct {
+            pub fn recordPushDescriptors(self: *const Self, command_buffer: VulkanContext.CommandBuffer, bindings: options.PushSetBindings) void {
+                const writes = pushDescriptorDataToWriteDescriptor(options.PushSetBindings, bindings);
+                command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), &writes.buffer);
+            }
+        } else struct {};
     };
 }
