@@ -283,7 +283,7 @@ pub fn build(b: *std.Build) !void {
     }
 }
 
-pub fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
+fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
     const max_output_size = 400 * 1024;
     var child = std.process.Child.init(argv, self.allocator);
     child.stdin_behavior = .Ignore;
