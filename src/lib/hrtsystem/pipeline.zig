@@ -68,8 +68,3 @@ pub const StandardPipeline = Pipeline(.{
     .PushSetBindings = StandardBindings,
 });
 
-pub fn dispatch(pipeline: anytype, encoder: *Encoder, extent: vk.Extent2D) void {
-    const width = std.math.divCeil(extent.width, 32) catch unreachable;
-    const height = std.math.divCeil(extent.height, 32) catch unreachable;
-    pipeline.recordDispatch(encoder.buffer, .{ .width = width, .height = height, .depth = 1 });
-}
