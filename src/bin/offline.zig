@@ -6,7 +6,7 @@ const engine = @import("engine");
 const core = engine.core;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
-const Pipeline = engine.hrtsystem.pipeline.StandardPipeline;
+const Pipeline = engine.hrtsystem.pipeline.RenderPipeline;
 const Scene = engine.hrtsystem.Scene;
 
 const vk_helpers = core.vk_helpers;

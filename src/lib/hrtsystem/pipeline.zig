@@ -19,7 +19,7 @@ const F32x3 = vector.Vec3(f32);
 const Mat3 = vector.Mat3(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
-pub const StandardBindings = struct {
+pub const RenderBindings = struct {
     tlas: ?vk.AccelerationStructureKHR,
     instances: ?core.mem.BufferSlice(vk.AccelerationStructureInstanceKHR),
     world_to_instances: ?core.mem.BufferSlice(Mat4x3),
@@ -32,7 +32,7 @@ pub const StandardBindings = struct {
     output_image: core.pipeline.StorageImage,
 };
 
-pub const StandardPushConstants = extern struct {
+pub const RenderPushConstants = extern struct {
     instance_count: u32,
     camera: Camera.Camera,
     aspect_ratio: f32,
@@ -48,9 +48,9 @@ pub const Integrator = enum(u32) {
     volume_path_tracing,
 };
 
-pub const StandardPipeline = Pipeline(.{
+pub const RenderPipeline = Pipeline(.{
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
-    .shader_source = shaders.main,
+    .shader_source = shaders.render,
     .SpecConstants = extern struct {
         integrator: Integrator = .path_tracing,
         direct_lighting_env_samples: u32 = 1,
@@ -63,8 +63,8 @@ pub const StandardPipeline = Pipeline(.{
         volume_path_tracing_env_samples_per_bounce: u32 = 1,
         volume_path_tracing_mesh_samples_per_bounce: u32 = 1,
     },
-    .PushConstants = StandardPushConstants,
+    .PushConstants = RenderPushConstants,
     .additional_descriptor_layout_count = 2,
-    .PushSetBindings = StandardBindings,
+    .PushSetBindings = RenderBindings,
 });
 

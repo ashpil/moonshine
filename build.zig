@@ -407,7 +407,7 @@ fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imp
 
 fn makeHrtsystemShaders(b: *std.Build, shader_source: *std.Build.Module) *std.Build.Module {
     return makeShadersModule(b, shader_source, &[_]ShaderImport {
-        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/main.hlsl" }, .name = "main", },
+        ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/render.hlsl" }, .name = "render", },
         ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/equirectangular_to_equal_area.hlsl" }, .name = "equirectangular_to_equal_area", },
         ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/background/fold.hlsl" }, .name = "background_fold", },
         ShaderImport { .shader = Shader { .type = .compute, .path = "src/lib/hrtsystem/shaders/local_light/triangle_power.hlsl" }, .name = "triangle_power", },

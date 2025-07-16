@@ -18,7 +18,7 @@ const Accel = hrtsystem.Accel;
 const ModelManager = hrtsystem.ModelManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
-const Pipeline = hrtsystem.pipeline.StandardPipeline;
+const Pipeline = hrtsystem.pipeline.RenderPipeline;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
