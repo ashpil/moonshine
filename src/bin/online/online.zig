@@ -133,12 +133,13 @@ pub fn main() !void {
     var post_process_pipeline = try PostProcessPipeline.create(&context, allocator, .{}, .{}, .{});
     defer post_process_pipeline.destroy(&context);
 
-    var gui_image = try Image.create(&context, window_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
+    const gui_format = .r8g8b8a8_unorm;
+    var gui_image = try Image.create(&context, window_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
     defer gui_image.destroy(&context);
 
     try encoder.begin();
 
-    var gui = try Platform.create(&context, display.swapchain, window, &encoder);
+    var gui = try Platform.create(&context, gui_format, window, &encoder);
     defer gui.destroy(&context);
 
     try encoder.submitAndIdleUntilDone(&context);

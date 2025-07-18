@@ -38,7 +38,7 @@ font_image_set: vk.DescriptorSet,
 vertex_buffers: [frames_in_flight]VertexBuffer,
 index_buffers: [frames_in_flight]IndexBuffer,
 
-pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, encoder: *Encoder) !Self {
+pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encoder: *Encoder) !Self {
     if (imgui.getCurrentContext()) |_| @panic("cannot create more than one Gui");
 
     imgui.createContext();
@@ -191,7 +191,7 @@ pub fn create(vc: *const VulkanContext, swapchain: Swapchain, window: Window, en
             .p_next = &vk.PipelineRenderingCreateInfo{
                 .view_mask = 0,
                 .color_attachment_count = 1,
-                .p_color_attachment_formats = (&swapchain.image_format)[0..1],
+                .p_color_attachment_formats = (&format)[0..1],
                 .depth_attachment_format = .undefined,
                 .stencil_attachment_format = .undefined,
             },
