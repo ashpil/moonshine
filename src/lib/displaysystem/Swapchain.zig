@@ -42,7 +42,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
         .image_color_space = settings.format.color_space,
         .image_extent = settings.extent,
         .image_array_layers = 1,
-        .image_usage = .{ .color_attachment_bit = true, .transfer_dst_bit = true },
+        .image_usage = .{ .storage_bit = true },
         .image_sharing_mode = settings.image_sharing_mode,
         .queue_family_index_count = @as(u32, @intCast(queue_family_indices.len)),
         .p_queue_family_indices = &queue_family_indices,
@@ -176,7 +176,7 @@ const SwapSettings = struct {
 
     pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !vk.SurfaceFormatKHR {
         const ideal = vk.SurfaceFormatKHR {
-            .format = .b8g8r8a8_srgb,
+            .format = .r8g8b8a8_unorm,
             .color_space = .srgb_nonlinear_khr,
         };
 

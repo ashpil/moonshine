@@ -285,18 +285,16 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
     const index_buffer = self.index_buffers[display_image_index];
     std.debug.assert(draw_data.TotalVtxCount <= vertex_buffer.len);
     std.debug.assert(draw_data.TotalIdxCount <= index_buffer.len);
-    if (draw_data.CmdListsCount > 0) {
-        var vertex_offset: usize = 0;
-        var index_offset: usize = 0;
-        for (draw_data.CmdLists.Data[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
-            const vertex_count: usize = @intCast(cmd_list.*.VtxBuffer.Size);
-            const index_count: usize = @intCast(cmd_list.*.IdxBuffer.Size);
-            @memcpy(vertex_buffer.hostSlice()[vertex_offset..].ptr, cmd_list.*.VtxBuffer.Data[0..vertex_count]);
-            @memcpy(index_buffer.hostSlice()[index_offset..].ptr, cmd_list.*.IdxBuffer.Data[0..index_count]);
-            vertex_offset += vertex_count;
-            index_offset += index_count;
-        }
-    } else return;
+    var vertex_offset: usize = 0;
+    var index_offset: usize = 0;
+    for (draw_data.CmdLists.Data[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
+        const vertex_count: usize = @intCast(cmd_list.*.VtxBuffer.Size);
+        const index_count: usize = @intCast(cmd_list.*.IdxBuffer.Size);
+        @memcpy(vertex_buffer.hostSlice()[vertex_offset..].ptr, cmd_list.*.VtxBuffer.Data[0..vertex_count]);
+        @memcpy(index_buffer.hostSlice()[index_offset..].ptr, cmd_list.*.IdxBuffer.Data[0..index_count]);
+        vertex_offset += vertex_count;
+        index_offset += index_count;
+    }
 
     command_buffer.beginRendering(&vk.RenderingInfo{
         .render_area = vk.Rect2D{
@@ -314,9 +312,9 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
             .image_layout = .color_attachment_optimal,
             .resolve_mode = .{},
             .resolve_image_layout = .undefined,
-            .load_op = .load,
+            .load_op = .clear,
             .store_op = .store,
-            .clear_value = undefined,
+            .clear_value = .{ .color = .{ .uint_32 = [4]u32{ 0, 0, 0, 0 } } },
         })[0..1],
     });
     command_buffer.bindPipeline(.graphics, self.pipeline);

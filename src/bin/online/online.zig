@@ -2,6 +2,8 @@ const std = @import("std");
 
 const engine = @import("engine");
 
+const shaders = @import("shaders");
+
 const ObjectPicker = @import("ObjectPicker.zig");
 const SyncCopier = @import("SyncCopier.zig");
 
@@ -10,7 +12,7 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const DestructionQueue = core.DestructionQueue;
 const vk_helpers = core.vk_helpers;
-const TextureManager = core.Images.TextureManager;
+const Image = core.Image;
 
 const hrtsystem = engine.hrtsystem;
 const Camera = hrtsystem.CameraManager;
@@ -18,7 +20,7 @@ const Accel = hrtsystem.Accel;
 const ModelManager = hrtsystem.ModelManager;
 const MaterialManager = hrtsystem.MaterialManager;
 const Scene = hrtsystem.Scene;
-const Pipeline = hrtsystem.pipeline.Render;
+const RenderPipeline = hrtsystem.pipeline.Render;
 
 const displaysystem = engine.displaysystem;
 const Display = displaysystem.Display;
@@ -71,6 +73,17 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
     return Window.getPhysicalDevicePresentationSupport(instance, device, idx);
 }
 
+const PostProcessPipeline = core.pipeline.Pipeline(.{
+    .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
+    .shader_source = shaders.post_process,
+    .PushSetBindings = struct {
+        src_image: core.pipeline.SampledImage,
+        overlay_image: core.pipeline.SampledImage,
+        dst_image: core.pipeline.StorageImage,
+    },
+});
+
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -110,9 +123,15 @@ pub fn main() !void {
     var object_picker = try ObjectPicker.create(&context, allocator);
     defer object_picker.destroy(&context);
 
-    var spec_constants = Pipeline.SpecConstants {};
-    var pipeline = try Pipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
-    defer pipeline.destroy(&context);
+    var spec_constants = RenderPipeline.SpecConstants {};
+    var render_pipeline = try RenderPipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    defer render_pipeline.destroy(&context);
+
+    var post_process_pipeline = try PostProcessPipeline.create(&context, allocator, .{}, .{}, .{});
+    defer post_process_pipeline.destroy(&context);
+
+    var gui_image = try Image.create(&context, window_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
+    defer gui_image.destroy(&context);
 
     try encoder.begin();
 
@@ -253,7 +272,7 @@ pub fn main() !void {
                 if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().element(0), .y = 0.0 })) {
                     const start = try std.time.Instant.now();
                     rebuild_error = false;
-                    if (pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
+                    if (render_pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
                         try frame_encoder.attachResource(old_pipeline);
                         scene.camera.sensors.items[active_sensor].clear();
                     } else |err| if (err == error.ShaderCompileFail) {
@@ -413,100 +432,82 @@ pub fn main() !void {
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
             frame_encoder.barrier(&[_]Encoder.ImageBarrier {
                 Encoder.ImageBarrier {
-                    .src_stage_mask = .{ .blit_bit = true },
-                    .src_access_mask = .{ .transfer_read_bit = true },
+                    .src_stage_mask = .{ .compute_shader_bit = true },
+                    .src_access_mask = .{ .shader_sampled_read_bit = true },
                     .dst_stage_mask = .{ .compute_shader_bit = true },
                     .dst_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                    .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .transfer_src_optimal,
+                    .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .shader_read_only_optimal,
                     .new_layout = .general,
                     .image = scene.camera.sensors.items[active_sensor].image.handle,
                 }
             }, &.{});
-            pipeline.recordBindPipeline(frame_encoder.buffer);
-            pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
-            pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
-            pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
-            pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
+            render_pipeline.recordBindPipeline(frame_encoder.buffer);
+            render_pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
+            render_pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
+            render_pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
+            render_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
         }
 
-        // transition swap image to one we can blit to and sensor image to one we can blit from
+        // render gui into gui image
+        frame_encoder.barrier(&[_]Encoder.ImageBarrier {
+            Encoder.ImageBarrier {
+                .src_stage_mask = .{ .compute_shader_bit = true },
+                .src_access_mask = .{ .shader_sampled_read_bit = true },
+                .dst_stage_mask = .{ .color_attachment_output_bit = true },
+                .dst_access_mask = .{ .color_attachment_write_bit = true },
+                .old_layout = .undefined,
+                .new_layout = .color_attachment_optimal,
+                .image = gui_image.handle,
+            },
+        }, &.{});
+        gui.endFrame(frame_encoder.buffer, display.swapchain.extent, gui_image.view, display.frame_index);
+
+        // post process rendered image and composite overlay onto swap image
         const swap_barrier = Encoder.ImageBarrier {
             .src_stage_mask = .{ .color_attachment_output_bit = true },
             .src_access_mask = .{ .color_attachment_read_bit = true },
-            .dst_stage_mask = .{ .blit_bit = true },
-            .dst_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
+            .dst_access_mask = .{ .shader_storage_write_bit = true },
             .old_layout = .undefined,
-            .new_layout = .transfer_dst_optimal,
+            .new_layout = .general,
             .image = display.swapchain.currentImage().handle,
         };
         const sensor_barrier = Encoder.ImageBarrier {
             .src_stage_mask = .{ .compute_shader_bit = true },
             .src_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-            .dst_stage_mask = .{ .blit_bit = true },
-            .dst_access_mask = .{ .transfer_read_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
+            .dst_access_mask = .{ .shader_storage_read_bit = true },
             .old_layout = .general,
-            .new_layout = .transfer_src_optimal,
+            .new_layout = .shader_read_only_optimal,
             .image = scene.camera.sensors.items[active_sensor].image.handle,
         };
-        frame_encoder.barrier(if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) &[_]Encoder.ImageBarrier { swap_barrier, sensor_barrier } else &[_]Encoder.ImageBarrier { swap_barrier }, &.{});
-
-        // blit storage image onto swap image
-        const subresource = vk.ImageSubresourceLayers{
-            .aspect_mask = .{ .color_bit = true },
-            .mip_level = 0,
-            .base_array_layer = 0,
-            .layer_count = 1,
+        const gui_barrier = Encoder.ImageBarrier {
+            .src_stage_mask = .{ .color_attachment_output_bit = true },
+            .src_access_mask = .{ .color_attachment_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
+            .dst_access_mask = .{ .shader_sampled_read_bit = true },
+            .old_layout = .color_attachment_optimal,
+            .new_layout = .shader_read_only_optimal,
+            .image = gui_image.handle,
         };
+        frame_encoder.barrier(if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier, sensor_barrier } else &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier }, &.{});
 
-        const region = vk.ImageBlit{
-            .src_subresource = subresource,
-            .src_offsets = .{ .{
-                .x = 0,
-                .y = 0,
-                .z = 0,
-            }, .{
-                .x = @as(i32, @intCast(scene.camera.sensors.items[active_sensor].extent.width)),
-                .y = @as(i32, @intCast(scene.camera.sensors.items[active_sensor].extent.height)),
-                .z = 1,
-            } },
-            .dst_subresource = subresource,
-            .dst_offsets = .{
-                .{
-                    .x = 0,
-                    .y = 0,
-                    .z = 0,
-                },
-                .{
-                    .x = @as(i32, @intCast(display.swapchain.extent.width)),
-                    .y = @as(i32, @intCast(display.swapchain.extent.height)),
-                    .z = 1,
-                },
-            },
-        };
-
-        frame_encoder.buffer.blitImage(scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, display.swapchain.currentImage().handle, .transfer_dst_optimal, 1, (&region)[0..1], .nearest);
-        frame_encoder.barrier(&[_]Encoder.ImageBarrier {
-            Encoder.ImageBarrier {
-                .src_stage_mask = .{ .blit_bit = true },
-                .src_access_mask = .{ .transfer_write_bit = true },
-                .dst_stage_mask = .{ .color_attachment_output_bit = true },
-                .dst_access_mask = .{ .color_attachment_read_bit = true },
-                .old_layout = .transfer_dst_optimal,
-                .new_layout = .color_attachment_optimal,
-                .image = display.swapchain.currentImage().handle,
-            }
-        }, &.{});
-
-        gui.endFrame(frame_encoder.buffer, display.swapchain.extent, display.swapchain.currentImage().view, display.frame_index);
+        post_process_pipeline.recordBindPipeline(frame_encoder.buffer);
+        post_process_pipeline.recordPushDescriptors(frame_encoder.buffer, PostProcessPipeline.PushSetBindings {
+            .src_image = .{ .view = scene.camera.sensors.items[active_sensor].image.view },
+            .overlay_image = .{ .view = gui_image.view },
+            .dst_image = .{ .view = display.swapchain.currentImage().view },
+        });
+        post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
 
         // transition swapchain back to present mode
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .src_stage_mask = .{ .color_attachment_output_bit = true },
-                .src_access_mask = .{ .color_attachment_write_bit = true },
+                .src_stage_mask = .{ .compute_shader_bit = true },
+                .src_access_mask = .{ .shader_storage_write_bit = true },
                 .dst_stage_mask = .{ .color_attachment_output_bit = true },
                 .dst_access_mask = .{},
-                .old_layout = .color_attachment_optimal,
+                .old_layout = .general,
                 .new_layout = .present_src_khr,
                 .image = display.swapchain.currentImage().handle,
             }
@@ -520,15 +521,19 @@ pub fn main() !void {
                 const new_extent = window.getExtent();
                 try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
+                try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
+                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .storage_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
             }
         } else |err| if (err == error.OutOfDateKHR) {
             const new_extent = window.getExtent();
             try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
             try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
+            try frame_encoder.attachResource(gui_image);
             scene.camera.sensors.items.len -= 1;
             active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
+            gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .storage_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
         } else return err;
 
         window.pollEvents();
@@ -606,7 +611,7 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
         imgui.primWriteIdx(draw_list, start + @as(imgui.DrawIdx, @intCast(spectral_line.len)));
     }
 
-    const points = spectral_line ++ [_]F32x3 { F32x3.splat(0.8) };
+    const points = spectral_line ++ [_]F32x3 { F32x3.splat(1.0) };
     for (points) |point| {
         const rgb = color.XYZToBT709(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
         const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));

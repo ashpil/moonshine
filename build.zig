@@ -89,6 +89,7 @@ pub fn build(b: *std.Build) !void {
                     .{ .name = "engine", .module = engine },
                     .{ .name = "shaders", .module = makeShadersModule(b, shader_source, &[_]ShaderImport {
                         ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/input.hlsl", }, .name = "input" },
+                        ShaderImport { .shader = Shader { .type = .compute, .path = "src/bin/online/post_process.hlsl" }, .name = "post_process", },
                     }) },
                 },
             }),

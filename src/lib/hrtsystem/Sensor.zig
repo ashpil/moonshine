@@ -13,7 +13,7 @@ sample_count: u32,
 const Self = @This();
 
 pub fn create(vc: *const VulkanContext, extent: vk.Extent2D, name: [:0]const u8) !Self {
-    const image = try Image.create(vc, extent, .{ .storage_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat, false, name);
+    const image = try Image.create(vc, extent, .{ .storage_bit = true, .sampled_bit = true, .transfer_src_bit = true, }, .r32g32b32a32_sfloat, false, name);
     errdefer image.destroy(vc);
 
     return Self {
