@@ -411,27 +411,44 @@ pub fn main() !void {
 
         if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
-            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.*, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
+            frame_encoder.barrier(&[_]Encoder.ImageBarrier {
+                Encoder.ImageBarrier {
+                    .src_stage_mask = .{ .blit_bit = true },
+                    .src_access_mask = .{ .transfer_read_bit = true },
+                    .dst_stage_mask = .{ .compute_shader_bit = true },
+                    .dst_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                    .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .transfer_src_optimal,
+                    .new_layout = .general,
+                    .image = scene.camera.sensors.items[active_sensor].image.handle,
+                }
+            }, &.{});
             pipeline.recordBindPipeline(frame_encoder.buffer);
             pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
             pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
             pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
             pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
-            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.*, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
         }
 
-        // transition swap image to one we can blit to
-        frame_encoder.barrier(&[_]Encoder.ImageBarrier {
-            Encoder.ImageBarrier {
-                .src_stage_mask = .{ .color_attachment_output_bit = true },
-                .src_access_mask = .{ .color_attachment_read_bit = true },
-                .dst_stage_mask = .{ .blit_bit = true },
-                .dst_access_mask = .{ .transfer_write_bit = true },
-                .old_layout = .undefined,
-                .new_layout = .transfer_dst_optimal,
-                .image = display.swapchain.currentImage().handle,
-            }
-        }, &.{});
+        // transition swap image to one we can blit to and sensor image to one we can blit from
+        const swap_barrier = Encoder.ImageBarrier {
+            .src_stage_mask = .{ .color_attachment_output_bit = true },
+            .src_access_mask = .{ .color_attachment_read_bit = true },
+            .dst_stage_mask = .{ .blit_bit = true },
+            .dst_access_mask = .{ .transfer_write_bit = true },
+            .old_layout = .undefined,
+            .new_layout = .transfer_dst_optimal,
+            .image = display.swapchain.currentImage().handle,
+        };
+        const sensor_barrier = Encoder.ImageBarrier {
+            .src_stage_mask = .{ .compute_shader_bit = true },
+            .src_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+            .dst_stage_mask = .{ .blit_bit = true },
+            .dst_access_mask = .{ .transfer_read_bit = true },
+            .old_layout = .general,
+            .new_layout = .transfer_src_optimal,
+            .image = scene.camera.sensors.items[active_sensor].image.handle,
+        };
+        frame_encoder.barrier(if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) &[_]Encoder.ImageBarrier { swap_barrier, sensor_barrier } else &[_]Encoder.ImageBarrier { swap_barrier }, &.{});
 
         // blit storage image onto swap image
         const subresource = vk.ImageSubresourceLayers{

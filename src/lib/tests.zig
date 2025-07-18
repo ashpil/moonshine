@@ -57,7 +57,15 @@ const TestingContext = struct {
         try self.encoder.begin();
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(self.encoder, .{ .compute_shader_bit = true }, .{});
+        self.encoder.barrier(&[_]Encoder.ImageBarrier {
+            Encoder.ImageBarrier {
+                .dst_stage_mask = .{ .compute_shader_bit = true },
+                .dst_access_mask = .{ .shader_storage_write_bit = true },
+                .old_layout = .undefined,
+                .new_layout = .general,
+                .image = scene.camera.sensors.items[0].image.handle,
+            }
+        }, &.{});
 
         // bind our stuff
         pipeline.recordBindPipeline(self.encoder.buffer);
@@ -73,35 +81,33 @@ const TestingContext = struct {
 
             // if not last invocation, need barrier cuz we write to images
             if (sample_count != spp) {
-                self.encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
-                    .image_memory_barrier_count = 1,
-                    .p_image_memory_barriers = &[_]vk.ImageMemoryBarrier2 {
-                        .{
-                            .src_stage_mask = .{ .compute_shader_bit = true },
-                            .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                            .dst_stage_mask = .{ .compute_shader_bit = true },
-                            .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                            .old_layout = .general,
-                            .new_layout = .general,
-                            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-                            .image = scene.camera.sensors.items[0].image.handle,
-                            .subresource_range = .{
-                                .aspect_mask = .{ .color_bit = true },
-                                .base_mip_level = 0,
-                                .level_count = 1,
-                                .base_array_layer = 0,
-                                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-                            },
-                        }
+                self.encoder.barrier(&[_]Encoder.ImageBarrier {
+                    Encoder.ImageBarrier {
+                        .src_stage_mask = .{ .compute_shader_bit = true },
+                        .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                        .dst_stage_mask = .{ .compute_shader_bit = true },
+                        .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                        .old_layout = .general,
+                        .new_layout = .general,
+                        .image = scene.camera.sensors.items[0].image.handle,
                     },
-                });
+                }, &.{});
             }
             scene.camera.sensors.items[0].sample_count += 1;
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(self.encoder, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
+        self.encoder.barrier(&[_]Encoder.ImageBarrier {
+            Encoder.ImageBarrier {
+                .src_stage_mask = .{ .compute_shader_bit = true },
+                .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                .dst_stage_mask = .{ .copy_bit = true },
+                .dst_access_mask = .{ .transfer_read_bit = true },
+                .old_layout = .general,
+                .new_layout = .transfer_src_optimal,
+                .image = scene.camera.sensors.items[0].image.handle,
+            }
+        }, &.{});
 
         // copy output image to host-visible staging buffer
         self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, self.output_buffer.handle);

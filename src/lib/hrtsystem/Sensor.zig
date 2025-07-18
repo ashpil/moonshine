@@ -27,40 +27,6 @@ pub fn aspectRatio(self: Self) f32 {
     return @as(f32, @floatFromInt(self.extent.width)) / @as(f32, @floatFromInt(self.extent.height));
 }
 
-// intended to be used in a loop, e.g
-//
-// while rendering:
-//   recordPrepareForCapture(...)
-//   ...
-//   recordPrepareForCopy(...)
-pub fn recordPrepareForCapture(self: *const Self, encoder: Encoder, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
-    encoder.barrier(&[_]Encoder.ImageBarrier {
-        Encoder.ImageBarrier {
-            .src_stage_mask = copy_stage,
-            .src_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
-            .dst_stage_mask = capture_stage,
-            .dst_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-            .old_layout = if (self.sample_count == 0) .undefined else .transfer_src_optimal,
-            .new_layout = .general,
-            .image = self.image.handle,
-        }
-    }, &.{});
-}
-
-pub fn recordPrepareForCopy(self: *const Self, encoder: Encoder, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
-    encoder.barrier(&[_]Encoder.ImageBarrier {
-        Encoder.ImageBarrier {
-            .src_stage_mask = capture_stage,
-            .src_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-            .dst_stage_mask = copy_stage,
-            .dst_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
-            .old_layout = .general,
-            .new_layout = .transfer_src_optimal,
-            .image = self.image.handle,
-        }
-    }, &.{});
-}
-
 pub fn clear(self: *Self) void {
     self.sample_count = 0;
 }
