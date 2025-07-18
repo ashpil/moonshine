@@ -131,37 +131,39 @@ pub fn XYZToBT709(XYZ: F32x3) F32x3 {
     return mat.mul(XYZ);
 }
 
-fn sRGBToBT709LinearScalar(value: f32) f32 {
-    if (value <= 0.04045) {
-        return value / 12.92;
-    } else {
-        return math.pow(f32, (value + 0.055) / 1.055, 2.4);
+const srgb = struct {
+    fn scalarEOTF(value: f32) f32 {
+        if (value <= 0.04045) {
+            return value / 12.92;
+        } else {
+            return math.pow(f32, (value + 0.055) / 1.055, 2.4);
+        }
     }
-}
 
-fn linearBT709TosRGBScalar(value: f32) f32 {
-    if (value <= 0.0031308) {
-        return value * 12.92;
-    } else {
-        return 1.055 * math.pow(f32, value, 1.0 / 2.4) - 0.055;
+    fn scalarInvEOTF(value: f32) f32 {
+        if (value <= 0.0031308) {
+            return value * 12.92;
+        } else {
+            return 1.055 * math.pow(f32, value, 1.0 / 2.4) - 0.055;
+        }
     }
-}
 
-pub fn linearBT709TosRGB(color: F32x3) F32x3 {
-    return F32x3.new(.{
-        linearBT709TosRGBScalar(color.element(0)),
-        linearBT709TosRGBScalar(color.element(1)),
-        linearBT709TosRGBScalar(color.element(2)),
-    });
-}
+    pub fn EOTF(color: F32x3) F32x3 {
+        return F32x3.new(.{
+            scalarEOTF(color.element(0)),
+            scalarEOTF(color.element(1)),
+            scalarEOTF(color.element(2)),
+        });
+    }
 
-pub fn sRGBToBT709Linear(color: F32x3) F32x3 {
-    return F32x3.new(.{
-        sRGBToBT709LinearScalar(color.element(0)),
-        sRGBToBT709LinearScalar(color.element(1)),
-        sRGBToBT709LinearScalar(color.element(2)),
-    });
-}
+    pub fn invEOTF(color: F32x3) F32x3 {
+        return F32x3.new(.{
+            scalarInvEOTF(color.element(0)),
+            scalarInvEOTF(color.element(1)),
+            scalarInvEOTF(color.element(2)),
+        });
+    }
+};
 
 pub const Primaries = union(enum) {
     named: Named,

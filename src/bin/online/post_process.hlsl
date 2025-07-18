@@ -9,9 +9,9 @@
 // returns linear color with BT709 primaries
 float3 applyImgui(const float3 linearSRGBColor, const float4 imguiPremultipliedAlpha) {
     // imgui is not color aware at all. to match its default behavior, all blending with it must be done in nonlinear srgb
-    const float3 nonlinearSrgbColor = srgbTransferFunctionInverse(saturate(linearSRGBColor));
+    const float3 nonlinearSrgbColor = srgb::InvEOTF(saturate(linearSRGBColor));
     const float3 colorNonlinearSrgb = nonlinearSrgbColor * (1 - imguiPremultipliedAlpha.a) + imguiPremultipliedAlpha.rgb;
-    return srgbTransferFunction(colorNonlinearSrgb);
+    return srgb::EOTF(colorNonlinearSrgb);
 }
 
 [numthreads(8, 8, 1)]
@@ -25,5 +25,5 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 
-    dstImage[pixelIndex] = float4(srgbTransferFunctionInverse(dstColor), 1.0);
+    dstImage[pixelIndex] = float4(srgb::InvEOTF(dstColor), 1.0);
 }
