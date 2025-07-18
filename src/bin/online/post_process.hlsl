@@ -6,6 +6,11 @@
 [[vk::binding(1, 0)]] Texture2D<float4> imguiPremultipliedAlphaImage; // imgui conventions with premultipled alpha
 [[vk::image_format("unknown")]] [[vk::binding(2, 0)]] RWTexture2D<float4> dstImage; // assumed to be sRGB
 
+struct PushConsts {
+    float srcImageSceneReferredToDisplayReferredScale;
+};
+[[vk::push_constant]] PushConsts pushConsts;
+
 // returns linear color with BT709 primaries
 float3 applyImgui(const float3 linearSRGBColor, const float4 imguiPremultipliedAlpha) {
     // imgui is not color aware at all. to match its default behavior, all blending with it must be done in nonlinear srgb
@@ -21,7 +26,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     if (any(pixelIndex >= dstImageSize)) return;
 
-    const float3 srcColor = srcImage[pixelIndex];
+    const float3 srcColor = srcImage[pixelIndex] * pushConsts.srcImageSceneReferredToDisplayReferredScale;
 
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 

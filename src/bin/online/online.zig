@@ -76,6 +76,9 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
 const PostProcessPipeline = core.pipeline.Pipeline(.{
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
     .shader_source = shaders.post_process,
+    .PushConstants = extern struct {
+        src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
+    },
     .PushSetBindings = struct {
         src_image: core.pipeline.SampledImage,
         overlay_image: core.pipeline.SampledImage,
@@ -155,6 +158,7 @@ pub fn main() !void {
     var current_clicked_color = F32x3.new(.{0.0, 0.0, 0.0});
     var frame_index: u32 = 0;
     var gui_open: bool = true;
+    var scene_referred_to_display_referred_scale: f32 = 1.0;
 
     while (!window.shouldClose()) {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
@@ -195,6 +199,7 @@ pub fn main() !void {
                 } else {
                     imgui.text("Unable to create color manager; assuming sRGB");
                 }
+                _ = imgui.dragScalar(f32, "Scene Referred To Display Referred Scale", &scene_referred_to_display_referred_scale, scene_referred_to_display_referred_scale / 10.0, 0.0001, std.math.inf(f32));
             }
             if (imgui.collapsingHeader("Scene")) {
                 try imgui.textFmt("Texture count: {}", .{scene.world.materials.textures.data.len});
@@ -497,6 +502,9 @@ pub fn main() !void {
             .src_image = .{ .view = scene.camera.sensors.items[active_sensor].image.view },
             .overlay_image = .{ .view = gui_image.view },
             .dst_image = .{ .view = display.swapchain.currentImage().view },
+        });
+        post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
+            .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
 
