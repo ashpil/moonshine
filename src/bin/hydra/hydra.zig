@@ -336,7 +336,7 @@ pub const HdMoonshine = struct {
         });
 
         // prepare our stuff
-        self.camera.sensors.items[sensor].recordPrepareForCapture(self.encoder.buffer, .{ .compute_shader_bit = true }, .{});
+        self.camera.sensors.items[sensor].recordPrepareForCapture(self.encoder, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         self.pipeline.recordBindPipeline(self.encoder.buffer);
@@ -350,7 +350,7 @@ pub const HdMoonshine = struct {
         self.pipeline.recordDispatchThreads2D(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
 
         // copy our stuff
-        self.camera.sensors.items[sensor].recordPrepareForCopy(self.encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
+        self.camera.sensors.items[sensor].recordPrepareForCopy(self.encoder, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         self.encoder.copyImageToBuffer(self.camera.sensors.items[sensor].image.handle, .transfer_src_optimal, self.camera.sensors.items[sensor].extent, self.output_buffers.items[sensor].handle);

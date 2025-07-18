@@ -33,52 +33,32 @@ pub fn aspectRatio(self: Self) f32 {
 //   recordPrepareForCapture(...)
 //   ...
 //   recordPrepareForCopy(...)
-pub fn recordPrepareForCapture(self: *const Self, command_buffer: VulkanContext.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo{
-        .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2{
+pub fn recordPrepareForCapture(self: *const Self, encoder: Encoder, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
+    encoder.barrier(&[_]Encoder.ImageBarrier {
+        Encoder.ImageBarrier {
             .src_stage_mask = copy_stage,
             .src_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
             .dst_stage_mask = capture_stage,
             .dst_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .old_layout = if (self.sample_count == 0) .undefined else .transfer_src_optimal,
             .new_layout = .general,
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = self.image.handle,
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        })[0..1],
-    });
+        }
+    }, &.{});
 }
 
-pub fn recordPrepareForCopy(self: *const Self, command_buffer: VulkanContext.CommandBuffer, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo{
-        .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
+pub fn recordPrepareForCopy(self: *const Self, encoder: Encoder, capture_stage: vk.PipelineStageFlags2, copy_stage: vk.PipelineStageFlags2) void {
+    encoder.barrier(&[_]Encoder.ImageBarrier {
+        Encoder.ImageBarrier {
             .src_stage_mask = capture_stage,
             .src_access_mask = if (self.sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .dst_stage_mask = copy_stage,
             .dst_access_mask = if (!std.meta.eql(copy_stage, .{})) .{ .transfer_read_bit = true } else .{},
             .old_layout = .general,
             .new_layout = .transfer_src_optimal,
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = self.image.handle,
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        })[0..1],
-    });
+        }
+    }, &.{});
 }
 
 pub fn clear(self: *Self) void {

@@ -411,13 +411,13 @@ pub fn main() !void {
 
         if (max_sample_count != 0 and scene.camera.sensors.items[active_sensor].sample_count > max_sample_count) scene.camera.sensors.items[active_sensor].clear();
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
-            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.buffer, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[active_sensor].recordPrepareForCapture(frame_encoder.*, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
             pipeline.recordBindPipeline(frame_encoder.buffer);
             pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
             pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
             pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
             pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
-            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.buffer, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
+            scene.camera.sensors.items[active_sensor].recordPrepareForCopy(frame_encoder.*, .{ .compute_shader_bit = true }, .{ .blit_bit = true });
         }
 
         // transition swap image to one we can blit to

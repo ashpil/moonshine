@@ -112,7 +112,7 @@ pub fn main() !void {
         try encoder.begin();
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(encoder.buffer, .{ .compute_shader_bit = true }, .{});
+        scene.camera.sensors.items[0].recordPrepareForCapture(encoder, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(encoder.buffer);
@@ -156,7 +156,7 @@ pub fn main() !void {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(encoder, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy rendered image to host-visible staging buffer
         encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, output_buffer.handle);

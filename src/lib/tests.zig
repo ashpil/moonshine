@@ -57,7 +57,7 @@ const TestingContext = struct {
         try self.encoder.begin();
 
         // prepare our stuff
-        scene.camera.sensors.items[0].recordPrepareForCapture(self.encoder.buffer, .{ .compute_shader_bit = true }, .{});
+        scene.camera.sensors.items[0].recordPrepareForCapture(self.encoder, .{ .compute_shader_bit = true }, .{});
 
         // bind our stuff
         pipeline.recordBindPipeline(self.encoder.buffer);
@@ -101,7 +101,7 @@ const TestingContext = struct {
         }
 
         // copy our stuff
-        scene.camera.sensors.items[0].recordPrepareForCopy(self.encoder.buffer, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
+        scene.camera.sensors.items[0].recordPrepareForCopy(self.encoder, .{ .compute_shader_bit = true }, .{ .copy_bit = true });
 
         // copy output image to host-visible staging buffer
         self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, self.output_buffer.handle);
