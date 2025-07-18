@@ -1,5 +1,5 @@
 #include "../../lib/shaders/utils/helpers.hlsl"
-#include "../../lib/shaders/utils/math.hlsl"
+#include "../../lib/shaders/utils/color.hlsl"
 
 // all images should be same size
 [[vk::binding(0, 0)]] Texture2D<float3> srcImage; // assumed to be linear, sRGB primaries
