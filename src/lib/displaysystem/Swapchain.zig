@@ -3,6 +3,7 @@ const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
 const VulkanContext = engine.core.VulkanContext;
+const Encoder = engine.core.Encoder;
 const vk_helpers = engine.core.vk_helpers;
 
 const SwapchainError = error {
@@ -11,25 +12,25 @@ const SwapchainError = error {
 
 pub const max_image_count = 4;
 
-const Image = struct {
+pub const Image = struct {
     handle: vk.Image,
     view: vk.ImageView,
 };
 
-surface: vk.SurfaceKHR,
-handle: vk.SwapchainKHR,
-images: std.BoundedArray(Image, max_image_count),
-image_index: u32,
-extent: vk.Extent2D,
+handle: vk.SwapchainKHR = .null_handle,
+images: std.BoundedArray(Image, max_image_count) = .{},
+extent: vk.Extent2D = .{
+    .width = 0,
+    .height = 0,
+},
 
 const Self = @This();
 
-// takes ownership of surface
 pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !Self {
-    return try createFromOld(vc, ideal_extent, surface, transient_allocator, .null_handle);
+    return try createFromOld(vc, ideal_extent, surface, transient_allocator, .{});
 }
 
-fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator, old_handle: vk.SwapchainKHR) !Self {
+pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator, old: Self) !Self {
     const settings = try SwapSettings.find(vc, ideal_extent, surface, transient_allocator);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
@@ -49,7 +50,7 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = settings.present_mode,
         .clipped = vk.TRUE,
-        .old_swapchain = old_handle,
+        .old_swapchain = old.handle,
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
@@ -88,27 +89,14 @@ fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surface: v
 
 
     return Self {
-        .surface = surface,
         .handle = handle,
         .images = images,
-        .image_index = undefined, // this is odd, is it the best?
         .extent = settings.extent,
     };
 }
 
-pub fn currentImage(self: *const Self) Image {
-    return self.images.get(self.image_index);
-}
-
-// returns old handle
-pub fn recreate(self: *Self, vc: *const VulkanContext, extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !vk.SwapchainKHR {
-    const old = self.handle;
-    self.* = try createFromOld(vc, extent, self.surface, transient_allocator, self.handle);
-    for (self.images.slice()) |image| vc.device.destroyImageView(image.view, null);
-    return old;
-}
-
-pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
+pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !u32 {
+    // ignore suboptimal here, better to handle on present
     const result = try vc.device.acquireNextImage2KHR(&.{
         .swapchain = self.handle,
         .timeout = std.math.maxInt(u64),
@@ -116,24 +104,27 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
         .fence = .null_handle,
         .device_mask = 1,
     });
-    self.image_index = result.image_index;
-    return result.result;
+    return result.image_index;
 }
 
-pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaphore) !vk.Result {
+pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaphore, image_index: u32) !vk.Result {
     return try vc.queue.presentKHR(&vk.PresentInfoKHR {
         .wait_semaphore_count = 1,
         .p_wait_semaphores = (&semaphore)[0..1],
         .swapchain_count = 1,
         .p_swapchains = (&self.handle)[0..1],
-        .p_image_indices = (&self.image_index)[0..1],
+        .p_image_indices = (&image_index)[0..1],
     });
 }
 
 pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
     for (self.images.slice()) |image| vc.device.destroyImageView(image.view, null);
     vc.device.destroySwapchainKHR(self.handle, null);
-    vc.instance.destroySurfaceKHR(self.surface, null);
+}
+
+pub fn attachToEncoder(self: *const Self, encoder: *Encoder) !void {
+    for (self.images.slice()) |image| try encoder.attachResource(image.view);
+    try encoder.attachResource(self.handle);
 }
 
 const SwapSettings = struct {

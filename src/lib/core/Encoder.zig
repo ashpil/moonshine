@@ -61,6 +61,9 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
 
 // attach resource to the lifetime of this encoder, to be destroyed
 // when the encoder is no longer active
+// the annoying bit about this is that it makes destruction (or delayed destruction)
+// failable due to the allocation. perhaps one should need to allocate this upfront?
+// you should need to know the maximum number of resources you might destroy on encoder begin
 pub fn attachResource(self: *Self, resource: anytype) !void {
     try self.destruction_queue.append(std.heap.page_allocator, resource);
 }

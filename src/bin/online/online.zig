@@ -104,8 +104,7 @@ pub fn main() !void {
     const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ hrtsystem.required_device_extensions), &hrtsystem.required_device_features, queueFamilyAcceptable);
     defer context.destroy(allocator);
 
-    const window_extent = window.getExtent();
-    var display = try Display.create(&context, window_extent, try window.createSurface(context.instance.handle), allocator);
+    var display = try Display.create(&context, window, allocator);
     defer display.destroy(&context);
 
     var encoder = try Encoder.create(&context, "main");
@@ -134,7 +133,7 @@ pub fn main() !void {
     defer post_process_pipeline.destroy(&context);
 
     const gui_format = .r8g8b8a8_unorm;
-    var gui_image = try Image.create(&context, window_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+    var gui_image = try Image.create(&context, window.getExtent(), .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
     defer gui_image.destroy(&context);
 
     try encoder.begin();
@@ -165,7 +164,7 @@ pub fn main() !void {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
                 const new_extent = window.getExtent();
-                context.device.destroySwapchainKHR(try display.recreate(&context, new_extent, allocator), null);
+                (try display.recreate(&context, new_extent, allocator, )).destroy(&context);
                 scene.camera.sensors.items[active_sensor].destroy(&context);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
@@ -476,7 +475,7 @@ pub fn main() !void {
             .dst_access_mask = .{ .shader_storage_write_bit = true },
             .old_layout = .undefined,
             .new_layout = .general,
-            .image = display.swapchain.currentImage().handle,
+            .image = display.currentImage().handle,
         };
         const sensor_barrier = Encoder.ImageBarrier {
             .src_stage_mask = .{ .compute_shader_bit = true },
@@ -502,7 +501,7 @@ pub fn main() !void {
         post_process_pipeline.recordPushDescriptors(frame_encoder.buffer, PostProcessPipeline.PushSetBindings {
             .src_image = .{ .view = scene.camera.sensors.items[active_sensor].image.view },
             .overlay_image = .{ .view = gui_image.view },
-            .dst_image = .{ .view = display.swapchain.currentImage().view },
+            .dst_image = .{ .view = display.currentImage().view },
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
@@ -518,7 +517,7 @@ pub fn main() !void {
                 .dst_access_mask = .{},
                 .old_layout = .general,
                 .new_layout = .present_src_khr,
-                .image = display.swapchain.currentImage().handle,
+                .image = display.currentImage().handle,
             }
         }, &.{});
 
@@ -528,7 +527,7 @@ pub fn main() !void {
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
             if (ok == vk.Result.suboptimal_khr) {
                 const new_extent = window.getExtent();
-                try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
+                try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
@@ -537,7 +536,7 @@ pub fn main() !void {
             }
         } else |err| if (err == error.OutOfDateKHR) {
             const new_extent = window.getExtent();
-            try frame_encoder.attachResource(try display.recreate(&context, new_extent, allocator));
+            try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
             try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
             try frame_encoder.attachResource(gui_image);
             scene.camera.sensors.items.len -= 1;

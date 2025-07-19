@@ -33,15 +33,18 @@ const Self = @This();
 frames: [frames_in_flight]Frame,
 frame_index: u8,
 
+swapchain_image_index: u32,
 swapchain: Swapchain,
+surface: vk.SurfaceKHR,
 
 timestamp_period: if (metrics) f32 else void,
 last_frame_time_ns: if (metrics) f64 else void,
 
-// uses initial_extent as the render extent -- that is, the buffer that is actually being rendered into, irrespective of window size
-// then during rendering the render buffer is blitted into the swapchain images
-pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !Self {
-    var swapchain = try Swapchain.create(vc, initial_extent, surface, transient_allocator);
+pub fn create(vc: *const VulkanContext, window: engine.Window, transient_allocator: std.mem.Allocator) !Self {
+    const surface = try window.createSurface(vc.instance.handle);
+    errdefer vc.instance.destroySurfaceKHR(surface, null);
+
+    var swapchain = try Swapchain.create(vc, window.getExtent(), surface, transient_allocator);
     errdefer swapchain.destroy(vc);
 
     var frames: [frames_in_flight]Frame = undefined;
@@ -61,8 +64,10 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
 
     return Self {
         .swapchain = swapchain,
+        .surface = surface,
         .frames = frames,
         .frame_index = 0,
+        .swapchain_image_index = undefined, // hmm
 
         .timestamp_period = timestamp_period,
         .last_frame_time_ns = if (metrics) 0.0 else {},
@@ -71,6 +76,7 @@ pub fn create(vc: *const VulkanContext, initial_extent: vk.Extent2D, surface: vk
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     self.swapchain.destroy(vc);
+    vc.instance.destroySurfaceKHR(self.surface, null);
     inline for (&self.frames) |*frame| {
         frame.destroy(vc);
     }
@@ -79,7 +85,7 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
 pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
     const frame = &self.frames[self.frame_index];
 
-    _ = try self.swapchain.acquireNextImage(vc, frame.image_acquired);
+    self.swapchain_image_index = try self.swapchain.acquireNextImage(vc, frame.image_acquired);
 
     try frame.encoder.begin();
 
@@ -88,8 +94,15 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
     return &frame.encoder;
 }
 
-pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !vk.SwapchainKHR {
-    return try self.swapchain.recreate(vc, new_extent, transient_allocator);
+pub fn currentImage(self: *const Self) Swapchain.Image {
+    return self.swapchain.images.get(self.swapchain_image_index);
+}
+
+// returns old swapchain
+pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !Swapchain {
+    const old_swapchain = self.swapchain;
+    self.swapchain = try Swapchain.createFromOld(vc, new_extent, self.surface, transient_allocator, old_swapchain);
+    return old_swapchain;
 }
 
 pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
@@ -122,7 +135,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
         // may still be in use by the previous usage of this swapchain image.
         // fix this with VK_EXT_swapchain_maintenance1 once it becomes
         // more widely supported.
-        break :blk self.swapchain.present(vc, frame.command_completed);
+        break :blk self.swapchain.present(vc, frame.command_completed, self.swapchain_image_index);
     };
 
     self.frame_index = (self.frame_index + 1) % frames_in_flight;
