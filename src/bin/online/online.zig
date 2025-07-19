@@ -528,9 +528,9 @@ pub fn main() !void {
             // only update frame count if we presented successfully
             scene.camera.sensors.items[active_sensor].sample_count += 1;
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
-            if (ok == .suboptimal_khr) {
+            const new_extent = window.getExtent();
+            if (ok == .suboptimal_khr or !std.meta.eql(new_extent, display.swapchain.extent)) {
                 // presentation succeeded, need to keep resources alive until frame finishes
-                const new_extent = window.getExtent();
                 try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
