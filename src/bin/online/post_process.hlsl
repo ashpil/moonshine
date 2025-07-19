@@ -8,6 +8,7 @@
 
 struct PushConsts {
     float srcImageSceneReferredToDisplayReferredScale;
+    TransferFunction dstTransferFunction;
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
@@ -30,5 +31,5 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 
-    dstImage[pixelIndex] = float4(srgb::InvEOTF(dstColor), 1.0);
+    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColor), 1.0);
 }

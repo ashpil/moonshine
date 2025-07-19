@@ -219,7 +219,7 @@ pub const Primaries = union(enum) {
     };
 };
 
-pub const TransferFunction = enum {
+pub const TransferFunction = enum(u32) {
     bt1886,
     gamma22,
     gamma28,

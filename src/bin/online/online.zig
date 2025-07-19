@@ -74,6 +74,7 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .shader_source = shaders.post_process,
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
+        dst_transfer_function: engine.color.TransferFunction,
     },
     .PushSetBindings = struct {
         src_image: core.pipeline.SampledImage,
@@ -509,6 +510,7 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
+            .dst_transfer_function = .srgb,
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
 
