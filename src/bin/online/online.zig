@@ -69,10 +69,6 @@ const Config = struct {
     }
 };
 
-fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: u32) bool {
-    return Window.getPhysicalDevicePresentationSupport(instance, device, idx);
-}
-
 const PostProcessPipeline = core.pipeline.Pipeline(.{
     .local_size = vk.Extent3D { .width = 8, .height = 8, .depth = 1 },
     .shader_source = shaders.post_process,
@@ -101,7 +97,12 @@ pub fn main() !void {
     const maybe_color_manager = Window.ColorManager.create(&window, allocator) catch null;
     defer if (maybe_color_manager) |color_manager| color_manager.destroy(allocator);
 
-    const context = try VulkanContext.create(allocator, "online", &window.getRequiredInstanceExtensions(), &(displaysystem.required_device_extensions ++ hrtsystem.required_device_extensions), &hrtsystem.required_device_features, queueFamilyAcceptable);
+    const context = blk: {
+        const base_requirements = comptime hrtsystem.vulkan_requirements.merge(displaysystem.vulkan_requirements);
+        var requirements = base_requirements;
+        requirements.instance_extensions = base_requirements.instance_extensions ++ &window.getRequiredInstanceExtensions();
+        break :blk try VulkanContext.create(allocator, "online", requirements);
+    };
     defer context.destroy(allocator);
 
     var display = try Display.create(&context, window, allocator);

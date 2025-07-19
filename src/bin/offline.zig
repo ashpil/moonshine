@@ -84,7 +84,7 @@ pub fn main() !void {
     const config = try Config.fromCli(allocator);
     defer config.destroy(allocator);
 
-    const context = try VulkanContext.create(allocator, "offline", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
+    const context = try VulkanContext.create(allocator, "offline", engine.hrtsystem.vulkan_requirements);
     defer context.destroy(allocator);
 
     var encoder = try Encoder.create(&context, "main");

@@ -11,16 +11,18 @@ pub const ConstantSpectra = @import("ConstantSpectra.zig");
 pub const Sensor = @import("Sensor.zig");
 
 const vk = @import("vulkan");
+const VulkanRequirements = @import("../engine.zig").core.VulkanContext.VulkanRequirements;
 
-pub const required_device_extensions = [_][*:0]const u8{
-    vk.extensions.khr_deferred_host_operations.name,
-    vk.extensions.khr_acceleration_structure.name,
-    vk.extensions.khr_ray_query.name,
-};
-
-pub const required_device_features = vk.PhysicalDeviceRayQueryFeaturesKHR {
-    .p_next = @constCast(&vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
-        .acceleration_structure = vk.TRUE,
-    }),
-    .ray_query = vk.TRUE,
+pub const vulkan_requirements = VulkanRequirements {
+    .device_extensions = &[_][*:0]const u8{
+        vk.extensions.khr_deferred_host_operations.name,
+        vk.extensions.khr_acceleration_structure.name,
+        vk.extensions.khr_ray_query.name,
+    },
+    .features = &vk.PhysicalDeviceRayQueryFeaturesKHR {
+        .p_next = @constCast(&vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
+            .acceleration_structure = vk.TRUE,
+        }),
+        .ray_query = vk.TRUE,
+    },
 };

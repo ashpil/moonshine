@@ -37,7 +37,7 @@ const TestingContext = struct {
     output_buffer: core.mem.DownloadBuffer([4]f32),
 
     fn create(allocator: std.mem.Allocator, extent: vk.Extent2D) !TestingContext {
-        const vc = try VulkanContext.create(allocator, "engine-tests", &.{}, &engine.hrtsystem.required_device_extensions, &engine.hrtsystem.required_device_features, null);
+        const vc = try VulkanContext.create(allocator, "engine-tests", engine.hrtsystem.vulkan_requirements);
         errdefer vc.destroy(allocator);
 
         var encoder = try Encoder.create(&vc, "main");
