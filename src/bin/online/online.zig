@@ -163,11 +163,14 @@ pub fn main() !void {
     while (!window.shouldClose()) {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
+                // presentation failed, can destroy resources immediately
                 const new_extent = window.getExtent();
-                (try display.recreate(&context, new_extent, allocator, )).destroy(&context);
-                scene.camera.sensors.items[active_sensor].destroy(&context);
+                (try display.recreate(&context, new_extent, allocator)).destroy(&context);
+                scene.camera.sensors.items[active_sensor].image.destroy(&context);
+                gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
+                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
@@ -525,23 +528,25 @@ pub fn main() !void {
             // only update frame count if we presented successfully
             scene.camera.sensors.items[active_sensor].sample_count += 1;
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
-            if (ok == vk.Result.suboptimal_khr) {
+            if (ok == .suboptimal_khr) {
+                // presentation succeeded, need to keep resources alive until frame finishes
                 const new_extent = window.getExtent();
                 try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
-                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .storage_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
+                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
             }
         } else |err| if (err == error.OutOfDateKHR) {
+            // presentation failed, can destroy resources immediately
             const new_extent = window.getExtent();
-            try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
-            try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
-            try frame_encoder.attachResource(gui_image);
+            (try display.recreate(&context, new_extent, allocator)).destroy(&context);
+            scene.camera.sensors.items[active_sensor].image.destroy(&context);
+            gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;
             active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
-            gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .storage_bit = true, }, .r8g8b8a8_unorm, false, "gui image");
+            gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
         } else return err;
 
         window.pollEvents();
