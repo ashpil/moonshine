@@ -2,13 +2,10 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
+const color = engine.color;
 const VulkanContext = engine.core.VulkanContext;
 const Encoder = engine.core.Encoder;
 const vk_helpers = engine.core.vk_helpers;
-
-const SwapchainError = error {
-    InvalidSurfaceDimensions,
-};
 
 pub const max_image_count = 4;
 
@@ -23,6 +20,9 @@ extent: vk.Extent2D = .{
     .width = 0,
     .height = 0,
 },
+// invalid to read these if extent is (0, 0)
+primaries: color.Primaries.Named = undefined,
+transfer_function: color.TransferFunction = undefined,
 
 const Self = @This();
 
@@ -38,8 +38,8 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surfac
     const handle = try vc.device.createSwapchainKHR(&.{
         .surface = surface,
         .min_image_count = settings.image_count,
-        .image_format = settings.format.format,
-        .image_color_space = settings.format.color_space,
+        .image_format = settings.format,
+        .image_color_space = getVkColorSpace(settings.primaries, settings.transfer_function).?,
         .image_extent = settings.extent,
         .image_array_layers = 1,
         .image_usage = .{ .storage_bit = true },
@@ -68,7 +68,7 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surfac
         image.view = try vc.device.createImageView(&vk.ImageViewCreateInfo{
             .image = image_handle,
             .view_type = .@"2d",
-            .format = settings.format.format,
+            .format = settings.format,
             .components = vk.ComponentMapping{
                 .r = .identity,
                 .g = .identity,
@@ -92,6 +92,8 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, surfac
         .handle = handle,
         .images = images,
         .extent = settings.extent,
+        .primaries = settings.primaries,
+        .transfer_function = settings.transfer_function,
     };
 }
 
@@ -128,7 +130,9 @@ pub fn attachToEncoder(self: *const Self, encoder: *Encoder) !void {
 }
 
 const SwapSettings = struct {
-    format: vk.SurfaceFormatKHR,
+    format: vk.Format,
+    primaries: color.Primaries.Named,
+    transfer_function: color.TransferFunction,
     present_mode: vk.PresentModeKHR,
     image_count: u32,
     image_sharing_mode: vk.SharingMode,
@@ -138,9 +142,12 @@ const SwapSettings = struct {
     // updates mutable extent
     pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, surface);
+        const format, const primaries, const transfer_function = try findFormat(vc, surface, transient_allocator);
 
         return SwapSettings {
-            .format = try findFormat(vc, surface, transient_allocator),
+            .format = format,
+            .primaries = primaries,
+            .transfer_function = transfer_function,
             .present_mode = try findPresentMode(vc, surface),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else @min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = .exclusive,
@@ -163,22 +170,26 @@ const SwapSettings = struct {
         return present_modes[0];
     }
 
-    pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !vk.SurfaceFormatKHR {
-        const ideal = vk.SurfaceFormatKHR {
+    pub fn findFormat(vc: *const VulkanContext, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !std.meta.Tuple(&.{ vk.Format, color.Primaries.Named, color.TransferFunction}) {
+        const needed_primaries = color.Primaries.Named.bt709;
+        const needed_transfer_function = color.TransferFunction.srgb;
+        const needed_vk_color_space = getVkColorSpace(needed_primaries, needed_transfer_function);
+
+        const needed = vk.SurfaceFormatKHR {
             .format = .r8g8b8a8_unorm,
-            .color_space = .srgb_nonlinear_khr,
+            .color_space = needed_vk_color_space.?,
         };
 
         const formats = try vc.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(vc.physical_device.handle, surface, transient_allocator);
         defer transient_allocator.free(formats);
 
         for (formats) |format| {
-            if (std.meta.eql(format, ideal)) {
-                return ideal;
+            if (std.meta.eql(format, needed)) {
+                return .{ needed.format, needed_primaries, needed_transfer_function };
             }
         }
 
-        return formats[0];
+        return error.NeededFormatIsUnavailable;
     }
 
     pub fn calculateExtent(extent: vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !vk.Extent2D {
@@ -191,7 +202,25 @@ const SwapSettings = struct {
             return caps.current_extent;
         }
         if (extent.height == 0 and extent.width == 0) {
-            return SwapchainError.InvalidSurfaceDimensions;
+            return error.InvalidSurfaceDimensions;
         }
     }
 };
+
+fn getVkColorSpace(primaries: color.Primaries.Named, transfer_function: color.TransferFunction) ?vk.ColorSpaceKHR {
+    return switch (primaries) {
+        .bt709 => switch (transfer_function) {
+            .linear => .bt709_linear_ext,
+            .extended_linear => .extended_srgb_linear_ext,
+            .srgb => .srgb_nonlinear_khr,
+            .st2084_pq => null,
+        },
+        .bt2020 => switch (transfer_function) {
+            .linear => .bt2020_linear_ext,
+            .extended_linear => null,
+            .srgb => null,
+            .st2084_pq => .hdr10_st2084_ext,
+        },
+    };
+}
+

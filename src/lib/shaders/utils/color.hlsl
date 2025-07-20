@@ -2,7 +2,7 @@
 
 #include "math.hlsl"
 
-namespace srgb {
+namespace SRGB {
     template<typename T>
     T EOTF(T value) {
         return select(value <= 0.04045, value / 12.92, pow((value + 0.055) / 1.055, 2.4));
@@ -14,7 +14,7 @@ namespace srgb {
     }
 };
 
-namespace pq {
+namespace ST2084PQ {
     static float m_1 = 2610.0 / 16384.0;
     static float m_2 = (2523.0 / 4096.0) * 128.0;
 
@@ -88,35 +88,26 @@ static const Primaries srgbPrimaries = {
 };
 
 enum class TransferFunction: uint {
-    BT1886,
-    Gamma22,
-    Gamma28,
-    ST240,
-    ExtLinear,
-    Log100,
-    Log316,
-    XVYCC,
+    Linear,
+    ExtendedLinear,
     SRGB,
-    ExtSrgb,
     ST2084PQ,
-    ST428,
-    HLG,
 };
 
 template<typename T>
 T toLinear(TransferFunction tf, T value) {
     switch (tf) {
-        case TransferFunction::SRGB: {
-            return srgb::EOTF(value);
+        case TransferFunction::Linear: {
+            return saturate(value);
         }
-        case TransferFunction::ExtLinear: {
+        case TransferFunction::ExtendedLinear: {
             return value;
         }
-        case TransferFunction::ST2084PQ: {
-            return pq::EOTF(value);
+        case TransferFunction::SRGB: {
+            return SRGB::EOTF(value);
         }
-        default: {
-            return 0.0 / 0.0; // TODO
+        case TransferFunction::ST2084PQ: {
+            return ST2084PQ::EOTF(value);
         }
     }
 }
@@ -124,17 +115,17 @@ T toLinear(TransferFunction tf, T value) {
 template<typename T>
 T fromLinear(TransferFunction tf, T value) {
     switch (tf) {
-        case TransferFunction::SRGB: {
-            return srgb::InvEOTF(value);
+        case TransferFunction::Linear: {
+            return saturate(value);
         }
-        case TransferFunction::ExtLinear: {
+        case TransferFunction::ExtendedLinear: {
             return value;
         }
-        case TransferFunction::ST2084PQ: {
-            return pq::InvEOTF(value);
+        case TransferFunction::SRGB: {
+            return SRGB::InvEOTF(value);
         }
-        default: {
-            return 0.0 / 0.0; // TODO
+        case TransferFunction::ST2084PQ: {
+            return ST2084PQ::InvEOTF(value);
         }
     }
 }

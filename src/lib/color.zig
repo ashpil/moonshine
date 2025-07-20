@@ -155,31 +155,13 @@ const srgb = struct {
 };
 
 pub const Primaries = union(enum) {
-    named: Named,
-    parametric: Parametric,
-
-    pub fn getParametric(self: Primaries) Parametric {
-        return switch (self) {
-            .named => |named| named.toParametric(),
-            .parametric => |parametric| parametric,
-        };
-    }
-
     pub const Named = enum {
-        srgb,
-        pal_m,
-        pal,
-        ntsc,
-        generic_film,
+        bt709,
         bt2020,
-        cie1931_xyz,
-        dci_p3,
-        display_p3,
-        adobe_rgb,
 
         pub fn toParametric(self: Named) Parametric {
             return switch (self) {
-                .srgb => .{
+                .bt709 => .{
                     .red = .new(.{0.64, 0.33}),
                     .green = .new(.{0.3, 0.6}),
                     .blue = .new(.{0.15, 0.06}),
@@ -193,7 +175,6 @@ pub const Primaries = union(enum) {
 
                     .white = .new(.{0.3127, 0.3290}),
                 },
-                else => unreachable, // TODO
             };
         }
     };
@@ -226,18 +207,9 @@ pub const Primaries = union(enum) {
 };
 
 pub const TransferFunction = enum(u32) {
-    bt1886,
-    gamma22,
-    gamma28,
-    st240,
-    ext_linear,
-    log_100,
-    log_316,
-    xvycc,
+    linear,
+    extended_linear,
     srgb,
-    ext_srgb,
     st2084_pq,
-    st428,
-    hlg,
 };
 

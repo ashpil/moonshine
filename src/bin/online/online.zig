@@ -96,9 +96,6 @@ pub fn main() !void {
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
 
-    const maybe_color_manager = Window.ColorManager.create(&window, allocator) catch null;
-    defer if (maybe_color_manager) |color_manager| color_manager.destroy(allocator);
-
     const context = blk: {
         const base_requirements = comptime hrtsystem.vulkan_requirements.merge(displaysystem.vulkan_requirements);
         var requirements = base_requirements;
@@ -190,21 +187,9 @@ pub fn main() !void {
                 try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             }
             if (imgui.collapsingHeader("Display")) {
-                if (maybe_color_manager) |color_manager| {
-                    const image_description = color_manager.getImageDescription();
-                    try imgui.textFmt("Minimum luminance: {d}cd/m^2", .{image_description.minimum_luminance});
-                    try imgui.textFmt("Maximum luminance: {d}cd/m^2", .{image_description.maximum_luminance});
-                    try imgui.textFmt("Reference luminance: {d}cd/m^2", .{image_description.reference_luminance});
-                    if (image_description.primaries == .named) {
-                        try imgui.textFmt("Primaries: {s}", .{@tagName(image_description.primaries.named)});
-                    }
-                    if (image_description.transfer_function) |transfer_function| {
-                        try imgui.textFmt("Transfer function: {s}", .{@tagName(transfer_function)});
-                    }
-                    drawChromaticityDiagram(image_description.primaries.getParametric());
-                } else {
-                    imgui.text("Unable to create color manager; assuming sRGB");
-                }
+                try imgui.textFmt("Primaries: {s}", .{@tagName(display.swapchain.primaries)});
+                try imgui.textFmt("Transfer function: {s}", .{@tagName(display.swapchain.transfer_function)});
+                drawChromaticityDiagram(display.swapchain.primaries.toParametric());
                 _ = imgui.dragScalar(f32, "Scene Referred To Display Referred Scale", &scene_referred_to_display_referred_scale, scene_referred_to_display_referred_scale / 10.0, 0.0001, std.math.inf(f32));
             }
             if (imgui.collapsingHeader("Scene")) {
@@ -511,8 +496,8 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
-            .dst_primaries = engine.color.Primaries.Named.srgb.toParametric(),
-            .dst_transfer_function = .srgb,
+            .dst_primaries = display.swapchain.primaries.toParametric(),
+            .dst_transfer_function = display.swapchain.transfer_function,
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
 
@@ -631,7 +616,7 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
 
     const points = spectral_line ++ [_]F32x3 { F32x3.splat(1.0) };
     for (points) |point| {
-        const rgb = color.Primaries.Named.srgb.toParametric().fromXYZ().mul(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
+        const rgb = color.Primaries.Named.bt709.toParametric().fromXYZ().mul(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
         const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));
         const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
 

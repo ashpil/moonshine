@@ -16,9 +16,9 @@ struct PushConsts {
 // returns linear color with BT709 primaries
 float3 applyImgui(const float3 linearSRGBColor, const float4 imguiPremultipliedAlpha) {
     // imgui is not color aware at all. to match its default behavior, all blending with it must be done in nonlinear srgb
-    const float3 nonlinearSrgbColor = srgb::InvEOTF(saturate(linearSRGBColor));
+    const float3 nonlinearSrgbColor = SRGB::InvEOTF(saturate(linearSRGBColor));
     const float3 colorNonlinearSrgb = nonlinearSrgbColor * (1 - imguiPremultipliedAlpha.a) + imguiPremultipliedAlpha.rgb;
-    return srgb::EOTF(colorNonlinearSrgb);
+    return SRGB::EOTF(colorNonlinearSrgb);
 }
 
 [numthreads(8, 8, 1)]

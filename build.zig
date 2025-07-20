@@ -13,12 +13,9 @@ pub fn build(b: *std.Build) !void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const optimize = b.standardOptimizeOption(.{});
 
-    const default_engine_options = EngineOptions.fromCli(b, target);
-
     // packages/libraries we'll need below
     const vulkan = makeVulkanModule(b);
-    const wayland = makeWaylandModule(b);
-    const glfw = try makeGlfwModule(b, vulkan, wayland, target, default_engine_options.wayland, default_engine_options.x11);
+    const glfw = try makeGlfwModule(b, vulkan, target);
     const imgui = makeDCImguiModule(b, glfw);
     const tinyexr = makeTinyExrModule(b);
     const wuffs = makeWuffsModule(b);
@@ -27,6 +24,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
     const hrtsystem_shaders = makeHrtsystemShaders(b, shader_source);
+    const default_engine_options = EngineOptions.fromCli(b);
 
     var compiles = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
 
@@ -37,7 +35,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, target, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, wayland, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
 
         const tests = b.addTest(.{
             .name = "gpu-tests",
@@ -77,7 +75,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, target, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, wayland, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
         const exe = b.addExecutable(.{
             .name = "online",
             .root_module = b.createModule(.{
@@ -104,7 +102,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, target, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, wayland, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_module = b.createModule(.{
@@ -127,7 +125,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, target, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, wayland, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
@@ -327,27 +325,12 @@ pub const EngineOptions = struct {
     gui: bool = true,
     shader_source_type: ShaderImport.SourceType = .embed,
 
-    // platforms
-    wayland: bool,
-    x11: bool,
+    fn fromCli(b: *std.Build) EngineOptions {
+        var options = EngineOptions {};
 
-    fn fromCli(b: *std.Build, target: std.Build.ResolvedTarget) EngineOptions {
-        var options = EngineOptions {
-            .wayland = target.result.os.tag == .linux,
-            .x11 = target.result.os.tag == .linux,
-        };
-
-        if (b.option(bool, "vk-validation", "Enable vulkan validation. (default: false)")) |vk_validation| {
+        if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
             options.vk_validation = if (vk_validation) .print else .ignore;
         }
-
-	if (b.option(bool, "wayland", "Support Wayland on Linux. (default: true)")) |wayland| {
-            options.wayland = wayland;
-	}
-
-	if (b.option(bool, "x11", "Support X11 on Linux. (default: true)")) |x11| {
-            options.x11 = x11;
-	}
 
         return options;
     }
@@ -360,8 +343,6 @@ pub const EngineOptions = struct {
         build_options.addOption(bool, "gui", self.gui);
         build_options.addOption(bool, "hrtsystem", self.hrtsystem);
         build_options.addOption(ShaderImport.SourceType, "shader_source_type", self.shader_source_type);
-
-        build_options.addOption(bool, "has_wayland", self.wayland);
 
         return build_options;
     }
@@ -419,7 +400,7 @@ fn makeHrtsystemShaders(b: *std.Build, shader_source: *std.Build.Module) *std.Bu
     });
 }
 
-fn makeEngineModule(b: *std.Build, target: std.Build.ResolvedTarget, options: EngineOptions,
+fn makeEngineModule(b: *std.Build, options: EngineOptions,
     shader_source: *std.Build.Module,
     hrtsystem_shaders: *std.Build.Module,
     vulkan: *std.Build.Module,
@@ -427,7 +408,6 @@ fn makeEngineModule(b: *std.Build, target: std.Build.ResolvedTarget, options: En
     tinyexr: *std.Build.Module,
     wuffs: *std.Build.Module,
     glfw: *std.Build.Module,
-    wayland: *std.Build.Module,
     imgui: *std.Build.Module,
 ) *std.Build.Module {
     var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
@@ -449,12 +429,7 @@ fn makeEngineModule(b: *std.Build, target: std.Build.ResolvedTarget, options: En
     }
 
     if (options.window) {
-        imports.appendSlice(if (target.result.os.tag == .linux and options.wayland) &[_]std.Build.Module.Import {
-            .{ .name = "glfw", .module = glfw },
-            .{ .name = "wayland", .module = wayland },
-        } else &[_]std.Build.Module.Import {
-            .{ .name = "glfw", .module = glfw },
-        }) catch @panic("OOM");
+        imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
     }
 
     if (options.gui) {
@@ -599,65 +574,37 @@ fn makeWuffsModule(b: *std.Build) *std.Build.Module {
     return module;
 }
 
-fn makeWaylandModule(b: *std.Build) *std.Build.Module {
-    const Scanner = @import("wayland_zig").Scanner;
-
-    const scanner = Scanner.create(b, .{
-        .wayland_xml = b.dependency("wayland", .{}).path("protocol/wayland.xml"),
-        .wayland_protocols = b.dependency("wayland_protocols", .{}).path("."),
-    });
-    scanner.addSystemProtocol("staging/color-management/color-management-v1.xml");
-
-    scanner.generate("wl_compositor", 1);
-    scanner.generate("wp_color_manager_v1", 1);
-
-    const wayland = b.createModule(.{ .root_source_file = scanner.result });
-
-    return wayland;
-}
-
-fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, wayland: *std.Build.Module, target: std.Build.ResolvedTarget, build_wayland: bool, build_x11: bool) !*std.Build.Module {
+fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.ResolvedTarget) !*std.Build.Module {
     const glfw = b.dependency("glfw", .{});
 
-    const is_linux = target.result.os.tag == .linux;
-
-    if (is_linux and (!build_wayland and !build_x11)) return error.NoSelectedLinuxDisplayServerProtocol;
-
     const write_files_step = b.addWriteFiles();
-    const file =
+    const root = write_files_step.add("glfw.zig",
         \\pub usingnamespace @cImport({
         \\    @cDefine("GLFW_INCLUDE_NONE", {});
         \\    @cInclude("GLFW/glfw3.h");
         \\});
         \\
+        \\const vk = @import("vulkan");
         \\const c = @This();
         \\
-        \\ // Vulkan
-        \\const vk = @import("vulkan");
         \\pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
         \\pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
-        \\
-    ;
-    const file_wayland_suffix =
-        \\ // Wayland
-        \\const wayland = @import("wayland").client;
-        \\pub extern fn glfwGetWaylandDisplay() ?*wayland.wl.Display;
-        \\pub extern fn glfwGetWaylandWindow(*c.GLFWwindow) ?*wayland.wl.Surface;
-    ;
-    const root = write_files_step.add("glfw.zig", if (is_linux and build_wayland) file ++ file_wayland_suffix else file);
+    );
 
     const module = b.createModule(.{
         .root_source_file = root,
         .link_libc = true,
         .optimize = .ReleaseFast,
         .target = target,
-        .imports = if (is_linux and build_wayland) &[_]std.Build.Module.Import {
-            .{ .name = "vulkan", .module = vulkan },
-            .{ .name = "wayland", .module = wayland },
-        } else &[_]std.Build.Module.Import {
+        .imports = &[_]std.Build.Module.Import {
             .{ .name = "vulkan", .module = vulkan },
         }
     });
+
+    const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
+    const build_x11 = b.option(bool, "x11", "Support X11 on Linux. (default: true)") orelse true;
+
+    if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
 
     if (target.result.os.tag == .linux and build_wayland) {
         const wayland_include_path = generateWaylandHeaders(b, glfw.path(""));
