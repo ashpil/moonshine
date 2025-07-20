@@ -115,20 +115,9 @@ pub fn XYZToxyY(XYZ: F32x3) F32x3 {
 pub fn xyYToXYZ(xyY: F32x3) F32x3 {
     return F32x3.new(.{
         xyY.element(0) * xyY.element(2) / xyY.element(1),
-        xyY.element(1),
-        (1 - xyY.element(0) + xyY.element(1)) * xyY.element(2) / xyY.element(1),
+        xyY.element(2),
+        (1 - xyY.element(0) - xyY.element(1)) * xyY.element(2) / xyY.element(1),
     });
-}
-
-pub fn XYZToBT709(XYZ: F32x3) F32x3 {
-    // TODO: make this matrix consistent with the one used in shaders
-    const mat = Mat3.fromRows(.{
-        .new(.{ 3.2404542, -1.5371385, -0.4985314}),
-        .new(.{-0.9692660,  1.8760108,  0.0415560}),
-        .new(.{ 0.0556434, -0.2040259,  1.0572252}),
-    });
-
-    return mat.mul(XYZ);
 }
 
 const srgb = struct {
@@ -210,12 +199,29 @@ pub const Primaries = union(enum) {
     };
 
     // all in xy chromaticity space
-    pub const Parametric = struct {
+    pub const Parametric = extern struct {
         red: F32x2,
-        blue: F32x2,
         green: F32x2,
+        blue: F32x2,
 
         white: F32x2,
+
+        pub fn toXYZ(self: Parametric) Mat3 {
+            const primary_conversion = Mat3.fromCols(.{
+                xyYToXYZ(self.red.append(1.0)),
+                xyYToXYZ(self.green.append(1.0)),
+                xyYToXYZ(self.blue.append(1.0)),
+            });
+
+            const xyz_white_in_rgb = primary_conversion.inverse().mul(xyYToXYZ(self.white.append(1.0)));
+            const white_conversion = Mat3.diagonal(xyz_white_in_rgb.toArray());
+
+            return primary_conversion.mul(white_conversion);
+        }
+
+        pub fn fromXYZ(self: Parametric) Mat3 {
+            return self.toXYZ().inverse();
+        }
     };
 };
 

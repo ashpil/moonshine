@@ -74,6 +74,7 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .shader_source = shaders.post_process,
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
+        dst_primaries: engine.color.Primaries.Parametric,
         dst_transfer_function: engine.color.TransferFunction,
     },
     .PushSetBindings = struct {
@@ -510,6 +511,7 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
+            .dst_primaries = engine.color.Primaries.Named.srgb.toParametric(),
             .dst_transfer_function = .srgb,
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
@@ -629,7 +631,7 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
 
     const points = spectral_line ++ [_]F32x3 { F32x3.splat(1.0) };
     for (points) |point| {
-        const rgb = color.XYZToBT709(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
+        const rgb = color.Primaries.Named.srgb.toParametric().fromXYZ().mul(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
         const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));
         const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
 

@@ -4,10 +4,11 @@
 // all images should be same size
 [[vk::binding(0, 0)]] Texture2D<float3> srcImage; // assumed to be linear, sRGB primaries
 [[vk::binding(1, 0)]] Texture2D<float4> imguiPremultipliedAlphaImage; // imgui conventions with premultipled alpha
-[[vk::image_format("unknown")]] [[vk::binding(2, 0)]] RWTexture2D<float4> dstImage; // assumed to be sRGB
+[[vk::image_format("unknown")]] [[vk::binding(2, 0)]] RWTexture2D<float4> dstImage;
 
 struct PushConsts {
     float srcImageSceneReferredToDisplayReferredScale;
+    Primaries dstPrimaries;
     TransferFunction dstTransferFunction;
 };
 [[vk::push_constant]] PushConsts pushConsts;
@@ -31,5 +32,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 
-    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColor), 1.0);
+    const float3 dstColorXYZ = mul(srgbPrimaries.toXYZ(), dstColor);
+
+    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ)), 1.0);
 }

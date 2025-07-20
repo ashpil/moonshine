@@ -12,6 +12,13 @@ float atanh(float x) {
     return log((1 + x) / (1 - x)) / 2;
 }
 
+float3x3 mat3Inverse(float3x3 m) {
+    const float3 v1 = cross(m[1], m[2]);
+    const float3 v2 = cross(m[2], m[0]);
+    const float3 v3 = cross(m[0], m[1]);
+    return transpose(float3x3(v1, v2, v3)) / determinant(m);
+}
+
 float3 faceForward(float3 n, float3 d) {
     return dot(n, d) > 0 ? n : -n;
 }
