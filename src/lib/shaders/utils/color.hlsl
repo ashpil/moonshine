@@ -14,6 +14,27 @@ namespace srgb {
     }
 };
 
+namespace pq {
+    static float m_1 = 2610.0 / 16384.0;
+    static float m_2 = (2523.0 / 4096.0) * 128.0;
+
+    static float c_1 = 3424 / 4096.0;
+    static float c_2 = (2413 / 4096.0) * 32.0;
+    static float c_3 = (2392 / 4096.0) * 32.0;
+
+    template<typename T>
+    T EOTF(T value) {
+        const T Y = pow(max((pow(value, 1.0 / m_2) - c_1), 0) / (c_2 - c_3 * pow(value, 1.0 / m_2)), 1.0 / m_1);
+        return 10000 * Y;
+    }
+
+    template<typename T>
+    T InvEOTF(T value) {
+        const T Y = value / 10000;
+        return pow((c_1 + c_2 * pow(Y, m_1)) / (1 + c_3 * pow(Y, m_1)), m_2);
+    }
+};
+
 float3 XYZToxyY(float3 XYZ) {
     return float3(
         XYZ[0] / normL1(XYZ),
@@ -91,6 +112,9 @@ T toLinear(TransferFunction tf, T value) {
         case TransferFunction::ExtLinear: {
             return value;
         }
+        case TransferFunction::ST2084PQ: {
+            return pq::EOTF(value);
+        }
         default: {
             return 0.0 / 0.0; // TODO
         }
@@ -105,6 +129,9 @@ T fromLinear(TransferFunction tf, T value) {
         }
         case TransferFunction::ExtLinear: {
             return value;
+        }
+        case TransferFunction::ST2084PQ: {
+            return pq::InvEOTF(value);
         }
         default: {
             return 0.0 / 0.0; // TODO
