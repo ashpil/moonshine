@@ -203,6 +203,10 @@ pub const Primaries = union(enum) {
         pub fn fromXYZ(self: Parametric) Mat3 {
             return self.toXYZ().inverse();
         }
+
+        pub fn luminance(self: Parametric, value: F32x3) f32 {
+            return self.toXYZ().mul(value).element(1);
+        }
     };
 };
 

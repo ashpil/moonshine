@@ -273,18 +273,14 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
 // this is technically an argument for supporting primitives other than triangles,
 // if the goal is just to test the BRDF in the most comprehensive way
 
-// used so that we can care less for less perceptable error
-fn luminance(color: [3]f32) f32 {
-    return 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2];
-}
-
 // spectral causes a decent amount of color variance so our per-pixel error bounds
 // are fairly high.
 // however, we additionally make sure that the total image average is 1
 fn assertWhiteFurnaceImage(image: []const [4]f32) !void {
     var average: f64 = 0.0;
     for (image) |pixel| {
-        const val = luminance(pixel[0..3].*);
+        // using luminance as a pereceptual metric of sorts
+        const val = engine.color.Primaries.Named.bt709.toParametric().luminance(F32x3.new(pixel[0..3].*));
         average += val / @as(f64, @floatFromInt(image.len));
         if (!std.math.approxEqAbs(f32, val, 1.0, 0.15)) return error.NonWhitePixel;
     }
