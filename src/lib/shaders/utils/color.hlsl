@@ -104,7 +104,7 @@ T toLinear(TransferFunction tf, T value) {
             return value;
         }
         case TransferFunction::SRGB: {
-            return SRGB::EOTF(value);
+            return SRGB::EOTF(saturate(value));
         }
         case TransferFunction::ST2084PQ: {
             return ST2084PQ::EOTF(value);
@@ -122,7 +122,7 @@ T fromLinear(TransferFunction tf, T value) {
             return value;
         }
         case TransferFunction::SRGB: {
-            return SRGB::InvEOTF(value);
+            return SRGB::InvEOTF(saturate(value));
         }
         case TransferFunction::ST2084PQ: {
             return ST2084PQ::InvEOTF(value);
