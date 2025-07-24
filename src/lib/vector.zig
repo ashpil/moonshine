@@ -176,6 +176,28 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             }
         } else struct {};
 
+        pub fn format(
+            self: Self,
+            comptime fmt: []const u8,
+            options: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            if (row_count != 1) try writer.writeAll("(");
+
+            inline for (0..row_count) |row_idx| {
+                if (col_count != 1) try writer.writeAll("(");
+                inline for (0..col_count) |col_idx| {
+                    const element = self.at(.{ .col = col_idx, .row = row_idx });
+                    try std.fmt.formatType(element, fmt, options, writer, std.options.fmt_max_depth - 1);
+                    if (col_idx != col_count - 1) try writer.writeAll(", ");
+                }
+                if (col_count != 1) try writer.writeAll(")");
+                if (row_idx != row_count - 1) try writer.writeAll(", ");
+            }
+
+            if (row_count != 1) try writer.writeAll(")");
+        }
+
         // math methods
         pub usingnamespace if (isNumberType(ComponentType)) struct {
             pub fn mul(self: Self, other: anytype) MatrixProduct(Self, @TypeOf(other)) {
