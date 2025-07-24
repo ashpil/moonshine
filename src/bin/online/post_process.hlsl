@@ -14,12 +14,18 @@ struct PushConsts {
 };
 [[vk::push_constant]] PushConsts pushConsts;
 
-// returns linear color with BT709 primaries
-float3 applyImgui(const float3 linearSRGBColor, const float4 imguiPremultipliedAlpha) {
-    // imgui is not color aware at all. to match its default behavior, all blending with it must be done in nonlinear srgb
-    const float3 nonlinearSrgbColor = SRGB::InvEOTF(saturate(linearSRGBColor));
-    const float3 colorNonlinearSrgb = nonlinearSrgbColor * (1 - imguiPremultipliedAlpha.a) + imguiPremultipliedAlpha.rgb;
-    return SRGB::EOTF(colorNonlinearSrgb);
+// any input primaries are fine as long as they are consistent
+float3 applyImgui(const float3 color, const float4 imguiPremultipliedAlpha) {
+    if (imguiPremultipliedAlpha.a > 0.0) {
+        // imgui is not color aware at all. to match its default behavior, all blending with it must be done with the srgb inv eotf applied
+        const float3 srcNonlinearColor = SRGB::InvEOTF(color); // TODO: could do some sort of smarter gamut clipping
+        const float3 dstNonlinearColor = srcNonlinearColor * (1 - imguiPremultipliedAlpha.a) + imguiPremultipliedAlpha.rgb;
+        return SRGB::EOTF(dstNonlinearColor);
+    } else {
+        // keeping this separate so our EOTF does not clamp colors outside of gui. will lead to strange behavior
+        // for real alpha fades, but we don't use that.
+        return color;
+    }
 }
 
 [numthreads(8, 8, 1)]
