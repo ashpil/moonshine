@@ -166,7 +166,7 @@ pub fn main() !void {
             error.OutOfDateKHR => blk: {
                 // presentation failed, can destroy resources immediately
                 const new_extent = window.getExtent();
-                (try display.recreate(&context, new_extent, allocator)).destroy(&context);
+                (try display.recreate(&context, window, allocator)).destroy(&context);
                 scene.camera.sensors.items[active_sensor].image.destroy(&context);
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
@@ -523,7 +523,7 @@ pub fn main() !void {
             const new_extent = window.getExtent();
             if (ok == .suboptimal_khr or !std.meta.eql(new_extent, display.swapchain.extent)) {
                 // presentation succeeded, need to keep resources alive until frame finishes
-                try (try display.recreate(&context, new_extent, allocator)).attachToEncoder(frame_encoder);
+                try (try display.recreate(&context, window, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
@@ -533,7 +533,7 @@ pub fn main() !void {
         } else |err| if (err == error.OutOfDateKHR) {
             // presentation failed, can destroy resources immediately
             const new_extent = window.getExtent();
-            (try display.recreate(&context, new_extent, allocator)).destroy(&context);
+            (try display.recreate(&context, window, allocator)).destroy(&context);
             scene.camera.sensors.items[active_sensor].image.destroy(&context);
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;

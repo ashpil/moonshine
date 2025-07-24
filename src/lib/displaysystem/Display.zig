@@ -8,6 +8,8 @@ const DestructionQueue = core.DestructionQueue;
 const Encoder = core.Encoder;
 const vk_helpers = core.vk_helpers;
 
+const Window = engine.Window;
+
 const Swapchain = engine.displaysystem.Swapchain;
 
 const metrics = @import("build_options").vk_metrics;
@@ -40,11 +42,12 @@ surface: vk.SurfaceKHR,
 timestamp_period: if (metrics) f32 else void,
 last_frame_time_ns: if (metrics) f64 else void,
 
-pub fn create(vc: *const VulkanContext, window: engine.Window, transient_allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, window: Window, transient_allocator: std.mem.Allocator) !Self {
     const surface = try window.createSurface(vc.instance.handle);
     errdefer vc.instance.destroySurfaceKHR(surface, null);
 
-    var swapchain = try Swapchain.create(vc, window.getExtent(), surface, transient_allocator);
+    const formats = &ldr_formats;
+    var swapchain = try Swapchain.create(vc, window.getExtent(), formats, surface, transient_allocator);
     errdefer swapchain.destroy(vc);
 
     var frames: [frames_in_flight]Frame = undefined;
@@ -82,6 +85,19 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     }
 }
 
+const ldr_formats = [_]Swapchain.SurfaceFormat {
+    .{
+        .format = .b8g8r8a8_unorm,
+        .primaries = .bt709,
+        .transfer_function = .srgb,
+    },
+    .{
+        .format = .r8g8b8a8_unorm,
+        .primaries = .bt709,
+        .transfer_function = .srgb,
+    },
+};
+
 pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
     const frame = &self.frames[self.frame_index];
 
@@ -99,9 +115,10 @@ pub fn currentImage(self: *const Self) Swapchain.Image {
 }
 
 // returns old swapchain
-pub fn recreate(self: *Self, vc: *const VulkanContext, new_extent: vk.Extent2D, transient_allocator: std.mem.Allocator) !Swapchain {
+pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, transient_allocator: std.mem.Allocator) !Swapchain {
     const old_swapchain = self.swapchain;
-    self.swapchain = try Swapchain.createFromOld(vc, new_extent, self.surface, transient_allocator, old_swapchain);
+    const formats = &ldr_formats;
+    self.swapchain = try Swapchain.createFromOld(vc, window.getExtent(), formats, self.surface, transient_allocator, old_swapchain);
     return old_swapchain;
 }
 
