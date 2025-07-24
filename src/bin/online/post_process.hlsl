@@ -8,6 +8,7 @@
 
 struct PushConsts {
     float srcImageSceneReferredToDisplayReferredScale;
+    float dstWhiteEncoding;
     Primaries dstPrimaries;
     TransferFunction dstTransferFunction;
 };
@@ -34,5 +35,5 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     const float3 dstColorXYZ = mul(srgbPrimaries.toXYZ(), dstColor);
 
-    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ)), 1.0);
+    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ) * pushConsts.dstWhiteEncoding), 1.0);
 }

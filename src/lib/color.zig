@@ -215,5 +215,15 @@ pub const TransferFunction = enum(u32) {
     extended_linear,
     srgb,
     st2084_pq,
+
+    // linear float value that corresponds to "white"
+    pub fn whiteEncoding(self: TransferFunction) f32 {
+        return switch (self) {
+            .linear => 1.0,
+            .extended_linear => 1.0,
+            .srgb => 1.0,
+            .st2084_pq => 203.0,
+        };
+    }
 };
 

@@ -74,6 +74,7 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .shader_source = shaders.post_process,
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
+        dst_white_encoding: f32,
         dst_primaries: engine.color.Primaries.Parametric,
         dst_transfer_function: engine.color.TransferFunction,
     },
@@ -496,6 +497,7 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
+            .dst_white_encoding = display.swapchain.transfer_function.whiteEncoding(),
             .dst_primaries = display.swapchain.primaries.toParametric(),
             .dst_transfer_function = display.swapchain.transfer_function,
         });
