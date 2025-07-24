@@ -80,7 +80,7 @@ struct Primaries {
     }
 };
 
-static const Primaries srgbPrimaries = {
+static const Primaries bt709Primaries = {
     float2(0.64, 0.33),
     float2(0.3, 0.6),
     float2(0.15, 0.06),

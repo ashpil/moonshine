@@ -2,7 +2,7 @@
 #include "../../lib/shaders/utils/color.hlsl"
 
 // all images should be same size
-[[vk::binding(0, 0)]] Texture2D<float3> srcImage; // assumed to be linear, sRGB primaries
+[[vk::binding(0, 0)]] Texture2D<float3> srcImage; // assumed to be linear, bt709 primaries
 [[vk::binding(1, 0)]] Texture2D<float4> imguiPremultipliedAlphaImage; // imgui conventions with premultipled alpha
 [[vk::image_format("unknown")]] [[vk::binding(2, 0)]] RWTexture2D<float4> dstImage;
 
@@ -33,7 +33,8 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 
-    const float3 dstColorXYZ = mul(srgbPrimaries.toXYZ(), dstColor);
+    const float3 dstColorXYZ = mul(bt709Primaries.toXYZ(), dstColor);
+    const float3 dstColorDstPrimaries = mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ);
 
-    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ) * pushConsts.dstWhiteEncoding), 1.0);
+    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColorDstPrimaries * pushConsts.dstWhiteEncoding), 1.0);
 }
