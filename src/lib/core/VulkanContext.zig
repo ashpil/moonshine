@@ -10,7 +10,7 @@ const root = @import("root");
 
 const validation_layers = [_][*:0]const u8{ "VK_LAYER_KHRONOS_validation" };
 
-const VulkanContextError = error {
+pub const VulkanContextError = error {
     VulkanDynLibLoadFail,
     InstanceProcAddrNotFound,
     UnavailableValidationLayers,
