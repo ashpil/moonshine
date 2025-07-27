@@ -211,17 +211,14 @@ pub const Primaries = union(enum) {
 };
 
 pub const TransferFunction = enum(u32) {
-    linear,
-    extended_linear,
+    linear, // note that this is defined for all reals
     srgb,
     st2084_pq,
 
     // linear float value that corresponds to "white"
     pub fn whiteEncoding(self: TransferFunction) f32 {
         return switch (self) {
-            .linear => 1.0,
-            .extended_linear => 1.0,
-            .srgb => 1.0,
+            .linear, .srgb => 1.0,
             .st2084_pq => 203.0,
         };
     }

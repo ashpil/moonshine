@@ -207,13 +207,11 @@ fn getVkColorSpace(primaries: color.Primaries.Named, transfer_function: color.Tr
     return switch (primaries) {
         .bt709 => switch (transfer_function) {
             .linear => .bt709_linear_ext,
-            .extended_linear => .extended_srgb_linear_ext,
             .srgb => .srgb_nonlinear_khr,
             .st2084_pq => null,
         },
         .bt2020 => switch (transfer_function) {
             .linear => .bt2020_linear_ext,
-            .extended_linear => null,
             .srgb => null,
             .st2084_pq => .hdr10_st2084_ext,
         },

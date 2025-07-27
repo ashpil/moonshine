@@ -89,7 +89,6 @@ static const Primaries bt709Primaries = {
 
 enum class TransferFunction: uint {
     Linear,
-    ExtendedLinear,
     SRGB,
     ST2084PQ,
 };
@@ -98,9 +97,6 @@ template<typename T>
 T toLinear(TransferFunction tf, T value) {
     switch (tf) {
         case TransferFunction::Linear: {
-            return saturate(value);
-        }
-        case TransferFunction::ExtendedLinear: {
             return value;
         }
         case TransferFunction::SRGB: {
@@ -116,9 +112,6 @@ template<typename T>
 T fromLinear(TransferFunction tf, T value) {
     switch (tf) {
         case TransferFunction::Linear: {
-            return saturate(value);
-        }
-        case TransferFunction::ExtendedLinear: {
             return value;
         }
         case TransferFunction::SRGB: {
