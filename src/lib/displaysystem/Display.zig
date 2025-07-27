@@ -42,11 +42,11 @@ surface: vk.SurfaceKHR,
 timestamp_period: if (metrics) f32 else void,
 last_frame_time_ns: if (metrics) f64 else void,
 
-pub fn create(vc: *const VulkanContext, window: Window, transient_allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, transient_allocator: std.mem.Allocator) !Self {
     const surface = try window.createSurface(vc.instance.handle);
     errdefer vc.instance.destroySurfaceKHR(surface, null);
 
-    const formats = &ldr_formats;
+    const formats = if (supports_swapchain_color_spaces) &(swapchain_color_space_formats ++ base_formats) else &base_formats;
     var swapchain = try Swapchain.create(vc, window.getExtent(), formats, surface, transient_allocator);
     errdefer swapchain.destroy(vc);
 
@@ -85,7 +85,25 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     }
 }
 
-const ldr_formats = [_]Swapchain.SurfaceFormat {
+// only support HDR on Linux right now because on Linux it's just this easy
+// doing it properly on Windows requires querying information from the OS
+const swapchain_color_space_formats = if (@import("builtin").os.tag == .linux) [_]Swapchain.SurfaceFormat {
+    // it's unclear whether I should prefer the 16-bit float format over the 10-bit integer format.
+    // theoretically most HDR displays should be 12-bit, not just 10-bit,
+    // so we would be losing something by using 10 bits only.
+    .{
+        .format = .r16g16b16a16_sfloat,
+        .primaries = .bt2020,
+        .transfer_function = .st2084_pq,
+    },
+    .{
+        .format = .a2r10g10b10_unorm_pack32,
+        .primaries = .bt2020,
+        .transfer_function = .st2084_pq,
+    },
+} else [_]Swapchain.SurfaceFormat {};
+
+const base_formats = [_]Swapchain.SurfaceFormat {
     .{
         .format = .b8g8r8a8_unorm,
         .primaries = .bt709,
@@ -115,9 +133,9 @@ pub fn currentImage(self: *const Self) Swapchain.Image {
 }
 
 // returns old swapchain
-pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, transient_allocator: std.mem.Allocator) !Swapchain {
+pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, transient_allocator: std.mem.Allocator) !Swapchain {
     const old_swapchain = self.swapchain;
-    const formats = &ldr_formats;
+    const formats = if (supports_swapchain_color_spaces) &(swapchain_color_space_formats ++ base_formats) else &base_formats;
     self.swapchain = try Swapchain.createFromOld(vc, window.getExtent(), formats, self.surface, transient_allocator, old_swapchain);
     return old_swapchain;
 }

@@ -40,6 +40,21 @@ const Mat4x3 = vector.Mat4x3(f32);
 
 const vk = @import("vulkan");
 
+fn createVulkanContext(allocator: std.mem.Allocator, window: Window) !std.meta.Tuple(&.{ VulkanContext, bool }) {
+    const base_requirements = comptime hrtsystem.vulkan_requirements.merge(displaysystem.vulkan_requirements);
+    const needed_instance_extensions = window.getRequiredInstanceExtensions();
+    const wanted_instance_extensions = [_][*:0]const u8 { vk.extensions.ext_swapchain_colorspace.name };
+    var needed_requirements = base_requirements;
+    needed_requirements.instance_extensions = base_requirements.instance_extensions ++ &needed_instance_extensions;
+    var wanted_requirements = base_requirements;
+    wanted_requirements.instance_extensions = base_requirements.instance_extensions ++ &needed_instance_extensions ++ &wanted_instance_extensions;
+    // this is super ugly but I don't currently want to write something that allows the context to give feedback on what extensions were enabled
+    return if (VulkanContext.create(allocator, "online", wanted_requirements)) |context| .{ context, true } else |err| switch (err) {
+        VulkanContext.VulkanContextError.UnavailableInstanceExtensions => .{ try VulkanContext.create(allocator, "online", needed_requirements), false },
+        else => return err,
+    };
+}
+
 const Config = struct {
     in_filepath: []const u8, // must be gltf/glb
     skybox_filepath: []const u8, // must be exr
@@ -97,15 +112,10 @@ pub fn main() !void {
     const window = try Window.create(config.extent.width, config.extent.height, "online");
     defer window.destroy();
 
-    const context = blk: {
-        const base_requirements = comptime hrtsystem.vulkan_requirements.merge(displaysystem.vulkan_requirements);
-        var requirements = base_requirements;
-        requirements.instance_extensions = base_requirements.instance_extensions ++ &window.getRequiredInstanceExtensions();
-        break :blk try VulkanContext.create(allocator, "online", requirements);
-    };
+    const context, const supports_swapchain_color_spaces = try createVulkanContext(allocator, window);
     defer context.destroy(allocator);
 
-    var display = try Display.create(&context, window, allocator);
+    var display = try Display.create(&context, window, supports_swapchain_color_spaces, allocator);
     defer display.destroy(&context);
 
     var encoder = try Encoder.create(&context, "main");
@@ -166,7 +176,7 @@ pub fn main() !void {
             error.OutOfDateKHR => blk: {
                 // presentation failed, can destroy resources immediately
                 const new_extent = window.getExtent();
-                (try display.recreate(&context, window, allocator)).destroy(&context);
+                (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
                 scene.camera.sensors.items[active_sensor].image.destroy(&context);
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
@@ -523,7 +533,7 @@ pub fn main() !void {
             const new_extent = window.getExtent();
             if (ok == .suboptimal_khr or !std.meta.eql(new_extent, display.swapchain.extent)) {
                 // presentation succeeded, need to keep resources alive until frame finishes
-                try (try display.recreate(&context, window, allocator)).attachToEncoder(frame_encoder);
+                try (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
@@ -533,7 +543,7 @@ pub fn main() !void {
         } else |err| if (err == error.OutOfDateKHR) {
             // presentation failed, can destroy resources immediately
             const new_extent = window.getExtent();
-            (try display.recreate(&context, window, allocator)).destroy(&context);
+            (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
             scene.camera.sensors.items[active_sensor].image.destroy(&context);
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;
