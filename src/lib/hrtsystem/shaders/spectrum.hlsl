@@ -7,13 +7,13 @@
 [[vk::binding(4, 2)]] Texture1D<float> dSpectrumR;
 [[vk::binding(5, 2)]] Texture1D<float> dSpectrumG;
 [[vk::binding(6, 2)]] Texture1D<float> dSpectrumB;
+// D65 should be scaled such that it integrates to luminance 1.0
 [[vk::binding(7, 2)]] Texture1D<float> dSpectrumD65;
 
 #include "../../shaders/utils/random.hlsl"
 #include "../../shaders/utils/math.hlsl"
+#include "../../shaders/utils/color.hlsl"
 #include "../../shaders/utils/helpers.hlsl"
-
-static const float CIE1931YIntegral = 106.85691710117189;
 
 namespace Spectrum {
     float sampleTabulated(const float λ, const float start, const float end, Texture1D<float> texture) {
@@ -42,21 +42,15 @@ namespace Spectrum {
         return sampledReflectance * sampledD65;
     }
 
-    float3 toXYZ(const float λ, const float s) {
+    float3 toXYZ(const float λ) {
         const float samplesStart = 360;
         const float samplesEnd = 830;
-        const float3 rgb = float3(
+        const float3 XYZ = float3(
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumCIEX),
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumCIEY),
             sampleTabulated(λ, samplesStart, samplesEnd, dSpectrumCIEZ)
         );
-        return rgb * s / CIE1931YIntegral;
-    }
-
-    float3 toLinearSRGB(const float λ, const float s) {
-        const float3 xyz = toXYZ(λ, s);
-        const float3x3 XYZtoLinearSRGB = { 0.03276749869518854, -0.015543557073358668, -0.00504115364541362, -0.009800789737065342, 0.018969392573362078, 0.00042019608374440075, 0.0005626856849785213, -0.0020631808449212427, 0.010691028014591895 };
-        return mul(XYZtoLinearSRGB, xyz);
+        return XYZ;
     }
 };
 

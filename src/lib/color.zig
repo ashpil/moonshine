@@ -20,6 +20,19 @@ pub const TabulatedSpectrum = struct {
         const fract = scaled_t - @as(f64, @floatFromInt(trunc));
         return math.lerp(self.data[trunc], self.data[trunc + 1], fract);
     }
+
+    // integral over the domain of this spectrum, assuming linear sampling
+    pub fn integral(self: TabulatedSpectrum) f64 {
+        const dt = (self.end - self.start + 1) / @as(f64, @floatFromInt(self.data.len));
+
+        var accumulator: f64 = 0.0;
+        for (0..self.data.len - 1) |i| {
+            const start = self.data[i];
+            const end = self.data[i + 1];
+            accumulator += (start + end) * dt / 2.0;
+        }
+        return accumulator;
+    }
 };
 
 pub const cie_1931 = struct {
