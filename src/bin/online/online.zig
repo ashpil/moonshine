@@ -32,11 +32,16 @@ const vector = engine.vector;
 const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
+const F64x4 = vector.Vec4(f64);
+const F64x3 = vector.Vec3(f64);
+const F64x2 = vector.Vec2(f64);
 const U8x4 = vector.Vec4(u8);
 const U8x3 = vector.Vec3(u8);
-const Mat3 = vector.Mat3(f32);
-const Mat2 = vector.Mat2(f32);
-const Mat4x3 = vector.Mat4x3(f32);
+const F32x3x3 = vector.Mat3(f32);
+const F32x2x2 = vector.Mat2(f32);
+const F32x4x3 = vector.Mat4x3(f32);
+const F64x3x3 = vector.Mat3(f64);
+const F64x2x2 = vector.Mat2(f64);
 
 const vk = @import("vulkan");
 
@@ -90,7 +95,7 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
         dst_white_encoding: f32,
-        dst_primaries: engine.color.Primaries.Parametric,
+        dst_primaries_from_xyz: F32x3x3,
         dst_transfer_function: engine.color.TransferFunction,
     },
     .PushSetBindings = struct {
@@ -248,7 +253,7 @@ pub fn main() !void {
                         changed = imgui.dragScalar(f32, "Vertical Scale", &scene.camera.cameras.items[active_camera][1].orthographic.vscale, 0.1, 0, std.math.inf(f32)) or changed;
                     },
                 }
-                changed = imgui.dragMatrix(Mat4x3, "Transform", &scene.camera.cameras.items[active_camera][1].transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                changed = imgui.dragMatrix(F32x4x3, "Transform", &scene.camera.cameras.items[active_camera][1].transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                 if (changed) {
                     scene.camera.sensors.items[active_sensor].clear();
                 }
@@ -356,9 +361,9 @@ pub fn main() !void {
                         if (thin) imgui.beginDisabled();
                         changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
                         if (thin) imgui.endDisabled();
-                        var transform: Mat4x3 = @bitCast(instance.transform);
+                        var transform: F32x4x3 = @bitCast(instance.transform);
                         imgui.pushItemWidth(imgui.getFontSize() * -6);
-                        changed = imgui.dragMatrix(Mat4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
+                        changed = imgui.dragMatrix(F32x4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                         if (changed) {
                             scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
                             try scene.world.accel.recordRebuild(frame_encoder.buffer);
@@ -385,8 +390,8 @@ pub fn main() !void {
                     const transform = scene.camera.cameras.items[active_camera][1].transform;
                     const transform_linear = transform.truncateCol();
                     const transform_translation = transform.col(3);
-                    const left_right = Mat3.fromAxisAngle(F32x3.new(.{0, 1, 0}), -delta.element(0)); // should be global. assumes glTF which has +Y as up
-                    const up_down = Mat3.fromAxisAngle(.new(.{0, 1, 0}), -delta.element(1)); // should be local
+                    const left_right = F32x3x3.fromAxisAngle(F32x3.new(.{0, 1, 0}), -delta.element(0)); // should be global. assumes glTF which has +Y as up
+                    const up_down = F32x3x3.fromAxisAngle(.new(.{0, 1, 0}), -delta.element(1)); // should be local
                     scene.camera.cameras.items[active_camera][1].transform = left_right.mul(transform_linear).mul(up_down).appendCol(transform_translation);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
@@ -395,7 +400,7 @@ pub fn main() !void {
                 const delta = imgui.getMouseDragDelta(.middle).componentDiv(window_size);
                 imgui.resetMouseDragDelta(.middle);
                 if (!std.meta.eql(delta, F32x2.new(.{0.0, 0.0}))) {
-                    const left_right = Mat3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
+                    const left_right = F32x3x3.fromAxisAngle(.new(.{0, 0, 1}), delta.element(0));
                     scene.background.backgrounds.items[0].transform = left_right.mul(scene.background.backgrounds.items[0].transform);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
@@ -507,8 +512,8 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
-            .dst_white_encoding = display.swapchain.transfer_function.whiteEncoding(),
-            .dst_primaries = display.swapchain.primaries.toParametric(),
+            .dst_white_encoding = @floatCast(display.swapchain.transfer_function.whiteEncoding()),
+            .dst_primaries_from_xyz = display.swapchain.primaries.toParametric().fromXYZ().floatCast(f32),
             .dst_transfer_function = display.swapchain.transfer_function,
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
@@ -588,35 +593,35 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
     const samples_end = 645;
     const sample_count = 200;
 
-    var spectral_line: [sample_count]F32x3 = undefined;
+    var spectral_line: [sample_count]F64x3 = undefined;
 
     for (0..sample_count) |i| {
-        const t = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(sample_count));
+        const t = @as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(sample_count));
         const lambda = samples_start + t * (samples_end - samples_start);
         spectral_line[i] = color.wavelengthToXYZ(lambda);
     }
 
     const available_size = imgui.getContentRegionAvail();
-    const canvas_size = F32x2.splat(available_size.element(0));
+    const canvas_size = F64x2.splat(@floatCast(available_size.element(0)));
 
-    const canvas_start = imgui.getCursorScreenPos();
+    const canvas_start = imgui.getCursorScreenPos().floatCast(f64);
     const canvas_end = canvas_start.componentAdd(canvas_size);
 
     const draw_list = imgui.getWindowDrawList();
 
-    imgui.addRect(draw_list, canvas_start, canvas_end, U8x4.splat(255), 0, 0, 1);
+    imgui.addRect(draw_list, canvas_start.floatCast(f32), canvas_end.floatCast(f32), U8x4.splat(255), 0, 0, 1);
 
     imgui.primReserve(draw_list, spectral_line.len * 3, spectral_line.len + 1);
 
-    var points_max = F32x2.splat(0);
+    var points_max = F64x2.splat(0);
     for (spectral_line) |point| {
         points_max = points_max.componentMax(color.XYZToxyY(point).truncate());
     }
 
-    const padding = F32x2.splat(0.01);
-    const normalize_mat = Mat2.diagonal(F32x2.splat(1).componentDiv(points_max.componentAdd(padding)).toArray()).appendCol(.splat(0)).appendRow(.new(.{0, 0, 1}));
-    const flip_mat = Mat2.diagonal([2]f32{1, -1}).appendCol(.new(.{0, 1})).appendRow(.new(.{0, 0, 1}));
-    const scale_mat = Mat2.diagonal(canvas_size.toArray()).appendCol(canvas_start).appendRow(.new(.{0, 0, 1}));
+    const padding = F64x2.splat(0.01);
+    const normalize_mat = F64x2x2.diagonal(F64x2.splat(1).componentDiv(points_max.componentAdd(padding)).toArray()).appendCol(.splat(0)).appendRow(.new(.{0, 0, 1}));
+    const flip_mat = F64x2x2.diagonal([2]f64{1, -1}).appendCol(.new(.{0, 1})).appendRow(.new(.{0, 0, 1}));
+    const scale_mat = F64x2x2.diagonal(canvas_size.toArray()).appendCol(canvas_start).appendRow(.new(.{0, 0, 1}));
     const xy_to_view = scale_mat.mul(flip_mat).mul(normalize_mat);
 
     for (0..spectral_line.len) |i| {
@@ -626,23 +631,23 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
         imgui.primWriteIdx(draw_list, start + @as(imgui.DrawIdx, @intCast(spectral_line.len)));
     }
 
-    const points = spectral_line ++ [_]F32x3 { F32x3.splat(1.0) };
+    const points = spectral_line ++ [_]F64x3 { F64x3.splat(1.0) };
     for (points) |point| {
-        const rgb = color.Primaries.Named.bt709.toParametric().fromXYZ().mul(point).componentClamp(F32x3.splat(0.0), F32x3.splat(1.0));
+        const rgb = color.Primaries.Named.bt709.toParametric().fromXYZ().mul(point).componentClamp(F64x3.splat(0.0), F64x3.splat(1.0));
         const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));
         const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
 
         const xy = color.XYZToxyY(point).truncate();
-        imgui.primWriteVtx(draw_list, xy_to_view.mul(xy.append(1)).truncate(), @bitCast(imgui.getIO().Fonts.*.TexUvWhitePixel), rgb_u8);
+        imgui.primWriteVtx(draw_list, xy_to_view.mul(xy.append(1)).truncate().floatCast(f32), @bitCast(imgui.getIO().Fonts.*.TexUvWhitePixel), rgb_u8);
     }
 
     imgui.addTriangle(draw_list,
-        xy_to_view.mul(primaries.red.append(1)).truncate(),
-        xy_to_view.mul(primaries.green.append(1)).truncate(),
-        xy_to_view.mul(primaries.blue.append(1)).truncate(),
+        xy_to_view.mul(primaries.red.append(1)).truncate().floatCast(f32),
+        xy_to_view.mul(primaries.green.append(1)).truncate().floatCast(f32),
+        xy_to_view.mul(primaries.blue.append(1)).truncate().floatCast(f32),
     U8x3.splat(0).append(255));
 
-    imgui.addCircle(draw_list, xy_to_view.mul(primaries.white.append(1)).truncate(), xy_to_view.mul(F32x2.splat(1.0 / 64.0).append(0)).element(0), U8x3.splat(0).append(255));
+    imgui.addCircle(draw_list, xy_to_view.mul(primaries.white.append(1)).truncate().floatCast(f32), @floatCast(xy_to_view.mul(F64x2.splat(1.0 / 64.0).append(0)).element(0)), U8x3.splat(0).append(255));
 
-    imgui.setCursorScreenPos(F32x2.new(.{canvas_start.element(0), canvas_end.element(1) + imgui.getStyle().FramePadding.x}));
+    imgui.setCursorScreenPos(F32x2.new(.{@floatCast(canvas_start.element(0)), @as(f32, @floatCast(canvas_end.element(1))) + imgui.getStyle().FramePadding.x}));
 }

@@ -71,14 +71,17 @@ mallet_bt709_g: Image,
 mallet_bt709_b: Image,
 d65: Image,
 
-fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_set: vk.DescriptorSet, dst_binding: u32, data: []const f32, name: [:0]const u8) !Image {
+fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_set: vk.DescriptorSet, dst_binding: u32, spectrum: color.TabulatedSpectrum, name: [:0]const u8) !Image {
     const extent = vk.Extent2D {
-        .width = @intCast(data.len),
+        .width = @intCast(spectrum.data.len),
         .height = 1,
     };
     const image = try Image.create(vc, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false, name);
 
-    const data_staging = try encoder.uploadAllocator().dupe(f32, data);
+    const data_staging = try encoder.uploadAllocator().alloc(f32, spectrum.data.len);
+    for (data_staging, spectrum.data) |*datum_staging, datum| {
+        datum_staging.* = @floatCast(datum);
+    }
 
     encoder.uploadDataToImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent, .shader_read_only_optimal);
 
@@ -130,13 +133,13 @@ pub fn create(vc: *const VulkanContext, encoder: *Encoder) !Self {
     }, (&descriptor_set)[0..1]);
     try vk_helpers.setDebugName(vc.device, descriptor_set, "Constant Spectra");
 
-    const cie_x = try createSpectrumImage(vc, encoder, descriptor_set, 1, color.cie_1931.x.data, "cie x");
-    const cie_y = try createSpectrumImage(vc, encoder, descriptor_set, 2, color.cie_1931.y.data, "cie y");
-    const cie_z = try createSpectrumImage(vc, encoder, descriptor_set, 3, color.cie_1931.z.data, "cie z");
-    const mallet_bt709_r = try createSpectrumImage(vc, encoder, descriptor_set, 4, color.mallet_bt709.r.data, "mallet bt709 r");
-    const mallet_bt709_g = try createSpectrumImage(vc, encoder, descriptor_set, 5, color.mallet_bt709.g.data, "mallet bt709 g");
-    const mallet_bt709_b = try createSpectrumImage(vc, encoder, descriptor_set, 6, color.mallet_bt709.b.data, "mallet bt709 b");
-    const d65 = try createSpectrumImage(vc, encoder, descriptor_set, 7, color.illuminants.d65.data, "illuminant d65");
+    const cie_x = try createSpectrumImage(vc, encoder, descriptor_set, 1, color.cie_1931.x, "cie x");
+    const cie_y = try createSpectrumImage(vc, encoder, descriptor_set, 2, color.cie_1931.y, "cie y");
+    const cie_z = try createSpectrumImage(vc, encoder, descriptor_set, 3, color.cie_1931.z, "cie z");
+    const mallet_bt709_r = try createSpectrumImage(vc, encoder, descriptor_set, 4, color.mallet_bt709.r, "mallet bt709 r");
+    const mallet_bt709_g = try createSpectrumImage(vc, encoder, descriptor_set, 5, color.mallet_bt709.g, "mallet bt709 g");
+    const mallet_bt709_b = try createSpectrumImage(vc, encoder, descriptor_set, 6, color.mallet_bt709.b, "mallet bt709 b");
+    const d65 = try createSpectrumImage(vc, encoder, descriptor_set, 7, color.illuminants.d65, "illuminant d65");
 
     return Self {
         .descriptor_layout = descriptor_layout,

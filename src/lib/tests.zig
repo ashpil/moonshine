@@ -280,9 +280,9 @@ fn assertWhiteFurnaceImage(image: []const [4]f32) !void {
     var average: f64 = 0.0;
     for (image) |pixel| {
         // using luminance as a pereceptual metric of sorts
-        const val = engine.color.Primaries.Named.bt709.toParametric().luminance(F32x3.new(pixel[0..3].*));
+        const val = engine.color.Primaries.Named.bt709.toParametric().luminance(F32x3.new(pixel[0..3].*).floatCast(f64));
         average += val / @as(f64, @floatFromInt(image.len));
-        if (!std.math.approxEqAbs(f32, val, 1.0, 0.15)) return error.NonWhitePixel;
+        if (!std.math.approxEqAbs(f64, val, 1.0, 0.15)) return error.NonWhitePixel;
     }
     if (!std.math.approxEqAbs(f64, average, 1.0, 0.002)) return error.NonWhiteAverage;
 }

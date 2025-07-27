@@ -9,7 +9,7 @@
 struct PushConsts {
     float srcImageSceneReferredToDisplayReferredScale;
     float dstWhiteEncoding;
-    Primaries dstPrimaries;
+    row_major float3x3 dstPrimariesFromXYZ;
     TransferFunction dstTransferFunction;
 };
 [[vk::push_constant]] PushConsts pushConsts;
@@ -40,7 +40,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     const float3 dstColor = applyImgui(srcColor, imguiPremultipliedAlphaImage[pixelIndex]);
 
     const float3 dstColorXYZ = mul(bt709Primaries.toXYZ(), dstColor);
-    const float3 dstColorDstPrimaries = mul(pushConsts.dstPrimaries.fromXYZ(), dstColorXYZ);
+    const float3 dstColorDstPrimaries = mul(pushConsts.dstPrimariesFromXYZ, dstColorXYZ);
 
     dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColorDstPrimaries * pushConsts.dstWhiteEncoding), 1.0);
 }
