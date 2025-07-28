@@ -32,7 +32,7 @@ global_volume: Material.Volume = .{},
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D) !Self {
+pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, primaries: engine.color.Primaries.Parametric) !Self {
     var gltf = Gltf.init(allocator);
     defer gltf.deinit();
 
@@ -49,7 +49,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
 
     var camera = Camera {};
     errdefer camera.destroy(vc, allocator);
-    _ = try camera.appendSensor(vc, allocator, extent);
+    _ = try camera.appendSensor(vc, allocator, extent, primaries);
 
     {
         // gltf spec:
@@ -142,6 +142,7 @@ pub fn pushConstants(self: *const Self, camera: u32, sensor: u32, background: u3
         .instance_count = self.world.accel.instance_count,
         .camera = self.camera.cameras.items[camera][1],
         .aspect_ratio = self.camera.sensors.items[sensor].aspectRatio(),
+        .xyz_to_dst_primaries = self.camera.sensors.items[sensor].primaries.fromXYZ().floatCast(f32),
         .sample_count = self.camera.sensors.items[sensor].sample_count,
         .global_volume = self.global_volume,
         .background_to_world = self.background.backgrounds.items[background].transform,

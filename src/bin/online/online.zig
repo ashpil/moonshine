@@ -94,6 +94,7 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .shader_source = shaders.post_process,
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
+        src_primaries_to_xyz: F32x3x3,
         dst_white_encoding: f32,
         dst_primaries_from_xyz: F32x3x3,
         dst_transfer_function: engine.color.TransferFunction,
@@ -132,7 +133,7 @@ pub fn main() !void {
     std.log.info("Set up initial state!", .{});
 
     try encoder.begin();
-    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent);
+    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, display.swapchain.primaries.toParametric());
     defer scene.destroy(&context, allocator);
     try encoder.submitAndIdleUntilDone(&context);
 
@@ -180,13 +181,12 @@ pub fn main() !void {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
                 // presentation failed, can destroy resources immediately
-                const new_extent = window.getExtent();
                 (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
                 scene.camera.sensors.items[active_sensor].image.destroy(&context);
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
-                active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
-                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
@@ -512,6 +512,7 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
+            .src_primaries_to_xyz = display.swapchain.primaries.toParametric().toXYZ().floatCast(f32),
             .dst_white_encoding = @floatCast(display.swapchain.transfer_function.whiteEncoding()),
             .dst_primaries_from_xyz = display.swapchain.primaries.toParametric().fromXYZ().floatCast(f32),
             .dst_transfer_function = display.swapchain.transfer_function,
@@ -535,25 +536,23 @@ pub fn main() !void {
             // only update frame count if we presented successfully
             scene.camera.sensors.items[active_sensor].sample_count += 1;
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
-            const new_extent = window.getExtent();
-            if (ok == .suboptimal_khr or !std.meta.eql(new_extent, display.swapchain.extent)) {
+            if (ok == .suboptimal_khr or !std.meta.eql(window.getExtent(), display.swapchain.extent)) {
                 // presentation succeeded, need to keep resources alive until frame finishes
                 try (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).attachToEncoder(frame_encoder);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
-                active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
-                gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
             }
         } else |err| if (err == error.OutOfDateKHR) {
             // presentation failed, can destroy resources immediately
-            const new_extent = window.getExtent();
             (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
             scene.camera.sensors.items[active_sensor].image.destroy(&context);
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;
-            active_sensor = try scene.camera.appendSensor(&context, allocator, new_extent);
-            gui_image = try Image.create(&context, new_extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+            active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+            gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
         } else return err;
 
         window.pollEvents();

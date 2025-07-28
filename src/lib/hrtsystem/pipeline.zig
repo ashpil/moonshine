@@ -44,6 +44,7 @@ pub const Render = Pipeline(.{
         instance_count: u32,
         camera: Camera.Camera,
         aspect_ratio: f32,
+        xyz_to_dst_primaries: Mat3,
         sample_count: u32,
         global_volume: Material.Volume,
         background_to_world: Mat3,

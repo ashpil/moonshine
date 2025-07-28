@@ -93,7 +93,7 @@ pub fn main() !void {
     try logger.log("set up initial state");
 
     try encoder.begin();
-    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent);
+    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Primaries.Named.bt709.toParametric());
     defer scene.destroy(&context, allocator);
     try encoder.submitAndIdleUntilDone(&context);
 

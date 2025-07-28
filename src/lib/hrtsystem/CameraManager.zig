@@ -43,11 +43,11 @@ cameras: std.ArrayListUnmanaged(std.meta.Tuple(&.{[:0]const u8, Camera })) = .{}
 const Self = @This();
 
 pub const SensorHandle = u32;
-pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: vk.Extent2D) !SensorHandle {
+pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: vk.Extent2D, primaries: engine.color.Primaries.Parametric) !SensorHandle {
     var buf: [32]u8 = undefined;
     const name = try std.fmt.bufPrintZ(&buf, "render {}", .{self.sensors.items.len});
 
-    try self.sensors.append(allocator, try Sensor.create(vc, extent, name));
+    try self.sensors.append(allocator, try Sensor.create(vc, extent, primaries, name));
     return @intCast(self.sensors.items.len - 1);
 }
 

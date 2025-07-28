@@ -555,7 +555,7 @@ pub const HdMoonshine = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.output_buffers.append(self.allocator.allocator(), core.mem.DownloadBuffer([4]f32).create(&self.vc, extent.width * extent.height, "output") catch unreachable) catch unreachable;
-        return self.camera.appendSensor(&self.vc, self.allocator.allocator(), extent) catch unreachable; // TODO: error handling
+        return self.camera.appendSensor(&self.vc, self.allocator.allocator(), extent, engine.color.Primaries.Named.bt709.toParametric()) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineGetSensorData(self: *const HdMoonshine, sensor: Camera.SensorHandle) [*][4]f32 {
