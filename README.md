@@ -14,7 +14,7 @@
     * online -- a real-time windowed renderer
     * hydra -- a hydra render delegate
 * Light Transport
-    * Full spectral path tracing
+    * Full spectral path tracing with an arbitrary output color space
     * Direct light sampling with multiple importance sampling for all lights and materials
 * Lights
     * 360° environment maps
