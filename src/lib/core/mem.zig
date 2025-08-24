@@ -76,15 +76,15 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             }
         }
 
-        pub usingnamespace if (usage.contains(.{ .shader_device_address_bit = true })) struct {
+        pub const getAddress = if (usage.contains(.{ .shader_device_address_bit = true })) struct {
             pub fn getAddress(self: Self, vc: *const VulkanContext) vk.DeviceAddress {
                 return if (self.handle == .null_handle) 0 else vc.device.getBufferDeviceAddress(&.{
                     .buffer = self.handle,
                 });
             }
-        } else struct {};
+        }.getAddress else struct {};
 
-        pub usingnamespace if (usage.contains(.{ .transfer_dst_bit = true })) struct {
+        const transfer = if (usage.contains(.{ .transfer_dst_bit = true })) struct {
             pub fn updateFrom(self: Self, encoder: *Encoder, dst_offset: vk.DeviceSize, src: []const T) void {
                 const bytes = std.mem.sliceAsBytes(src);
                 encoder.buffer.updateBuffer(self.handle, dst_offset * @sizeOf(T), bytes.len, src.ptr);
@@ -101,7 +101,10 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             }
         } else struct {};
 
-        pub usingnamespace if (usage.contains(.{ .transfer_src_bit = true }) or usage.contains(.{ .storage_buffer_bit = true })) struct {
+        pub const updateFrom = transfer.updateFrom;
+        pub const uploadFrom = transfer.uploadFrom;
+
+        pub const deviceSlice = if (usage.contains(.{ .transfer_src_bit = true }) or usage.contains(.{ .storage_buffer_bit = true })) struct {
             pub fn deviceSlice(self: Self) BufferSlice(T) {
                 return BufferSlice(T) {
                     .handle = self.handle,
@@ -109,13 +112,13 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
                     .len = self.len,
                 };
             }
-        } else struct {};
+        }.deviceSlice else struct {};
 
-        pub usingnamespace if (host_visible) struct {
+        pub const hostSlice = if (host_visible) struct {
             pub fn hostSlice(self: Self) []T {
                 return self.mapped[0..self.len];
             }
-        } else struct {};
+        }.hostSlice else struct {};
 
         pub fn isNull(self: Self) bool {
             return self.handle == .null_handle;

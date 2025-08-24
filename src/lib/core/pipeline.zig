@@ -367,24 +367,24 @@ pub fn Pipeline(comptime options: struct {
             self.recordDispatchThreads2D(command_buffer, extent_2d);
         }
 
-        pub usingnamespace if (options.additional_descriptor_layout_count != 0) struct {
+        pub const recordBindAdditionalDescriptorSets = if (options.additional_descriptor_layout_count != 0) struct {
             pub fn recordBindAdditionalDescriptorSets(self: *const Self, command_buffer: VulkanContext.CommandBuffer, sets: [options.additional_descriptor_layout_count]vk.DescriptorSet) void {
                 command_buffer.bindDescriptorSets(.compute, self.bindings.layout, 1, sets.len, &sets, 0, undefined);
             }
-        } else struct {};
+        }.recordBindAdditionalDescriptorSets else struct {};
 
-        pub usingnamespace if (@sizeOf(options.PushConstants) != 0) struct {
+        pub const recordPushConstants = if (@sizeOf(options.PushConstants) != 0) struct {
             pub fn recordPushConstants(self: *const Self, command_buffer: VulkanContext.CommandBuffer, constants: options.PushConstants) void {
                 const bytes = std.mem.asBytes(&constants);
                 command_buffer.pushConstants(self.bindings.layout, .{ .compute_bit = true }, 0, bytes.len, bytes);
             }
-        } else struct {};
+        }.recordPushConstants else struct {};
 
-        pub usingnamespace if (@sizeOf(options.PushSetBindings) != 0) struct {
+        pub const recordPushDescriptors = if (@sizeOf(options.PushSetBindings) != 0) struct {
             pub fn recordPushDescriptors(self: *const Self, command_buffer: VulkanContext.CommandBuffer, bindings: options.PushSetBindings) void {
                 const writes = pushDescriptorDataToWriteDescriptor(options.PushSetBindings, bindings);
                 command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), &writes.buffer);
             }
-        } else struct {};
+        }.recordPushDescriptors else struct {};
     };
 }

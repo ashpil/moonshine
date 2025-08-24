@@ -211,7 +211,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
         break :blk image;
     };
 
-    const font_image_set = try descriptor_set_layout.allocate_set(vc, [_]vk.WriteDescriptorSet{
+    const font_image_set = try descriptor_set_layout.allocateSet(vc, [_]vk.WriteDescriptorSet{
         .{
             .dst_set = undefined,
             .dst_binding = 0,

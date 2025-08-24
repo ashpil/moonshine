@@ -1,5 +1,4 @@
 const std = @import("std");
-const math = std.math;
 
 fn MatrixProduct(Left: type, Right: type) type {
     if (Left.ComponentType != Right.ComponentType) @compileError("Component types must be matching, but left is " ++ @typeName(Left.ComponentType) ++ " and right is " ++ @typeName(Right.ComponentType));
@@ -48,8 +47,8 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
         pub const Col = Matrix(T, 1, row_count);
         pub const Row = Matrix(T, col_count, 1);
 
-        pub const ColIndex = math.IntFittingRange(0, col_count);
-        pub const RowIndex = math.IntFittingRange(0, row_count);
+        pub const ColIndex = std.math.IntFittingRange(0, col_count);
+        pub const RowIndex = std.math.IntFittingRange(0, row_count);
         pub const Index = if (col_count == 1 and row_count == 1) struct {
             col: ColIndex = 0,
             row: RowIndex = 0,
@@ -86,7 +85,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             return out;
         }
 
-        pub fn col(self: Self, index: math.IntFittingRange(0, col_count)) Col {
+        pub fn col(self: Self, index: std.math.IntFittingRange(0, col_count)) Col {
             var out: Col = undefined;
             inline for (0..row_count) |row_idx| {
                 out.at_mut(.{ .row = row_idx }).* = self.at(.{ .col = index, .row = row_idx});
@@ -102,7 +101,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             return out;
         }
 
-        pub fn row(self: Self, index: math.IntFittingRange(0, row_count)) Row {
+        pub fn row(self: Self, index: std.math.IntFittingRange(0, row_count)) Row {
             var out: Row = undefined;
             inline for (0..col_count) |col_idx| {
                 out.at_mut(.{ .col = col_idx }).* = self.at(.{ .row = index, .col = col_idx});
@@ -138,11 +137,11 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             return out;
         }
 
-        pub fn splat(element: ComponentType) Self {
+        pub fn splat(value: ComponentType) Self {
             var out: Self = undefined;
             inline for (0..col_count) |col_idx| {
                 inline for (0..row_count) |row_idx| {
-                    out.at_mut(.{ .col = col_idx, .row = row_idx }).* = element;
+                    out.at_mut(.{ .col = col_idx, .row = row_idx }).* = value;
                 }
             }
             return out;
@@ -152,7 +151,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             return .fromCols(self.cols() ++ .{ to_append });
         }
 
-        pub usingnamespace if (col_count > 1) struct {
+        const MultipleCols = if (col_count > 1) struct {
             pub fn withoutCol(self: Self, comptime index: ColIndex) Matrix(ComponentType, col_count - 1, row_count) {
                 return .fromCols(self.cols()[0..index].* ++ self.cols()[index + 1..].*);
             }
@@ -162,11 +161,14 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             }
         } else struct {};
 
+        pub const withoutCol = MultipleCols.withoutCol;
+        pub const truncateCol = MultipleCols.truncateCol;
+
         pub fn appendRow(self: Self, to_append: Row) Matrix(ComponentType, col_count, row_count + 1) {
             return .fromRows(self.rows() ++ .{ to_append });
         }
 
-        pub usingnamespace if (row_count > 1) struct {
+        const MultipleRows = if (row_count > 1) struct {
             pub fn withoutRow(self: Self, comptime index: RowIndex) Matrix(ComponentType, col_count, row_count - 1) {
                 return .fromRows(self.rows()[0..index].* ++ self.rows()[index + 1..].*);
             }
@@ -175,6 +177,9 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 return self.withoutRow(row_count - 1);
             }
         } else struct {};
+
+        pub const withoutRow = MultipleRows.withoutRow;
+        pub const truncateRow = MultipleRows.truncateRow;
 
         pub fn format(
             self: Self,
@@ -187,8 +192,8 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             inline for (0..row_count) |row_idx| {
                 if (col_count != 1) try writer.writeAll("(");
                 inline for (0..col_count) |col_idx| {
-                    const element = self.at(.{ .col = col_idx, .row = row_idx });
-                    try std.fmt.formatType(element, fmt, options, writer, std.options.fmt_max_depth - 1);
+                    const value = self.at(.{ .col = col_idx, .row = row_idx });
+                    try std.fmt.formatType(value, fmt, options, writer, std.options.fmt_max_depth - 1);
                     if (col_idx != col_count - 1) try writer.writeAll(", ");
                 }
                 if (col_count != 1) try writer.writeAll(")");
@@ -198,8 +203,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
             if (row_count != 1) try writer.writeAll(")");
         }
 
-        // math methods
-        pub usingnamespace if (isNumberType(ComponentType)) struct {
+        const math = if (isNumberType(ComponentType)) struct {
             pub fn mul(self: Self, other: anytype) MatrixProduct(Self, @TypeOf(other)) {
                 const Product = MatrixProduct(Self, @TypeOf(other));
                 var out = Product.splat(0);
@@ -294,8 +298,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 return self.componentMax(min).componentMin(max);
             }
 
-            // number type conversion methods
-            pub usingnamespace if (isIntegerType(T)) struct {
+            const integer = if (isIntegerType(T)) struct {
                 pub fn intCast(self: Self, Target: type) Matrix(Target, col_count, row_count) {
                     var out: Matrix(Target, col_count, row_count) = undefined;
                     inline for (0..row_count) |row_idx| {
@@ -317,7 +320,10 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 }
             } else struct {};
 
-            pub usingnamespace if (isFloatType(T)) struct {
+            pub const intCast = integer.intCast;
+            pub const floatFromInt = integer.floatFromInt;
+
+            const float = if (isFloatType(T)) struct {
                 pub fn floatCast(self: Self, Target: type) Matrix(Target, col_count, row_count) {
                     var out: Matrix(Target, col_count, row_count) = undefined;
                     inline for (0..row_count) |row_idx| {
@@ -338,10 +344,26 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     return out;
                 }
             } else struct {};
+
+            pub const floatCast = float.floatCast;
+            pub const intFromFloat = float.intFromFloat;
         } else struct {};
 
-        // square matrix methods
-        pub usingnamespace if (col_count == row_count) struct {
+        pub const mul = math.mul;
+        pub const scale = math.scale;
+        pub const componentMul = math.componentMul;
+        pub const componentDiv = math.componentDiv;
+        pub const componentAdd = math.componentAdd;
+        pub const componentSub = math.componentSub;
+        pub const componentMax = math.componentMax;
+        pub const componentMin = math.componentMin;
+        pub const componentClamp = math.componentClamp;
+        pub const intCast = math.intCast;
+        pub const floatFromInt = math.floatFromInt;
+        pub const floatCast = math.floatCast;
+        pub const intFromFloat = math.intFromFloat;
+
+        const square = if (col_count == row_count) struct {
             pub const identity = Self.diagonal(.{ 1 } ** col_count);
 
             pub fn diagonal(values: [col_count]ComponentType) Self {
@@ -352,8 +374,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 return out;
             }
 
-            // square matrix math methods
-            pub usingnamespace if (isNumberType(ComponentType)) struct {
+            const math = if (isNumberType(ComponentType)) struct {
                 pub fn determinant(self: Self) ComponentType {
                     return self.cofactor().row(0).dot(self.row(0));
                 }
@@ -371,21 +392,22 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                         return out;
                     }
                 }
+
                 pub fn adjugate(self: Self) Self {
                     return self.cofactor().transpose();
                 }
 
-                pub usingnamespace if (isFloatType(ComponentType)) struct {
+                pub const float = if (isFloatType(ComponentType)) struct {
                     pub fn inverse(self: Self) Self {
                         const det = self.determinant();
                         std.debug.assert(det != 0);
                         return self.adjugate().scale(1 / det);
                     }
 
-                    pub usingnamespace if (col_count == 3) struct {
+                    pub const fromAxisAngle = if (col_count == 3) struct {
                         // TODO: remove this once everything is migrated to rotors
                         pub fn fromAxisAngle(axis: Vec3(ComponentType), angle: ComponentType) Self {
-                            const sin, const cos = .{ math.sin(angle), math.cos(angle) };
+                            const sin, const cos = .{ std.math.sin(angle), std.math.cos(angle) };
                             const x, const y, const z = .{ axis.element(0), axis.element(1), axis.element(2) };
 
                             return Self.fromRows(.{
@@ -394,18 +416,29 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                                 .new(.{(1 - cos) * x * z - sin * y, (1 - cos) * y * z + sin * x, (1 - cos) * z * z + cos}),
                             });
                         }
-                    } else struct {};
+                    }.fromAxisAngle else unreachable;
                 } else struct {};
+
+                pub const inverse = float.inverse;
+                pub const fromAxisAngle = float.fromAxisAngle;
+
             } else struct {};
         } else struct {};
 
-        // vector methods
-        pub usingnamespace if (col_count == 1 or row_count == 1) struct {
-            pub fn element_mut(self: *Self, index: math.IntFittingRange(0, element_count)) *ComponentType {
+        pub const identity = square.identity;
+        pub const diagonal = square.diagonal;
+        pub const determinant = square.math.determinant;
+        pub const cofactor = square.math.cofactor;
+        pub const adjugate = square.math.adjugate;
+        pub const inverse = square.math.inverse;
+        pub const fromAxisAngle = square.math.fromAxisAngle;
+
+        const vector = if (col_count == 1 or row_count == 1) struct {
+            pub fn element_mut(self: *Self, index: std.math.IntFittingRange(0, element_count)) *ComponentType {
                 return if (comptime col_count == 1) self.at_mut(.{ .row = index }) else self.at_mut(.{ .col = index });
             }
 
-            pub fn element(self: Self, index: math.IntFittingRange(0, element_count)) ComponentType {
+            pub fn element(self: Self, index: std.math.IntFittingRange(0, element_count)) ComponentType {
                 var mut = self;
                 return mut.element_mut(index).*;
             }
@@ -438,8 +471,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                 return .new(self.toArray()[0..element_count - 1].*);
             }
 
-            // vector math methods
-            pub usingnamespace if (isNumberType(ComponentType)) struct {
+            const math = if (isNumberType(ComponentType)) struct {
                 pub fn dot(self: Self, other: Self) ComponentType {
                     return (if (comptime col_count == 1) self.transpose().mul(other) else self.mul(other.transpose())).get();
                 }
@@ -464,9 +496,9 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     return out;
                 }
 
-                pub usingnamespace if (isFloatType(ComponentType)) struct {
+                const float = if (isFloatType(ComponentType)) struct {
                     pub fn normL2(self: Self) ComponentType {
-                        return math.sqrt(self.dot(self));
+                        return std.math.sqrt(self.dot(self));
                     }
 
                     pub fn unit(self: Self) Self {
@@ -474,7 +506,10 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     }
                 } else struct {};
 
-                pub usingnamespace if (element_count > 1) struct {
+                pub const normL2 = float.normL2;
+                pub const unit = float.unit;
+
+                pub const wedge = if (element_count > 1) struct {
                     // technically this returns a bivector rather than a vector,
                     // but currently there's no way to destinguish these
                     const Bivector = if (col_count != 1) Matrix(ComponentType, col_count * (col_count - 1) / 2, 1) else Matrix(ComponentType, 1, row_count * (row_count - 1) / 2);
@@ -489,24 +524,39 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                         }
                         return out;
                     }
-                } else struct {};
+                }.wedge else struct {};
 
-                pub usingnamespace if (element_count == 3) struct {
+                pub const cross = if (element_count == 3) struct {
                     pub fn cross(self: Self, other: Self) Self {
                         const x = self.element(1) * other.element(2) - other.element(1) * self.element(2);
                         const y = self.element(2) * other.element(0) - other.element(2) * self.element(0);
                         const z = self.element(0) * other.element(1) - other.element(0) * self.element(1);
                         return Self.new(.{ x, y, z });
                     }
-                } else struct {};
+                }.cross else struct {};
             } else struct {};
         } else struct {};
 
-        pub usingnamespace if (col_count == 1 and row_count == 1) struct {
+        pub const element_mut = vector.element_mut;
+        pub const element = vector.element;
+        pub const new = vector.new;
+        pub const fromArray = vector.fromArray;
+        pub const toArray = vector.toArray;
+        pub const append = vector.append;
+        pub const truncate = vector.truncate;
+        pub const dot = vector.math.dot;
+        pub const normL1 = vector.math.normL1;
+        pub const normLInf = vector.math.normLInf;
+        pub const normL2 = vector.math.normL2;
+        pub const unit = vector.math.unit;
+        pub const wedge = vector.math.wedge;
+        pub const cross = vector.math.cross;
+
+        pub const get = if (col_count == 1 and row_count == 1) struct {
             pub fn get(self: Self) ComponentType {
                 return self.at(.{});
             }
-        } else struct {};
+        }.get else struct {};
     };
 }
 
@@ -605,9 +655,9 @@ pub fn Rotor3(comptime T: type) type {
             return self.mul(other).mul(self.reverse());
         }
 
-        pub usingnamespace if (isFloatType(T)) struct {
+        const float = if (isFloatType(T)) struct {
             pub fn norm(self: Self) T {
-                return math.sqrt(self.scalar * self.scalar + self.bivector.dot(self.bivector));
+                return std.math.sqrt(self.scalar * self.scalar + self.bivector.dot(self.bivector));
             }
 
             pub fn unit(self: Self) Self {
@@ -616,8 +666,8 @@ pub fn Rotor3(comptime T: type) type {
 
             // plane must be normalized
             pub fn fromPlaneAngle(plane: Vec3(T), angle: T) Self {
-                const sin = math.sin(angle / 2.0);
-                const cos = math.cos(angle / 2.0);
+                const sin = std.math.sin(angle / 2.0);
+                const cos = std.math.cos(angle / 2.0);
                 return Self.new(plane.scale(-sin), cos).unit();
             }
 
@@ -641,6 +691,12 @@ pub fn Rotor3(comptime T: type) type {
                     .mul(Self.fromPlaneAngle(Vec3(T).new(.{0, 1, 0}).wedge(Vec3(T).new(.{0, 0, 1})), v.element(0)));
             }
         } else struct {};
+
+        const norm = float.norm;
+        const unit = float.unit;
+        const fromPlaneAngle = float.fromPlaneAngle;
+        const fromMatrix = float.fromMatrix;
+        const fromXYZ = float.fromXYZ;
 
         pub fn toMatrix(self: Self) Mat3(T) {
             return Mat3(T).fromCols(.{

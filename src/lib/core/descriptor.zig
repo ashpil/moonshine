@@ -86,8 +86,8 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
             };
         }
 
-        pub usingnamespace if (is_push_descriptor) struct {} else struct {
-            pub fn allocate_set(self: *const Self, vc: *const VulkanContext, writes: [bindings.len]vk.WriteDescriptorSet) !vk.DescriptorSet {
+        pub const allocateSet = if (is_push_descriptor) struct {} else struct {
+            pub fn allocateSet(self: *const Self, vc: *const VulkanContext, writes: [bindings.len]vk.WriteDescriptorSet) !vk.DescriptorSet {
                 var descriptor_set: vk.DescriptorSet = undefined;
 
                 try vc.device.allocateDescriptorSets(&vk.DescriptorSetAllocateInfo {
@@ -119,7 +119,7 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
 
                 return descriptor_set;
             }
-        };
+        }.allocateSet;
 
         pub fn destroy(self: *Self, vc: *const VulkanContext) void {
             if (!is_push_descriptor) vc.device.destroyDescriptorPool(self.pool, null);
