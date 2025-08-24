@@ -2,6 +2,10 @@
 
 const c = @import("glfw");
 const vk = @import("vulkan");
+
+extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
+extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
+
 const std = @import("std");
 
 const Error = error {
@@ -37,7 +41,7 @@ pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
 }
 
 pub fn getPhysicalDevicePresentationSupport(instance: vk.Instance, device: vk.PhysicalDevice, idx: u32) bool {
-    return c.glfwGetPhysicalDevicePresentationSupport(instance, device, idx) == c.GLFW_TRUE;
+    return glfwGetPhysicalDevicePresentationSupport(instance, device, idx) == c.GLFW_TRUE;
 }
 
 // abusing the fact a little bit that we know that glfw always asks for two extensions
@@ -71,7 +75,7 @@ pub fn pollEvents(self: *const Self) void {
 
 pub fn createSurface(self: *const Self, instance: vk.Instance) Error!vk.SurfaceKHR {
     var surface: vk.SurfaceKHR = undefined;
-    if (c.glfwCreateWindowSurface(instance, self.handle, null, &surface) != vk.Result.success) return Error.SurfaceCreateFail; // this could give more details
+    if (glfwCreateWindowSurface(instance, self.handle, null, &surface) != vk.Result.success) return Error.SurfaceCreateFail; // this could give more details
     return surface;
 }
 

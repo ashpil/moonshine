@@ -1,8 +1,14 @@
 // wrappers around cimgui
 const std = @import("std");
 const vk = @import("vulkan");
+const glfw = @import("glfw");
 
 const c = @import("imgui");
+
+extern fn ImGui_ImplGlfw_InitForVulkan(*glfw.GLFWwindow, bool) bool;
+extern fn ImGui_ImplGlfw_Shutdown() void;
+extern fn ImGui_ImplGlfw_NewFrame() void;
+
 const Window = @import("../Window.zig");
 
 const vector = @import("../vector.zig");
@@ -471,13 +477,13 @@ pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.E
 }
 
 pub fn implGlfwInit(window: Window) void {
-    std.debug.assert(c.ImGui_ImplGlfw_InitForVulkan(window.handle, true));
+    std.debug.assert(ImGui_ImplGlfw_InitForVulkan(window.handle, true));
 }
 
 pub fn implGlfwShutdown() void {
-    c.ImGui_ImplGlfw_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
 }
 
 pub fn implGlfwNewFrame() void {
-    c.ImGui_ImplGlfw_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
 }

@@ -15,10 +15,10 @@ pub fn build(b: *std.Build) !void {
 
     // packages/libraries we'll need below
     const vulkan = makeVulkanModule(b);
-    const glfw = try makeGlfwModule(b, vulkan, target);
-    const imgui = makeDCImguiModule(b, glfw);
-    const tinyexr = makeTinyExrModule(b);
-    const wuffs = makeWuffsModule(b);
+    const glfw = try makeGlfwModule(b, target);
+    const imgui = makeDCImguiModule(b, glfw, target);
+    const tinyexr = makeTinyExrModule(b, target);
+    const wuffs = makeWuffsModule(b, target);
     const zgltf = makeZgltfModule(b);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
@@ -463,31 +463,19 @@ fn makeVulkanModule(b: *std.Build) *std.Build.Module {
     });
 }
 
-fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
+fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.ResolvedTarget) *std.Build.Module {
     const dcimgui = b.dependency("dcimgui", .{});
     const imgui = b.dependency("imgui", .{});
 
-    const write_files_step = b.addWriteFiles();
-    const root = write_files_step.add("imgui.zig",
-        \\pub usingnamespace @cImport({
-        \\    @cInclude("dcimgui_nodefaultargfunctions.h");
-        \\});
-        \\
-        \\const glfw = @import("glfw");
-        \\
-        \\pub extern fn ImGui_ImplGlfw_InitForVulkan(*glfw.GLFWwindow, bool) bool;
-        \\pub extern fn ImGui_ImplGlfw_Shutdown() void;
-        \\pub extern fn ImGui_ImplGlfw_NewFrame() void;
-    );
-
-    const module = b.createModule(.{
-        .root_source_file = root,
-        .link_libcpp = true,
+    const step = b.addTranslateC(.{
+        .root_source_file = dcimgui.path("dcimgui_nodefaultargfunctions.h"),
         .optimize = .ReleaseFast,
-        .imports = &[_]std.Build.Module.Import {
-            .{ .name = "glfw", .module = glfw },
-        }
+        .target = target,
     });
+    step.addIncludePath(imgui.path(""));
+
+    const module = step.createModule();
+    module.link_libcpp = true;
 
     module.addCSourceFiles(.{
         .root = dcimgui.path(""),
@@ -518,22 +506,19 @@ fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module) *std.Build.Module {
     return module;
 }
 
-fn makeTinyExrModule(b: *std.Build) *std.Build.Module {
+fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const tinyexr = b.dependency("tinyexr", .{});
     const miniz_path = "deps/miniz/";
 
-    const write_files_step = b.addWriteFiles();
-    const root = write_files_step.add("tinyexr.zig",
-        \\pub usingnamespace @cImport(@cInclude("tinyexr.h"));
-    );
-
-    const module = b.createModule(.{
-        .root_source_file = root,
-        .link_libcpp = true,
+    const step = b.addTranslateC(.{
+        .root_source_file = tinyexr.path("tinyexr.h"),
         .optimize = .ReleaseFast,
-        .sanitize_c = false, // fails :( https://github.com/syoyo/tinyexr/issues/187
+        .target = target,
     });
 
+    const module = step.createModule();
+    module.link_libcpp = true;
+    module.sanitize_c = false; // fails :( https://github.com/syoyo/tinyexr/issues/187
     module.addCSourceFiles(.{
         .root = tinyexr.path(""),
         .files = &.{
@@ -541,65 +526,47 @@ fn makeTinyExrModule(b: *std.Build) *std.Build.Module {
             miniz_path ++ "miniz.c",
         },
     });
-
     module.addIncludePath(tinyexr.path(""));
     module.addIncludePath(tinyexr.path(miniz_path));
 
     return module;
 }
 
-fn makeWuffsModule(b: *std.Build) *std.Build.Module {
+fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const base = b.dependency("wuffs", .{});
 
-    const write_files_step = b.addWriteFiles();
-    const root = write_files_step.add("wuffs.zig",
-        \\pub usingnamespace @cImport(@cInclude("wuffs-v0.4.c"));
-    );
-
-    const module = b.createModule(.{
-        .root_source_file = root,
-        .link_libc = true,
+    const step = b.addTranslateC(.{
+        .root_source_file = base.path("release/c/wuffs-v0.4.c"),
         .optimize = .ReleaseFast,
+        .target = target,
     });
 
+    const module = step.createModule();
     module.addCSourceFile(.{
         .file = base.path("release/c/wuffs-v0.4.c"),
         .flags = &.{
             "-DWUFFS_IMPLEMENTATION",
         },
     });
-
     module.addIncludePath(base.path("release/c/"));
 
     return module;
 }
 
-fn makeGlfwModule(b: *std.Build, vulkan: *std.Build.Module, target: std.Build.ResolvedTarget) !*std.Build.Module {
+fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {
     const glfw = b.dependency("glfw", .{});
 
-    const write_files_step = b.addWriteFiles();
-    const root = write_files_step.add("glfw.zig",
-        \\pub usingnamespace @cImport({
-        \\    @cDefine("GLFW_INCLUDE_NONE", {});
-        \\    @cInclude("GLFW/glfw3.h");
-        \\});
-        \\
-        \\const vk = @import("vulkan");
-        \\const c = @This();
-        \\
-        \\pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
-        \\pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
-    );
+        //pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
+        //pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
 
-    const module = b.createModule(.{
-        .root_source_file = root,
-        .link_libc = true,
+    const step = b.addTranslateC(.{
+        .root_source_file = glfw.path("include/GLFW/glfw3.h"),
         .optimize = .ReleaseFast,
         .target = target,
-        .imports = &[_]std.Build.Module.Import {
-            .{ .name = "vulkan", .module = vulkan },
-        }
     });
+    step.defineCMacro("GLFW_INCLUDE_NONE", null);
+
+    const module = step.createModule();
 
     const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
     const build_x11 = b.option(bool, "x11", "Support X11 on Linux. (default: true)") orelse true;
