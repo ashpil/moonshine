@@ -42,7 +42,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
 
     const memory = try vc.device.allocateMemory(&.{
         .allocation_size = mem_requirements.size,
-        .memory_type_index = try vc.findMemoryType(mem_requirements.memory_type_bits, .{ .device_local_bit = true }),
+        .memory_type_index = try vc.memory_types.find(mem_requirements.memory_type_bits, .{ .device_local_bit = true }),
     }, null);
     errdefer vc.device.freeMemory(memory, null);
 

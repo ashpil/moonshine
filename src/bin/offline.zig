@@ -69,7 +69,11 @@ const IntervalLogger = struct {
         const elapsed = new_time.since(self.last_time);
         const ms = elapsed / std.time.ns_per_ms;
         const s = ms / std.time.ms_per_s;
-        try std.io.getStdOut().writer().print("{}.{:0>3} seconds to {s}\n", .{ s, ms, state });
+
+        var out_stream = std.fs.File.stdout().writer(&.{});
+        const writer = &out_stream.interface;
+        try writer.print("{}.{:0>3} seconds to {s}\n", .{ s, ms, state });
+
         self.last_time = new_time;
     }
 };

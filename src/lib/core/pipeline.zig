@@ -28,17 +28,9 @@ pub fn createShaderModule(vc: *const VulkanContext, shader_source: ShaderSource,
 
                 while (try poller.poll()) {}
 
-                var fifo = poller.fifo(.stdout);
-                if (fifo.head > 0) {
-                    @memcpy(fifo.buf[0..fifo.count], fifo.buf[fifo.head .. fifo.head + fifo.count]);
-                }
-
-                to_free = fifo.buf;
-                const stdout = fifo.buf[0..fifo.count];
-                fifo.* = std.io.PollFifo.init(allocator);
-
-                break :blk_inner stdout;
+                break :blk_inner try poller.toOwnedSlice(.stdout);
             };
+            to_free = stdout;
 
             const term = try compile_process.wait();
             if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
@@ -98,8 +90,7 @@ fn createPushDescriptorBindings(comptime Bindings: type, comptime stage_flags: v
 }
 
 // inline so that the temporaries here end up in the parent function
-// not sure if this is part of the spec but seems to work
-pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: BindingsType) std.BoundedArray(vk.WriteDescriptorSet, @typeInfo(BindingsType).@"struct".fields.len) {
+pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: BindingsType) []const vk.WriteDescriptorSet {
     var writes: [@typeInfo(BindingsType).@"struct".fields.len]vk.WriteDescriptorSet = undefined;
     inline for (@typeInfo(BindingsType).@"struct".fields, &writes, 0..) |binding, *write, i| {
         const descriptor_type = comptime typeToDescriptorType(switch (@typeInfo(binding.type)) {
@@ -170,7 +161,8 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
 
     // remove any writes we may not actually want, e.g.,
     // samplers or zero-size things
-    var pruned_writes = std.BoundedArray(vk.WriteDescriptorSet, @typeInfo(BindingsType).@"struct".fields.len) {};
+    var pruned_writes_buffer: [@typeInfo(BindingsType).@"struct".fields.len]vk.WriteDescriptorSet = undefined;
+    var pruned_writes = std.ArrayList(vk.WriteDescriptorSet).initBuffer(&pruned_writes_buffer);
     for (writes) |write| {
         if (write.descriptor_type == .sampler) continue;
         if (write.descriptor_count == 0) continue;
@@ -178,10 +170,10 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
             .storage_buffer => if (write.p_buffer_info[0].buffer == .null_handle) continue,
             else => {},
         }
-        pruned_writes.append(write) catch unreachable;
+        pruned_writes.appendBounded(write) catch unreachable;
     }
 
-    return pruned_writes;
+    return pruned_writes.items;
 }
 
 pub fn PipelineBindings(
@@ -383,7 +375,7 @@ pub fn Pipeline(comptime options: struct {
         pub const recordPushDescriptors = if (@sizeOf(options.PushSetBindings) != 0) struct {
             pub fn recordPushDescriptors(self: *const Self, command_buffer: VulkanContext.CommandBuffer, bindings: options.PushSetBindings) void {
                 const writes = pushDescriptorDataToWriteDescriptor(options.PushSetBindings, bindings);
-                command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), &writes.buffer);
+                command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), writes.ptr);
             }
         }.recordPushDescriptors else struct {};
     };

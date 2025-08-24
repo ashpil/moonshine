@@ -15,7 +15,7 @@ pub const Image = struct {
 };
 
 handle: vk.SwapchainKHR = .null_handle,
-images: std.BoundedArray(Image, max_image_count) = .{},
+images: []Image = &.{},
 extent: vk.Extent2D = .{
     .width = 0,
     .height = 0,
@@ -32,12 +32,12 @@ pub const SurfaceFormat = struct {
     transfer_function: color.TransferFunction,
 };
 
-pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !Self {
-    return try createFromOld(vc, ideal_extent, format_whitelist, surface, transient_allocator, .{});
+pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, allocator: std.mem.Allocator) !Self {
+    return try createFromOld(vc, ideal_extent, format_whitelist, surface, allocator, .{});
 }
 
-pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator, old: Self) !Self {
-    const settings = try SwapSettings.find(vc, ideal_extent, format_whitelist, surface, transient_allocator);
+pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, allocator: std.mem.Allocator, old: Self) !Self {
+    const settings = try SwapSettings.find(vc, ideal_extent, format_whitelist, surface, allocator);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
 
@@ -60,14 +60,13 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
 
-    const image_handles = try vk_helpers.getVkSliceBounded(max_image_count, @TypeOf(vc.device).getSwapchainImagesKHR, .{ vc.device, handle });
+    const image_handles = try vc.device.getSwapchainImagesAllocKHR(handle, allocator);
+    defer allocator.free(image_handles);
 
-    var images = std.BoundedArray(Image, max_image_count) {
-        .buffer = undefined,
-        .len = image_handles.len,
-    };
+    const images = try allocator.alloc(Image, image_handles.len);
+    errdefer allocator.free(images);
 
-    inline for (&images.buffer, image_handles.buffer, 0..) |*image, image_handle, i| {
+    for (images, image_handles, 0..) |*image, image_handle, i| {
         if (i >= images.len) {
             break;
         }
@@ -90,9 +89,10 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format
             },
         }, null);
         image.handle = image_handle;
-        try vk_helpers.setDebugName(vc.device, image.view, std.fmt.comptimePrint("swapchain image view {}", .{ i }));
+        const name = try std.fmt.allocPrintSentinel(allocator, "swapchain image view {}", .{ i }, 0);
+        defer allocator.free(name);
+        try vk_helpers.setDebugName(vc.device, image.view, name);
     }
-
 
     return Self {
         .handle = handle,
@@ -125,13 +125,16 @@ pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaph
     });
 }
 
-pub fn destroy(self: *const Self, vc: *const VulkanContext) void {
-    for (self.images.slice()) |image| vc.device.destroyImageView(image.view, null);
+pub fn destroy(self: *const Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    for (self.images) |image| vc.device.destroyImageView(image.view, null);
+    allocator.free(self.images);
     vc.device.destroySwapchainKHR(self.handle, null);
 }
 
-pub fn attachToEncoder(self: *const Self, encoder: *Encoder) !void {
-    for (self.images.slice()) |image| try encoder.attachResource(image.view);
+// invalid to be used after this
+pub fn attachToEncoder(self: *const Self, encoder: *Encoder, allocator: std.mem.Allocator) !void {
+    for (self.images) |image| try encoder.attachResource(image.view);
+    allocator.free(self.images);
     try encoder.attachResource(self.handle);
 }
 
@@ -144,12 +147,12 @@ const SwapSettings = struct {
     extent: vk.Extent2D,
 
     // updates mutable extent
-    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !SwapSettings {
+    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, surface);
 
         return SwapSettings {
-            .format = try determineFormat(vc, format_whitelist, surface, transient_allocator),
-            .present_mode = try determinePresentMode(vc, surface),
+            .format = try determineFormat(vc, format_whitelist, surface, transient),
+            .present_mode = try determinePresentMode(vc, surface, transient),
             .image_count = if (caps.max_image_count == 0) caps.min_image_count + 1 else @min(caps.min_image_count + 1, caps.max_image_count),
             .image_sharing_mode = .exclusive,
             .pre_transform = caps.current_transform,
@@ -157,10 +160,11 @@ const SwapSettings = struct {
         };
     }
 
-    pub fn determinePresentMode(vc: *const VulkanContext, surface: vk.SurfaceKHR) !vk.PresentModeKHR {
+    pub fn determinePresentMode(vc: *const VulkanContext, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !vk.PresentModeKHR {
         const ideal = vk.PresentModeKHR.fifo_khr;
 
-        const present_modes = (try vk_helpers.getVkSliceBounded(8, @TypeOf(vc.instance).getPhysicalDeviceSurfacePresentModesKHR, .{ vc.instance, vc.physical_device.handle, surface })).slice();
+        const present_modes = try vc.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(vc.physical_device.handle, surface, transient);
+        defer transient.free(present_modes);
 
         for (present_modes) |present_mode| {
             if (std.meta.eql(present_mode, ideal)) {
@@ -172,9 +176,9 @@ const SwapSettings = struct {
     }
 
     // finds first whitelisted format that is actually available
-    pub fn determineFormat(vc: *const VulkanContext, whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient_allocator: std.mem.Allocator) !SurfaceFormat {
-        const available_surface_formats = try vc.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(vc.physical_device.handle, surface, transient_allocator);
-        defer transient_allocator.free(available_surface_formats);
+    pub fn determineFormat(vc: *const VulkanContext, whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !SurfaceFormat {
+        const available_surface_formats = try vc.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(vc.physical_device.handle, surface, transient);
+        defer transient.free(available_surface_formats);
 
         for (whitelist) |wanted| {
             const wanted_color_space = getVkColorSpace(wanted.primaries, wanted.transfer_function).?;

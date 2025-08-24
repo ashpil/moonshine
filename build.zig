@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
     const hrtsystem_shaders = makeHrtsystemShaders(b, shader_source);
     const default_engine_options = EngineOptions.fromCli(b);
 
-    var compiles = std.ArrayList(*std.Build.Step.Compile).init(b.allocator);
+    var compiles = std.array_list.Managed(*std.Build.Step.Compile).init(b.allocator);
 
     // TODO: make custom test runner parallel + share some state across tests
     try compiles.append(blk: {
@@ -78,6 +78,7 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
         const exe = b.addExecutable(.{
             .name = "online",
+            .use_llvm = true, // seems to be some compiler bug as of 0.15.1 that prevents online from compiling
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/bin/online/online.zig"),
                 .target = target,
@@ -129,10 +130,10 @@ pub fn build(b: *std.Build) !void {
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
-        const zig_lib = b.addSharedLibrary(.{
+        const zig_lib = b.addLibrary(.{
             .name = "moonshine",
             .root_module = b.createModule(.{
-            .root_source_file = b.path("src/bin/hydra/hydra.zig"),
+                .root_source_file = b.path("src/bin/hydra/hydra.zig"),
                 .target = target,
                 .optimize = optimize,
                 .imports = &[_]std.Build.Module.Import {
@@ -145,10 +146,13 @@ pub fn build(b: *std.Build) !void {
         });
         try compiles.append(zig_lib);
 
-        const lib = b.addSharedLibrary(.{
+        const lib = b.addLibrary(.{
+            .linkage = .dynamic,
             .name = "hdMoonshine",
-            .target = target,
-            .optimize = optimize,
+            .root_module = b.createModule(.{
+                .target = target,
+                .optimize = optimize,
+            }),
         });
         lib.addCSourceFiles(.{
            .files = &.{
@@ -292,7 +296,7 @@ fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
 
     try child.spawn();
 
-    const stderr = child.stderr.?.reader().readAllAlloc(self.allocator, max_output_size) catch {
+    const stderr = child.stderr.?.readToEndAlloc(self.allocator, max_output_size) catch {
         return error.ReadFailure;
     };
     errdefer self.allocator.free(stderr);
@@ -351,8 +355,8 @@ pub const EngineOptions = struct {
 fn makeShadersModule(b: *std.Build, shader_source: *std.Build.Module, shader_imports: []const ShaderImport) *std.Build.Module {
     const stdout_shader_args = [_][]const u8{ "-Fo", "/dev/stdout" }; // TODO: windows
 
-    var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
-    var contents = std.ArrayList(u8).init(b.allocator);
+    var imports = std.array_list.Managed(std.Build.Module.Import).init(b.allocator);
+    var contents = std.array_list.Managed(u8).init(b.allocator);
 
     contents.appendSlice(
         \\const ShaderSource = @import("shader_source");
@@ -410,7 +414,7 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
     glfw: *std.Build.Module,
     imgui: *std.Build.Module,
 ) *std.Build.Module {
-    var imports = std.ArrayList(std.Build.Module.Import).init(b.allocator);
+    var imports = std.array_list.Managed(std.Build.Module.Import).init(b.allocator);
     defer imports.deinit();
 
     imports.appendSlice(&[_]std.Build.Module.Import {
@@ -518,7 +522,7 @@ fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build
 
     const module = step.createModule();
     module.link_libcpp = true;
-    module.sanitize_c = false; // fails :( https://github.com/syoyo/tinyexr/issues/187
+    module.sanitize_c = .off; // fails :( https://github.com/syoyo/tinyexr/issues/187
     module.addCSourceFiles(.{
         .root = tinyexr.path(""),
         .files = &.{
@@ -556,9 +560,6 @@ fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.M
 fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {
     const glfw = b.dependency("glfw", .{});
 
-        //pub extern fn glfwCreateWindowSurface(vk.Instance, *c.GLFWwindow, ?*const vk.AllocationCallbacks, *vk.SurfaceKHR) vk.Result;
-        //pub extern fn glfwGetPhysicalDevicePresentationSupport(vk.Instance, vk.PhysicalDevice, u32) c_int;
-
     const step = b.addTranslateC(.{
         .root_source_file = glfw.path("include/GLFW/glfw3.h"),
         .optimize = .ReleaseFast,
@@ -580,7 +581,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
 
     // collect source files
     const sources = blk: {
-        var sources = std.ArrayList([]const u8).init(b.allocator);
+        var sources = std.array_list.Managed([]const u8).init(b.allocator);
 
         const source_path = "src/";
 
@@ -645,7 +646,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
     };
 
     const flags = blk: {
-        var flags = std.ArrayList([]const u8).init(b.allocator);
+        var flags = std.array_list.Managed([]const u8).init(b.allocator);
 
         if (target.result.os.tag == .linux) {
             if (build_wayland) try flags.append("-D_GLFW_WAYLAND");

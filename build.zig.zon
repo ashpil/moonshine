@@ -4,8 +4,8 @@
 
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/fdbe6d60d1a937ee64f4e37c2acd0c76a7588f24.tar.gz",
-            .hash = "vulkan-0.0.0-r7Ytx2dUAwDhoUvuIqliqPUbyDZZi0bl_CQIwspUpHs_",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/93bc6f1ac3e13dd98d918e242dc892f179a0d0f5.tar.gz",
+            .hash = "vulkan-0.0.0-r7YtxwA_AwAU4rmOITZD_KJs11Kie1sv0t-pcMDQGIqw",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/9c77de5c3dd216f28e407eec65ed9c0a296c1f74.tar.gz",
@@ -28,8 +28,8 @@
             .hash = "N-V-__8AAGC4nQHVa2CJUUb6saSEtcSR7c3wMfzHy9oF6m1g",
         },
         .zgltf = .{
-            .url = "https://github.com/kooparse/zgltf/archive/b6579c3887c7ab0eef5f1eda09abbbc1f04d76ce.tar.gz",
-            .hash = "zgltf-0.1.0-sX6QAqIKAgAfb7yQlVrdsLwCNc6Fx8wFOLIQRaEGJnVC",
+            .url = "https://github.com/ashpil/zgltf/archive/267c1f934a9ec4af5e23309ddeca0cc4b7679cd3.tar.gz",
+            .hash = "zgltf-0.1.0-sX6QAjsXAgBwZzkV__XD-MAf2Y5lRqSFsbxixrXXhlhz",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
@@ -37,7 +37,7 @@
         },
     },
     .fingerprint = 0xccaef4ce7dcdd508,
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
     .paths = .{
         "",
     },

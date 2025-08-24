@@ -41,7 +41,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         gltf_filepath,
         std.math.maxInt(usize),
         null,
-        4,
+        .@"4",
         null
     );
     defer allocator.free(buffer);
@@ -63,9 +63,9 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
             .new(.{ 0, 0, 0, 1}),
         });
 
-        for (gltf.data.nodes.items) |node| {
+        for (gltf.data.nodes) |node| {
             if (node.camera) |camera_idx| {
-                const gltf_camera = gltf.data.cameras.items[camera_idx];
+                const gltf_camera = gltf.data.cameras[camera_idx];
                 const mat_array = Gltf.getGlobalTransform(&gltf.data, node);
                 const transform = Mat4.fromCols(.{ .new(mat_array[0]), .new(mat_array[1]), .new(mat_array[2]), .new(mat_array[3]) });
                 _ = try camera.appendCamera(allocator, Camera.Camera {
@@ -80,7 +80,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
                     .orthographic = Camera.Orthographic {
                         .vscale = if (gltf_camera.type == .orthographic) gltf_camera.type.orthographic.ymag else 1,
                     },
-                }, try allocator.dupeZ(u8, gltf_camera.name));
+                }, try allocator.dupeZ(u8, gltf_camera.name orelse "<unnamed>"));
             }
         }
 

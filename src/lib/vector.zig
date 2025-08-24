@@ -181,19 +181,14 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
         pub const withoutRow = MultipleRows.withoutRow;
         pub const truncateRow = MultipleRows.truncateRow;
 
-        pub fn format(
-            self: Self,
-            comptime fmt: []const u8,
-            options: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
+        pub fn format(self: Self, writer: *std.io.Writer) !void {
             if (row_count != 1) try writer.writeAll("(");
 
             inline for (0..row_count) |row_idx| {
                 if (col_count != 1) try writer.writeAll("(");
                 inline for (0..col_count) |col_idx| {
                     const value = self.at(.{ .col = col_idx, .row = row_idx });
-                    try std.fmt.formatType(value, fmt, options, writer, std.options.fmt_max_depth - 1);
+                    try writer.printValue("any", .{}, value, std.options.fmt_max_depth - 1);
                     if (col_idx != col_count - 1) try writer.writeAll(", ");
                 }
                 if (col_count != 1) try writer.writeAll(")");

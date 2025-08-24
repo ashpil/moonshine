@@ -122,7 +122,7 @@ pub fn main() !void {
     defer context.destroy(allocator);
 
     var display = try Display.create(&context, window, supports_swapchain_color_spaces, allocator);
-    defer display.destroy(&context);
+    defer display.destroy(&context, allocator);
 
     var encoder = try Encoder.create(&context, "main");
     defer encoder.destroy(&context);
@@ -181,7 +181,7 @@ pub fn main() !void {
         var frame_encoder = if (display.startFrame(&context)) |buffer| buffer else |err| switch (err) {
             error.OutOfDateKHR => blk: {
                 // presentation failed, can destroy resources immediately
-                (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
+                (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context, allocator);
                 scene.camera.sensors.items[active_sensor].image.destroy(&context);
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
@@ -538,7 +538,7 @@ pub fn main() !void {
             if (max_sample_count != 0) scene.camera.sensors.items[active_sensor].sample_count = @min(scene.camera.sensors.items[active_sensor].sample_count, max_sample_count);
             if (ok == .suboptimal_khr or !std.meta.eql(window.getExtent(), display.swapchain.extent)) {
                 // presentation succeeded, need to keep resources alive until frame finishes
-                try (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).attachToEncoder(frame_encoder);
+                try (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).attachToEncoder(frame_encoder, allocator);
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
@@ -547,7 +547,7 @@ pub fn main() !void {
             }
         } else |err| if (err == error.OutOfDateKHR) {
             // presentation failed, can destroy resources immediately
-            (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context);
+            (try display.recreate(&context, window, supports_swapchain_color_spaces, allocator)).destroy(&context, allocator);
             scene.camera.sensors.items[active_sensor].image.destroy(&context);
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;

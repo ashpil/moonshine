@@ -184,7 +184,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             if (@sizeOf(field.type) != 0) {
                 const variant_buffer = &@field(self.variant_buffers, field.name);
                 if (variant_buffer.buffer.isNull()) {
-                    const buffer_name = try std.fmt.allocPrintZ(allocator, "material {s} {s}", .{ parameters.name, field.name });
+                    const buffer_name = try std.fmt.allocPrintSentinel(allocator, "material {s} {s}", .{ parameters.name, field.name }, 0);
                     defer allocator.free(buffer_name);
                     variant_buffer.buffer = try core.mem.DeviceBuffer(field.type, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, buffer_name);
                     variant_buffer.addr = variant_buffer.buffer.getAddress(vc);

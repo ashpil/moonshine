@@ -20,7 +20,7 @@ fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.Buff
 
     const allocate_info = vk.MemoryAllocateInfo {
         .allocation_size = mem_requirements.size,
-        .memory_type_index = try vc.findMemoryType(mem_requirements.memory_type_bits, properties),
+        .memory_type_index = try vc.memory_types.find(mem_requirements.memory_type_bits, properties),
         .p_next = if (usage.contains(.{ .shader_device_address_bit = true })) &vk.MemoryAllocateFlagsInfo {
             .device_mask = 0,
             .flags = .{ .device_address_bit = true },
@@ -211,7 +211,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
                 },
             }, &memory_requirements);
 
-            const memory_type_index: MemoryTypeIndex = vc.findMemoryType(memory_requirements.memory_requirements.memory_type_bits, memory_properties) catch unreachable;
+            const memory_type_index: MemoryTypeIndex = vc.memory_types.find(memory_requirements.memory_requirements.memory_type_bits, memory_properties) catch unreachable;
 
             return Self {
                 .device = vc.device,

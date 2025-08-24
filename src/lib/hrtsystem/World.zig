@@ -66,7 +66,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     // stuff that is in every material
     var material = blk: {
         var material: Material.Parameters = undefined;
-        material.name = gltf_material.name;
+        material.name = gltf_material.name orelse "<unnamed>";
 
         material.volume.medium = MaterialManager.Medium {
             .@"σ_a" = F32x3.new(.{
@@ -87,7 +87,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         }
 
         material.normal = if (gltf_material.normal_texture) |texture| normal: {
-            const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+            const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
             // this gives us rgb --> need to convert to rg
             // theoretically gltf spec claims these values should already be linear
@@ -98,17 +98,17 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             for (rg, img) |*dst, src| {
                 dst.* = src.truncate();
             }
-            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} normal", .{ gltf_material.name });
+            const debug_name = try std.fmt.allocPrintSentinel(allocator, "{s} normal", .{ material.name }, 0);
             defer allocator.free(debug_name);
             break :normal try textures.upload(vc, U8x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else normal: {
-            const rg: *F32x2 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2)), @sizeOf(F32x2)));
+            const rg: *F32x2 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x2))), @sizeOf(F32x2)));
             rg.* = Material.Parameters.default_normal;
             break :normal try textures.upload(vc, F32x2, allocator, encoder, encoder.upload_allocator.getBufferSlice(rg), vk.Extent2D { .width = 1, .height = 1 }, "default normal");
         };
 
         material.emissive = if (gltf_material.emissive_texture) |texture| emissive: {
-            const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+            const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
             const img, const width, const height = try loadImage(allocator, image, gltf_directory);
             defer allocator.free(img);
@@ -118,13 +118,13 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
                 dst.* = src.append(0);
             }
 
-            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} emissive", .{ gltf_material.name });
+            const debug_name = try std.fmt.allocPrintSentinel(allocator, "{s} emissive", .{ material.name }, 0);
             defer allocator.free(debug_name);
             break :emissive try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
         } else emissive: {
-            const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
+            const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4))), @sizeOf(F32x4)));
             constant.* = F32x3.new(gltf_material.emissive_factor).scale(gltf_material.emissive_strength).append(std.math.nan(f32));
-            const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant emissive {}", .{ gltf_material.name, constant });
+            const debug_name = try std.fmt.allocPrintSentinel(allocator, "{s} constant emissive {f}", .{ material.name, constant }, 0);
             defer allocator.free(debug_name);
             break :emissive try textures.upload(vc, F32x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(constant), vk.Extent2D { .width = 1, .height = 1 }, debug_name);
         };
@@ -147,7 +147,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     }
 
     standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
-        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
         const img, const width, const height = try loadImage(allocator, image, gltf_directory);
         defer allocator.free(img);
@@ -156,19 +156,19 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             dst.* = src.append(0);
         }
 
-        const debug_name = try std.fmt.allocPrintZ(allocator, "{s} color", .{ gltf_material.name });
+        const debug_name = try std.fmt.allocPrintSentinel(allocator, "{s} color", .{ material.name }, 0);
         defer allocator.free(debug_name);
         break :blk try textures.upload(vc, U8x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba), vk.Extent2D { .width = width, .height = height }, debug_name);
     } else blk: {
-        const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4)), @sizeOf(F32x4)));
+        const constant: *F32x4 = @ptrCast(try encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4))), @sizeOf(F32x4)));
         constant.* = F32x3.new(gltf_material.metallic_roughness.base_color_factor[0..3].*).append(std.math.nan(f32));
-        const debug_name = try std.fmt.allocPrintZ(allocator, "{s} constant color {}", .{ gltf_material.name, constant });
+        const debug_name = try std.fmt.allocPrintSentinel(allocator, "{s} constant color {f}", .{ material.name, constant }, 0);
         defer allocator.free(debug_name);
         break :blk try textures.upload(vc, F32x4, allocator, encoder, encoder.upload_allocator.getBufferSlice(constant), vk.Extent2D { .width = 1, .height = 1 }, debug_name);
     };
 
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
-        const image = gltf.data.images.items[gltf.data.textures.items[texture.index].source.?];
+        const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
         // this gives us rgb --> only need g (roughness) and b (metalness) channels
         // theoretically gltf spec claims these values should already be linear
@@ -181,10 +181,10 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             dst1.* = src.element(2);
             dst2.* = src.element(1);
         }
-        const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} metalness", .{ gltf_material.name });
+        const debug_name_metalness = try std.fmt.allocPrintSentinel(allocator, "{s} metalness", .{ material.name }, 0);
         defer allocator.free(debug_name_metalness);
         standard_pbr.metalness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(metalness), vk.Extent2D { .width = width, .height = height }, debug_name_metalness);
-        const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} roughness", .{ gltf_material.name });
+        const debug_name_roughness = try std.fmt.allocPrintSentinel(allocator, "{s} roughness", .{ material.name }, 0);
         defer allocator.free(debug_name_roughness);
         standard_pbr.roughness = try textures.upload(vc, u8, allocator, encoder, encoder.upload_allocator.getBufferSlice(roughness), vk.Extent2D { .width = width, .height = height }, debug_name_roughness);
         material.bsdf = .{ .standard_pbr = standard_pbr };
@@ -202,13 +202,13 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
             material.bsdf = .{ .perfect_mirror = {} };
             return material;
         } else {
-            const debug_name_metalness = try std.fmt.allocPrintZ(allocator, "{s} constant metalness {}", .{ gltf_material.name, gltf_material.metallic_roughness.metallic_factor });
+            const debug_name_metalness = try std.fmt.allocPrintSentinel(allocator, "{s} constant metalness {}", .{ material.name, gltf_material.metallic_roughness.metallic_factor }, 0);
             defer allocator.free(debug_name_metalness);
             const metalness = try encoder.uploadAllocator().create(f32);
             metalness.* = gltf_material.metallic_roughness.metallic_factor;
             standard_pbr.metalness = try textures.upload(vc, f32, allocator, encoder, encoder.upload_allocator.getBufferSlice(metalness), vk.Extent2D { .width = 1, .height = 1 }, debug_name_metalness);
 
-            const debug_name_roughness = try std.fmt.allocPrintZ(allocator, "{s} constant roughness {}", .{ gltf_material.name, gltf_material.metallic_roughness.roughness_factor });
+            const debug_name_roughness = try std.fmt.allocPrintSentinel(allocator, "{s} constant roughness {}", .{ material.name, gltf_material.metallic_roughness.roughness_factor }, 0);
             defer allocator.free(debug_name_roughness);
             const roughness = try encoder.uploadAllocator().create(f32);
             roughness.* = gltf_material.metallic_roughness.roughness_factor;
@@ -227,7 +227,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
         var materials = try MaterialManager.createEmpty(vc);
         errdefer materials.destroy(vc, allocator);
 
-        for (gltf.data.materials.items) |material| {
+        for (gltf.data.materials) |material| {
             const mat = try gltfMaterialToMaterial(vc, allocator, encoder, gltf, gltf_directory, material, &materials.textures);
             _ = try materials.upload(vc, allocator, encoder, mat);
         }
@@ -241,11 +241,11 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     };
     errdefer materials.destroy(vc, allocator);
 
-    const buffers = try allocator.alloc([]align(4) const u8, gltf.data.buffers.items.len);
+    const buffers = try allocator.alloc([]align(4) const u8, gltf.data.buffers.len);
     defer allocator.free(buffers);
-    for (gltf.data.buffers.items, buffers) |src, *dst| {
+    for (gltf.data.buffers, buffers) |src, *dst| {
         if (src.uri) |uri| {
-            const bytes = try allocator.alignedAlloc(u8, 4, src.byte_length);
+            const bytes = try allocator.alignedAlloc(u8, .@"4", src.byte_length);
             const filepath = if (gltf_directory) |dir| try std.fs.path.join(allocator, &.{ dir, uri }) else uri;
             defer if (gltf_directory != null) allocator.free(filepath);
             _ = try std.fs.cwd().readFile(filepath, bytes);
@@ -267,20 +267,20 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     var gltf_mesh_idx_to_model = try allocator.alloc(?struct {
         handle: ModelManager.Handle,
         thin: bool
-    }, gltf.data.meshes.items.len);
+    }, gltf.data.meshes.len);
     defer allocator.free(gltf_mesh_idx_to_model);
     @memset(gltf_mesh_idx_to_model, null);
 
-    for (gltf.data.meshes.items, 0..) |mesh, mesh_idx| {
-        var geometries = std.ArrayList(Geometry.Parameters).init(allocator);
+    for (gltf.data.meshes, 0..) |mesh, mesh_idx| {
+        var geometries = std.array_list.Managed(Geometry.Parameters).init(allocator);
         defer geometries.deinit();
-        try geometries.ensureTotalCapacityPrecise(mesh.primitives.items.len);
+        try geometries.ensureTotalCapacityPrecise(mesh.primitives.len);
         var model_thin: bool = undefined;
-        for (mesh.primitives.items, 0..) |primitive, primitive_idx| {
+        for (mesh.primitives, 0..) |primitive, primitive_idx| {
             std.debug.assert(primitive.mode == .triangles);
 
             const material, const thin = if (primitive.material) |material_idx| blk: {
-                const material = gltf.data.materials.items[material_idx];
+                const material = gltf.data.materials[material_idx];
                 // ignore primitives that have a non-opaque alpha mode. there's no support for texture opacity,
                 // and ignoring them is a better approximation than making them exist but be opaque
                 if (material.alpha_mode != .@"opaque") continue;
@@ -296,15 +296,15 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             model_thin = thin;
             // get indices
             const indices = if (primitive.indices) |indices_index| blk2: {
-                const accessor = gltf.data.accessors.items[indices_index];
-                const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
+                const accessor = gltf.data.accessors[indices_index];
+                const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
 
                 break :blk2 switch (accessor.component_type) {
                     .unsigned_byte => blk3: {
-                        var indices = std.ArrayList(u8).init(allocator);
-                        defer indices.deinit();
+                        var indices: std.ArrayList(u8) = .empty;
+                        defer indices.deinit(allocator);
 
-                        gltf.getDataFromBufferView(u8, &indices, accessor, buffer);
+                        gltf.getDataFromBufferView(u8, &indices, allocator, accessor, buffer);
 
                         // convert to U32x3
                         const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
@@ -314,10 +314,10 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                         break :blk3 actual_indices;
                     },
                     .unsigned_short => blk3: {
-                        var indices = std.ArrayList(u16).init(allocator);
-                        defer indices.deinit();
+                        var indices: std.ArrayList(u16) = .empty;
+                        defer indices.deinit(allocator);
 
-                        gltf.getDataFromBufferView(u16, &indices, accessor, buffer);
+                        gltf.getDataFromBufferView(u16, &indices, allocator, accessor, buffer);
 
                         // convert to U32x3
                         const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
@@ -327,12 +327,12 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                         break :blk3 actual_indices;
                     },
                     .unsigned_integer => blk3: {
-                        var indices = std.ArrayList(u32).init(encoder.uploadAllocator());
-                        defer indices.deinit();
+                        var indices: std.ArrayList(u32) = .empty;
+                        defer indices.deinit(encoder.uploadAllocator());
 
-                        gltf.getDataFromBufferView(u32, &indices, accessor, buffer);
+                        gltf.getDataFromBufferView(u32, &indices, allocator, accessor, buffer);
 
-                        break :blk3 std.mem.bytesAsSlice(U32x3, std.mem.sliceAsBytes(try indices.toOwnedSlice()));
+                        break :blk3 std.mem.bytesAsSlice(U32x3, std.mem.sliceAsBytes(try indices.toOwnedSlice(encoder.uploadAllocator())));
                     },
                     else => unreachable,
                 };
@@ -340,37 +340,37 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             errdefer if (indices) |nonnull| encoder.uploadAllocator().free(nonnull);
 
             const vertices = blk2: {
-                var positions = std.ArrayList(f32).init(encoder.uploadAllocator());
-                var texcoords = std.ArrayList(f32).init(encoder.uploadAllocator());
-                var normals = std.ArrayList(f32).init(encoder.uploadAllocator());
+                var positions: std.ArrayList(f32) = .empty;
+                var texcoords: std.ArrayList(f32) = .empty;
+                var normals: std.ArrayList(f32) = .empty;
 
-                for (primitive.attributes.items) |attribute| {
+                for (primitive.attributes) |attribute| {
                     switch (attribute) {
                         .position => |accessor_index| {
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &positions, accessor, buffer);
+                            const accessor = gltf.data.accessors[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &positions, encoder.uploadAllocator(), accessor, buffer);
                         },
                         .texcoord => |accessor_index| {
                             // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
                             // so ignore any after the first
                             if (texcoords.items.len != 0) continue;
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &texcoords, accessor, buffer);
+                            const accessor = gltf.data.accessors[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &texcoords, encoder.uploadAllocator(), accessor, buffer);
                         },
                         .normal => |accessor_index| {
-                            const accessor = gltf.data.accessors.items[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views.items[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &normals, accessor, buffer);
+                            const accessor = gltf.data.accessors[accessor_index];
+                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                            gltf.getDataFromBufferView(f32, &normals, encoder.uploadAllocator(), accessor, buffer);
                         },
                         else => {},
                     }
                 }
 
-                const positions_slice = try positions.toOwnedSlice();
-                const texcoords_slice = try texcoords.toOwnedSlice();
-                const normals_slice = try normals.toOwnedSlice();
+                const positions_slice = try positions.toOwnedSlice(encoder.uploadAllocator());
+                const texcoords_slice = try texcoords.toOwnedSlice(encoder.uploadAllocator());
+                const normals_slice = try normals.toOwnedSlice(encoder.uploadAllocator());
 
                 // TODO: remove ptrcast workaround below once ptrcast works on slices
                 break :blk2 .{
@@ -383,7 +383,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             errdefer encoder.uploadAllocator().free(vertices.texcoords);
 
             const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh.Parameters {
-                .name = mesh.name,
+                .name = mesh.name orelse "<unnamed>",
                 .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
                 .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,
                 .normals = if (vertices.normals.len != 0) encoder.upload_allocator.getBufferSlice(vertices.normals) else null,
@@ -409,7 +409,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
     // TODO: iterate over nodes in hierarchy order rather than flat so
     // that looking up transforms is not O(n^2)
-    for (gltf.data.nodes.items) |node| {
+    for (gltf.data.nodes) |node| {
         if (node.mesh) |mesh_idx| {
             if (gltf_mesh_idx_to_model[mesh_idx]) |model| {
                 const mat_array = Gltf.getGlobalTransform(&gltf.data, node);

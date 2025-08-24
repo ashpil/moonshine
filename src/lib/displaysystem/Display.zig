@@ -42,13 +42,13 @@ surface: vk.SurfaceKHR,
 timestamp_period: if (metrics) f32 else void,
 last_frame_time_ns: if (metrics) f64 else void,
 
-pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, transient_allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, allocator: std.mem.Allocator) !Self {
     const surface = try window.createSurface(vc.instance.handle);
     errdefer vc.instance.destroySurfaceKHR(surface, null);
 
     const formats = if (supports_swapchain_color_spaces) &(swapchain_color_space_formats ++ base_formats) else &base_formats;
-    var swapchain = try Swapchain.create(vc, window.getExtent(), formats, surface, transient_allocator);
-    errdefer swapchain.destroy(vc);
+    var swapchain = try Swapchain.create(vc, window.getExtent(), formats, surface, allocator);
+    errdefer swapchain.destroy(vc, allocator);
 
     var frames: [frames_in_flight]Frame = undefined;
     inline for (&frames, 0..) |*frame, i| {
@@ -77,8 +77,8 @@ pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color
     };
 }
 
-pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    self.swapchain.destroy(vc);
+pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
+    self.swapchain.destroy(vc, allocator);
     vc.instance.destroySurfaceKHR(self.surface, null);
     inline for (&self.frames) |*frame| {
         frame.destroy(vc);
@@ -129,14 +129,14 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
 }
 
 pub fn currentImage(self: *const Self) Swapchain.Image {
-    return self.swapchain.images.get(self.swapchain_image_index);
+    return self.swapchain.images[self.swapchain_image_index];
 }
 
 // returns old swapchain
-pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, transient_allocator: std.mem.Allocator) !Swapchain {
+pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, allocator: std.mem.Allocator) !Swapchain {
     const old_swapchain = self.swapchain;
     const formats = if (supports_swapchain_color_spaces) &(swapchain_color_space_formats ++ base_formats) else &base_formats;
-    self.swapchain = try Swapchain.createFromOld(vc, window.getExtent(), formats, self.surface, transient_allocator, old_swapchain);
+    self.swapchain = try Swapchain.createFromOld(vc, window.getExtent(), formats, self.surface, allocator, old_swapchain);
     return old_swapchain;
 }
 

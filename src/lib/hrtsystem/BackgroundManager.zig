@@ -129,25 +129,26 @@ pub const Handle = u32;
 pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, color_image: Rgba2D, transform: Mat3, name: []const u8) !Handle {
     const equirectangular_extent = color_image.extent;
 
-    const texture_name_equirectangular = try std.fmt.allocPrintZ(allocator, "background {s} equirectangular", .{ name });
+    const texture_name_equirectangular = try std.fmt.allocPrintSentinel(allocator, "background {s} equirectangular", .{ name }, 0);
     defer allocator.free(texture_name_equirectangular);
     const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name_equirectangular);
     try encoder.attachResource(equirectangular_image);
 
-    const equirectangular_image_host = try encoder.uploadAllocator().alignedAlloc([4]f32, engine.core.vk_helpers.texelBlockSize(.r32g32b32a32_sfloat), color_image.asSlice().len);
+    const equirectangular_image_host = try encoder.uploadAllocator().alignedAlloc([4]f32, std.mem.Alignment.fromByteUnits(engine.core.vk_helpers.texelBlockSize(.r32g32b32a32_sfloat)), color_image.asSlice().len);
     @memcpy(equirectangular_image_host, color_image.asSlice());
 
     const equal_area_map_size: u32 = @min(std.math.ceilPowerOfTwoAssert(u32, color_image.extent.width), maximum_equal_area_map_size);
     const equal_area_extent = vk.Extent2D { .width = equal_area_map_size, .height = equal_area_map_size };
 
-    const texture_name_equal_area = try std.fmt.allocPrintZ(allocator, "background {s} equal area", .{ name });
+    const texture_name_equal_area = try std.fmt.allocPrintSentinel(allocator, "background {s} equal area", .{ name }, 0);
     defer allocator.free(texture_name_equal_area);
     const equal_area_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, true, texture_name_equal_area);
     errdefer equal_area_image.destroy(vc);
 
     const actual_mip_count = std.math.log2(equal_area_map_size) + 1;
     const maximum_mip_count = comptime std.math.log2(maximum_equal_area_map_size) + 1;
-    var mip_views = std.BoundedArray(vk.ImageView, maximum_mip_count) {};
+    var buffer: [maximum_mip_count]vk.ImageView = undefined;
+    var mip_views = std.ArrayList(vk.ImageView).initBuffer(&buffer);
     for (0..actual_mip_count) |level_index| {
         const view = try vc.device.createImageView(&vk.ImageViewCreateInfo {
             .flags = .{},
@@ -168,7 +169,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
                 .layer_count = vk.REMAINING_ARRAY_LAYERS,
             },
         }, null);
-        try mip_views.append(view);
+        try mip_views.appendBounded(view);
         try encoder.attachResource(view);
     }
 
@@ -215,7 +216,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
     self.equirectangular_to_equal_area_pipeline.recordDispatchWorkgroups(encoder.buffer, .{ .width = dispatch_size, .height = dispatch_size, .depth = 1 });
 
     self.fold_pipeline.recordBindPipeline(encoder.buffer);
-    for (1..mip_views.len) |dst_mip_level| {
+    for (1..mip_views.items.len) |dst_mip_level| {
         encoder.barrier(&[_]Encoder.ImageBarrier {
             .{
                 .src_stage_mask = .{ .compute_shader_bit = true },
@@ -230,10 +231,10 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
             },
         }, &.{});
         self.fold_pipeline.recordPushDescriptors(encoder.buffer, .{
-            .src_mip = .{ .view = mip_views.get(dst_mip_level - 1) },
-            .dst_mip = .{ .view = mip_views.get(dst_mip_level) },
+            .src_mip = .{ .view = mip_views.items[dst_mip_level - 1] },
+            .dst_mip = .{ .view = mip_views.items[dst_mip_level] },
         });
-        const dst_mip_size = std.math.pow(u32, 2, @intCast(mip_views.len - dst_mip_level));
+        const dst_mip_size = std.math.pow(u32, 2, @intCast(mip_views.items.len - dst_mip_level));
         const mip_dispatch_size = if (dst_mip_size > shader_local_size) @divExact(dst_mip_size, shader_local_size) else 1;
         self.fold_pipeline.recordDispatchWorkgroups(encoder.buffer, .{ .width = mip_dispatch_size, .height = mip_dispatch_size, .depth = 1 });
     }
@@ -246,7 +247,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
             .old_layout = .general,
             .new_layout = .shader_read_only_optimal,
             .image = equal_area_image.handle,
-            .base_mip_level = @intCast(mip_views.len - 1),
+            .base_mip_level = @intCast(mip_views.items.len - 1),
             .level_count = 1,
         },
     }, &.{});

@@ -4,9 +4,6 @@ on:
   push:
     branches: [ trunk ]
 
-env:
-  ZIG_VERSION: 0.14.0
-
 jobs:
   build-linux:
     runs-on: ubuntu-22.04
@@ -27,9 +24,7 @@ jobs:
         echo "$PWD/bin" >> $GITHUB_PATH
 
     - name: Setup Zig
-      uses: mlugg/setup-zig@v1
-      with:
-        version: ${{env.ZIG_VERSION}}
+      uses: mlugg/setup-zig@v2
 
     - name: Type check
       run: zig build check
@@ -48,9 +43,7 @@ jobs:
         Add-Content $env:GITHUB_PATH ";.\dxc\bin\x86"
 
     - name: Setup Zig
-      uses: mlugg/setup-zig@v1
-      with:
-        version: ${{env.ZIG_VERSION}}
+      uses: mlugg/setup-zig@v2
 
     - name: Type check
       run: zig build check

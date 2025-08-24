@@ -20,7 +20,7 @@ handle: *c.GLFWwindow,
 
 pub fn create(width: u32, height: u32, app_name: [*:0]const u8) Error!Self {
     const Callback = struct {
-        fn callback(code: c_int, message: [*c]const u8) callconv(.C) void {
+        fn callback(code: c_int, message: [*c]const u8) callconv(.c) void {
             std.log.warn("glfw: {}: {s}", .{code, message});
         }
     };

@@ -84,9 +84,9 @@ const Base = struct {
         );
     }
 
-    fn validationLayersAvailable(self: Base, allocator: std.mem.Allocator) !bool {
-        const available_layers = try vk_helpers.getVkSlice(allocator, vk.BaseWrapper.enumerateInstanceLayerProperties, .{ self.dispatch });
-        defer allocator.free(available_layers);
+    fn validationLayersAvailable(self: Base, transient: std.mem.Allocator) !bool {
+        const available_layers = try self.dispatch.enumerateInstanceLayerPropertiesAlloc(transient);
+        defer transient.free(available_layers);
 
         for (validation_layers) |layer_name| {
             const layer_found = for (available_layers) |layer_properties| {
@@ -101,7 +101,7 @@ const Base = struct {
     }
 
     fn instanceExtensionsAvailable(self: Base, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        const available_extensions = try vk_helpers.getVkSlice(allocator, vk.BaseWrapper.enumerateInstanceExtensionProperties, .{ self.dispatch, null });
+        const available_extensions = try self.dispatch.enumerateInstanceExtensionPropertiesAlloc(null, allocator);
         defer allocator.free(available_extensions);
 
         for (extensions) |extension_name| {
@@ -121,7 +121,7 @@ const Base = struct {
 // * strip beginning frames that do not have symbols
 // * strip beginning frames that are in vk.zig
 // * strip ending frames in zig setup
-fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_stream: anytype, tty_config: std.io.tty.Config) !void {
+fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_stream: *std.Io.Writer, tty_config: std.io.tty.Config) !void {
     var memory = [1]usize { 0 } ** 32;
     var stack_trace: std.builtin.StackTrace = .{
         .index = undefined,
@@ -188,7 +188,7 @@ fn debugCallback(
     message_type: vk.DebugUtilsMessageTypeFlagsEXT,
     callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
     user_data: ?*anyopaque,
-    ) callconv(.C) vk.Bool32 {
+    ) callconv(.c) vk.Bool32 {
     _ = message_type;
     _ = user_data;
     const verbose_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .verbose_bit_ext = true }).toInt();
@@ -203,23 +203,27 @@ fn debugCallback(
         else => unreachable,
     };
 
-    const out_stream = std.io.getStdErr().writer();
-    const tty_config = std.io.tty.detectConfig(std.io.getStdErr());
+    var buffer: [1024]u8 = undefined;
+    var out_stream = std.fs.File.stderr().writer(&buffer);
+    const writer = &out_stream.interface;
+    const tty_config = std.io.tty.detectConfig(std.fs.File.stderr());
 
-    tty_config.setColor(out_stream, color) catch {};
-    out_stream.print("{s}\n", .{ callback_data.?.p_message.? }) catch @panic("unable to write validation error to stderr");
-    tty_config.setColor(out_stream, .reset) catch {};
+    tty_config.setColor(writer, color) catch {};
+    writer.print("{s}\n", .{ callback_data.?.p_message.? }) catch @panic("unable to write validation error to stderr");
+    tty_config.setColor(writer, .reset) catch {};
 
     // write stack trace for validation error
     switch (@import("build_options").vk_validation) {
         .print => {
             if (std.debug.getSelfDebugInfo()) |debug_info| {
-                writeMinimalStacktrace(@returnAddress(), debug_info, out_stream, tty_config) catch @panic("unable to write validation error stack trace to stderr");
+                writeMinimalStacktrace(@returnAddress(), debug_info, writer, tty_config) catch @panic("unable to write validation error stack trace to stderr");
             } else |_| {}
         },
         .panic => @panic("validation error encountered"),
         .ignore => unreachable,
     }
+
+    writer.flush() catch @panic("unable to flush writer");
 
     return vk.FALSE;
 }
@@ -228,6 +232,38 @@ const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
     .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true},
     .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
     .pfn_user_callback = debugCallback,
+};
+
+pub const MemoryTypes = struct {
+    size: u32,
+    buffer: [vk.MAX_MEMORY_TYPES]vk.MemoryPropertyFlags,
+
+    fn slice(self: *const MemoryTypes) []const vk.MemoryPropertyFlags {
+        return self.buffer[0..self.size];
+    }
+
+    pub fn create(instance: Instance, physical_device: PhysicalDevice) MemoryTypes {
+        const properties = instance.getPhysicalDeviceMemoryProperties(physical_device.handle);
+
+        var self = MemoryTypes {
+            .size = properties.memory_type_count,
+            .buffer = undefined,
+        };
+
+        for (properties.memory_types[0..properties.memory_type_count], self.buffer[0..self.size]) |types, *flags| {
+            flags.* = types.property_flags;
+        }
+
+        return self;
+    }
+
+    pub fn find(self: MemoryTypes, type_filter: u32, required_properties: vk.MemoryPropertyFlags) !std.meta.Int(.unsigned, vk.MAX_MEMORY_TYPES) {
+        return for (self.slice(), 0..) |avalable_properties, i| {
+            if (type_filter & (@as(u32, 1) << @intCast(i)) != 0 and avalable_properties.contains(required_properties)) {
+                break @intCast(i);
+            }
+        } else error.UnavailbleMemoryType;
+    }
 };
 
 base: Base,
@@ -242,7 +278,7 @@ debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
 queue: Queue,
 
-memory_types: std.BoundedArray(vk.MemoryPropertyFlags, vk.MAX_MEMORY_TYPES),
+memory_types: MemoryTypes,
 
 const Self = @This();
 
@@ -305,14 +341,6 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     const queue_handle = device.getDeviceQueue(physical_device.queue_family_index, 0);
     const queue = Queue.init(queue_handle, device_dispatch);
 
-    const properties = instance.getPhysicalDeviceMemoryProperties(physical_device.handle);
-
-    var memory_types = std.BoundedArray(vk.MemoryPropertyFlags, vk.MAX_MEMORY_TYPES).init(properties.memory_type_count) catch unreachable;
-
-    for (properties.memory_types[0..properties.memory_type_count], memory_types.slice()) |src, *dst| {
-        dst.* = src.property_flags;
-    }
-
     return Self {
         .base = base,
         .instance_dispatch = instance_dispatch,
@@ -324,16 +352,8 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
 
         .queue = queue,
 
-        .memory_types = memory_types,
+        .memory_types = MemoryTypes.create(instance, physical_device),
     };
-}
-
-pub fn findMemoryType(self: Self, type_filter: u32, required_properties: vk.MemoryPropertyFlags) !std.meta.Int(.unsigned, vk.MAX_MEMORY_TYPES) {
-    return for (self.memory_types.slice(), 0..) |avalable_properties, i| {
-        if (type_filter & (@as(u32, 1) << @intCast(i)) != 0 and avalable_properties.contains(required_properties)) {
-            break @intCast(i);
-        }
-    } else error.UnavailbleMemoryType;
 }
 
 pub fn destroy(self: Self, allocator: std.mem.Allocator) void {
@@ -350,8 +370,9 @@ const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     queue_family_index: u32,
 
-    fn pickQueueFamily(instance: Instance, device: vk.PhysicalDevice, queueFamilyAcceptable: *const QueueFamilyAcceptable) !u32 {
-        const families = vk_helpers.getVkSliceBounded(8, Instance.getPhysicalDeviceQueueFamilyProperties, .{ instance, device }).slice();
+    fn pickQueueFamily(instance: Instance, transient: std.mem.Allocator, device: vk.PhysicalDevice, queueFamilyAcceptable: *const QueueFamilyAcceptable) !u32 {
+        const families = try instance.getPhysicalDeviceQueueFamilyPropertiesAlloc(device, transient);
+        defer transient.free(families);
 
         var picked_family: ?u32 = null;
         for (families, 0..) |family, i| {
@@ -366,12 +387,13 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableQueues;
     }
 
-    fn pick(instance: Instance, allocator: std.mem.Allocator, queueFamilyAcceptable: *const QueueFamilyAcceptable, extensions: []const [*:0]const u8) !PhysicalDevice {
-        const devices = (try vk_helpers.getVkSliceBounded(4, Instance.enumeratePhysicalDevices, .{ instance })).slice();
+    fn pick(instance: Instance, transient: std.mem.Allocator, queueFamilyAcceptable: *const QueueFamilyAcceptable, extensions: []const [*:0]const u8) !PhysicalDevice {
+        const devices = try instance.enumeratePhysicalDevicesAlloc(transient);
+        defer transient.free(devices);
 
         return for (devices) |device| {
-            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, allocator, extensions)) {
-                if (pickQueueFamily(instance, device, queueFamilyAcceptable)) |index| {
+            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, transient, extensions)) {
+                if (pickQueueFamily(instance, transient, device, queueFamilyAcceptable)) |index| {
                     break PhysicalDevice {
                         .handle = device,
                         .queue_family_index = index,
@@ -381,9 +403,9 @@ const PhysicalDevice = struct {
         } else return VulkanContextError.UnavailableDevices;
     }
 
-    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, allocator: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
-        const available_extensions = try vk_helpers.getVkSlice(allocator, Instance.enumerateDeviceExtensionProperties, .{ instance, device, null });
-        defer allocator.free(available_extensions);
+    fn deviceExtensionsAvailable(instance: Instance, device: vk.PhysicalDevice, transient: std.mem.Allocator, extensions: []const [*:0]const u8) !bool {
+        const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(device, null, transient);
+        defer transient.free(available_extensions);
 
         for (extensions) |extension_name| {
             const extension_found = for (available_extensions) |extension| {
