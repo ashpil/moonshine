@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) !void {
     const tinyexr = makeTinyExrModule(b, target);
     const wuffs = makeWuffsModule(b, target);
     const zgltf = makeZgltfModule(b, target);
+    const tracy = makeTracyLibrary(b, target);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
@@ -35,7 +36,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
 
         const tests = b.addTest(.{
             .name = "gpu-tests",
@@ -75,7 +76,7 @@ pub fn build(b: *std.Build) !void {
         var engine_options = default_engine_options;
         engine_options.vk_metrics = true;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
         const exe = b.addExecutable(.{
             .name = "online",
             .use_llvm = true, // seems to be some compiler bug as of 0.15.1 that prevents online from compiling
@@ -103,7 +104,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = .embed;
-        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
         const exe = b.addExecutable(.{
             .name = "offline",
             .root_module = b.createModule(.{
@@ -126,7 +127,7 @@ pub fn build(b: *std.Build) !void {
         engine_options.window = false;
         engine_options.gui = false;
         engine_options.shader_source_type = if (target.result.os.tag == .linux) .load else .embed; // hot reload only works on linux atm
-        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui);
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
 
         // once https://github.com/ziglang/zig/issues/9698 lands
         // wont need to make own header
@@ -322,6 +323,7 @@ const VulkanValidationMode = enum {
 pub const EngineOptions = struct {
     vk_validation: VulkanValidationMode = .ignore,
     vk_metrics: bool = false,
+    tracy: bool = false,
 
     // modules
     hrtsystem: bool = true,
@@ -334,6 +336,10 @@ pub const EngineOptions = struct {
 
         if (b.option(bool, "vk-validation", "Enable vulkan validation")) |vk_validation| {
             options.vk_validation = if (vk_validation) .print else .ignore;
+        }
+
+        if (b.option(bool, "tracy", "Enable tracy integration")) |tracy| {
+            options.tracy = tracy;
         }
 
         return options;
@@ -413,6 +419,7 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
     wuffs: *std.Build.Module,
     glfw: *std.Build.Module,
     imgui: *std.Build.Module,
+    tracy: *std.Build.Step.Compile,
 ) *std.Build.Module {
     var imports = std.array_list.Managed(std.Build.Module.Import).init(b.allocator);
     defer imports.deinit();
@@ -436,6 +443,10 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
         imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
     }
 
+    if (options.tracy) {
+        imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
+    }
+
     if (options.gui) {
         imports.append(std.Build.Module.Import { .name = "imgui", .module = imgui }) catch @panic("OOM");
     }
@@ -445,6 +456,10 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
         .imports = imports.items,
         .link_libc = true, // always needed to load vulkan
     });
+
+    if (options.tracy) {
+        module.linkLibrary(tracy);
+    }
 
     return module;
 }
@@ -556,6 +571,28 @@ fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.M
     module.addIncludePath(base.path("release/c/"));
 
     return module;
+}
+
+fn makeTracyLibrary(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Step.Compile {
+    const base = b.dependency("tracy", .{});
+
+    const module = b.createModule(.{
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    module.addCSourceFile(.{
+        .file = base.path("public/TracyClient.cpp"),
+        .flags = &.{
+            "-DTRACY_ENABLE",
+        },
+    });
+    module.link_libc = true;
+    module.link_libcpp = true;
+
+    return b.addLibrary(.{
+        .name = "tracy",
+        .root_module = module,
+    });
 }
 
 fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {

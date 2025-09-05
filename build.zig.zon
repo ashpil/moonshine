@@ -35,6 +35,10 @@
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
             .hash = "N-V-__8AALcpVQBr9VERrZc0MwDxDcN2zInDaZPF91ZMaUjq",
         },
+        .tracy = .{
+            .url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.11.1.tar.gz",
+            .hash = "N-V-__8AAMeOlQEipHjcyu0TCftdAi9AQe7EXUDJOoVe0k-t",
+        },
     },
     .fingerprint = 0xccaef4ce7dcdd508,
     .minimum_zig_version = "0.15.1",
