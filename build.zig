@@ -19,7 +19,7 @@ pub fn build(b: *std.Build) !void {
     const imgui = makeDCImguiModule(b, glfw, target);
     const tinyexr = makeTinyExrModule(b, target);
     const wuffs = makeWuffsModule(b, target);
-    const zgltf = makeZgltfModule(b);
+    const zgltf = makeZgltfModule(b, target);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
@@ -449,9 +449,10 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
     return module;
 }
 
-fn makeZgltfModule(b: *std.Build) *std.Build.Module {
+fn makeZgltfModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const zgltf = b.dependency("zgltf", .{}).module("zgltf");
     zgltf.optimize = .ReleaseFast;
+    zgltf.resolved_target = target;
     return zgltf;
 }
 
