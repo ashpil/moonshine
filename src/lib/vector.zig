@@ -65,8 +65,6 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
 
         // this is the only method that has knowledge of the underlying storage -- it's abstracted away from everything else
         pub fn at_mut(self: *Self, index: Index) *ComponentType {
-            std.debug.assert(index.col < col_count);
-            std.debug.assert(index.row < row_count);
             return &self.storage[index.row][index.col];
         }
 
