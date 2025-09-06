@@ -28,6 +28,7 @@ const F32x4 = vector.Vec4(f32);
 const F32x3 = vector.Vec3(f32);
 const F32x2 = vector.Vec2(f32);
 const U32x3 = vector.Vec3(u32);
+const U16x3 = vector.Vec3(u16);
 const U8x2 = vector.Vec2(u8);
 const U8x3 = vector.Vec3(u8);
 const U8x4 = vector.Vec4(u8);
@@ -294,99 +295,83 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 std.debug.assert(model_thin == thin);
             }
             model_thin = thin;
-            // get indices
-            const indices = if (primitive.indices) |indices_index| blk2: {
+
+            const indices = if (primitive.indices) |indices_index| indices: {
                 const accessor = gltf.data.accessors[indices_index];
                 const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
 
-                break :blk2 switch (accessor.component_type) {
-                    .unsigned_byte => blk3: {
-                        var indices: std.ArrayList(u8) = .empty;
-                        defer indices.deinit(allocator);
-
-                        gltf.getDataFromBufferView(u8, &indices, allocator, accessor, buffer);
+                break :indices switch (accessor.component_type) {
+                    .unsigned_byte => blk: {
+                        const indices = try gltf.getDataFromBufferView(u8, allocator, accessor, buffer);
+                        defer allocator.free(indices);
 
                         // convert to U32x3
-                        const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
-                        for (actual_indices, 0..) |*index, i| {
-                            index.* = U32x3.new(.{ indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2] });
+                        const indices_u32 = try encoder.uploadAllocator().alloc(U32x3, indices.len / 3);
+                        for (indices_u32, 0..) |*index, i| {
+                            index.* = U8x3.fromArray(indices[i * 3..][0..3].*).intCast(u32);
                         }
-                        break :blk3 actual_indices;
+                        break :blk indices_u32;
                     },
-                    .unsigned_short => blk3: {
-                        var indices: std.ArrayList(u16) = .empty;
-                        defer indices.deinit(allocator);
-
-                        gltf.getDataFromBufferView(u16, &indices, allocator, accessor, buffer);
+                    .unsigned_short => blk: {
+                        const indices = try gltf.getDataFromBufferView(u16, allocator, accessor, buffer);
+                        defer allocator.free(indices);
 
                         // convert to U32x3
-                        const actual_indices = try encoder.uploadAllocator().alloc(U32x3, indices.items.len / 3);
-                        for (actual_indices, 0..) |*index, i| {
-                            index.* = U32x3.new(.{ indices.items[i * 3 + 0], indices.items[i * 3 + 1], indices.items[i * 3 + 2] });
+                        const indices_u32 = try encoder.uploadAllocator().alloc(U32x3, indices.len / 3);
+                        for (indices_u32, 0..) |*index, i| {
+                            index.* = U16x3.fromArray(indices[i * 3..][0..3].*).intCast(u32);
                         }
-                        break :blk3 actual_indices;
+                        break :blk indices_u32;
                     },
-                    .unsigned_integer => blk3: {
-                        var indices: std.ArrayList(u32) = .empty;
-                        defer indices.deinit(encoder.uploadAllocator());
-
-                        gltf.getDataFromBufferView(u32, &indices, allocator, accessor, buffer);
-
-                        break :blk3 std.mem.bytesAsSlice(U32x3, std.mem.sliceAsBytes(try indices.toOwnedSlice(encoder.uploadAllocator())));
+                    .unsigned_integer => blk: {
+                        const indices = try gltf.getDataFromBufferView(u32, encoder.uploadAllocator(), accessor, buffer);
+                        break :blk @as([]const U32x3, @ptrCast(indices));
                     },
                     else => unreachable,
                 };
             } else null;
             errdefer if (indices) |nonnull| encoder.uploadAllocator().free(nonnull);
 
-            const vertices = blk2: {
-                var positions: std.ArrayList(f32) = .empty;
-                var texcoords: std.ArrayList(f32) = .empty;
-                var normals: std.ArrayList(f32) = .empty;
+            var positions: []const F32x3 = &.{};
+            errdefer encoder.uploadAllocator().free(positions);
+            var texcoords: []const F32x2 = &.{};
+            errdefer encoder.uploadAllocator().free(texcoords);
+            var normals: []const F32x3 = &.{};
+            errdefer encoder.uploadAllocator().free(normals);
 
-                for (primitive.attributes) |attribute| {
-                    switch (attribute) {
-                        .position => |accessor_index| {
-                            const accessor = gltf.data.accessors[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &positions, encoder.uploadAllocator(), accessor, buffer);
-                        },
-                        .texcoord => |accessor_index| {
-                            // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
-                            // so ignore any after the first
-                            if (texcoords.items.len != 0) continue;
-                            const accessor = gltf.data.accessors[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &texcoords, encoder.uploadAllocator(), accessor, buffer);
-                        },
-                        .normal => |accessor_index| {
-                            const accessor = gltf.data.accessors[accessor_index];
-                            const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
-                            gltf.getDataFromBufferView(f32, &normals, encoder.uploadAllocator(), accessor, buffer);
-                        },
-                        else => {},
-                    }
+            for (primitive.attributes) |attribute| {
+                switch (attribute) {
+                    .position => |accessor_index| {
+                        const accessor = gltf.data.accessors[accessor_index];
+                        const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                        const slice = try gltf.getDataFromBufferView(f32, encoder.uploadAllocator(), accessor, buffer);
+                        positions = @ptrCast(slice);
+                    },
+                    .texcoord => |accessor_index| {
+                        // mesh may have many texcoords that we can use, but moonshine only knows how to use one set of them currently
+                        // so ignore any after the first
+                        if (texcoords.len != 0) continue;
+                        const accessor = gltf.data.accessors[accessor_index];
+                        const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                        const slice = try gltf.getDataFromBufferView(f32, encoder.uploadAllocator(), accessor, buffer);
+                        texcoords = @ptrCast(slice);
+                    },
+                    .normal => |accessor_index| {
+                        const accessor = gltf.data.accessors[accessor_index];
+                        const buffer = buffers[gltf.data.buffer_views[accessor.buffer_view.?].buffer];
+                        const slice = try gltf.getDataFromBufferView(f32, encoder.uploadAllocator(), accessor, buffer);
+                        normals = @ptrCast(slice);
+                    },
+                    else => {},
                 }
-
-                const positions_slice = try positions.toOwnedSlice(encoder.uploadAllocator());
-                const texcoords_slice = try texcoords.toOwnedSlice(encoder.uploadAllocator());
-                const normals_slice = try normals.toOwnedSlice(encoder.uploadAllocator());
-
-                // TODO: remove ptrcast workaround below once ptrcast works on slices
-                break :blk2 .{
-                    .positions = @as([*]F32x3, @ptrCast(positions_slice.ptr))[0..positions_slice.len / 3],
-                    .texcoords = @as([*]F32x2, @ptrCast(texcoords_slice.ptr))[0..texcoords_slice.len / 2],
-                    .normals = @as([*]F32x3, @ptrCast(normals_slice.ptr))[0..normals_slice.len / 3],
-                };
-            };
-            errdefer encoder.uploadAllocator().free(vertices.positions);
-            errdefer encoder.uploadAllocator().free(vertices.texcoords);
+            }
+            std.debug.assert(positions.len > 0);
 
             const mesh_handle = try meshes.upload(vc, allocator, encoder, MeshManager.Mesh.Parameters {
                 .name = mesh.name orelse "<unnamed>",
-                .positions = encoder.upload_allocator.getBufferSlice(vertices.positions),
-                .texcoords = if (vertices.texcoords.len != 0) encoder.upload_allocator.getBufferSlice(vertices.texcoords) else null,
-                .normals = if (vertices.normals.len != 0) encoder.upload_allocator.getBufferSlice(vertices.normals) else null,
+                .positions = encoder.upload_allocator.getBufferSlice(positions),
+                .texcoords = if (texcoords.len != 0) encoder.upload_allocator.getBufferSlice(texcoords) else null,
+                .normals = if (normals.len != 0) encoder.upload_allocator.getBufferSlice(normals) else null,
                 .indices = if (indices) |i| encoder.upload_allocator.getBufferSlice(i) else null,
             });
 
