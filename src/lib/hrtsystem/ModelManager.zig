@@ -140,20 +140,13 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     // TODO: these barriers should probably be elsewhere
     for (geometries) |geometry| {
-        encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
+        const base_barriers = [_]Encoder.BufferBarrier{
             Encoder.BufferBarrier {
                 .src_stage_mask = .{ .all_commands_bit = true },
                 .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
                 .dst_stage_mask = .{ .all_commands_bit = true },
                 .dst_access_mask = .{ .memory_read_bit = true },
                 .buffer = mesh_manager.host.items(.position_buffer)[geometry.mesh].handle,
-            },
-            Encoder.BufferBarrier {
-                .src_stage_mask = .{ .all_commands_bit = true },
-                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .dst_stage_mask = .{ .all_commands_bit = true },
-                .dst_access_mask = .{ .memory_read_bit = true },
-                .buffer = mesh_manager.host.items(.index_buffer)[geometry.mesh].handle,
             },
             Encoder.BufferBarrier {
                 .src_stage_mask = .{ .all_commands_bit = true },
@@ -169,7 +162,17 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                 .dst_access_mask = .{ .memory_read_bit = true },
                 .buffer = material_manager.materials.handle,
             },
-        });
+        };
+
+        encoder.barrier(&.{}, if (mesh_manager.host.items(.index_count)[geometry.mesh] == 0) &base_barriers else &(base_barriers ++ [1]Encoder.BufferBarrier{
+            Encoder.BufferBarrier {
+                .src_stage_mask = .{ .all_commands_bit = true },
+                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
+                .dst_stage_mask = .{ .all_commands_bit = true },
+                .dst_access_mask = .{ .memory_read_bit = true },
+                .buffer = mesh_manager.host.items(.index_buffer)[geometry.mesh].handle,
+            },
+        }));
     }
 
     const vk_geometries = try allocator.alloc(vk.AccelerationStructureGeometryKHR, geometries.len);
