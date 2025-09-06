@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) !void {
     const tinyexr = makeTinyExrModule(b, target);
     const wuffs = makeWuffsModule(b, target);
     const zgltf = makeZgltfModule(b, target);
-    const tracy = makeTracyLibrary(b, target);
+    const tracy = makeTracyModule(b, target);
     const shader_source = b.createModule(.{
         .root_source_file = b.path("src/lib/core/shader_source.zig"),
     });
@@ -420,7 +420,7 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
     wuffs: *std.Build.Module,
     glfw: *std.Build.Module,
     imgui: *std.Build.Module,
-    tracy: *std.Build.Step.Compile,
+    tracy: *std.Build.Module,
 ) *std.Build.Module {
     var imports = std.array_list.Managed(std.Build.Module.Import).init(b.allocator);
     defer imports.deinit();
@@ -452,15 +452,15 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
         imports.append(std.Build.Module.Import { .name = "imgui", .module = imgui }) catch @panic("OOM");
     }
 
+    if (options.tracy) {
+        imports.append(std.Build.Module.Import { .name = "tracy", .module = tracy }) catch @panic("OOM");
+    }
+
     const module = b.createModule(.{
         .root_source_file = b.path("src/lib/engine.zig"),
         .imports = imports.items,
         .link_libc = true, // always needed to load vulkan
     });
-
-    if (options.tracy) {
-        module.linkLibrary(tracy);
-    }
 
     return module;
 }
@@ -574,13 +574,17 @@ fn makeWuffsModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.M
     return module;
 }
 
-fn makeTracyLibrary(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Step.Compile {
+fn makeTracyModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const base = b.dependency("tracy", .{});
 
-    const module = b.createModule(.{
-        .target = target,
+    const step = b.addTranslateC(.{
+        .root_source_file = base.path("public/tracy/TracyC.h"),
         .optimize = .ReleaseFast,
+        .target = target,
     });
+    step.defineCMacro("TRACY_ENABLE", null);
+
+    const module = step.createModule();
     module.addCSourceFile(.{
         .file = base.path("public/TracyClient.cpp"),
         .flags = &.{
@@ -590,10 +594,7 @@ fn makeTracyLibrary(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.
     module.link_libc = true;
     module.link_libcpp = true;
 
-    return b.addLibrary(.{
-        .name = "tracy",
-        .root_module = module,
-    });
+    return module;
 }
 
 fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.Module {
