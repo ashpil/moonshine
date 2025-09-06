@@ -107,6 +107,7 @@ pub fn build(b: *std.Build) !void {
         const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
         const exe = b.addExecutable(.{
             .name = "offline",
+            .use_llvm = true, // native seems way slower and doesn't work with tracy
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/bin/offline.zig"),
                 .target = target,
