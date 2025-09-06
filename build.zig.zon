@@ -28,8 +28,8 @@
             .hash = "N-V-__8AAGC4nQHVa2CJUUb6saSEtcSR7c3wMfzHy9oF6m1g",
         },
         .zgltf = .{
-            .url = "https://github.com/ashpil/zgltf/archive/267c1f934a9ec4af5e23309ddeca0cc4b7679cd3.tar.gz",
-            .hash = "zgltf-0.1.0-sX6QAjsXAgBwZzkV__XD-MAf2Y5lRqSFsbxixrXXhlhz",
+            .url = "https://github.com/kooparse/zgltf/archive/be1ecfc1d0972d4ff70dbf7b2791669fca8cf242.tar.gz",
+            .hash = "zgltf-0.1.0-sX6QAiEYAgChw5-Oje5Q7wuX6dEfIfw-A1iKAE4KPz45",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",

@@ -5,7 +5,7 @@
 
 const std = @import("std");
 const vk = @import("vulkan");
-const Gltf = @import("zgltf");
+const Gltf = @import("zgltf").Gltf;
 
 const engine = @import("../engine.zig");
 const core = engine.core;
