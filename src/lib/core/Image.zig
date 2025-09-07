@@ -6,11 +6,16 @@ const core = engine.core;
 const vk_helpers = core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 
+const tracy_enabled = @import("build_options").tracy;
+const tracy = @import("../tracy.zig");
+
 const Self = @This();
 
 handle: vk.Image,
 view: vk.ImageView,
 memory: vk.DeviceMemory,
+
+const memory_properties = vk.MemoryPropertyFlags { .device_local_bit = true };
 
 pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, with_mips: bool, name: [:0]const u8) !Self {
     const extent = vk.Extent3D {
@@ -42,9 +47,10 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
 
     const memory = try vc.device.allocateMemory(&.{
         .allocation_size = mem_requirements.size,
-        .memory_type_index = try vc.memory_types.find(mem_requirements.memory_type_bits, .{ .device_local_bit = true }),
+        .memory_type_index = try vc.memory_types.find(mem_requirements.memory_type_bits, memory_properties),
     }, null);
     errdefer vc.device.freeMemory(memory, null);
+    if (tracy_enabled) tracy.memory.alloc(@intFromEnum(memory), mem_requirements.size, comptime core.mem.comptimeHeapName(memory_properties));
 
     try vc.device.bindImageMemory(handle, memory, 0);
 
@@ -82,4 +88,5 @@ pub fn destroy(self: Self, vc: *const VulkanContext) void {
     vc.device.destroyImageView(self.view, null);
     vc.device.destroyImage(self.handle, null);
     vc.device.freeMemory(self.memory, null);
+    if (tracy_enabled) tracy.memory.free(@intFromEnum(self.memory), comptime core.mem.comptimeHeapName(memory_properties));
 }

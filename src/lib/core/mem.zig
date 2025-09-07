@@ -5,9 +5,53 @@ const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 const vk_helpers = core.vk_helpers;
 
+const tracy_enabled = @import("build_options").tracy;
+const tracy = @import("../tracy.zig");
+
 const vk_map_memory_minimum_guaranteed_alignment = 64; // https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-minmax may as well commuincate this to the compiler
 
-fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, properties: vk.MemoryPropertyFlags, name: [:0]const u8) !std.meta.Tuple(&.{ vk.Buffer, vk.DeviceMemory }) {
+fn heapName(properties: vk.MemoryPropertyFlags, writer: *std.io.Writer) !void {
+    var first = true;
+    inline for (comptime std.meta.fieldNames(vk.MemoryPropertyFlags)) |name| {
+        if (name[0] == '_') continue;
+        if (@field(properties, name)) {
+            if (!first) {
+                try writer.writeByte('|');
+            }
+            const bit = "_bit";
+            const bit_idx = std.mem.lastIndexOf(u8, name, bit).?;
+            for (name[0..bit_idx]) |c| {
+                try writer.writeByte(std.ascii.toUpper(c));
+            }
+            for (name[bit_idx + bit.len..]) |c| {
+                try writer.writeByte(std.ascii.toUpper(c));
+            }
+            first = false;
+        }
+    }
+}
+
+fn heapNameSize(properties: vk.MemoryPropertyFlags) usize {
+    var trash_buffer: [64]u8 = undefined;
+    var dw: std.io.Writer.Discarding = .init(&trash_buffer);
+    heapName(properties, &dw.writer) catch |err| switch (err) {
+        error.WriteFailed => unreachable,
+    };
+    return @intCast(dw.count + dw.writer.end);
+}
+
+pub fn comptimeHeapName(comptime properties: vk.MemoryPropertyFlags) *const [heapNameSize(properties):0]u8 {
+    comptime {
+        var buf: [heapNameSize(properties):0]u8 = undefined;
+        var w: std.io.Writer = .fixed(&buf);
+        heapName(properties, &w) catch unreachable;
+        buf[buf.len] = 0;
+        const final = buf;
+        return &final;
+    }
+}
+
+fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, comptime properties: vk.MemoryPropertyFlags, name: [:0]const u8) !std.meta.Tuple(&.{ vk.Buffer, vk.DeviceMemory }) {
     const buffer = try vc.device.createBuffer(&.{
             .size = size,
             .usage = usage,
@@ -24,11 +68,12 @@ fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.Buff
         .p_next = if (usage.contains(.{ .shader_device_address_bit = true })) &vk.MemoryAllocateFlagsInfo {
             .device_mask = 0,
             .flags = .{ .device_address_bit = true },
-            } else null,
+        } else null,
     };
 
     const memory = try vc.device.allocateMemory(&allocate_info, null);
     errdefer vc.device.freeMemory(memory, null);
+    if (tracy_enabled) tracy.memory.alloc(@intFromEnum(memory), mem_requirements.size, comptime comptimeHeapName(properties));
     try vk_helpers.setDebugName(vc.device, memory, name);
 
     try vc.device.bindBufferMemory(buffer, memory, 0);
@@ -73,6 +118,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             if (self.handle != .null_handle) {
                 vc.device.destroyBuffer(self.handle, null);
                 vc.device.freeMemory(self.memory, null);
+                if (tracy_enabled) tracy.memory.free(@intFromEnum(self.memory), comptime comptimeHeapName(memory_properties));
             }
         }
 
@@ -289,6 +335,9 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{}", .{ err });
 
             const ptr_unaligned: [*]align(vk_map_memory_minimum_guaranteed_alignment) u8 = @alignCast(@ptrCast(self.device.mapMemory(memory, 0, vk.WHOLE_SIZE, .{}) catch return null));
+
+            if (tracy_enabled) tracy.memory.alloc(@intFromPtr(ptr_unaligned), total_len, comptime comptimeHeapName(memory_properties));
+
             const ptr_aligned = std.mem.alignPointer(ptr_unaligned + @sizeOf(Allocations.Node), required_alignment).?;
 
             const buffer = self.device.createBuffer(&.{
@@ -324,6 +373,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
             entry.set(null);
             self.device.destroyBuffer(buffer, null);
             self.device.freeMemory(memory, null);
+            if (tracy_enabled) tracy.memory.free(@intFromPtr(buf.ptr) - @sizeOf(Allocations.Node), comptime comptimeHeapName(memory_properties));
         }
 
         // for pointer returned by alloc
