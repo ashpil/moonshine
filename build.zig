@@ -594,6 +594,7 @@ fn makeTracyModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.M
     });
     module.link_libc = true;
     module.link_libcpp = true;
+    module.sanitize_c = .off; // fails :(
 
     return module;
 }
