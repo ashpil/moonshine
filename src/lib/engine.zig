@@ -9,3 +9,4 @@ pub const gui = @import("./gui/gui.zig");
 // utils
 pub const vector = @import("./vector.zig");
 pub const color = @import("./color.zig");
+pub const tracy = @import("./tracy.zig");
