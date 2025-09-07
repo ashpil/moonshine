@@ -81,7 +81,7 @@ const IntervalLogger = struct {
 pub fn main() !void {
     var logger = try IntervalLogger.start();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
+    var gpa = engine.Allocator.init();
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 

@@ -353,6 +353,7 @@ pub const EngineOptions = struct {
         build_options.addOption(bool, "window", self.window);
         build_options.addOption(bool, "gui", self.gui);
         build_options.addOption(bool, "hrtsystem", self.hrtsystem);
+        build_options.addOption(bool, "tracy", self.tracy);
         build_options.addOption(ShaderImport.SourceType, "shader_source_type", self.shader_source_type);
 
         return build_options;
