@@ -13,7 +13,10 @@ tracy: if (tracy_enabled) TracyAllocator else void,
 pub fn init() Self {
     return Self {
         .inner = if (use_debug_allocator) .{} else {},
-        .tracy = undefined,
+        .tracy = if (tracy_enabled) TracyAllocator {
+            .child_allocator = undefined,
+            .pool_name = "HOST",
+        } else {},
     };
 }
 
