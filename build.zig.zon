@@ -8,8 +8,8 @@
             .hash = "vulkan-0.0.0-r7YtxwA_AwAU4rmOITZD_KJs11Kie1sv0t-pcMDQGIqw",
         },
         .vulkan_headers = .{
-            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/9c77de5c3dd216f28e407eec65ed9c0a296c1f74.tar.gz",
-            .hash = "N-V-__8AAHwr7wGgESDREQVGeJWFvErxgAnCu78GY5gT5-Cc",
+            .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/d1cd37e925510a167d4abef39340dbdea47d8989.tar.gz",
+            .hash = "N-V-__8AAESg9gHKzlANbo03d4Fcb5m_5aZXJXIhYbWzCe4G",
         },
         .dcimgui = .{
             .url = "https://github.com/dearimgui/dear_bindings/releases/download/DearBindings_v0.13_ImGui_v1.91.9b/DearBindings_v0.13_ImGui_v1.91.9b.zip",
