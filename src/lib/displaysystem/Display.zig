@@ -12,8 +12,6 @@ const Window = engine.Window;
 
 const Swapchain = engine.displaysystem.Swapchain;
 
-const metrics = @import("build_options").vk_metrics;
-
 // DOUBLE BUFFER STRATEGY
 // This uses the strategy that I think is most decent while being the simplest to implement.
 //
@@ -39,9 +37,6 @@ swapchain_image_index: u32,
 swapchain: Swapchain,
 surface: vk.SurfaceKHR,
 
-timestamp_period: if (metrics) f32 else void,
-last_frame_time_ns: if (metrics) f64 else void,
-
 pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color_spaces: bool, allocator: std.mem.Allocator) !Self {
     const surface = try window.createSurface(vc.instance.handle);
     errdefer vc.instance.destroySurfaceKHR(surface, null);
@@ -55,25 +50,12 @@ pub fn create(vc: *const VulkanContext, window: Window, supports_swapchain_color
         frame.* = try Frame.create(vc, std.fmt.comptimePrint("frame {}", .{i}), i != 0);
     }
 
-    const timestamp_period = if (metrics) blk: {
-        var properties = vk.PhysicalDeviceProperties2 {
-            .properties = undefined,
-        };
-
-        vc.instance.getPhysicalDeviceProperties2(vc.physical_device.handle, &properties);
-
-        break :blk properties.properties.limits.timestamp_period;
-    } else {};
-
     return Self {
         .swapchain = swapchain,
         .surface = surface,
         .frames = frames,
         .frame_index = 0,
         .swapchain_image_index = undefined, // hmm
-
-        .timestamp_period = timestamp_period,
-        .last_frame_time_ns = if (metrics) 0.0 else {},
     };
 }
 
@@ -123,8 +105,6 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
 
     try frame.encoder.begin();
 
-    if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .top_of_pipe_bit = true }, frame.query_pool, 0);
-
     return &frame.encoder;
 }
 
@@ -143,8 +123,6 @@ pub fn recreate(self: *Self, vc: *const VulkanContext, window: Window, supports_
 pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     const result = blk: {
         const frame = self.frames[self.frame_index];
-
-        if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
 
         try frame.encoder.submit(vc.queue, .{
             .wait_semaphore_infos = &[_]vk.SemaphoreSubmitInfoKHR {
@@ -179,13 +157,6 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     var next_frame = &self.frames[self.frame_index];
     _ = try vc.device.waitForFences(1, (&next_frame.fence)[0..1], vk.TRUE, std.math.maxInt(u64));
 
-    // collect metrics if enabled
-    if (metrics) {
-        var timestamps: [2]u64 = undefined;
-        const query_result = try vc.device.getQueryPoolResults(next_frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
-        self.last_frame_time_ns = if (query_result == .success) @as(f64, @floatFromInt(timestamps[1] - timestamps[0])) * self.timestamp_period else std.math.nan(f64);
-    }
-
     // reset resources associated with next frame so it is ready for use on next startFrame
     try next_frame.reset(vc);
 
@@ -198,8 +169,6 @@ const Frame = struct {
     fence: vk.Fence,
 
     encoder: Encoder,
-
-    query_pool: if (metrics) vk.QueryPool else void,
 
     fn create(vc: *const VulkanContext, name: [*:0]const u8, fence_initially_signaled: bool) !Frame {
         const image_acquired = try vc.device.createSemaphore(&.{}, null);
@@ -215,33 +184,19 @@ const Frame = struct {
         var encoder = try Encoder.create(vc, name);
         errdefer encoder.destroy(vc);
 
-        const query_pool = if (metrics) try vc.device.createQueryPool(&.{
-            .query_type = .timestamp,
-            .query_count = 2,
-        }, null) else undefined;
-        errdefer if (metrics) vc.device.destroyQueryPool(query_pool, null);
-        if (metrics) vc.device.resetQueryPool(query_pool, 0, 2);
-
         return Frame {
             .image_acquired = image_acquired,
             .command_completed = command_completed,
             .fence = fence,
 
             .encoder = encoder,
-
-            .query_pool = query_pool,
         };
     }
 
     // frame must not be in use
     fn reset(self: *Frame, vc: *const VulkanContext) !void {
         try vc.device.resetFences(1, (&self.fence)[0..1]);
-
-        if (metrics) {
-            vc.device.resetQueryPool(self.query_pool, 0, 2);
-        }
-        try vc.device.resetCommandPool(self.encoder.pool, .{});
-        self.encoder.clearResources(vc);
+        try self.encoder.clearResources(vc);
     }
 
     fn destroy(self: *Frame, vc: *const VulkanContext) void {
@@ -249,6 +204,5 @@ const Frame = struct {
         vc.device.destroySemaphore(self.command_completed, null);
         vc.device.destroyFence(self.fence, null);
         self.encoder.destroy(vc);
-        if (metrics) vc.device.destroyQueryPool(self.query_pool, null);
     }
 };

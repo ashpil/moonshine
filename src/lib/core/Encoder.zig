@@ -7,14 +7,18 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const core = @import("./core.zig");
+const tracy = @import("../tracy.zig");
 const VulkanContext = core.VulkanContext;
 const vk_helpers = core.vk_helpers;
+
+const enable_tracy = @import("build_options").tracy;
 
 pool: vk.CommandPool,
 buffer: VulkanContext.CommandBuffer,
 destruction_queue: core.DestructionQueue, // use the page allocator for this for now -- the idea that you probably will either want to destroy zero or many
 upload_allocator: core.mem.UploadPageAllocator,
 upload_arena: std.heap.ArenaAllocator, // can't use State as we want to return the allocator but maintain a reference to it
+query_pool: if (enable_tracy) vk.QueryPool else void,
 
 const Self = @This();
 
@@ -36,9 +40,17 @@ pub fn create(vc: *const VulkanContext, name: [*:0]const u8) !Self {
 
     try vk_helpers.setDebugName(vc.device, buffer, name);
 
+    const query_pool = if (enable_tracy) try vc.device.createQueryPool(&.{
+        .query_type = .timestamp,
+        .query_count = 2,
+        .flags = .{ .reset_bit_khr = true },
+    }, null) else {};
+    errdefer if (enable_tracy) vc.device.destroyQueryPool(query_pool, null);
+
     return Self {
         .pool = pool,
         .buffer = VulkanContext.CommandBuffer.init(buffer, vc.device_dispatch),
+        .query_pool = query_pool,
         .destruction_queue = .{},
         .upload_allocator = core.mem.UploadPageAllocator.init(vc),
         .upload_arena = std.heap.ArenaAllocator {
@@ -56,6 +68,7 @@ pub fn uploadAllocator(self: *Self) std.mem.Allocator {
 // command buffer must not be pending
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
     vc.device.destroyCommandPool(self.pool, null);
+    if (enable_tracy) vc.device.destroyQueryPool(self.query_pool, null);
     self.destruction_queue.destroy(vc, std.heap.page_allocator);
 }
 
@@ -68,8 +81,26 @@ pub fn attachResource(self: *Self, resource: anytype) !void {
     try self.destruction_queue.append(std.heap.page_allocator, resource);
 }
 
-pub fn clearResources(self: *Self, vc: *const VulkanContext) void {
+// sort of weird because in the zig zen resource deallocation must
+// succeed, but this can fail. not sure what's going on with resetCommandPool --
+// is it actually failable?
+pub fn clearResources(self: *Self, vc: *const VulkanContext) !void {
+    try vc.queue.waitIdle();
     self.destruction_queue.clear(vc);
+
+    if (enable_tracy) {
+        var timestamps: [2]u64 = undefined;
+        const result = try vc.device.getQueryPoolResults(self.query_pool, 0, 2, @sizeOf(@TypeOf(timestamps)), &timestamps, @sizeOf(u64), .{ .@"64_bit" = true });
+        if (result == .success) {
+            // not ready can only happen here if the encoder was not previously submitted, which is legal
+            const start = @as(f32, @floatFromInt(timestamps[0])) * vc.timestamp_period_ns;
+            const end = @as(f32, @floatFromInt(timestamps[1])) * vc.timestamp_period_ns;
+            _ = start;
+            _ = end;
+            vc.device.resetQueryPool(self.query_pool, 0, 2);
+        }
+    }
+    try vc.device.resetCommandPool(self.pool, .{});
 
     self.upload_arena.child_allocator = self.upload_allocator.allocator();
     std.debug.assert(self.upload_arena.reset(.free_all));
@@ -82,6 +113,7 @@ pub fn begin(self: Self) !void {
             .one_time_submit_bit = true,
         },
     });
+    if (enable_tracy) self.buffer.writeTimestamp2(.{ .top_of_pipe_bit = true }, self.query_pool, 0);
 }
 
 // submit recorded work
@@ -90,6 +122,7 @@ pub fn submit(self: Self, queue: VulkanContext.Queue, sync: struct {
     signal_semaphore_infos: []const vk.SemaphoreSubmitInfoKHR = &.{},
     fence: vk.Fence = .null_handle,
 }) !void {
+    if (enable_tracy) self.buffer.writeTimestamp2(.{ .bottom_of_pipe_bit = true }, self.query_pool, 1);
     try self.buffer.endCommandBuffer();
 
     const submit_info = vk.SubmitInfo2 {
@@ -110,8 +143,7 @@ pub fn submit(self: Self, queue: VulkanContext.Queue, sync: struct {
 pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     try self.submit(vc.queue, .{});
     try vc.queue.waitIdle();
-    try vc.device.resetCommandPool(self.pool, .{});
-    self.clearResources(vc);
+    try self.clearResources(vc);
 }
 
 pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.BufferSlice(T), dst_image: vk.Image, dst_image_extent: vk.Extent2D, dst_layout: vk.ImageLayout) void {

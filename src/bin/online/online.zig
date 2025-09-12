@@ -198,10 +198,7 @@ pub fn main() !void {
             imgui.setNextWindowPos(50, 50);
             imgui.setNextWindowSize(250, 350);
             imgui.begin("Settings");
-            if (imgui.collapsingHeader("Performance")) {
-                try imgui.textFmt("Last frame time: {d:.3}ms", .{display.last_frame_time_ns / std.time.ns_per_ms});
-                try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
-            }
+            try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             if (imgui.collapsingHeader("Display")) {
                 try imgui.textFmt("Primaries: {s}", .{@tagName(display.swapchain.primaries)});
                 try imgui.textFmt("Transfer function: {s}", .{@tagName(display.swapchain.transfer_function)});

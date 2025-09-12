@@ -4,7 +4,9 @@ const builtin = @import("builtin");
 
 const vk_helpers = @import("../engine.zig").core.vk_helpers;
 
-const validate = @import("build_options").vk_validation != .ignore;
+const build_options = @import("build_options");
+const validate = build_options.vk_validation != .ignore;
+const collect_timestamps = build_options.tracy;
 
 const root = @import("root");
 
@@ -279,15 +281,22 @@ debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 queue: Queue,
 
 memory_types: MemoryTypes,
+timestamp_period_ns: if (collect_timestamps) f32 else void,
 
 const Self = @This();
 
 const QueueFamilyAcceptable = fn(vk.Instance, vk.PhysicalDevice, u32) bool;
 fn returnsTrue(_: vk.Instance, _: vk.PhysicalDevice, _: u32) bool { return true; }
 
-const core_device_extensions = [_][*:0]const u8{
+const base_core_device_extensions = [_][*:0]const u8{
     vk.extensions.khr_push_descriptor.name,
 };
+
+const collect_timestamps_core_device_extensions = [_][*:0]const u8{
+    vk.extensions.khr_maintenance_9.name,
+};
+
+const core_device_extensions = if (collect_timestamps) base_core_device_extensions ++ collect_timestamps_core_device_extensions else base_core_device_extensions;
 
 pub const VulkanRequirements = struct {
     instance_extensions: []const [*:0]const u8 = &.{},
@@ -341,6 +350,16 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     const queue_handle = device.getDeviceQueue(physical_device.queue_family_index, 0);
     const queue = Queue.init(queue_handle, device_dispatch);
 
+    const properties = if (collect_timestamps) blk: {
+        var properties = vk.PhysicalDeviceProperties2 {
+            .properties = undefined,
+        };
+
+        instance.getPhysicalDeviceProperties2(physical_device.handle, &properties);
+
+        break :blk properties.properties;
+    } else {};
+
     return Self {
         .base = base,
         .instance_dispatch = instance_dispatch,
@@ -353,6 +372,7 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
         .queue = queue,
 
         .memory_types = MemoryTypes.create(instance, physical_device),
+        .timestamp_period_ns = if (collect_timestamps) properties.limits.timestamp_period else {},
     };
 }
 
@@ -445,7 +465,7 @@ const PhysicalDevice = struct {
             .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
             .runtime_descriptor_array = vk.TRUE,
             .descriptor_binding_partially_bound = vk.TRUE,
-            .host_query_reset = vk.TRUE,
+            .host_query_reset = if (collect_timestamps) vk.TRUE else vk.FALSE,
             .descriptor_binding_update_unused_while_pending = vk.TRUE,
         };
 
