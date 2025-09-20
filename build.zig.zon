@@ -28,7 +28,7 @@
             .hash = "N-V-__8AAGC4nQHVa2CJUUb6saSEtcSR7c3wMfzHy9oF6m1g",
         },
         .zgltf = .{
-            .url = "https://github.com/ashpil/zgltf/archive/43dfbf469ca4912332a964ad9dbaba03b837d1ca.tar.gz",
+            .url = "https://github.com/kooparse/zgltf/archive/34fba4f48fac331b30316b4ace9b5be7b819d3a9.tar.gz",
             .hash = "zgltf-0.1.0-sX6QAlESAgDC3JQJwE68MnU2xMLyNPSN60FT7KLjqUWt",
         },
         .wuffs = .{
