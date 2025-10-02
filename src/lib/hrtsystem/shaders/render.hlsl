@@ -30,7 +30,7 @@
 struct PushConsts {
     uint instanceCount;
     Camera camera;
-    row_major float3x3 XYZToDstPrimaries;
+    row_major float3x3 XYZToDstChromaticities;
     uint sampleCount;
     ChromaticVolume globalVolume;
     float3x3 backgroundToWorld;
@@ -109,7 +109,7 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
 
     // accumulate
     const float3 newSampleXYZ = Spectrum::toXYZ(w.λ) * radiance / w.pdf;
-    const float3 newSample = mul(pushConsts.XYZToDstPrimaries, newSampleXYZ);
+    const float3 newSample = mul(pushConsts.XYZToDstChromaticities, newSampleXYZ);
     const float3 priorSampleAverage = pushConsts.sampleCount == 0 ? 0 : dOutputImage[imageCoords].xyz;
     const float3 newAverage = accumulate(priorSampleAverage, newSample, pushConsts.sampleCount);
     dOutputImage[imageCoords] = float4(newAverage, 1);

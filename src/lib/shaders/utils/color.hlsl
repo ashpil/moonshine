@@ -51,7 +51,7 @@ float3 xyYToXYZ(float3 xyY) {
     );
 }
 
-struct Primaries {
+struct Chromaticities {
     float2 red;
     float2 green;
     float2 blue;
@@ -80,7 +80,7 @@ struct Primaries {
     }
 };
 
-static const Primaries bt709Primaries = {
+static const Chromaticities bt709Chromaticities = {
     float2(0.64, 0.33),
     float2(0.3, 0.6),
     float2(0.15, 0.06),

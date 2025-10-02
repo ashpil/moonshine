@@ -87,32 +87,28 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
 
 // only support HDR on Linux right now because on Linux it's just this easy
 // doing it properly on Windows requires querying information from the OS
-const swapchain_color_space_formats = if (@import("builtin").os.tag == .linux) [_]Swapchain.SurfaceFormat {
+const swapchain_color_space_formats = if (@import("builtin").os.tag == .linux) [_]vk.SurfaceFormatKHR {
     // it's unclear whether I should prefer the 16-bit float format over the 10-bit integer format.
     // theoretically most HDR displays should be 12-bit, not just 10-bit,
     // so we would be losing something by using 10 bits only.
     .{
         .format = .r16g16b16a16_sfloat,
-        .primaries = .bt2020,
-        .transfer_function = .st2084_pq,
+        .color_space = .hdr10_st2084_ext,
     },
     .{
         .format = .a2r10g10b10_unorm_pack32,
-        .primaries = .bt2020,
-        .transfer_function = .st2084_pq,
+        .color_space = .hdr10_st2084_ext,
     },
-} else [_]Swapchain.SurfaceFormat {};
+} else [_]vk.SurfaceFormatKHR {};
 
-const base_formats = [_]Swapchain.SurfaceFormat {
+const base_formats = [_]vk.SurfaceFormatKHR {
     .{
         .format = .b8g8r8a8_unorm,
-        .primaries = .bt709,
-        .transfer_function = .srgb,
+        .color_space = .srgb_nonlinear_khr,
     },
     .{
         .format = .r8g8b8a8_unorm,
-        .primaries = .bt709,
-        .transfer_function = .srgb,
+        .color_space = .srgb_nonlinear_khr,
     },
 };
 

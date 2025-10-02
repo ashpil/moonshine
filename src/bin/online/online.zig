@@ -94,9 +94,9 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
     .shader_source = shaders.post_process,
     .PushConstants = extern struct {
         src_image_scene_referred_to_display_referred_scale: f32 = 1.0,
-        src_primaries_to_xyz: F32x3x3,
+        src_chromaticities_to_xyz: F32x3x3,
         dst_white_encoding: f32,
-        dst_primaries_from_xyz: F32x3x3,
+        dst_chromaticities_from_xyz: F32x3x3,
         dst_transfer_function: engine.color.TransferFunction,
     },
     .PushSetBindings = struct {
@@ -133,7 +133,7 @@ pub fn main() !void {
     std.log.info("Set up initial state!", .{});
 
     try encoder.begin();
-    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, display.swapchain.primaries.toParametric());
+    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
     defer scene.destroy(&context, allocator);
     try encoder.submitAndIdleUntilDone(&context);
 
@@ -185,7 +185,7 @@ pub fn main() !void {
                 scene.camera.sensors.items[active_sensor].image.destroy(&context);
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
-                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
                 gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
@@ -203,9 +203,8 @@ pub fn main() !void {
                 try imgui.textFmt("Framerate: {d:.2} FPS", .{imgui.getIO().Framerate});
             }
             if (imgui.collapsingHeader("Display")) {
-                try imgui.textFmt("Primaries: {s}", .{@tagName(display.swapchain.primaries)});
-                try imgui.textFmt("Transfer function: {s}", .{@tagName(display.swapchain.transfer_function)});
-                drawChromaticityDiagram(display.swapchain.primaries.toParametric());
+                try imgui.textFmt("Color space: {s}", .{@tagName(display.swapchain.color_space)});
+                drawChromaticityDiagram(engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
                 _ = imgui.dragScalar(f32, "Scene Referred To Display Referred Scale", &scene_referred_to_display_referred_scale, scene_referred_to_display_referred_scale / 10.0, 0.0001, std.math.inf(f32));
             }
             if (imgui.collapsingHeader("Scene")) {
@@ -512,10 +511,10 @@ pub fn main() !void {
         });
         post_process_pipeline.recordPushConstants(frame_encoder.buffer, .{
             .src_image_scene_referred_to_display_referred_scale = scene_referred_to_display_referred_scale,
-            .src_primaries_to_xyz = display.swapchain.primaries.toParametric().toXYZ().floatCast(f32),
-            .dst_white_encoding = @floatCast(display.swapchain.transfer_function.whiteEncoding()),
-            .dst_primaries_from_xyz = display.swapchain.primaries.toParametric().fromXYZ().floatCast(f32),
-            .dst_transfer_function = display.swapchain.transfer_function,
+            .src_chromaticities_to_xyz = engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space).toXYZ().floatCast(f32),
+            .dst_white_encoding = @floatCast(engine.color.TransferFunction.fromVkColorspace(display.swapchain.color_space).whiteEncoding()),
+            .dst_chromaticities_from_xyz = engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space).fromXYZ().floatCast(f32),
+            .dst_transfer_function = engine.color.TransferFunction.fromVkColorspace(display.swapchain.color_space),
         });
         post_process_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
 
@@ -542,7 +541,7 @@ pub fn main() !void {
                 try frame_encoder.attachResource(scene.camera.sensors.items[active_sensor].image);
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
-                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+                active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
                 gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
             }
         } else |err| if (err == error.OutOfDateKHR) {
@@ -551,7 +550,7 @@ pub fn main() !void {
             scene.camera.sensors.items[active_sensor].image.destroy(&context);
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;
-            active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, display.swapchain.primaries.toParametric());
+            active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
             gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
         } else return err;
 
@@ -585,7 +584,7 @@ pub fn exposeToImguiRecursive(T: type, value: *T, name: [:0]const u8) bool {
 // the shape here is correct, but the inner fill colors are terrible
 // doing better would require creating a texture, which is annoying,
 // or a custom draw shader, also annoying
-fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
+fn drawChromaticityDiagram(chromaticities: engine.color.Chromaticities) void {
     const color = engine.color;
 
     const samples_start = 435;
@@ -632,7 +631,7 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
 
     const points = spectral_line ++ [_]F64x3 { F64x3.splat(1.0) };
     for (points) |point| {
-        const rgb = color.Primaries.Named.bt709.toParametric().fromXYZ().mul(point).componentClamp(F64x3.splat(0.0), F64x3.splat(1.0));
+        const rgb = engine.color.Chromaticities.bt709.fromXYZ().mul(point).componentClamp(F64x3.splat(0.0), F64x3.splat(1.0));
         const rgb_scaled = rgb.scale(@floatFromInt(std.math.maxInt(u8)));
         const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
 
@@ -641,12 +640,12 @@ fn drawChromaticityDiagram(primaries: engine.color.Primaries.Parametric) void {
     }
 
     imgui.addTriangle(draw_list,
-        xy_to_view.mul(primaries.red.append(1)).truncate().floatCast(f32),
-        xy_to_view.mul(primaries.green.append(1)).truncate().floatCast(f32),
-        xy_to_view.mul(primaries.blue.append(1)).truncate().floatCast(f32),
+        xy_to_view.mul(chromaticities.red.append(1)).truncate().floatCast(f32),
+        xy_to_view.mul(chromaticities.green.append(1)).truncate().floatCast(f32),
+        xy_to_view.mul(chromaticities.blue.append(1)).truncate().floatCast(f32),
     U8x3.splat(0).append(255));
 
-    imgui.addCircle(draw_list, xy_to_view.mul(primaries.white.append(1)).truncate().floatCast(f32), @floatCast(xy_to_view.mul(F64x2.splat(1.0 / 64.0).append(0)).element(0)), U8x3.splat(0).append(255));
+    imgui.addCircle(draw_list, xy_to_view.mul(chromaticities.white.append(1)).truncate().floatCast(f32), @floatCast(xy_to_view.mul(F64x2.splat(1.0 / 64.0).append(0)).element(0)), U8x3.splat(0).append(255));
 
     imgui.setCursorScreenPos(F32x2.new(.{@floatCast(canvas_start.element(0)), @as(f32, @floatCast(canvas_end.element(1))) + imgui.getStyle().FramePadding.x}));
 }

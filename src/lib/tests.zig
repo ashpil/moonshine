@@ -273,7 +273,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
 // this is technically an argument for supporting primitives other than triangles,
 // if the goal is just to test the BRDF in the most comprehensive way
 
-const tests_color_space = engine.color.Primaries.Named.bt709;
+const tests_color_space = engine.color.Chromaticities.bt709;
 
 // spectral causes a decent amount of color variance so our per-pixel error bounds
 // are fairly high.
@@ -282,7 +282,7 @@ fn assertWhiteFurnaceImage(image: []const [4]f32) !void {
     var average: f64 = 0.0;
     for (image) |pixel| {
         // using luminance as a pereceptual metric of sorts
-        const val = tests_color_space.toParametric().luminance(F32x3.new(pixel[0..3].*).floatCast(f64));
+        const val = tests_color_space.luminance(F32x3.new(pixel[0..3].*).floatCast(f64));
         average += val / @as(f64, @floatFromInt(image.len));
         if (!std.math.approxEqAbs(f64, val, 1.0, 0.15)) return error.NonWhitePixel;
     }
@@ -349,7 +349,7 @@ test "white sphere on white background is white" {
             .vfov = std.math.pi / 4.0,
         },
     }, try allocator.dupeZ(u8, ""));
-    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space.toParametric());
+    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc, allocator);
     var white = [4]f32 {1, 1, 1, 1};
@@ -451,7 +451,7 @@ test "white volume on white background is white" {
             .vfov = std.math.pi / 4.0,
         },
     }, try allocator.dupeZ(u8, ""));
-    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space.toParametric());
+    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc, allocator);
     var white = [4]f32 {1, 1, 1, 1};
@@ -556,7 +556,7 @@ test "inside illuminating sphere is white" {
             .vfov = std.math.pi / 3.0,
         },
     }, try allocator.dupeZ(u8, ""));
-    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space.toParametric());
+    _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc, allocator);
     var black = [4]f32 {0, 0, 0, 1};

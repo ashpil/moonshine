@@ -8,9 +8,9 @@
 
 struct PushConsts {
     float srcImageSceneReferredToDisplayReferredScale;
-    row_major float3x3 srcPrimariesToXYZ;
+    row_major float3x3 srcChromaticitiesToXYZ;
     float dstWhiteEncoding;
-    row_major float3x3 dstPrimariesFromXYZ;
+    row_major float3x3 dstChromaticitiesFromXYZ;
     TransferFunction dstTransferFunction;
 };
 [[vk::push_constant]] PushConsts pushConsts;
@@ -36,12 +36,12 @@ void main(uint3 dispatchXYZ: SV_DispatchThreadID) {
     if (any(pixelIndex >= dstImageSize)) return;
 
     const float3 srcColor = srcImage[pixelIndex] * pushConsts.srcImageSceneReferredToDisplayReferredScale;
-    const float3 srcColorXYZ = mul(pushConsts.srcPrimariesToXYZ, srcColor);
+    const float3 srcColorXYZ = mul(pushConsts.srcChromaticitiesToXYZ, srcColor);
 
-    const float3 dstColorBT709 = applyImgui(mul(bt709Primaries.fromXYZ(), srcColorXYZ), imguiPremultipliedAlphaImage[pixelIndex]);
+    const float3 dstColorBT709 = applyImgui(mul(bt709Chromaticities.fromXYZ(), srcColorXYZ), imguiPremultipliedAlphaImage[pixelIndex]);
 
-    const float3 dstColorXYZ = mul(bt709Primaries.toXYZ(), dstColorBT709);
-    const float3 dstColorDstPrimaries = mul(pushConsts.dstPrimariesFromXYZ, dstColorXYZ);
+    const float3 dstColorXYZ = mul(bt709Chromaticities.toXYZ(), dstColorBT709);
+    const float3 dstColorDstChromaticities = mul(pushConsts.dstChromaticitiesFromXYZ, dstColorXYZ);
 
-    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColorDstPrimaries * pushConsts.dstWhiteEncoding), 1.0);
+    dstImage[pixelIndex] = float4(fromLinear(pushConsts.dstTransferFunction, dstColorDstChromaticities * pushConsts.dstWhiteEncoding), 1.0);
 }

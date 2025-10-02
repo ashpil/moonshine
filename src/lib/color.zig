@@ -1,4 +1,5 @@
 const math = @import("std").math;
+const vk = @import("vulkan");
 
 const vector = @import("vector.zig");
 const F64x3 = vector.Vec3(f64);
@@ -167,59 +168,57 @@ const srgb = struct {
     }
 };
 
-pub const Primaries = union(enum) {
-    pub const Named = enum {
-        bt709,
-        bt2020,
+// primaries and white point
+pub const Chromaticities = extern struct {
+    red: F64x2,
+    green: F64x2,
+    blue: F64x2,
 
-        pub fn toParametric(self: Named) Parametric {
-            return switch (self) {
-                .bt709 => .{
-                    .red = .new(.{0.64, 0.33}),
-                    .green = .new(.{0.3, 0.6}),
-                    .blue = .new(.{0.15, 0.06}),
+    white: F64x2,
 
-                    .white = .new(.{0.3127, 0.3290}),
-                },
-                .bt2020 => .{
-                    .red = .new(.{0.708, 0.292}),
-                    .green = .new(.{0.170, 0.797}),
-                    .blue = .new(.{0.131, 0.046}),
+    pub fn fromVkColorspace(color_space: vk.ColorSpaceKHR) Chromaticities {
+        return switch (color_space) {
+            .hdr10_st2084_ext => bt2020,
+            .srgb_nonlinear_khr => bt709,
+            else => unreachable, // TODO
+        };
+    }
 
-                    .white = .new(.{0.3127, 0.3290}),
-                },
-            };
-        }
+    pub fn toXYZ(self: Chromaticities) Mat3 {
+        const primary_conversion = Mat3.fromCols(.{
+            xyYToXYZ(self.red.append(1.0)),
+            xyYToXYZ(self.green.append(1.0)),
+            xyYToXYZ(self.blue.append(1.0)),
+        });
+
+        const xyz_white_in_rgb = primary_conversion.inverse().mul(xyYToXYZ(self.white.append(1.0)));
+        const white_conversion = Mat3.diagonal(xyz_white_in_rgb.toArray());
+
+        return primary_conversion.mul(white_conversion);
+    }
+
+    pub fn fromXYZ(self: Chromaticities) Mat3 {
+        return self.toXYZ().inverse();
+    }
+
+    pub fn luminance(self: Chromaticities, value: F64x3) f64 {
+        return self.toXYZ().mul(value).element(1);
+    }
+
+    pub const bt709 = Chromaticities {
+        .red = .new(.{0.64, 0.33}),
+        .green = .new(.{0.3, 0.6}),
+        .blue = .new(.{0.15, 0.06}),
+
+        .white = .new(.{0.3127, 0.3290}),
     };
 
-    // all in xy chromaticity space
-    pub const Parametric = extern struct {
-        red: F64x2,
-        green: F64x2,
-        blue: F64x2,
+    pub const bt2020 = Chromaticities {
+        .red = .new(.{0.708, 0.292}),
+        .green = .new(.{0.170, 0.797}),
+        .blue = .new(.{0.131, 0.046}),
 
-        white: F64x2,
-
-        pub fn toXYZ(self: Parametric) Mat3 {
-            const primary_conversion = Mat3.fromCols(.{
-                xyYToXYZ(self.red.append(1.0)),
-                xyYToXYZ(self.green.append(1.0)),
-                xyYToXYZ(self.blue.append(1.0)),
-            });
-
-            const xyz_white_in_rgb = primary_conversion.inverse().mul(xyYToXYZ(self.white.append(1.0)));
-            const white_conversion = Mat3.diagonal(xyz_white_in_rgb.toArray());
-
-            return primary_conversion.mul(white_conversion);
-        }
-
-        pub fn fromXYZ(self: Parametric) Mat3 {
-            return self.toXYZ().inverse();
-        }
-
-        pub fn luminance(self: Parametric, value: F64x3) f64 {
-            return self.toXYZ().mul(value).element(1);
-        }
+        .white = .new(.{0.3127, 0.3290}),
     };
 };
 
@@ -227,6 +226,14 @@ pub const TransferFunction = enum(u32) {
     linear, // note that this is defined for all reals
     srgb,
     st2084_pq,
+
+    pub fn fromVkColorspace(color_space: vk.ColorSpaceKHR) TransferFunction {
+        return switch (color_space) {
+            .hdr10_st2084_ext => .st2084_pq,
+            .srgb_nonlinear_khr => .srgb,
+            else => unreachable, // TODO
+        };
+    }
 
     // linear float value that corresponds to "white"
     pub fn whiteEncoding(self: TransferFunction) f64 {

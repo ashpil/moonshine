@@ -20,23 +20,16 @@ extent: vk.Extent2D = .{
     .width = 0,
     .height = 0,
 },
-// invalid to read these if extent is (0, 0)
-primaries: color.Primaries.Named = undefined,
-transfer_function: color.TransferFunction = undefined,
+// invalid to read this if extent is (0, 0)
+color_space: vk.ColorSpaceKHR = undefined,
 
 const Self = @This();
 
-pub const SurfaceFormat = struct {
-    format: vk.Format,
-    primaries: color.Primaries.Named,
-    transfer_function: color.TransferFunction,
-};
-
-pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const vk.SurfaceFormatKHR, surface: vk.SurfaceKHR, allocator: std.mem.Allocator) !Self {
     return try createFromOld(vc, ideal_extent, format_whitelist, surface, allocator, .{});
 }
 
-pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, allocator: std.mem.Allocator, old: Self) !Self {
+pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format_whitelist: []const vk.SurfaceFormatKHR, surface: vk.SurfaceKHR, allocator: std.mem.Allocator, old: Self) !Self {
     const settings = try SwapSettings.find(vc, ideal_extent, format_whitelist, surface, allocator);
 
     const queue_family_indices = [_]u32{ vc.physical_device.queue_family_index };
@@ -45,7 +38,7 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format
         .surface = surface,
         .min_image_count = settings.image_count,
         .image_format = settings.format.format,
-        .image_color_space = getVkColorSpace(settings.format.primaries, settings.format.transfer_function).?,
+        .image_color_space = settings.format.color_space,
         .image_extent = settings.extent,
         .image_array_layers = 1,
         .image_usage = .{ .storage_bit = true },
@@ -98,8 +91,7 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format
         .handle = handle,
         .images = images,
         .extent = settings.extent,
-        .primaries = settings.format.primaries,
-        .transfer_function = settings.format.transfer_function,
+        .color_space = settings.format.color_space,
     };
 }
 
@@ -139,7 +131,7 @@ pub fn attachToEncoder(self: *const Self, encoder: *Encoder, allocator: std.mem.
 }
 
 const SwapSettings = struct {
-    format: SurfaceFormat,
+    format: vk.SurfaceFormatKHR,
     present_mode: vk.PresentModeKHR,
     image_count: u32,
     image_sharing_mode: vk.SharingMode,
@@ -147,7 +139,7 @@ const SwapSettings = struct {
     extent: vk.Extent2D,
 
     // updates mutable extent
-    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, format_whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !SwapSettings {
+    pub fn find(vc: *const VulkanContext, extent: vk.Extent2D, format_whitelist: []const vk.SurfaceFormatKHR, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !SwapSettings {
         const caps = try vc.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(vc.physical_device.handle, surface);
 
         return SwapSettings {
@@ -176,14 +168,13 @@ const SwapSettings = struct {
     }
 
     // finds first whitelisted format that is actually available
-    pub fn determineFormat(vc: *const VulkanContext, whitelist: []const SurfaceFormat, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !SurfaceFormat {
+    pub fn determineFormat(vc: *const VulkanContext, whitelist: []const vk.SurfaceFormatKHR, surface: vk.SurfaceKHR, transient: std.mem.Allocator) !vk.SurfaceFormatKHR {
         const available_surface_formats = try vc.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(vc.physical_device.handle, surface, transient);
         defer transient.free(available_surface_formats);
 
         for (whitelist) |wanted| {
-            const wanted_color_space = getVkColorSpace(wanted.primaries, wanted.transfer_function).?;
             for (available_surface_formats) |available| {
-                if (available.format == wanted.format and available.color_space == wanted_color_space) {
+                if (std.meta.eql(available, wanted)) {
                     return wanted;
                 }
             }
@@ -206,19 +197,3 @@ const SwapSettings = struct {
         }
     }
 };
-
-fn getVkColorSpace(primaries: color.Primaries.Named, transfer_function: color.TransferFunction) ?vk.ColorSpaceKHR {
-    return switch (primaries) {
-        .bt709 => switch (transfer_function) {
-            .linear => .bt709_linear_ext,
-            .srgb => .srgb_nonlinear_khr,
-            .st2084_pq => null,
-        },
-        .bt2020 => switch (transfer_function) {
-            .linear => .bt2020_linear_ext,
-            .srgb => null,
-            .st2084_pq => .hdr10_st2084_ext,
-        },
-    };
-}
-
