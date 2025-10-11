@@ -21,8 +21,8 @@ pub const vulkan_requirements = VulkanRequirements {
     },
     .features = &vk.PhysicalDeviceRayQueryFeaturesKHR {
         .p_next = @constCast(&vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
-            .acceleration_structure = vk.TRUE,
+            .acceleration_structure = .true,
         }),
-        .ray_query = vk.TRUE,
+        .ray_query = .true,
     },
 };

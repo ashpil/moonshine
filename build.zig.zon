@@ -4,8 +4,8 @@
 
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/93bc6f1ac3e13dd98d918e242dc892f179a0d0f5.tar.gz",
-            .hash = "vulkan-0.0.0-r7YtxwA_AwAU4rmOITZD_KJs11Kie1sv0t-pcMDQGIqw",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/c9c4dae70356766f0954ae7d2b8aba4d1dd53a2a.tar.gz",
+            .hash = "vulkan-0.0.0-r7Ytx6hBAwBUnt0XA-uOkR2hda4fAHFhQITNTgJpnFkY",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/d1cd37e925510a167d4abef39340dbdea47d8989.tar.gz",

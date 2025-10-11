@@ -364,14 +364,14 @@ pub const TextureManager = struct {
             .address_mode_v = .repeat,
             .address_mode_w = .repeat,
             .mip_lod_bias = 0.0,
-            .anisotropy_enable = vk.FALSE,
+            .anisotropy_enable = .false,
             .max_anisotropy = 0.0,
-            .compare_enable = vk.FALSE,
+            .compare_enable = .false,
             .compare_op = .always,
             .min_lod = 0.0,
             .max_lod = 0.0,
             .border_color = .float_opaque_white,
-            .unnormalized_coordinates = vk.FALSE,
+            .unnormalized_coordinates = .false,
         }, null);
     }
 };

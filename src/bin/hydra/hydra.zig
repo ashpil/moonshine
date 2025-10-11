@@ -268,7 +268,7 @@ pub const HdMoonshine = struct {
         //             .flags = .{ .opaque_bit_khr = true },
         //             .geometry = .{
         //                 .instances = .{
-        //                     .array_of_pointers = vk.FALSE,
+        //                     .array_of_pointers = .false,
         //                     .data = .{
         //                         .device_address = self.world.accel.instances_address,
         //                     }

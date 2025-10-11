@@ -173,7 +173,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
 
     // wait for next frame to ensure CPU is not too far ahead of GPU
     var next_frame = &self.frames[self.frame_index];
-    _ = try vc.device.waitForFences(1, (&next_frame.fence)[0..1], vk.TRUE, std.math.maxInt(u64));
+    _ = try vc.device.waitForFences(1, (&next_frame.fence)[0..1], .true, std.math.maxInt(u64));
 
     // collect metrics if enabled
     if (metrics) {

@@ -225,7 +225,7 @@ fn debugCallback(
 
     writer.flush() catch @panic("unable to flush writer");
 
-    return vk.FALSE;
+    return .false;
 }
 
 const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
@@ -434,19 +434,19 @@ const PhysicalDevice = struct {
 
         var vulkan_13_features = vk.PhysicalDeviceVulkan13Features {
             .p_next = @constCast(features),
-            .synchronization_2 = vk.TRUE,
-            .dynamic_rendering = vk.TRUE, // technically not required by core lib, but afaik since vk 1.3 requires it this can't hurt?
+            .synchronization_2 = .true,
+            .dynamic_rendering = .true, // technically not required by core lib, but afaik since vk 1.3 requires it this can't hurt?
         };
 
         const vulkan_12_features = vk.PhysicalDeviceVulkan12Features {
             .p_next = &vulkan_13_features,
-            .buffer_device_address = vk.TRUE,
-            .scalar_block_layout = vk.TRUE,
-            .shader_sampled_image_array_non_uniform_indexing = vk.TRUE,
-            .runtime_descriptor_array = vk.TRUE,
-            .descriptor_binding_partially_bound = vk.TRUE,
-            .host_query_reset = vk.TRUE,
-            .descriptor_binding_update_unused_while_pending = vk.TRUE,
+            .buffer_device_address = .true,
+            .scalar_block_layout = .true,
+            .shader_sampled_image_array_non_uniform_indexing = .true,
+            .runtime_descriptor_array = .true,
+            .descriptor_binding_partially_bound = .true,
+            .host_query_reset = .true,
+            .descriptor_binding_update_unused_while_pending = .true,
         };
 
         return try instance.createDevice(
@@ -459,7 +459,7 @@ const PhysicalDevice = struct {
                 .enabled_extension_count = @as(u32, @intCast(extensions.len)),
                 .pp_enabled_extension_names = extensions.ptr,
                 .p_enabled_features = &.{
-                    .shader_int_64 = vk.TRUE,
+                    .shader_int_64 = .true,
                 },
                 .p_next = &vulkan_12_features,
             },

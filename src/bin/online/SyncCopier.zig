@@ -48,7 +48,7 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     });
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], vk.TRUE, std.math.maxInt(u64));
+    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
     try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
@@ -78,7 +78,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     })[0..1]);
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], vk.TRUE, std.math.maxInt(u64));
+    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
     try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 

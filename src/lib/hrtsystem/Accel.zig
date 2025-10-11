@@ -191,7 +191,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
             .flags = .{ .opaque_bit_khr = true },
             .geometry = .{
                 .instances = .{
-                    .array_of_pointers = vk.FALSE,
+                    .array_of_pointers = .false,
                     .data = .{
                         .device_address = self.instances_address,
                     }
@@ -312,7 +312,7 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
         .flags = .{ .opaque_bit_khr = true },
         .geometry = .{
             .instances = .{
-                .array_of_pointers = vk.FALSE,
+                .array_of_pointers = .false,
                 .data = .{
                     .device_address = self.instances_address,
                 }

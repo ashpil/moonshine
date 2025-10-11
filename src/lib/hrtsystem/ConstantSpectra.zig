@@ -113,14 +113,14 @@ pub fn create(vc: *const VulkanContext, encoder: *Encoder) !Self {
         .address_mode_v = .clamp_to_border,
         .address_mode_w = .clamp_to_border,
         .mip_lod_bias = 0.0,
-        .anisotropy_enable = vk.FALSE,
+        .anisotropy_enable = .false,
         .max_anisotropy = 0.0,
-        .compare_enable = vk.FALSE,
+        .compare_enable = .false,
         .compare_op = .always,
         .min_lod = 0.0,
         .max_lod = 0.0,
         .border_color = .float_opaque_black,
-        .unnormalized_coordinates = vk.FALSE,
+        .unnormalized_coordinates = .false,
     }, null);
 
     const descriptor_layout = try DescriptorLayout.create(vc, .{ sampler });

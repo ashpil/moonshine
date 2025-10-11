@@ -48,7 +48,7 @@ pub fn createFromOld(vc: *const VulkanContext, ideal_extent: vk.Extent2D, format
         .pre_transform = settings.pre_transform,
         .composite_alpha = .{ .opaque_bit_khr = true },
         .present_mode = settings.present_mode,
-        .clipped = vk.TRUE,
+        .clipped = .true,
         .old_swapchain = old.handle,
     }, null);
     errdefer vc.device.destroySwapchainKHR(handle, null);
