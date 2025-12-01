@@ -9,9 +9,21 @@ fn queueFamilyAcceptable(instance: vk.Instance, device: vk.PhysicalDevice, idx: 
     return Window.getPhysicalDevicePresentationSupport(instance, device, idx);
 }
 
+var swapchain_maintenance_1_features = vk.PhysicalDeviceSwapchainMaintenance1FeaturesEXT {
+    .swapchain_maintenance_1 = .true,
+};
+
 pub const vulkan_requirements = VulkanRequirements {
+    .instance_extensions = &[_][*:0]const u8{
+        vk.extensions.khr_get_surface_capabilities_2.name,
+        vk.extensions.ext_surface_maintenance_1.name,
+    },
     .device_extensions = &[_][*:0]const u8{
         vk.extensions.khr_swapchain.name,
+        vk.extensions.ext_swapchain_maintenance_1.name,
     },
     .queueFamilyAcceptable = &queueFamilyAcceptable,
+    .features = &[_]*vk.BaseOutStructure {
+         @ptrCast(&swapchain_maintenance_1_features),
+    },
 };

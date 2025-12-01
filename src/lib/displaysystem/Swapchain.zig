@@ -107,13 +107,17 @@ pub fn acquireNextImage(self: *Self, vc: *const VulkanContext, semaphore: vk.Sem
     return result.image_index;
 }
 
-pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaphore, image_index: u32) !vk.Result {
+pub fn present(self: *const Self, vc: *const VulkanContext, semaphore: vk.Semaphore, fence: vk.Fence, image_index: u32) !vk.Result {
     return try vc.queue.presentKHR(&vk.PresentInfoKHR {
         .wait_semaphore_count = 1,
         .p_wait_semaphores = (&semaphore)[0..1],
         .swapchain_count = 1,
         .p_swapchains = (&self.handle)[0..1],
         .p_image_indices = (&image_index)[0..1],
+        .p_next = &vk.SwapchainPresentFenceInfoEXT {
+            .swapchain_count = 1,
+            .p_fences = (&fence)[0..1],
+        },
     });
 }
 

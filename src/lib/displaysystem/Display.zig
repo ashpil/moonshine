@@ -159,14 +159,9 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
                     .device_index = 0,
                 }
             },
-            .fence = frame.fence,
         });
 
-        // TODO: the synchronization here is not sufficient, as the semaphore
-        // may still be in use by the previous usage of this swapchain image.
-        // fix this with VK_EXT_swapchain_maintenance1 once it becomes
-        // more widely supported.
-        break :blk self.swapchain.present(vc, frame.command_completed, self.swapchain_image_index);
+        break :blk self.swapchain.present(vc, frame.command_completed, frame.fence, self.swapchain_image_index);
     };
 
     self.frame_index = (self.frame_index + 1) % frames_in_flight;
