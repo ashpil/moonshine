@@ -301,16 +301,12 @@ pub const VulkanRequirements = struct {
                 return self.queueFamilyAcceptable(instance, physical_device, idx) and other.queueFamilyAcceptable(instance, physical_device, idx);
             }
         };
-        comptime var features = self.features;
-        comptime while (features != null) {
-            const features_base: *const vk.BaseInStructure = @alignCast(@ptrCast(features.?));
-            features = features_base.p_next;
-        };
-        features = other.features;
+        if (self.features != null and other.features != null) @compileError("todo");
+        const features = if (self.features == null) other.features else self.features;
         return VulkanRequirements {
             .instance_extensions = self.instance_extensions ++ other.instance_extensions,
             .device_extensions = self.device_extensions ++ other.device_extensions,
-            .features = self.features,
+            .features = features,
             .queueFamilyAcceptable = Wrapper.queueFamilyAcceptable,
         };
     }
