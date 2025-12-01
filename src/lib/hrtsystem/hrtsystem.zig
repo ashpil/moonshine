@@ -13,16 +13,22 @@ pub const Sensor = @import("Sensor.zig");
 const vk = @import("vulkan");
 const VulkanRequirements = @import("../engine.zig").core.VulkanContext.VulkanRequirements;
 
+var acceleration_structure_features = vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
+    .acceleration_structure = .true,
+};
+
+var ray_query_features = vk.PhysicalDeviceRayQueryFeaturesKHR {
+    .ray_query = .true,
+};
+
 pub const vulkan_requirements = VulkanRequirements {
     .device_extensions = &[_][*:0]const u8{
         vk.extensions.khr_deferred_host_operations.name,
         vk.extensions.khr_acceleration_structure.name,
         vk.extensions.khr_ray_query.name,
     },
-    .features = &vk.PhysicalDeviceRayQueryFeaturesKHR {
-        .p_next = @constCast(&vk.PhysicalDeviceAccelerationStructureFeaturesKHR {
-            .acceleration_structure = .true,
-        }),
-        .ray_query = .true,
+    .features = &[_]*vk.BaseOutStructure {
+         @ptrCast(&ray_query_features),
+         @ptrCast(&acceleration_structure_features),
     },
 };

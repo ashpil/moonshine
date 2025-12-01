@@ -292,7 +292,7 @@ const core_device_extensions = [_][*:0]const u8{
 pub const VulkanRequirements = struct {
     instance_extensions: []const [*:0]const u8 = &.{},
     device_extensions: []const [*:0]const u8 = &.{},
-    features: ?*const anyopaque = null,
+    features: []const *vk.BaseOutStructure = &.{}, // note that this may be mutated
     queueFamilyAcceptable: *const QueueFamilyAcceptable = returnsTrue,
 
     pub fn merge(comptime self: VulkanRequirements, comptime other: VulkanRequirements) VulkanRequirements {
@@ -301,14 +301,24 @@ pub const VulkanRequirements = struct {
                 return self.queueFamilyAcceptable(instance, physical_device, idx) and other.queueFamilyAcceptable(instance, physical_device, idx);
             }
         };
-        if (self.features != null and other.features != null) @compileError("todo");
-        const features = if (self.features == null) other.features else self.features;
         return VulkanRequirements {
             .instance_extensions = self.instance_extensions ++ other.instance_extensions,
             .device_extensions = self.device_extensions ++ other.device_extensions,
-            .features = features,
+            .features = self.features ++ other.features,
             .queueFamilyAcceptable = Wrapper.queueFamilyAcceptable,
         };
+    }
+
+    pub fn featureChain(self: VulkanRequirements) ?*const anyopaque {
+        if (self.features.len == 0) return null;
+
+        for (self.features[0..self.features.len - 1], self.features[1..]) |curr, next| {
+            var curr_chain = curr;
+            while (curr_chain.p_next) |curr_next| curr_chain = curr_next;
+            curr_chain.p_next = next;
+        }
+
+        return self.features[0];
     }
 };
 
@@ -328,7 +338,7 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     const all_device_extensions = try std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &core_device_extensions, requirements.device_extensions });
     defer allocator.free(all_device_extensions);
     const physical_device = try PhysicalDevice.pick(instance, allocator, requirements.queueFamilyAcceptable, all_device_extensions);
-    const device_handle = try physical_device.createLogicalDevice(instance, all_device_extensions, requirements.features);
+    const device_handle = try physical_device.createLogicalDevice(instance, all_device_extensions, requirements.featureChain());
     const device_dispatch = try allocator.create(vk.DeviceWrapper);
     device_dispatch.* = vk.DeviceWrapper.load(device_handle, instance_dispatch.dispatch.vkGetDeviceProcAddr.?);
     const device = Device.init(device_handle, device_dispatch);
