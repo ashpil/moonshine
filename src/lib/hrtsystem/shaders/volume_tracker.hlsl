@@ -84,7 +84,14 @@ struct VolumeTracker {
                 other = current[0];
                 for (uint i = priority - 1; i > 0; i--) {
                     if (depth[i - 1] != 0) {
-                        other = current[i];
+                        // the intent of this is to be
+                        // other = current[i]
+                        // but the NVIDIA compiler absolutely chokes on that and hangs.
+                        // good job NVIDIA
+                        other.medium.σ_a = current[i].medium.σ_a;
+                        other.medium.σ_s = current[i].medium.σ_s;
+                        other.phase.g = current[i].phase.g;
+                        other.IOR = current[i].IOR;
                         break;
                     }
                 }
@@ -93,7 +100,14 @@ struct VolumeTracker {
             if (depth[priority - 1] > 0) {
                 other = VolumeAlgebra::add(current[priority], newVolume);
             } else {
-                other = newVolume;
+                // the intent of this is to be
+                // other = newVolume
+                // but the NVIDIA compiler absolutely chokes on that and hangs.
+                // good job NVIDIA
+                other.medium.σ_a = newVolume.medium.σ_a;
+                other.medium.σ_s = newVolume.medium.σ_s;
+                other.phase.g = newVolume.phase.g;
+                other.IOR = newVolume.IOR;
             }
         }
         return activePriority() <= priority;
