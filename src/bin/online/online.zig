@@ -121,6 +121,13 @@ pub fn main() !void {
     const context, const supports_swapchain_color_spaces = try createVulkanContext(allocator, window);
     defer context.destroy(allocator);
 
+    run(allocator, context, config, window, supports_swapchain_color_spaces) catch |err| {
+        if (err == error.DeviceLost) try context.handleDeviceLost(allocator);
+        return err;
+    };
+}
+
+fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, window: Window, supports_swapchain_color_spaces: bool) !void {
     var display = try Display.create(&context, window, supports_swapchain_color_spaces, allocator);
     defer display.destroy(&context, allocator);
 

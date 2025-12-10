@@ -79,17 +79,24 @@ const IntervalLogger = struct {
 };
 
 pub fn main() !void {
-    var logger = try IntervalLogger.start();
-
     var gpa = engine.Allocator.init();
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const config = try Config.fromCli(allocator);
-    defer config.destroy(allocator);
-
     const context = try VulkanContext.create(allocator, "offline", engine.hrtsystem.vulkan_requirements);
     defer context.destroy(allocator);
+
+    run(allocator, context) catch |err| {
+        if (err == error.DeviceLost) try context.handleDeviceLost(allocator);
+        return err;
+    };
+}
+
+fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
+    var logger = try IntervalLogger.start();
+
+    const config = try Config.fromCli(allocator);
+    defer config.destroy(allocator);
 
     var encoder = try Encoder.create(&context, "main");
     defer encoder.destroy(&context);

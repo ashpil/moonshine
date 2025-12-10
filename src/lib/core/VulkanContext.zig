@@ -335,10 +335,8 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
-    const all_device_extensions = try std.mem.concat(allocator, [*:0]const u8, &[_][]const [*:0]const u8{ &core_device_extensions, requirements.device_extensions });
-    defer allocator.free(all_device_extensions);
-    const physical_device = try PhysicalDevice.pick(instance, allocator, requirements.queueFamilyAcceptable, all_device_extensions);
-    const device_handle = try physical_device.createLogicalDevice(instance, all_device_extensions, requirements.featureChain());
+    const physical_device = try PhysicalDevice.pick(instance, allocator, requirements.queueFamilyAcceptable, requirements.device_extensions);
+    const device_handle = try physical_device.createLogicalDevice(allocator, instance, requirements.device_extensions, requirements.featureChain());
     const device_dispatch = try allocator.create(vk.DeviceWrapper);
     device_dispatch.* = vk.DeviceWrapper.load(device_handle, instance_dispatch.dispatch.vkGetDeviceProcAddr.?);
     const device = Device.init(device_handle, device_dispatch);
@@ -372,8 +370,80 @@ pub fn destroy(self: Self, allocator: std.mem.Allocator) void {
     self.base.destroy();
 }
 
+pub fn handleDeviceLost(self: Self, transient: std.mem.Allocator) !void {
+    var buffer: [64]u8 = undefined;
+    const stderr = std.debug.lockStderrWriter(&buffer);
+    defer std.debug.unlockStderrWriter();
+
+    try stderr.writeAll("Device lost detected.\n");
+
+    if (self.physical_device.supports_device_fault_extension) {
+        var counts = vk.DeviceFaultCountsEXT {
+            .address_info_count = undefined,
+            .vendor_info_count = undefined,
+            .vendor_binary_size = undefined,
+        };
+        const res1 = try self.device.getDeviceFaultInfoEXT(&counts, null);
+        std.debug.assert(res1 == .success);
+
+        const address_infos = try transient.alloc(vk.DeviceFaultAddressInfoEXT, counts.address_info_count);
+        defer transient.free(address_infos);
+
+        const vendor_infos = try transient.alloc(vk.DeviceFaultVendorInfoEXT, counts.vendor_info_count);
+        defer transient.free(vendor_infos);
+
+        const vendor_binary = try transient.alloc(u8, counts.vendor_binary_size);
+        defer transient.free(vendor_binary);
+
+        var info = vk.DeviceFaultInfoEXT {
+            .description = undefined,
+            .p_address_infos = @ptrCast(address_infos.ptr),
+            .p_vendor_infos = @ptrCast(vendor_infos.ptr),
+            .p_vendor_binary_data = vendor_binary.ptr,
+        };
+
+        const res2 = try self.device.getDeviceFaultInfoEXT(&counts, &info);
+        std.debug.assert(res2 == .success);
+
+        try stderr.print("Description: {s}\n", .{ info.description });
+        if (address_infos.len != 0) try stderr.writeAll("Addresses:\n");
+        for (address_infos) |address_info| {
+            const lower_address = address_info.reported_address & ~(address_info.address_precision - 1);
+            const upper_address = address_info.reported_address | (address_info.address_precision - 1);
+            try stderr.print("  {}: {}..={}\n", .{address_info.address_type, lower_address, upper_address});
+        }
+        if (vendor_infos.len != 0) try stderr.writeAll("Vendor data:\n");
+        for (vendor_infos) |vendor_info| {
+            try stderr.print("  {}:{}: {s}\n", .{vendor_info.vendor_fault_code, vendor_info.vendor_fault_data, vendor_info.description});
+        }
+        if (vendor_binary.len != 0) {
+            var hasher = std.hash.XxHash3.init(0);
+            hasher.update(&info.description);
+            hasher.update(vendor_binary);
+            hasher.update(@as([]const u8, @ptrCast(address_infos)));
+            hasher.update(@as([]const u8, @ptrCast(vendor_infos)));
+
+            const hash = hasher.final();
+
+            var file_name_buffer: [32]u8 = undefined;
+            const file_name = std.fmt.bufPrint(&file_name_buffer, "gpu_dump_{x}.bin", .{ hash }) catch unreachable;
+            const file = try std.fs.cwd().createFile(file_name, .{});
+            defer file.close();
+
+            try file.writeAll(vendor_binary);
+            try stderr.print("Wrote vendor binary to {s}\n", .{file_name});
+        } else {
+            try stderr.writeAll("Vendor binary unvailable");
+        }
+    } else {
+        try stderr.writeAll("VK_EXT_DEVICE_FAULT unavailable, unable to query fault information.\n");
+    }
+}
+
 const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
+    supports_device_fault_extension: bool,
+    supports_device_fault_extension_vendor_binary: bool,
     queue_family_index: u32,
 
     fn pickQueueFamily(instance: Instance, transient: std.mem.Allocator, device: vk.PhysicalDevice, queueFamilyAcceptable: *const QueueFamilyAcceptable) !u32 {
@@ -397,11 +467,42 @@ const PhysicalDevice = struct {
         const devices = try instance.enumeratePhysicalDevicesAlloc(transient);
         defer transient.free(devices);
 
+        const all_extensions = try std.mem.concat(transient, [*:0]const u8, &[_][]const [*:0]const u8{ &core_device_extensions, extensions });
+        defer transient.free(all_extensions);
+
         return for (devices) |device| {
-            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, transient, extensions)) {
+            if (try PhysicalDevice.deviceExtensionsAvailable(instance, device, transient, all_extensions)) {
                 if (pickQueueFamily(instance, transient, device, queueFamilyAcceptable)) |index| {
+
+                    const available_extensions = try instance.enumerateDeviceExtensionPropertiesAlloc(device, null, transient);
+                    defer transient.free(available_extensions);
+
+                    const supports_device_fault_extension = for (available_extensions) |extension| {
+                        if (std.mem.orderZ(u8, vk.extensions.ext_device_fault.name, @ptrCast(&extension.extension_name)) == .eq) {
+                            break true;
+                        }
+                    } else false;
+
+                    const supports_device_fault_extension_vendor_binary = if (supports_device_fault_extension) blk: {
+                        var device_fault_features = vk.PhysicalDeviceFaultFeaturesEXT {
+                            .device_fault = undefined,
+                            .device_fault_vendor_binary = undefined,
+                        };
+
+                        var features = vk.PhysicalDeviceFeatures2 {
+                            .p_next = &device_fault_features,
+                            .features = undefined,
+                        };
+
+                        instance.getPhysicalDeviceFeatures2(device, &features);
+
+                        break :blk device_fault_features.device_fault_vendor_binary == .true;
+                    } else false;
+
                     break PhysicalDevice {
                         .handle = device,
+                        .supports_device_fault_extension = supports_device_fault_extension,
+                        .supports_device_fault_extension_vendor_binary = supports_device_fault_extension_vendor_binary,
                         .queue_family_index = index,
                     };
                 } else |err| return err;
@@ -428,7 +529,7 @@ const PhysicalDevice = struct {
         return true;
     }
 
-    fn createLogicalDevice(self: *const PhysicalDevice, instance: Instance, extensions: []const [*:0]const u8, features: ?*const anyopaque) !vk.Device {
+    fn createLogicalDevice(self: *const PhysicalDevice, transient: std.mem.Allocator, instance: Instance, extensions: []const [*:0]const u8, features: ?*const anyopaque) !vk.Device {
         const priority = [_]f32{1.0};
         const queue_create_info = [_]vk.DeviceQueueCreateInfo{
             .{
@@ -455,6 +556,16 @@ const PhysicalDevice = struct {
             .descriptor_binding_update_unused_while_pending = .true,
         };
 
+        const core_extensions = if (self.supports_device_fault_extension) &(core_device_extensions ++ [_][*:0]const u8{ vk.extensions.ext_device_fault.name }) else &core_device_extensions;
+        const all_extensions = try std.mem.concat(transient, [*:0]const u8, &[_][]const [*:0]const u8{ core_extensions, extensions });
+        defer transient.free(all_extensions);
+
+        const final_features: *const anyopaque = if (self.supports_device_fault_extension) @ptrCast(&vk.PhysicalDeviceFaultFeaturesEXT {
+            .p_next = @constCast(&vulkan_12_features),
+            .device_fault = .true,
+            .device_fault_vendor_binary = if (self.supports_device_fault_extension_vendor_binary) .true else .false,
+        }) else @ptrCast(&vulkan_12_features);
+
         return try instance.createDevice(
             self.handle,
             &.{
@@ -462,12 +573,12 @@ const PhysicalDevice = struct {
                 .p_queue_create_infos = &queue_create_info,
                 .enabled_layer_count = if (validate) validation_layers.len else 0,
                 .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
-                .enabled_extension_count = @as(u32, @intCast(extensions.len)),
-                .pp_enabled_extension_names = extensions.ptr,
+                .enabled_extension_count = @as(u32, @intCast(all_extensions.len)),
+                .pp_enabled_extension_names = all_extensions.ptr,
                 .p_enabled_features = &.{
                     .shader_int_64 = .true,
                 },
-                .p_next = &vulkan_12_features,
+                .p_next = final_features,
             },
             null,
         );
