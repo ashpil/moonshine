@@ -207,7 +207,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
 
         const img_data = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)];
         const staging_data = try encoder.uploadAllocator().dupe(u8, img_data);
-        encoder.uploadDataToImage(u8, encoder.upload_allocator.getBufferSlice(staging_data), image.handle, tex_data[1], .shader_read_only_optimal);
+        encoder.initializeImage(u8, encoder.upload_allocator.getBufferSlice(staging_data), image.handle, tex_data[1]);
         break :blk image;
     };
 
@@ -221,7 +221,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
             .p_image_info = (&vk.DescriptorImageInfo{
                 .sampler = undefined,
                 .image_view = font_image.view,
-                .image_layout = .read_only_optimal,
+                .image_layout = .general,
             })[0..1],
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
@@ -309,7 +309,7 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
         .color_attachment_count = 1,
         .p_color_attachments = (&vk.RenderingAttachmentInfo{
             .image_view = image_view,
-            .image_layout = .color_attachment_optimal,
+            .image_layout = .general,
             .resolve_mode = .{},
             .resolve_image_layout = .undefined,
             .load_op = .clear,

@@ -414,7 +414,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                 window.setCursorMode(.normal);
                 if (imgui.isMouseClicked(.left)) {
                     current_clicked_object = try object_picker.getClickedObject(&context, scene.world.accel.tlas_handle, imgui.getMousePos().componentDiv(window_size), scene.camera.cameras.items[active_camera][1], scene.camera.sensors.items[active_sensor]);
-                    const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, .transfer_src_optimal, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().element(0)), .y = @intFromFloat(imgui.getMousePos().element(1)), .z = 0 });
+                    const clicked_pixel = try sync_copier.copyImagePixel(&context, F32x4, scene.camera.sensors.items[active_sensor].image.handle, vk.Offset3D { .x = @intFromFloat(imgui.getMousePos().element(0)), .y = @intFromFloat(imgui.getMousePos().element(1)), .z = 0 });
                     current_clicked_color = clicked_pixel.truncate();
                     has_clicked = true;
                 }
@@ -454,7 +454,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                     .src_access_mask = .{ .shader_sampled_read_bit = true },
                     .dst_stage_mask = .{ .compute_shader_bit = true },
                     .dst_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                    .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .shader_read_only_optimal,
+                    .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .general,
                     .new_layout = .general,
                     .image = scene.camera.sensors.items[active_sensor].image.handle,
                 }
@@ -474,7 +474,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                 .dst_stage_mask = .{ .color_attachment_output_bit = true },
                 .dst_access_mask = .{ .color_attachment_write_bit = true },
                 .old_layout = .undefined,
-                .new_layout = .color_attachment_optimal,
+                .new_layout = .general,
                 .image = gui_image.handle,
             },
         }, &.{});
@@ -495,8 +495,6 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
             .src_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .old_layout = .general,
-            .new_layout = .shader_read_only_optimal,
             .image = scene.camera.sensors.items[active_sensor].image.handle,
         };
         const gui_barrier = Encoder.ImageBarrier {
@@ -504,8 +502,6 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
             .src_access_mask = .{ .color_attachment_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_sampled_read_bit = true },
-            .old_layout = .color_attachment_optimal,
-            .new_layout = .shader_read_only_optimal,
             .image = gui_image.handle,
         };
         frame_encoder.barrier(if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier, sensor_barrier } else &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier }, &.{});

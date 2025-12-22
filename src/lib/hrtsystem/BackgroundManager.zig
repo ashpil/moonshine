@@ -179,7 +179,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .undefined,
-            .new_layout = .transfer_dst_optimal,
+            .new_layout = .general,
             .image = equirectangular_image.handle,
         },
         .{
@@ -192,7 +192,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
     }, &.{});
 
     const equirectangular_image_host_slice = encoder.upload_allocator.getBufferSlice(equirectangular_image_host);
-    encoder.copyBufferToImage(equirectangular_image_host_slice.handle, equirectangular_image_host_slice.offset, equirectangular_image.handle, .transfer_dst_optimal, equirectangular_extent);
+    encoder.copyBufferToImage(equirectangular_image_host_slice.handle, equirectangular_image_host_slice.offset, equirectangular_image.handle, equirectangular_extent);
 
     encoder.barrier(&[_]Encoder.ImageBarrier {
         .{
@@ -200,8 +200,6 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_read_bit = true },
-            .old_layout = .transfer_dst_optimal,
-            .new_layout = .shader_read_only_optimal,
             .image = equirectangular_image.handle,
         },
     }, &.{});
@@ -223,8 +221,6 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
                 .src_access_mask = .{ .shader_write_bit = true },
                 .dst_stage_mask = .{ .compute_shader_bit = true },
                 .dst_access_mask = .{ .shader_read_bit = true },
-                .old_layout = .general,
-                .new_layout = .shader_read_only_optimal,
                 .image = equal_area_image.handle,
                 .base_mip_level = @intCast(dst_mip_level - 1),
                 .level_count = 1,
@@ -244,8 +240,6 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
             .src_access_mask = .{ .shader_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_read_bit = true },
-            .old_layout = .general,
-            .new_layout = .shader_read_only_optimal,
             .image = equal_area_image.handle,
             .base_mip_level = @intCast(mip_views.items.len - 1),
             .level_count = 1,

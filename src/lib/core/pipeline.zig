@@ -150,7 +150,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .p_image_info = (&vk.DescriptorImageInfo {
                     .sampler = .null_handle,
                     .image_view = binding_value.view,
-                    .image_layout = .shader_read_only_optimal,
+                    .image_layout = .general,
                 })[0..1],
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,

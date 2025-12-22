@@ -87,8 +87,6 @@ const TestingContext = struct {
                         .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                         .dst_stage_mask = .{ .compute_shader_bit = true },
                         .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                        .old_layout = .general,
-                        .new_layout = .general,
                         .image = scene.camera.sensors.items[0].image.handle,
                     },
                 }, &.{});
@@ -103,14 +101,12 @@ const TestingContext = struct {
                 .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                 .dst_stage_mask = .{ .copy_bit = true },
                 .dst_access_mask = .{ .transfer_read_bit = true },
-                .old_layout = .general,
-                .new_layout = .transfer_src_optimal,
                 .image = scene.camera.sensors.items[0].image.handle,
             }
         }, &.{});
 
         // copy output image to host-visible staging buffer
-        self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, .transfer_src_optimal, scene.camera.sensors.items[0].extent, self.output_buffer.handle);
+        self.encoder.copyImageToBuffer(scene.camera.sensors.items[0].image.handle, scene.camera.sensors.items[0].extent, self.output_buffer.handle);
 
         try self.encoder.submitAndIdleUntilDone(&self.vc);
 

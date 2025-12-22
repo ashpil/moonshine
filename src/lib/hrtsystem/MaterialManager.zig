@@ -324,7 +324,7 @@ pub const TextureManager = struct {
         const image = try Image.create(vc, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, false, name);
         try self.data.append(allocator, image);
 
-        encoder.uploadDataToImage(T, src, image.handle, extent, .shader_read_only_optimal);
+        encoder.initializeImage(T, src, image.handle, extent);
 
         vc.device.updateDescriptorSets(1, (&vk.WriteDescriptorSet {
             .dst_set = self.descriptor_set,
@@ -333,7 +333,7 @@ pub const TextureManager = struct {
             .descriptor_count = 1,
             .descriptor_type = .sampled_image,
             .p_image_info = (&vk.DescriptorImageInfo {
-                .image_layout = .shader_read_only_optimal,
+                .image_layout = .general,
                 .image_view = image.view,
                 .sampler = .null_handle,
             })[0..1],

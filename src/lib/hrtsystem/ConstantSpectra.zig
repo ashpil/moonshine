@@ -83,7 +83,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
         datum_staging.* = @floatCast(datum * spectrum_scale);
     }
 
-    encoder.uploadDataToImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent, .shader_read_only_optimal);
+    encoder.initializeImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent);
 
     vc.device.updateDescriptorSets(1, (&vk.WriteDescriptorSet {
         .dst_set = descriptor_set,
@@ -92,7 +92,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
         .descriptor_count = 1,
         .descriptor_type = .sampled_image,
         .p_image_info = (&vk.DescriptorImageInfo {
-            .image_layout = .shader_read_only_optimal,
+            .image_layout = .general,
             .image_view = image.view,
             .sampler = .null_handle,
         })[0..1],

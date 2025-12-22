@@ -114,14 +114,14 @@ pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     self.clearResources(vc);
 }
 
-pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.BufferSlice(T), dst_image: vk.Image, dst_image_extent: vk.Extent2D, dst_layout: vk.ImageLayout) void {
+pub fn initializeImage(self: Self, comptime T: type, src_data: core.mem.BufferSlice(T), dst_image: vk.Image, dst_image_extent: vk.Extent2D) void {
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
             .dst_stage_mask = .{ .copy_bit = true },
             .dst_access_mask = .{ .transfer_write_bit = true },
             .old_layout = .undefined,
-            .new_layout = .transfer_dst_optimal,
+            .new_layout = .general,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = dst_image,
@@ -134,26 +134,7 @@ pub fn uploadDataToImage(self: Self, comptime T: type, src_data: core.mem.Buffer
             },
         })[0..1],
     });
-    self.copyBufferToImage(src_data.handle, src_data.offset, dst_image, .transfer_dst_optimal, dst_image_extent);
-    self.buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .image_memory_barrier_count = 1,
-        .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .old_layout = .transfer_dst_optimal,
-            .new_layout = dst_layout,
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .image = dst_image,
-            .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
-                .base_mip_level = 0,
-                .level_count = 1,
-                .base_array_layer = 0,
-                .layer_count = vk.REMAINING_ARRAY_LAYERS,
-            },
-        })[0..1],
-    });
+    self.copyBufferToImage(src_data.handle, src_data.offset, dst_image, dst_image_extent);
 }
 
 // buffers must have appropriate flags
@@ -167,8 +148,8 @@ pub fn fillBuffer(self: Self, dst: vk.Buffer, size: vk.DeviceSize, data: anytype
     self.buffer.fillBuffer(dst, 0, size * 4, @bitCast(data));
 }
 
-pub fn clearColorImage(self: Self, dst: vk.Image, layout: vk.ImageLayout, color: vk.ClearColorValue) void {
-    self.buffer.clearColorImage(dst, layout, &color, 1, &[1]vk.ImageSubresourceRange{
+pub fn clearColorImage(self: Self, dst: vk.Image, color: vk.ClearColorValue) void {
+    self.buffer.clearColorImage(dst, .general, &color, 1, &[1]vk.ImageSubresourceRange{
         .{
             .aspect_mask = .{ .color_bit = true },
             .base_mip_level = 0,
@@ -184,7 +165,7 @@ pub fn buildAccelerationStructures(self: Self, infos: []const vk.AccelerationStr
     self.buffer.buildAccelerationStructuresKHR(@intCast(infos.len), infos.ptr, build_range_infos.ptr);
 }
 
-pub fn copyImageToBuffer(self: Self, src: vk.Image, layout: vk.ImageLayout, extent: vk.Extent2D, dst: vk.Buffer) void {
+pub fn copyImageToBuffer(self: Self, src: vk.Image, extent: vk.Extent2D, dst: vk.Buffer) void {
     const copy = vk.BufferImageCopy {
         .buffer_offset = 0,
         .buffer_row_length = 0,
@@ -206,10 +187,10 @@ pub fn copyImageToBuffer(self: Self, src: vk.Image, layout: vk.ImageLayout, exte
             .depth = 1,
         },
     };
-    self.buffer.copyImageToBuffer(src, layout, dst, 1, (&copy)[0..1]);
+    self.buffer.copyImageToBuffer(src, .general, dst, 1, (&copy)[0..1]);
 }
 
-pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, dst: vk.Image, layout: vk.ImageLayout, extent: vk.Extent2D) void {
+pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, dst: vk.Image, extent: vk.Extent2D) void {
     const copy = vk.BufferImageCopy {
         .buffer_offset = src_offset,
         .buffer_row_length = 0,
@@ -231,7 +212,7 @@ pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, 
             .depth = 1,
         },
     };
-    self.buffer.copyBufferToImage(src, dst, layout, 1, (&copy)[0..1]);
+    self.buffer.copyBufferToImage(src, dst, .general, 1, (&copy)[0..1]);
 }
 
 // meant to be same as vk.ImageMemoryBarrier2 but sane defaults

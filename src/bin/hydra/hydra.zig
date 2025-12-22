@@ -364,14 +364,12 @@ pub const HdMoonshine = struct {
                 .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
                 .dst_stage_mask = .{ .copy_bit = true },
                 .dst_access_mask = .{ .transfer_read_bit = true },
-                .old_layout = .general,
-                .new_layout = .transfer_src_optimal,
                 .image = self.camera.sensors.items[0].image.handle,
             }
         }, &.{});
 
         // copy rendered image to host-visible staging buffer
-        self.encoder.copyImageToBuffer(self.camera.sensors.items[sensor].image.handle, .transfer_src_optimal, self.camera.sensors.items[sensor].extent, self.output_buffers.items[sensor].handle);
+        self.encoder.copyImageToBuffer(self.camera.sensors.items[sensor].image.handle, self.camera.sensors.items[sensor].extent, self.output_buffers.items[sensor].handle);
 
         self.encoder.submitAndIdleUntilDone(&self.vc) catch return false;
 

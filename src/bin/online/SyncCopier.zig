@@ -55,11 +55,11 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.mapped))).*;
 }
 
-pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType: type, src_image: vk.Image, src_layout: vk.ImageLayout, offset: vk.Offset3D) !PixelType {
+pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType: type, src_image: vk.Image, offset: vk.Offset3D) !PixelType {
     std.debug.assert(@sizeOf(PixelType) <= self.buffer.len);
 
     try self.encoder.begin();
-    self.encoder.buffer.copyImageToBuffer(src_image, src_layout, self.buffer.handle, 1, (&vk.BufferImageCopy {
+    self.encoder.buffer.copyImageToBuffer(src_image, .general, self.buffer.handle, 1, (&vk.BufferImageCopy {
         .buffer_offset = 0,
         .buffer_row_length = 0,
         .buffer_image_height = 0,
