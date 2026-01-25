@@ -100,7 +100,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     const index_buffer = blk: {
         if (parameters.indices) |indices| {
-            const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} incides", .{ parameters.name }, 0);
+            const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} indices", .{ parameters.name }, 0);
             defer allocator.free(buffer_name);
             const gpu_buffer = try core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }).create(vc, indices.len, buffer_name);
             gpu_buffer.uploadFrom(encoder, 0, indices);

@@ -60,6 +60,12 @@ const Base = struct {
         const required_extensions = try getRequiredExtensions(allocator, required_extension_names);
         defer allocator.free(required_extensions);
 
+        const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
+            .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true},
+            .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
+            .pfn_user_callback = debugCallback,
+        };
+
         if (validate and !(try self.validationLayersAvailable(allocator))) return VulkanContextError.UnavailableValidationLayers;
         if (!try self.instanceExtensionsAvailable(allocator, required_extensions)) return VulkanContextError.UnavailableInstanceExtensions;
 
@@ -144,7 +150,7 @@ fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_s
 
     // skip frames from start that are vk.zig frames, as
     // they are pure wrappers and can be trusted
-    skipped_frame_count = 0;
+    skipped_frame_count = 1;
     for (stack_trace.instruction_addresses) |addr| {
         if (debug_info.getModuleForAddress(addr)) |module| {
             if (module.getSymbolAtAddress(debug_info.allocator, addr)) |symbol_info| {
@@ -183,14 +189,63 @@ fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_s
     try std.debug.writeStackTrace(stack_trace, out_stream, debug_info, tty_config);
 }
 
-fn debugCallback(
-    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
-    message_type: vk.DebugUtilsMessageTypeFlagsEXT,
-    callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
-    user_data: ?*anyopaque,
-    ) callconv(.c) vk.Bool32 {
-    _ = message_type;
-    _ = user_data;
+const DeviceAddressBindingTracker = struct {
+    const BindingEvent = struct {
+        range: BoundRange,
+        internal: bool,
+        object_type: vk.ObjectType,
+        object_name: ?[]const u8,
+        type: EventType,
+    };
+
+    const BoundRange = packed struct {
+        base: vk.DeviceAddress,
+        size: vk.DeviceSize,
+    };
+
+    const EventType = enum {
+        bind,
+        unbind,
+    };
+
+    const Bindings = std.ArrayListUnmanaged(BindingEvent);
+
+    bindings: Bindings =.{},
+
+    fn destroy(self: *DeviceAddressBindingTracker, allocator: std.mem.Allocator) void {
+        for (self.bindings.items) |binding| {
+            if (binding.object_name) |name| allocator.free(name);
+        }
+        self.bindings.deinit(allocator);
+    }
+
+    fn append(self: *DeviceAddressBindingTracker, allocator: std.mem.Allocator, binding: BindingEvent) std.mem.Allocator.Error!void {
+        try self.bindings.append(allocator, binding);
+    }
+};
+
+
+const DebugCallbackUserData = struct {
+    allocator: std.mem.Allocator,
+    device_address_binding_tracker: DeviceAddressBindingTracker,
+
+    fn create(allocator: std.mem.Allocator) std.mem.Allocator.Error!*DebugCallbackUserData {
+        const result = try allocator.create(DebugCallbackUserData);
+        result.* = DebugCallbackUserData {
+            .allocator = allocator,
+            .device_address_binding_tracker = DeviceAddressBindingTracker {},
+        };
+        return result;
+    }
+
+    fn destroy(self: *DebugCallbackUserData) void {
+        const allocator = self.allocator;
+        self.device_address_binding_tracker.destroy(allocator);
+        allocator.destroy(self);
+    }
+};
+
+fn debugCallbackValidation(message_severity: vk.DebugUtilsMessageSeverityFlagsEXT, callback_data: vk.DebugUtilsMessengerCallbackDataEXT) vk.Bool32 {
     const verbose_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .verbose_bit_ext = true }).toInt();
     const info_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .info_bit_ext = true }).toInt();
     const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
@@ -209,7 +264,7 @@ fn debugCallback(
     const tty_config = std.io.tty.detectConfig(std.fs.File.stderr());
 
     tty_config.setColor(writer, color) catch {};
-    writer.print("{s}\n", .{ callback_data.?.p_message.? }) catch @panic("unable to write validation error to stderr");
+    writer.print("{s}\n", .{ callback_data.p_message.? }) catch @panic("unable to write validation error to stderr");
     tty_config.setColor(writer, .reset) catch {};
 
     // write stack trace for validation error
@@ -228,11 +283,44 @@ fn debugCallback(
     return .false;
 }
 
-const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
-    .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true},
-    .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
-    .pfn_user_callback = debugCallback,
-};
+// TODO: this'll need more careful handling for multithreading
+fn debugCallbackDeviceAddressBinding(user_data: *DebugCallbackUserData, callback_data: vk.DebugUtilsMessengerCallbackDataEXT) vk.Bool32 {
+    const device_address_binding_callback_data: *const vk.DeviceAddressBindingCallbackDataEXT = @ptrCast(@alignCast(callback_data.p_next));
+    const object = callback_data.p_objects.?[0..callback_data.object_count][0];
+    const binding = DeviceAddressBindingTracker.BindingEvent {
+        .range = .{
+            .base = device_address_binding_callback_data.base_address,
+            .size = device_address_binding_callback_data.size,
+        },
+        .internal = device_address_binding_callback_data.flags.contains(.{ .internal_object_bit_ext = true }),
+        .object_type = object.object_type,
+        .object_name = if (object.p_object_name) |name| user_data.allocator.dupe(u8, std.mem.span(name)) catch @panic("OOM") else null,
+        .type = switch (device_address_binding_callback_data.binding_type) {
+            .bind_ext => .bind,
+            .unbind_ext => .unbind,
+            else => unreachable,
+        },
+    };
+    user_data.device_address_binding_tracker.append(user_data.allocator, binding) catch @panic("OOM");
+    return .false;
+}
+
+// TODO: should this be two separate callbacks and messengers?
+fn debugCallback(
+    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk.DebugUtilsMessageTypeFlagsEXT,
+    callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT,
+    user_data_opaque: ?*anyopaque,
+    ) callconv(.c) vk.Bool32 {
+    const user_data: *DebugCallbackUserData = @ptrCast(@alignCast(user_data_opaque));
+    const device_address_binding = comptime (vk.DebugUtilsMessageTypeFlagsEXT{ .device_address_binding_bit_ext = true }).toInt();
+    const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
+    const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_bit_ext = true }).toInt();
+    return switch (message_type.toInt()) {
+        device_address_binding => debugCallbackDeviceAddressBinding(user_data, callback_data.?.*),
+        else => if (message_severity.toInt() == warning_severity or message_severity.toInt() == error_severity) debugCallbackValidation(message_severity, callback_data.?.*) else .true,
+    };
+}
 
 pub const MemoryTypes = struct {
     size: u32,
@@ -274,6 +362,7 @@ device: Device,
 
 physical_device: PhysicalDevice,
 
+debug_callback_user_data: if (validate) *DebugCallbackUserData else void,
 debug_messenger: if (validate) vk.DebugUtilsMessengerEXT else void,
 
 queue: Queue,
@@ -332,6 +421,13 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     const instance = Instance.init(instance_handle, instance_dispatch);
     errdefer instance.destroyInstance(null);
 
+    const debug_callback_user_data = if (validate) try DebugCallbackUserData.create(allocator) else {};
+    const debug_messenger_create_info = if (validate) vk.DebugUtilsMessengerCreateInfoEXT {
+        .message_severity = .{ .info_bit_ext = true, .warning_bit_ext = true, .error_bit_ext = true },
+        .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true, .device_address_binding_bit_ext = true },
+        .p_user_data = debug_callback_user_data,
+        .pfn_user_callback = debugCallback,
+    } else {};
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&debug_messenger_create_info, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
@@ -349,6 +445,7 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
         .base = base,
         .instance_dispatch = instance_dispatch,
         .instance = instance,
+        .debug_callback_user_data = debug_callback_user_data,
         .debug_messenger = debug_messenger,
         .device_dispatch = device_dispatch,
         .device = device,
@@ -364,6 +461,7 @@ pub fn destroy(self: Self, allocator: std.mem.Allocator) void {
     self.device.destroyDevice(null);
     allocator.destroy(self.device_dispatch);
 
+    if (validate) self.debug_callback_user_data.destroy();
     if (validate) self.instance.destroyDebugUtilsMessengerEXT(self.debug_messenger, null);
     self.instance.destroyInstance(null);
     allocator.destroy(self.instance_dispatch);
@@ -410,7 +508,23 @@ pub fn handleDeviceLost(self: Self, transient: std.mem.Allocator) !void {
         for (address_infos) |address_info| {
             const lower_address = address_info.reported_address & ~(address_info.address_precision - 1);
             const upper_address = address_info.reported_address | (address_info.address_precision - 1);
-            try stderr.print("  {}: {}..={}\n", .{address_info.address_type, lower_address, upper_address});
+            try stderr.print("  {s}: 0x{X}..=0x{X}\n", .{@tagName(address_info.address_type), lower_address, upper_address});
+        }
+        if (validate and self.physical_device.supports_device_address_binding_report_extension) {
+            const bindings = self.debug_callback_user_data.device_address_binding_tracker.bindings.items;
+            try stderr.writeAll("Bound Addresses:\n");
+            for (bindings) |binding| {
+                try stderr.print("  0x{X}..=0x{X}: ", .{binding.range.base, binding.range.base + binding.range.size});
+                try stderr.writeAll(if (binding.internal) "internal " else "external ");
+                try stderr.writeAll(@tagName(binding.object_type));
+                if (binding.object_name) |name| {
+                    try stderr.writeAll(" ");
+                    try stderr.print("{s}", .{name});
+                }
+                try stderr.writeAll(" ");
+                try stderr.writeAll(@tagName(binding.type));
+                try stderr.writeAll("\n");
+            }
         }
         if (vendor_infos.len != 0) try stderr.writeAll("Vendor data:\n");
         for (vendor_infos) |vendor_info| {
@@ -444,6 +558,7 @@ const PhysicalDevice = struct {
     handle: vk.PhysicalDevice,
     supports_device_fault_extension: bool,
     supports_device_fault_extension_vendor_binary: bool,
+    supports_device_address_binding_report_extension: bool,
     queue_family_index: u32,
 
     fn pickQueueFamily(instance: Instance, transient: std.mem.Allocator, device: vk.PhysicalDevice, queueFamilyAcceptable: *const QueueFamilyAcceptable) !u32 {
@@ -499,10 +614,17 @@ const PhysicalDevice = struct {
                         break :blk device_fault_features.device_fault_vendor_binary == .true;
                     } else false;
 
+                    const supports_device_address_binding_report_extension = if (validate and supports_device_fault_extension) for (available_extensions) |extension| {
+                        if (std.mem.orderZ(u8, vk.extensions.ext_device_address_binding_report.name, @ptrCast(&extension.extension_name)) == .eq) {
+                            break true;
+                        }
+                    } else false else false;
+
                     break PhysicalDevice {
                         .handle = device,
                         .supports_device_fault_extension = supports_device_fault_extension,
                         .supports_device_fault_extension_vendor_binary = supports_device_fault_extension_vendor_binary,
+                        .supports_device_address_binding_report_extension = supports_device_address_binding_report_extension,
                         .queue_family_index = index,
                     };
                 } else |err| return err;
@@ -556,15 +678,22 @@ const PhysicalDevice = struct {
             .descriptor_binding_update_unused_while_pending = .true,
         };
 
-        const core_extensions = if (self.supports_device_fault_extension) &(core_device_extensions ++ [_][*:0]const u8{ vk.extensions.ext_device_fault.name }) else &core_device_extensions;
+        const device_address_binding_report_features = vk.PhysicalDeviceAddressBindingReportFeaturesEXT {
+            .p_next = @constCast(&vulkan_12_features),
+            .report_address_binding = .true,
+        };
+
+        const device_fault_features = vk.PhysicalDeviceFaultFeaturesEXT {
+            .p_next = if (self.supports_device_address_binding_report_extension) @constCast(&device_address_binding_report_features) else @constCast(&vulkan_12_features),
+            .device_fault = .true,
+            .device_fault_vendor_binary = if (self.supports_device_fault_extension_vendor_binary) .true else .false,
+        };
+
+        const core_extensions = if (self.supports_device_fault_extension) if (self.supports_device_address_binding_report_extension) &(core_device_extensions ++ [_][*:0]const u8{ vk.extensions.ext_device_fault.name, vk.extensions.ext_device_address_binding_report.name }) else &(core_device_extensions ++ [_][*:0]const u8{ vk.extensions.ext_device_fault.name }) else &core_device_extensions;
         const all_extensions = try std.mem.concat(transient, [*:0]const u8, &[_][]const [*:0]const u8{ core_extensions, extensions });
         defer transient.free(all_extensions);
 
-        const final_features: *const anyopaque = if (self.supports_device_fault_extension) @ptrCast(&vk.PhysicalDeviceFaultFeaturesEXT {
-            .p_next = @constCast(&vulkan_12_features),
-            .device_fault = .true,
-            .device_fault_vendor_binary = if (self.supports_device_fault_extension_vendor_binary) .true else .false,
-        }) else @ptrCast(&vulkan_12_features);
+        const final_features: *const anyopaque = if (self.supports_device_fault_extension) @ptrCast(&device_fault_features) else @ptrCast(&vulkan_12_features);
 
         return try instance.createDevice(
             self.handle,
