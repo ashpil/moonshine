@@ -276,7 +276,10 @@ fn debugCallbackValidation(message_severity: vk.DebugUtilsMessageSeverityFlagsEX
                 writeMinimalStacktrace(@returnAddress(), debug_info, writer, tty_config) catch @panic("unable to write validation error stack trace to stderr");
             } else |_| {}
         },
-        .panic => @panic("validation error encountered"),
+        .panic => {
+            writer.flush() catch @panic("unable to flush writer");
+            @panic("validation error encountered");
+        },
         .ignore => unreachable,
     }
 
