@@ -11,3 +11,7 @@ pub const vector = @import("./vector.zig");
 pub const color = @import("./color.zig");
 pub const Allocator = @import("./Allocator.zig");
 pub const tracy = @import("./tracy.zig");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

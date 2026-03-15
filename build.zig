@@ -59,13 +59,15 @@ pub fn build(b: *std.Build) !void {
     });
 
     try compiles.append(blk: {
+        var engine_options = default_engine_options;
+        engine_options.shader_source_type = .embed;
+        const engine = makeEngineModule(b, engine_options, shader_source, hrtsystem_shaders, vulkan, zgltf, tinyexr, wuffs, glfw, imgui, tracy);
+        engine.resolved_target = target;
+        engine.optimize = optimize;
+
         const tests = b.addTest(.{
-            .name = "vector-tests",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/lib/vector.zig"),
-                .target = target,
-                .optimize = optimize,
-            }),
+            .name = "cpu-tests",
+            .root_module = engine,
         });
 
         break :blk tests;
