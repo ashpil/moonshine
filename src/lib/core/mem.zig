@@ -345,7 +345,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
                 .usage = usage,
                 .sharing_mode = .exclusive,
             }, null) catch return null;
-            vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{}", .{ err });
+            vk_helpers.setDebugName(self.device, buffer, debug_name) catch |err| std.debug.panic("{}", .{ err });
 
             self.device.bindBufferMemory(buffer, memory, 0) catch return null;
 

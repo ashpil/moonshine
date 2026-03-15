@@ -42,7 +42,7 @@ pub const Allocator = struct {
         const ret = self.child_allocator.rawResize(buf, alignment, new_len, ret_addr);
         if (ret) {
             memory.free(@intFromPtr(buf.ptr), self.pool_name);
-            memory.alloc(@intFromPtr(buf.ptr), buf.len, self.pool_name);
+            memory.alloc(@intFromPtr(buf.ptr), new_len, self.pool_name);
         }
         return ret;
     }

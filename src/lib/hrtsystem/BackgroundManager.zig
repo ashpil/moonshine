@@ -114,7 +114,7 @@ pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, allocator: st
 // this should probably be a parameter, or should infer proper value for this
 //
 // the equal area map size will be the biggest power of two greater than
-// or equal to the equirectangular height, clamped to maximum_equal_area_map_size
+// or equal to the equirectangular width, clamped to maximum_equal_area_map_size
 const maximum_equal_area_map_size = 16384;
 const shader_local_size = 8; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
 

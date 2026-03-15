@@ -17,10 +17,10 @@
 
 namespace Spectrum {
     float sampleTabulated(const float λ, const float start, const float end, Texture1D<float> texture) {
-        // correctly handles LUT insetting: https://docs.vulkan.org/spec/latest/_images/vulkantexture0-ll.svg need samples to be on the dots
+        // map start/end onto first/last texel centers, not onto texture edges (which is the vulkan default): https://docs.vulkan.org/spec/latest/_images/vulkantexture0-ll.svg
         const float size = end - start;
-        const float spacing = size / textureDimensions(texture);
-        const float t = (λ - start + (spacing / 2.0)) / (size + spacing);
+        const float texelPosition = (λ - start) / size * (textureDimensions(texture) - 1);
+        const float t = (texelPosition + 0.5) / textureDimensions(texture);
         return texture.SampleLevel(dSpectrumSampler, t, 0);
     }
 

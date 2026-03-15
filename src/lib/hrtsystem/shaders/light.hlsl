@@ -87,7 +87,7 @@ struct EnvMap : Light {
 
         const float3x3 toLocal = transpose(toWorld);
         const float2 uv = squareToEqualAreaSphereInverse(normalize(mul(toLocal, dirWs)));
-        const uint2 idx = clamp(uint2(uv * size), uint2(0, 0), uint2(size, size));
+        const uint2 idx = clamp(uint2(uv * size), 0, size - 1);
         const float discretePdf = Spectrum::sampleReflectance(λ, texture[idx]) * float(size * size) / integral;
 
         LightEvaluation eval;

@@ -144,7 +144,7 @@ pub fn create(vc: *const VulkanContext, encoder: *Encoder) !Self {
     const d65 = blk: {
         std.debug.assert(color.illuminants.d65.start <= color.cie_1931.y.start);
         std.debug.assert(color.illuminants.d65.start % 1.0 == 0.0);
-        const dt = (color.cie_1931.y.end - color.cie_1931.y.start + 1) / @as(f64, @floatFromInt(color.cie_1931.y.data.len));
+        const dt = (color.cie_1931.y.end - color.cie_1931.y.start) / @as(f64, @floatFromInt(color.cie_1931.y.data.len - 1));
         var accumulator: f64 = 0.0;
         for (0..color.cie_1931.y.data.len - 1) |y_i| {
             const d65_i = @as(usize, @intFromFloat(color.cie_1931.y.start - color.illuminants.d65.start)) + y_i;

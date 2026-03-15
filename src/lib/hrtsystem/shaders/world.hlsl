@@ -163,7 +163,7 @@ struct Mesh {
     TriangleLocalSpace triangleLocalSpace(const uint primitiveIndex) {
         TriangleLocalSpace t;
 
-        const uint3 ind = indexAddress != 0 ? vk::RawBufferLoad<uint3>(indexAddress + sizeof(uint3) * primitiveIndex) : float3(primitiveIndex * 3 + 0, primitiveIndex * 3 + 1, primitiveIndex * 3 + 2);
+        const uint3 ind = indexAddress != 0 ? vk::RawBufferLoad<uint3>(indexAddress + sizeof(uint3) * primitiveIndex) : uint3(primitiveIndex * 3 + 0, primitiveIndex * 3 + 1, primitiveIndex * 3 + 2);
 
         // positions always available
         t.positions[0] = loadPosition(positionAddress, ind.x);

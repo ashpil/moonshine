@@ -80,7 +80,7 @@ const TestingContext = struct {
             pipeline.recordDispatchThreads2D(self.encoder.buffer, scene.camera.sensors.items[0].extent);
 
             // if not last invocation, need barrier cuz we write to images
-            if (sample_count != spp) {
+            if (sample_count != spp - 1) {
                 self.encoder.barrier(&[_]Encoder.ImageBarrier {
                     Encoder.ImageBarrier {
                         .src_stage_mask = .{ .compute_shader_bit = true },

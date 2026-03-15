@@ -430,14 +430,6 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     };
 }
 
-pub fn updateTransform(self: *Self, index: u32, new_transform: Mat4x3) void {
-    self.accel.updateTransform(index, new_transform);
-}
-
-pub fn updateVisibility(self: *Self, index: u32, visible: bool) void {
-    self.accel.updateVisibility(index, visible);
-}
-
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     self.materials.destroy(vc, allocator);
     self.meshes.destroy(vc, allocator);

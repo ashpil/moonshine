@@ -445,10 +445,6 @@ fn makeEngineModule(b: *std.Build, options: EngineOptions,
         imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
     }
 
-    if (options.tracy) {
-        imports.append(std.Build.Module.Import { .name = "glfw", .module = glfw }) catch @panic("OOM");
-    }
-
     if (options.gui) {
         imports.append(std.Build.Module.Import { .name = "imgui", .module = imgui }) catch @panic("OOM");
     }

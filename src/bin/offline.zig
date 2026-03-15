@@ -69,10 +69,11 @@ const IntervalLogger = struct {
         const elapsed = new_time.since(self.last_time);
         const ms = elapsed / std.time.ns_per_ms;
         const s = ms / std.time.ms_per_s;
+        const ms_remainder = ms % std.time.ms_per_s;
 
         var out_stream = std.fs.File.stdout().writer(&.{});
         const writer = &out_stream.interface;
-        try writer.print("{}.{:0>3} seconds to {s}\n", .{ s, ms, state });
+        try writer.print("{}.{:0>3} seconds to {s}\n", .{ s, ms_remainder, state });
 
         self.last_time = new_time;
     }
@@ -146,7 +147,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
             pipeline.recordDispatchThreads2D(encoder.buffer, scene.camera.sensors.items[0].extent);
 
             // if not last invocation, need barrier cuz we write to images
-            if (sample_count != config.spp) {
+            if (sample_count != config.spp - 1) {
                 encoder.barrier(&[_]Encoder.ImageBarrier {
                     Encoder.ImageBarrier {
                         .src_stage_mask = .{ .compute_shader_bit = true },

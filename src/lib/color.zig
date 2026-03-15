@@ -6,6 +6,8 @@ const F64x3 = vector.Vec3(f64);
 const F64x2 = vector.Vec2(f64);
 const Mat3 = vector.Mat3(f64);
 
+// This is a spectrum with the first sample at `start`, the last sample at `end`,
+// and the rest uniformly spaced in between.
 pub const TabulatedSpectrum = struct {
     start: f64,
     end: f64,
@@ -16,7 +18,7 @@ pub const TabulatedSpectrum = struct {
         const t = (@"λ" - self.start) / (self.end - self.start);
         if (t <= 0.0) return self.data[0];
         if (t >= 1.0) return self.data[self.data.len - 1];
-        const scaled_t = @as(f64, @floatFromInt(self.data.len)) * t;
+        const scaled_t = @as(f64, @floatFromInt(self.data.len - 1)) * t;
         const trunc: usize = @intFromFloat(@trunc(scaled_t));
         const fract = scaled_t - @as(f64, @floatFromInt(trunc));
         return math.lerp(self.data[trunc], self.data[trunc + 1], fract);
@@ -24,7 +26,7 @@ pub const TabulatedSpectrum = struct {
 
     // integral over the domain of this spectrum, assuming linear sampling
     pub fn integral(self: TabulatedSpectrum) f64 {
-        const dt = (self.end - self.start + 1) / @as(f64, @floatFromInt(self.data.len));
+        const dt = (self.end - self.start) / @as(f64, @floatFromInt(self.data.len - 1));
 
         var accumulator: f64 = 0.0;
         for (0..self.data.len - 1) |i| {

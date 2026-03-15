@@ -286,7 +286,7 @@ pub fn Pipeline(comptime options: struct {
                     map_entry.* = vk.SpecializationMapEntry {
                         .constant_id = j,
                         .offset = @offsetOf(SpecConstants, inner_field.name),
-                        .size = inner_field.alignment,
+                        .size = @sizeOf(inner_field.type),
                     };
                 }
 

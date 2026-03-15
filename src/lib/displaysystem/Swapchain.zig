@@ -188,6 +188,9 @@ const SwapSettings = struct {
     }
 
     pub fn determineExtent(extent: vk.Extent2D, caps: vk.SurfaceCapabilitiesKHR) !vk.Extent2D {
+        if (extent.height == 0 and extent.width == 0) {
+            return error.InvalidSurfaceDimensions;
+        }
         if (caps.current_extent.width == std.math.maxInt(u32)) {
             return vk.Extent2D {
                 .width = std.math.clamp(extent.width, caps.min_image_extent.width, caps.max_image_extent.width),
@@ -195,9 +198,6 @@ const SwapSettings = struct {
             };
         } else {
             return caps.current_extent;
-        }
-        if (extent.height == 0 and extent.width == 0) {
-            return error.InvalidSurfaceDimensions;
         }
     }
 };

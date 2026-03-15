@@ -402,10 +402,9 @@ pub const VulkanRequirements = struct {
         if (self.features.len == 0) return null;
 
         for (self.features[0..self.features.len - 1], self.features[1..]) |curr, next| {
-            var curr_chain = curr;
-            while (curr_chain.p_next) |curr_next| curr_chain = curr_next;
-            curr_chain.p_next = next;
+            curr.p_next = next;
         }
+        self.features[self.features.len - 1].p_next = null;
 
         return self.features[0];
     }
