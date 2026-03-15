@@ -16,11 +16,11 @@ var swapchain_maintenance_1_features = vk.PhysicalDeviceSwapchainMaintenance1Fea
 pub const vulkan_requirements = VulkanRequirements {
     .instance_extensions = &[_][*:0]const u8{
         vk.extensions.khr_get_surface_capabilities_2.name,
-        vk.extensions.ext_surface_maintenance_1.name,
+        vk.extensions.khr_surface_maintenance_1.name,
     },
     .device_extensions = &[_][*:0]const u8{
         vk.extensions.khr_swapchain.name,
-        vk.extensions.ext_swapchain_maintenance_1.name,
+        vk.extensions.khr_swapchain_maintenance_1.name,
     },
     .queueFamilyAcceptable = &queueFamilyAcceptable,
     .features = &[_]*vk.BaseOutStructure {
