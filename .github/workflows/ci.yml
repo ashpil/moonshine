@@ -1,11 +1,11 @@
-name: Check
+name: CI
 
 on:
   push:
     branches: [ trunk ]
 
 jobs:
-  build-linux:
+  linux:
     runs-on: ubuntu-22.04
 
     steps:
@@ -29,7 +29,10 @@ jobs:
     - name: Type check
       run: zig build check
 
-  build-windows:
+    - name: CPU tests
+      run: zig build run-cpu-tests
+
+  windows:
     runs-on: windows-2022
 
     steps:
@@ -47,3 +50,6 @@ jobs:
 
     - name: Type check
       run: zig build check
+
+    - name: CPU tests
+      run: zig build run-cpu-tests
