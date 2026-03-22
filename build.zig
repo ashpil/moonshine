@@ -772,7 +772,6 @@ const Shader = struct {
     path: []const u8,
     type: ShaderType,
 
-    const include_shader_debug_info = false;
     const shader_compile_cmd = [_][]const u8 {
         "dxc",
         "-HV", "2021",
@@ -781,7 +780,7 @@ const Shader = struct {
         "-fvk-use-scalar-layout",
         "-Ges", // strict mode
         "-WX", // treat warnings as errors
-    } ++ (if (include_shader_debug_info) [_][]const u8{ "-Zi" } else [_][]const u8{});
+    };
 
     fn compileCommand(self: Shader) [shader_compile_cmd.len + 2][]const u8 {
         return shader_compile_cmd ++ [_][]const u8{ "-T", self.type.dxcProfile() };
@@ -799,7 +798,8 @@ const Shader = struct {
         const compile_shader = std.Build.Step.Run.create(b, b.fmt("compile {s}", .{ self.path }));
         compile_shader.addArgs(&self.compileCommand());
         compile_shader.addFileArg(input_file_path);
-        compile_shader.addArg("-Fo");
+        compile_shader.addArg("-Zi"); // include debug info
+        compile_shader.addArg("-Fo"); // output file after this
         const spv_file = compile_shader.addOutputFileArg(b.fmt("{s}.spv", .{ self.path }));
 
         compile_shader.step.dependOn(&get_dependendies.step);
