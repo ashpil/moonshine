@@ -279,7 +279,10 @@ const ColorEditFlags = packed struct(c_int) {
 };
 
 pub fn colorEdit(label: [*:0]const u8, color: *F32x3, flags: ColorEditFlags) bool {
-    return c.ImGui_ColorEdit4(label, @ptrCast(color), @bitCast(flags));
+    var rgba = [4]f32{ color.element(0), color.element(1), color.element(2), 1.0 };
+    const result = c.ImGui_ColorEdit4(label, &rgba, @bitCast(flags));
+    color.* = F32x3.new(.{ rgba[0], rgba[1], rgba[2] });
+    return result;
 }
 
 pub const Key = enum(c_int) {
