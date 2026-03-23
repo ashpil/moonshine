@@ -133,7 +133,7 @@ pub const HdMoonshine = struct {
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         _ = self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
 
-        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_specta.descriptor_layout.handle }) catch return null;
+        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_spectra.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
         self.output_buffers = .{};
@@ -348,7 +348,7 @@ pub const HdMoonshine = struct {
 
         // bind our stuff
         self.pipeline.recordBindPipeline(self.encoder.buffer);
-        self.pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ self.world.materials.textures.descriptor_set, self.world.constant_specta.descriptor_set });
+        self.pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ self.world.materials.textures.descriptor_set, self.world.constant_spectra.descriptor_set });
         self.pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(camera, sensor, 0));
 
         // push our stuff

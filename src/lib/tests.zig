@@ -69,7 +69,7 @@ const TestingContext = struct {
 
         // bind our stuff
         pipeline.recordBindPipeline(self.encoder.buffer);
-        pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
+        pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_spectra.descriptor_set });
         pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(0, 0, 0));
 
         for (0..spp) |sample_count| {
@@ -370,7 +370,7 @@ test "white sphere on white background is white" {
     var pipeline = try Pipeline.create(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.equal_area_sampler}, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    }, .{ scene.background.equal_area_sampler}, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
@@ -473,7 +473,7 @@ test "white volume on white background is white" {
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 0,
         .volume_path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    }, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 512);
@@ -577,7 +577,7 @@ test "inside illuminating sphere is white" {
     var pipeline = try Pipeline.create(&tc.vc, allocator, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
-    }, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    }, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer pipeline.destroy(&tc.vc);
 
     try tc.renderToOutput(&pipeline, &scene, 1024);

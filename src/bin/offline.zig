@@ -111,7 +111,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
 
     try logger.log("load world");
 
-    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer pipeline.destroy(&context);
 
     try logger.log("create pipeline");
@@ -136,7 +136,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
 
         // bind our stuff
         pipeline.recordBindPipeline(encoder.buffer);
-        pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
+        pipeline.recordBindAdditionalDescriptorSets(encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_spectra.descriptor_set });
         pipeline.recordPushDescriptors(encoder.buffer, scene.pushDescriptors(0, 0, 0));
 
         for (0..config.spp) |sample_count| {

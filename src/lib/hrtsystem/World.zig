@@ -44,7 +44,7 @@ models: ModelManager,
 
 accel: Accel,
 
-constant_specta: ConstantSpectra,
+constant_spectra: ConstantSpectra,
 
 const Self = @This();
 
@@ -413,7 +413,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
         .meshes = meshes,
         .models = models,
         .accel = accel,
-        .constant_specta = try ConstantSpectra.create(vc, encoder),
+        .constant_spectra = try ConstantSpectra.create(vc, encoder),
     };
 }
 
@@ -426,7 +426,7 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         .meshes = .{},
         .models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout),
         .accel = try Accel.createEmpty(vc, allocator),
-        .constant_specta = try ConstantSpectra.create(vc, encoder),
+        .constant_spectra = try ConstantSpectra.create(vc, encoder),
     };
 }
 
@@ -435,5 +435,5 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.meshes.destroy(vc, allocator);
     self.models.destroy(vc, allocator);
     self.accel.destroy(vc);
-    self.constant_specta.destroy(vc);
+    self.constant_spectra.destroy(vc);
 }

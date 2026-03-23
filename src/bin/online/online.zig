@@ -150,7 +150,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
     defer object_picker.destroy(&context);
 
     var spec_constants = RenderPipeline.SpecConstants {};
-    var render_pipeline = try RenderPipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_specta.descriptor_layout.handle });
+    var render_pipeline = try RenderPipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer render_pipeline.destroy(&context);
 
     var post_process_pipeline = try PostProcessPipeline.create(&context, allocator, .{}, .{}, .{});
@@ -460,7 +460,7 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                 }
             }, &.{});
             render_pipeline.recordBindPipeline(frame_encoder.buffer);
-            render_pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_specta.descriptor_set });
+            render_pipeline.recordBindAdditionalDescriptorSets(frame_encoder.buffer, .{ scene.world.materials.textures.descriptor_set, scene.world.constant_spectra.descriptor_set });
             render_pipeline.recordPushDescriptors(frame_encoder.buffer, scene.pushDescriptors(active_camera, active_sensor, 0));
             render_pipeline.recordPushConstants(frame_encoder.buffer, scene.pushConstants(active_camera, active_sensor, 0, frame_index));
             render_pipeline.recordDispatchThreads2D(frame_encoder.buffer, scene.camera.sensors.items[active_sensor].extent);
