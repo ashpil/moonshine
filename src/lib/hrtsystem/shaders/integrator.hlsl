@@ -15,7 +15,7 @@
 //   power == 1 this becomes balance heuristic
 //   power == 0 this becomes uniform weighting
 float powerHeuristic(const uint fCount, const float fPdf, const uint gCount, const float gPdf, const uint power) {
-    return pow(fPdf, power) / (fCount * pow(fPdf, power) + gCount * pow(gPdf, power));
+    return pow(fPdf, power) / (pow(fCount * fPdf, power) + pow(gCount * gPdf, power));
 }
 
 float misWeight(const uint fCount, const float fPdf, const uint gCount, const float gPdf) {
