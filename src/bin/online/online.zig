@@ -397,8 +397,8 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                     const transform_linear = transform.truncateCol();
                     const transform_translation = transform.col(3);
                     const left_right = F32x3x3.fromAxisAngle(F32x3.new(.{0, 1, 0}), -delta.element(0)); // should be global. assumes glTF which has +Y as up
-                    const up_down = F32x3x3.fromAxisAngle(.new(.{0, 1, 0}), -delta.element(1)); // should be local
-                    scene.camera.cameras.items[active_camera][1].transform = left_right.mul(transform_linear).mul(up_down).appendCol(transform_translation);
+                    const up_down = transform_linear.mul(F32x3x3.fromAxisAngle(.new(.{0, 1, 0}), -delta.element(1))); // should be local
+                    scene.camera.cameras.items[active_camera][1].transform = left_right.mul(up_down).appendCol(transform_translation);
                     scene.camera.sensors.items[active_sensor].clear();
                 }
             } else if (imgui.isMouseDragging(.middle)) {
