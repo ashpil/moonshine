@@ -59,7 +59,6 @@ struct Camera {
 
     Ray generateRay(const float2 uv, const float2 rand) {
         const float2 uvScaled = (uv * 2 - 1) * float2(aspect, 1);
-        const Ray rayCameraSpace = thinLens.generateRay(rand, uvScaled);
         switch (model) {
             case CameraModel::ThinLens: {
                 return thinLens.generateRay(rand, uvScaled).transformed(toWorld);
