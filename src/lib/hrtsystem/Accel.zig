@@ -267,7 +267,7 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
             self.instance_power_fold_pipeline.recordPushConstants(encoder.buffer, .{
                 .src_level_offset = std.math.pow(u32, 2, src_level - 0) - 1,
                 .dst_level_offset = std.math.pow(u32, 2, src_level - 1) - 1,
-                .max_src_index = max_instances,
+                .max_src_index = self.instance_count,
             });
             self.instance_power_fold_pipeline.recordDispatchThreads1D(encoder.buffer, dst_level_size);
         }
