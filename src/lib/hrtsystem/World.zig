@@ -276,8 +276,8 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
         var geometries = std.array_list.Managed(Geometry.Parameters).init(allocator);
         defer geometries.deinit();
         try geometries.ensureTotalCapacityPrecise(mesh.primitives.len);
-        var model_thin: bool = undefined;
-        for (mesh.primitives, 0..) |primitive, primitive_idx| {
+        var maybe_model_thin: ?bool = null;
+        for (mesh.primitives) |primitive| {
             std.debug.assert(primitive.mode == .triangles);
 
             const material, const thin = if (primitive.material) |material_idx| blk: {
@@ -288,13 +288,13 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
                 const thin = material.thickness_factor == 0;
                 break :blk .{ material_idx, thin };
             } else .{ (materials.material_count - 1), true };
-            if (primitive_idx != 0) {
+            if (maybe_model_thin) |model_thin| {
                 // thickness in moonshine is on a per-instance basis, but gltf is per-material.
                 // currently, just assert all materials in an instance have same thickness.
                 // a better solution would be to break-up instances with non-same thickness.
                 std.debug.assert(model_thin == thin);
             }
-            model_thin = thin;
+            maybe_model_thin = thin;
 
             const indices = if (primitive.indices) |indices_index| indices: {
                 const accessor = gltf.data.accessors[indices_index];
@@ -385,7 +385,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
 
         gltf_mesh_idx_to_model[mesh_idx] = .{
             .handle = try models.upload(vc, allocator, encoder, meshes, materials, geometries.items),
-            .thin = model_thin,
+            .thin = maybe_model_thin.?,
         };
     }
 
