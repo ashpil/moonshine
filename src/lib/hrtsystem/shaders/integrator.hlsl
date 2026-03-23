@@ -221,7 +221,7 @@ struct VolumePathTracingIntegrator : Integrator {
                     path.radiance += path.throughput * estimateDirectVolumetric(scene.world, scene.tlas, scene.instanceLights, path.volumeTracker.currentVolume().phase, outgoingDirWs, λ, position, 0, 0, true, path.volumeTracker, rand, meshSamplesPerBounce, 1);
                 }
 
-                const BSDFSample sample = path.volumeTracker.currentVolume().phase.sample(path.ray.direction, float2(rng.getFloat(), rng.getFloat()));
+                const BSDFSample sample = path.volumeTracker.currentVolume().phase.sample(outgoingDirWs, float2(rng.getFloat(), rng.getFloat()));
                 path.ray.direction = sample.dir;
                 path.ray.origin = position;
                 path.pdf = sample.eval.pdf;
