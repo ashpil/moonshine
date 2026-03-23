@@ -17,7 +17,7 @@ void main() {
     // make camera have perfect focus
     camera.thinLens.focusDistance = 1.0f;
     camera.thinLens.aperture = 0.0f;
-    Ray ray = pushConsts.camera.generateRay(pushConsts.coords, float2(0, 0));
+    Ray ray = camera.generateRay(pushConsts.coords, float2(0, 0));
 
     click_data[0] = Intersection::find(TLAS, ray);
 }
