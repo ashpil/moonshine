@@ -4,32 +4,32 @@
 
     .dependencies = .{
         .vulkan_zig = .{
-            .url = "https://github.com/Snektron/vulkan-zig/archive/c9c4dae70356766f0954ae7d2b8aba4d1dd53a2a.tar.gz",
-            .hash = "vulkan-0.0.0-r7Ytx6hBAwBUnt0XA-uOkR2hda4fAHFhQITNTgJpnFkY",
+            .url = "https://github.com/Snektron/vulkan-zig/archive/3ada9e2989bab70090a55f0f6fac19ea90d06357.tar.gz",
+            .hash = "vulkan-0.0.0-r7Ytx6FIAwD3QyrrJhvObO0YSZ6WEkMGSCPKbhM__HFd",
         },
         .vulkan_headers = .{
             .url = "https://github.com/KhronosGroup/Vulkan-Headers/archive/33d7f512583b8de44d1b6384aa1cf482f92e53e9.tar.gz",
             .hash = "N-V-__8AABoW_QEK-3TzuDEzM4iIfxXkfm2qHw0hBj0rutkl",
         },
         .dcimgui = .{
-            .url = "https://github.com/dearimgui/dear_bindings/releases/download/DearBindings_v0.13_ImGui_v1.91.9b/DearBindings_v0.13_ImGui_v1.91.9b.zip",
-            .hash = "N-V-__8AAElztAAVXCDJG7uMbFRYYqc4GkWPQ_2-rLLcg5iI",
+            .url = "https://github.com/dearimgui/dear_bindings/releases/download/DearBindings_v0.19_ImGui_v1.92.7/DearBindings_v0.19_ImGui_v1.92.7.zip",
+            .hash = "N-V-__8AAPiI-QM5PkbbZVb1wSW8WgBZoVXLsflkVUGjn5pG",
         },
         .imgui = .{
-            .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.9b.tar.gz",
-            .hash = "N-V-__8AANpOagDObvZHjSGqw8P-8zqOHVAJff5T-ZD_3Kzj",
+            .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.92.7.tar.gz",
+            .hash = "N-V-__8AAM0cdgCJO0g4SkUvCFzFbPglWpE82zv-24Yy0IF1",
         },
         .glfw = .{
-            .url = "https://github.com/glfw/glfw/archive/8e15281d34a8b9ee9271ccce38177a3d812456f8.tar.gz",
-            .hash = "N-V-__8AAGD4SQCyH91wVkI7APjdrtU5vNABUcAah-vF9gS4",
+            .url = "https://github.com/glfw/glfw/archive/b00e6a8a88ad1b60c0a045e696301deb92c9a13e.tar.gz",
+            .hash = "N-V-__8AAGQvSgBolU0qEYD33XFbXfbRvGHiLnb7r3pm_00w",
         },
         .tinyexr = .{
-            .url = "https://github.com/syoyo/tinyexr/archive/71af6a54d7a04ba5f9ae6d6449cc5b8a1f5072de.tar.gz",
-            .hash = "N-V-__8AAHDOnQGkuV1rw0p_a8rMyLWmJksL1XlN-CwNNC3z",
+            .url = "https://github.com/syoyo/tinyexr/archive/4946b5d92e13bcc8102ac2c8efd129596a90bf75.tar.gz",
+            .hash = "N-V-__8AAIdisgHfRde7QqgG-w8z6G6NvLaRVTxUVM02cKjk",
         },
         .zgltf = .{
-            .url = "https://github.com/kooparse/zgltf/archive/fc3bb36672fb71f05e0226160051e7104b0c6865.tar.gz",
-            .hash = "zgltf-0.1.0-sX6QArASAgBCGBz2QR-lv48sEuXhENvQyi3y8weqJzwZ",
+            .url = "https://github.com/kooparse/zgltf/archive/ec52d477db346af99d4cdced4e35e67e1670023f.tar.gz",
+            .hash = "zgltf-0.1.0-sX6QAt0SAgDzMQCCG-N181hVbx8JnwFYZ3luQigQpVBM",
         },
         .wuffs = .{
             .url = "https://github.com/google/wuffs-mirror-release-c/archive/a29749ebe0be57d2b19d8406475bd2326d0f1a85.tar.gz",
