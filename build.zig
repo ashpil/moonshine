@@ -158,7 +158,7 @@ pub fn build(b: *std.Build) !void {
                 .optimize = optimize,
             }),
         });
-        lib.addCSourceFiles(.{
+        lib.root_module.addCSourceFiles(.{
            .files = &.{
                 "hydra/rendererPlugin.cpp",
                 "hydra/renderDelegate.cpp",
@@ -174,7 +174,7 @@ pub fn build(b: *std.Build) !void {
                 "-DARCH_HAS_GNU_STL_EXTENSIONS",
             }
         });
-        lib.linkLibrary(zig_lib);
+        lib.root_module.linkLibrary(zig_lib);
 
         // options
         const usd_dir = b.option([]const u8, "usd-path", "Where your USD SDK is installed.") orelse "../USD";
@@ -182,18 +182,18 @@ pub fn build(b: *std.Build) !void {
         const usd_monolithic = b.option(bool, "usd-monolithic", "Whether USD was built monolithically.") orelse false;
 
         // link against usd produced libraries
-        lib.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "lib/" }) });
+        lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "lib/" }) });
         if (usd_monolithic) {
-            lib.linkSystemLibrary("usd_ms");
+            lib.root_module.linkSystemLibrary("usd_ms", .{});
         } else {
-            lib.linkSystemLibrary("usd_hd");
-            lib.linkSystemLibrary("usd_sdr");
-            lib.linkSystemLibrary("usd_hio");
+            lib.root_module.linkSystemLibrary("usd_hd", .{});
+            lib.root_module.linkSystemLibrary("usd_sdr", .{});
+            lib.root_module.linkSystemLibrary("usd_hio", .{});
         }
 
         // include headers necessary for usd
-        lib.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "include/" }) });
-        if (tbb_dir) |dir| lib.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ dir, "include/" }) });
+        lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "include/" }) });
+        if (tbb_dir) |dir| lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ dir, "include/" }) });
 
         // might need python headers if USD built with python support
         {
@@ -201,7 +201,7 @@ pub fn build(b: *std.Build) !void {
             const paths =  b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .Inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "";
             if (paths.len != 0) {
                 var iter = std.mem.splitScalar(u8, paths, ' ');
-                while (iter.next()) |include_dir| lib.addSystemIncludePath(.{ .cwd_relative = include_dir[2..] });
+                while (iter.next()) |include_dir| lib.root_module.addSystemIncludePath(.{ .cwd_relative = include_dir[2..] });
             }
         }
 
@@ -209,7 +209,7 @@ pub fn build(b: *std.Build) !void {
         // make nicer once https://github.com/ziglang/zig/issues/3936
         {
             // link against stdlibc++
-            lib.addObjectFile(.{ .cwd_relative = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
+            lib.root_module.addObjectFile(.{ .cwd_relative = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
 
             // need stdlibc++ include directories
             // i've had to do some arcane magic to figure out what to do here,
@@ -218,9 +218,9 @@ pub fn build(b: *std.Build) !void {
             var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
             while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
                 if (first) {
-                    lib.addIncludePath(.{ .cwd_relative = include_dir[1..] });
+                    lib.root_module.addIncludePath(.{ .cwd_relative = include_dir[1..] });
                 } else {
-                    lib.addSystemIncludePath(.{ .cwd_relative = include_dir[1..] });
+                    lib.root_module.addSystemIncludePath(.{ .cwd_relative = include_dir[1..] });
                 }
                 first = false;
             };
