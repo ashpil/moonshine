@@ -115,7 +115,7 @@ pub fn DescriptorLayout(comptime bindings: []const Binding, comptime layout_flag
                     valid_write_count += 1;
                 }
 
-                vc.device.updateDescriptorSets(valid_write_count, &valid_writes, 0, undefined);
+                vc.device.updateDescriptorSets(valid_writes[0..valid_write_count], &.{});
 
                 return descriptor_set;
             }

@@ -84,11 +84,11 @@ const Self = @This();
 // TODO: resizable buffers
 const max_instances = std.math.pow(u32, 2, 12);
 
-pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
-    var instance_power_pipeline = try InstancePowerPipeline.create(vc, allocator, .{}, .{}, .{});
+pub fn createEmpty(vc: *const VulkanContext) !Self {
+    var instance_power_pipeline = try InstancePowerPipeline.create(vc, .{}, .{}, .{});
     errdefer instance_power_pipeline.destroy(vc);
 
-    var instance_power_fold_pipeline = try InstancePowerFoldPipeline.create(vc, allocator, .{}, .{}, .{});
+    var instance_power_fold_pipeline = try InstancePowerFoldPipeline.create(vc, .{}, .{}, .{});
     errdefer instance_power_fold_pipeline.destroy(vc);
 
     std.debug.assert(max_instances % 2 == 0);
@@ -342,7 +342,7 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
 
     const build_info_ref = @as([*]const vk.AccelerationStructureBuildRangeInfoKHR, (&build_info)[0..1]);
 
-    command_buffer.buildAccelerationStructuresKHR(1, (&geometry_info)[0..1], (&build_info_ref)[0..1]);
+    command_buffer.buildAccelerationStructuresKHR((&geometry_info)[0..1], (&build_info_ref)[0..1]);
 
     const barriers = [_]vk.MemoryBarrier2 {
         .{

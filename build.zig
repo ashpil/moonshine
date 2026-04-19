@@ -198,7 +198,7 @@ pub fn build(b: *std.Build) !void {
         // might need python headers if USD built with python support
         {
             var out_code: u8 = undefined;
-            const paths =  b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .Inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .Inherit) catch "";
+            const paths =  b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .inherit) catch "";
             if (paths.len != 0) {
                 var iter = std.mem.splitScalar(u8, paths, ' ');
                 while (iter.next()) |include_dir| lib.root_module.addSystemIncludePath(.{ .cwd_relative = include_dir[2..] });
@@ -291,29 +291,37 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
+    std.debug.assert(argv.len != 0);
+
+    const graph = self.graph;
+    const io = graph.io;
+
     const max_output_size = 400 * 1024;
-    var child = std.process.Child.init(argv, self.allocator);
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Pipe;
-    child.env_map = &self.graph.env_map;
+    try std.Build.Step.handleVerbose2(self, .inherit, &graph.environ_map, argv);
 
-    try child.spawn();
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .environ_map = &graph.environ_map,
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .pipe,
+    });
 
-    const stderr = child.stderr.?.readToEndAlloc(self.allocator, max_output_size) catch {
+    var stderr_reader = child.stderr.?.readerStreaming(io, &.{});
+    const stderr = stderr_reader.interface.allocRemaining(self.allocator, .limited(max_output_size)) catch {
         return error.ReadFailure;
     };
     errdefer self.allocator.free(stderr);
 
-    const term = try child.wait();
+    const term = try child.wait(io);
     switch (term) {
-        .Exited => |code| {
-            if (code != 0) return error.ExitCodeFailure;
+        .exited => |code| {
+            if (code != 0) {
+                return error.ExitCodeFailure;
+            }
             return stderr;
         },
-        .Signal, .Stopped, .Unknown => {
-            return error.ProcessTerminated;
-        },
+        .signal, .stopped, .unknown => return error.ProcessTerminated,
     }
 }
 

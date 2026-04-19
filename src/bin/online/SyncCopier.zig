@@ -48,8 +48,8 @@ pub fn copyBufferItem(self: *Self, vc: *const VulkanContext, comptime BufferInne
     });
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
-    try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
+    _ = try vc.device.waitForFences((&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
+    try vc.device.resetFences((&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return @as(*BufferInner, @ptrCast(@alignCast(self.buffer.mapped))).*;
@@ -59,7 +59,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     std.debug.assert(@sizeOf(PixelType) <= self.buffer.len);
 
     try self.encoder.begin();
-    self.encoder.buffer.copyImageToBuffer(src_image, .general, self.buffer.handle, 1, (&vk.BufferImageCopy {
+    self.encoder.buffer.copyImageToBuffer(src_image, .general, self.buffer.handle, (&vk.BufferImageCopy {
         .buffer_offset = 0,
         .buffer_row_length = 0,
         .buffer_image_height = 0,
@@ -78,8 +78,8 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
     })[0..1]);
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
-    try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
+    _ = try vc.device.waitForFences((&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
+    try vc.device.resetFences((&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return @as(*PixelType, @ptrCast(@alignCast(self.buffer.mapped))).*;

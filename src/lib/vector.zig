@@ -179,7 +179,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
         pub const withoutRow = MultipleRows.withoutRow;
         pub const truncateRow = MultipleRows.truncateRow;
 
-        pub fn format(self: Self, writer: *std.io.Writer) !void {
+        pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
             if (row_count != 1) try writer.writeAll("(");
 
             inline for (0..row_count) |row_idx| {
@@ -469,9 +469,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
                     return (if (comptime col_count == 1) self.transpose().mul(other) else self.mul(other.transpose())).get();
                 }
 
-                const PossiblyIntNorm = if (isFloatType(ComponentType) or ComponentType == comptime_int) ComponentType else @Type(std.builtin.Type {
-                    .int = .{ .bits = @typeInfo(ComponentType).int.bits, .signedness = .unsigned }
-                });
+                const PossiblyIntNorm = if (isFloatType(ComponentType) or ComponentType == comptime_int) ComponentType else @Int(.unsigned, @typeInfo(ComponentType).int.bits);
 
                 pub fn normL1(self: Self) PossiblyIntNorm {
                     var out: PossiblyIntNorm = 0;

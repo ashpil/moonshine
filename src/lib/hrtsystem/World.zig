@@ -48,11 +48,11 @@ constant_spectra: ConstantSpectra,
 
 const Self = @This();
 
-fn loadImage(allocator: std.mem.Allocator, image: Gltf.Image, gltf_directory: ?[]const u8) !std.meta.Tuple(&.{[]const U8x3, u32, u32}) {
+fn loadImage(allocator: std.mem.Allocator, io: std.Io, image: Gltf.Image, gltf_directory: ?[]const u8) !std.meta.Tuple(&.{[]const U8x3, u32, u32}) {
     const buffer, const free = if (image.data) |data| .{data, false} else if (image.uri) |uri| blk: {
         const filepath = if (gltf_directory) |dir| try std.fs.path.join(allocator, &.{ dir, uri }) else uri;
         defer if (gltf_directory != null) allocator.free(filepath);
-        const buffer = try std.fs.cwd().readFileAlloc(allocator, filepath, std.math.maxInt(usize));
+        const buffer = try std.Io.Dir.cwd().readFileAlloc(io, filepath, allocator, .unlimited);
         break :blk .{buffer, true};
     } else return error.EmptyImage;
     defer if (free) allocator.free(buffer);
@@ -63,7 +63,7 @@ fn loadImage(allocator: std.mem.Allocator, image: Gltf.Image, gltf_directory: ?[
 }
 
 // TODO: consider just uploading all textures upfront rather than as part of this function
-fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8, gltf_material: Gltf.Material, textures: *TextureManager) !Material.Parameters {
+fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.Io, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8, gltf_material: Gltf.Material, textures: *TextureManager) !Material.Parameters {
     // stuff that is in every material
     var material = blk: {
         var material: Material.Parameters = undefined;
@@ -92,7 +92,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
             // this gives us rgb --> need to convert to rg
             // theoretically gltf spec claims these values should already be linear
-            const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+            const img, const width, const height = try loadImage(allocator, io, image, gltf_directory);
             defer allocator.free(img);
 
             const rg = try encoder.uploadAllocator().alloc(U8x2, img.len);
@@ -111,7 +111,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         material.emissive = if (gltf_material.emissive_texture) |texture| emissive: {
             const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
-            const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+            const img, const width, const height = try loadImage(allocator, io, image, gltf_directory);
             defer allocator.free(img);
 
             const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
@@ -150,7 +150,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
         const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
 
-        const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+        const img, const width, const height = try loadImage(allocator, io, image, gltf_directory);
         defer allocator.free(img);
         const rgba = try encoder.uploadAllocator().alloc(U8x4, img.len);
         for (rgba, img) |*dst, src| {
@@ -173,7 +173,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
         // this gives us rgb --> only need g (roughness) and b (metalness) channels
         // theoretically gltf spec claims these values should already be linear
-        const img, const width, const height = try loadImage(allocator, image, gltf_directory);
+        const img, const width, const height = try loadImage(allocator, io, image, gltf_directory);
         defer allocator.free(img);
 
         const metalness = try encoder.uploadAllocator().alloc(u8, img.len);
@@ -223,17 +223,17 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
 
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
-pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8) !Self {
+pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.Io, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8) !Self {
     var materials = blk: {
         var materials = try MaterialManager.createEmpty(vc);
         errdefer materials.destroy(vc, allocator);
 
         for (gltf.data.materials) |material| {
-            const mat = try gltfMaterialToMaterial(vc, allocator, encoder, gltf, gltf_directory, material, &materials.textures);
+            const mat = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, gltf_directory, material, &materials.textures);
             _ = try materials.upload(vc, allocator, encoder, mat);
         }
 
-        const default_material = try gltfMaterialToMaterial(vc, allocator, encoder, gltf, gltf_directory, Gltf.Material {
+        const default_material = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, gltf_directory, Gltf.Material {
             .name = "default",
         }, &materials.textures);
         _ = try materials.upload(vc, allocator, encoder, default_material);
@@ -249,7 +249,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
             const bytes = try allocator.alignedAlloc(u8, .@"4", src.byte_length);
             const filepath = if (gltf_directory) |dir| try std.fs.path.join(allocator, &.{ dir, uri }) else uri;
             defer if (gltf_directory != null) allocator.free(filepath);
-            _ = try std.fs.cwd().readFile(filepath, bytes);
+            _ = try std.Io.Dir.cwd().readFile(io, filepath, bytes);
             dst.* = bytes;
         } else {
             dst.* = gltf.glb_binary.?;
@@ -260,7 +260,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
     var meshes = MeshManager {};
     errdefer meshes.destroy(vc, allocator);
 
-    var models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout);
+    var models = try ModelManager.createEmpty(vc, materials.textures.descriptor_layout);
     errdefer models.destroy(vc, allocator);
 
     // need to keep this sparse mapping as we may discard meshes that moonshine
@@ -389,7 +389,7 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder:
         };
     }
 
-    var accel = try Accel.createEmpty(vc, allocator);
+    var accel = try Accel.createEmpty(vc);
     errdefer accel.destroy(vc);
 
     // TODO: iterate over nodes in hierarchy order rather than flat so
@@ -424,8 +424,8 @@ pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
     return Self {
         .materials = materials,
         .meshes = .{},
-        .models = try ModelManager.createEmpty(vc, allocator, materials.textures.descriptor_layout),
-        .accel = try Accel.createEmpty(vc, allocator),
+        .models = try ModelManager.createEmpty(vc, materials.textures.descriptor_layout),
+        .accel = try Accel.createEmpty(vc),
         .constant_spectra = try ConstantSpectra.create(vc, encoder),
     };
 }

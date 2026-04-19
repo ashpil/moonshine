@@ -110,14 +110,14 @@ pub const Handle = u24;
 
 const Self = @This();
 
-pub fn createEmpty(vc: *const VulkanContext, allocator: std.mem.Allocator, texture_descriptor_layout: MaterialManager.TextureManager.DescriptorLayout) !Self {
-    var triangle_power_pipeline = try TrianglePowerPipeline.create(vc, allocator, .{}, .{}, .{ texture_descriptor_layout.handle });
+pub fn createEmpty(vc: *const VulkanContext, texture_descriptor_layout: MaterialManager.TextureManager.DescriptorLayout) !Self {
+    var triangle_power_pipeline = try TrianglePowerPipeline.create(vc, .{}, .{}, .{ texture_descriptor_layout.handle });
     errdefer triangle_power_pipeline.destroy(vc);
 
-    var geometry_power_pipeline = try GeometryPowerPipeline.create(vc, allocator, .{}, .{}, .{});
+    var geometry_power_pipeline = try GeometryPowerPipeline.create(vc, .{}, .{}, .{});
     errdefer geometry_power_pipeline.destroy(vc);
 
-    var power_fold_pipeline = try PowerFoldPipeline.create(vc, allocator, .{}, .{}, .{});
+    var power_fold_pipeline = try PowerFoldPipeline.create(vc, .{}, .{}, .{});
     errdefer power_fold_pipeline.destroy(vc);
 
     return Self {

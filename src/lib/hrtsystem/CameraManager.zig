@@ -37,8 +37,8 @@ pub const Camera = extern struct {
     orthographic: Orthographic = .{},
 };
 
-sensors: std.ArrayListUnmanaged(Sensor) = .{},
-cameras: std.ArrayListUnmanaged(std.meta.Tuple(&.{[:0]const u8, Camera })) = .{},
+sensors: std.ArrayListUnmanaged(Sensor) = .empty,
+cameras: std.ArrayListUnmanaged(std.meta.Tuple(&.{[:0]const u8, Camera })) = .empty,
 
 const Self = @This();
 

@@ -122,25 +122,18 @@ pub const Lambert = extern struct {
 fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) type {
     if (@typeInfo(Union) != .@"union") @compileError(@typeName(Union) ++ " must be a union, but is not");
     const variants = @typeInfo(Union).@"union".fields;
-    comptime var fields: [variants.len]std.builtin.Type.StructField = undefined;
-    for (&fields, variants) |*field, variant| {
+    comptime var field_names: [variants.len][]const u8 = undefined;
+    comptime var field_types: [variants.len]type = undefined;
+    comptime var field_attrs: [variants.len]std.builtin.Type.StructField.Attributes = undefined;
+    for (&field_names, &field_types, &field_attrs, variants) |*name, *t, *attr, variant| {
         const T = InnerFn(variant.type);
-        field.* = .{
-            .name = variant.name,
-            .type = T,
+        name.* = variant.name;
+        t.* = T;
+        attr.* = .{
             .default_value_ptr = &T {},
-            .is_comptime = false,
-            .alignment = @alignOf(T),
         };
     }
-    return @Type(.{
-        .@"struct" = .{
-            .layout = .auto,
-            .fields = &fields,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
+    return @Struct(.auto, null, &field_names, &field_types, &field_attrs);
 }
 
 fn VariantBuffer(comptime T: type) type {
@@ -326,7 +319,7 @@ pub const TextureManager = struct {
 
         encoder.initializeImage(T, src, image.handle, extent);
 
-        vc.device.updateDescriptorSets(1, (&vk.WriteDescriptorSet {
+        vc.device.updateDescriptorSets((&vk.WriteDescriptorSet {
             .dst_set = self.descriptor_set,
             .dst_binding = 0,
             .dst_array_element = texture_index,
@@ -339,7 +332,7 @@ pub const TextureManager = struct {
             })[0..1],
             .p_buffer_info = undefined,
             .p_texel_buffer_view = undefined,
-        })[0..1], 0, null);
+        })[0..1], &.{});
 
         return texture_index;
     }

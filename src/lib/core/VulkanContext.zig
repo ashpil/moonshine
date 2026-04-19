@@ -24,14 +24,37 @@ pub const Device = vk.DeviceProxy;
 pub const Queue = vk.QueueProxy;
 pub const CommandBuffer = vk.CommandBufferProxy;
 
+const DynLib = if (builtin.os.tag == .windows) struct {
+    handle: std.os.windows.HMODULE,
+
+    fn open(path: [:0]const u8) !DynLib {
+        const handle = LoadLibraryA(path.ptr) orelse return error.FileNotFound;
+        return .{ .handle = handle };
+    }
+
+    fn close(self: *DynLib) void {
+        std.debug.assert(FreeLibrary(self.handle).toBool());
+    }
+
+    fn lookup(self: *DynLib, comptime T: type, name: [:0]const u8) ?T {
+        const proc = GetProcAddress(self.handle, name.ptr) orelse return null;
+        return @ptrCast(@as(*const anyopaque, @ptrCast(proc)));
+    }
+
+    extern "kernel32" fn LoadLibraryA(lpLibFileName: [*:0]const u8) callconv(.winapi) ?std.os.windows.HMODULE;
+    extern "kernel32" fn GetProcAddress(hModule: std.os.windows.HMODULE, lpProcName: [*:0]const u8) callconv(.winapi) ?*const fn () callconv(.winapi) isize;
+    extern "kernel32" fn FreeLibrary(hModule: std.os.windows.HMODULE) callconv(.winapi) std.os.windows.BOOL;
+} else std.DynLib;
+
 const Base = struct {
-    vulkan_lib: std.DynLib,
+    vulkan_lib: DynLib,
     pfn_get_instance_proc_addr: vk.PfnGetInstanceProcAddr,
     dispatch: vk.BaseWrapper,
 
     fn new() !Base {
         const vulkan_lib_name = if (builtin.os.tag == .windows) "vulkan-1.dll" else "libvulkan.so.1";
-        var vulkan_lib = std.DynLib.open(vulkan_lib_name) catch std.DynLib.open("libvulkan.so") catch return VulkanContextError.VulkanDynLibLoadFail;
+        const vulkan_lib_alt_name = if (builtin.os.tag == .windows) "vulkan.dll" else "libvulkan.so";
+        var vulkan_lib = DynLib.open(vulkan_lib_name) catch DynLib.open(vulkan_lib_alt_name) catch return VulkanContextError.VulkanDynLibLoadFail;
         const pfn_get_instance_proc_addr = vulkan_lib.lookup(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr") orelse return VulkanContextError.InstanceProcAddrNotFound;
         return Base {
             .vulkan_lib = vulkan_lib,
@@ -127,66 +150,78 @@ const Base = struct {
 // * strip beginning frames that do not have symbols
 // * strip beginning frames that are in vk.zig
 // * strip ending frames in zig setup
-fn writeMinimalStacktrace(address: usize, debug_info: *std.debug.SelfInfo, out_stream: *std.Io.Writer, tty_config: std.io.tty.Config) !void {
-    var memory = [1]usize { 0 } ** 32;
-    var stack_trace: std.builtin.StackTrace = .{
-        .index = undefined,
-        .instruction_addresses = &memory,
+fn writeMinimalStacktrace(first_address: usize, terminal: std.Io.Terminal) void {
+    const io = std.Options.debug_io;
+    const gpa = std.debug.getDebugInfoAllocator();
+    const self_info = std.debug.getSelfDebugInfo() catch {
+        std.debug.writeCurrentStackTrace(.{ .allow_unsafe_unwind = true }, terminal) catch {};
+        return;
     };
-    std.debug.captureStackTrace(address, &stack_trace);
-    stack_trace.instruction_addresses.len = stack_trace.index;
 
-    // skip frames from start until we get something that has zig-provided
-    // debug symbols, to avoid useless validation layer frames
-    var skipped_frame_count: usize = 0;
-    for (stack_trace.instruction_addresses) |addr| {
-        if (debug_info.getModuleForAddress(addr)) |_| {
-            break;
-        } else |_| {}
-        skipped_frame_count += 1;
+    var addr_buf: [32]usize = undefined;
+    const st = std.debug.captureCurrentStackTrace(.{ .first_address = first_address, .allow_unsafe_unwind = true }, &addr_buf);
+
+    if (st.return_addresses.len == 0) {
+        std.debug.writeCurrentStackTrace(.{ .allow_unsafe_unwind = true }, terminal) catch {};
+        return;
     }
-    stack_trace.instruction_addresses = stack_trace.instruction_addresses[skipped_frame_count..];
-    stack_trace.index = stack_trace.instruction_addresses.len;
 
-    // skip frames from start that are vk.zig frames, as
-    // they are pure wrappers and can be trusted
-    skipped_frame_count = 1;
-    for (stack_trace.instruction_addresses) |addr| {
-        if (debug_info.getModuleForAddress(addr)) |module| {
-            if (module.getSymbolAtAddress(debug_info.allocator, addr)) |symbol_info| {
-                if (symbol_info.source_location) |location| {
-                    if (std.mem.endsWith(u8, location.file_name, "vk.zig")) {
-                        skipped_frame_count += 1;
-                        continue;
-                    }
-                }
-            } else |_| {}
-        } else |_| {}
+    var symbols: std.ArrayList(std.debug.Symbol) = .empty;
+    defer symbols.deinit(gpa);
+
+    // skip frames from start:
+    // * frames without source locations (validation layer, etc.)
+    // * vk.zig frames (pure wrappers)
+    var skip_start: usize = 0;
+    for (st.return_addresses) |addr| {
+        symbols.clearRetainingCapacity();
+        self_info.getSymbols(io, gpa, gpa, addr, false, &symbols) catch {
+            skip_start += 1;
+            continue;
+        };
+        const location = if (symbols.items.len > 0) symbols.items[0].source_location else null;
+        if (location == null) {
+            skip_start += 1;
+            continue;
+        }
+        if (std.mem.endsWith(u8, location.?.file_name, "vk.zig")) {
+            skip_start += 1;
+            continue;
+        }
         break;
     }
-    stack_trace.instruction_addresses = stack_trace.instruction_addresses[skipped_frame_count..];
-    stack_trace.index = stack_trace.instruction_addresses.len;
 
-    // skip frames frames from end until we get to the our main,
+    // skip frames from end until we get to our main,
     // to avoid useless zig internal frames
-    skipped_frame_count = 0;
-    var seen_main = false;
-    for (0..stack_trace.instruction_addresses.len) |idx| {
-        const addr = stack_trace.instruction_addresses[stack_trace.instruction_addresses.len - idx - 1];
-        if (debug_info.getModuleForAddress(addr)) |module| {
-            if (module.getSymbolAtAddress(debug_info.allocator, addr)) |symbol_info| {
-                if (std.mem.eql(u8, symbol_info.name, "main")) {
-                    if (seen_main) break;
-                    seen_main = true;
-                }
-            } else |_| {}
-        } else |_| {}
-        skipped_frame_count += 1;
+    var skip_end: usize = 0;
+    var i = st.return_addresses.len;
+    while (i > skip_start) {
+        i -= 1;
+        const addr = st.return_addresses[i];
+        symbols.clearRetainingCapacity();
+        self_info.getSymbols(io, gpa, gpa, addr, false, &symbols) catch {
+            skip_end += 1;
+            continue;
+        };
+        if (symbols.items.len > 0) {
+            if (symbols.items[0].name) |name| {
+                if (std.mem.eql(u8, name, "main")) break;
+            }
+        }
+        skip_end += 1;
     }
-    stack_trace.instruction_addresses = stack_trace.instruction_addresses[0..stack_trace.instruction_addresses.len - skipped_frame_count];
-    stack_trace.index = stack_trace.instruction_addresses.len;
 
-    try std.debug.writeStackTrace(stack_trace, out_stream, debug_info, tty_config);
+    const end = st.return_addresses.len - skip_end;
+    if (skip_start >= end) {
+        std.debug.writeCurrentStackTrace(.{ .allow_unsafe_unwind = true }, terminal) catch {};
+        return;
+    }
+
+    const filtered: std.debug.StackTrace = .{
+        .return_addresses = st.return_addresses[skip_start..end],
+        .skipped = .none,
+    };
+    std.debug.writeStackTrace(&filtered, terminal) catch {};
 }
 
 const DeviceAddressBindingTracker = struct {
@@ -210,7 +245,7 @@ const DeviceAddressBindingTracker = struct {
 
     const Bindings = std.ArrayListUnmanaged(BindingEvent);
 
-    bindings: Bindings =.{},
+    bindings: Bindings = .empty,
 
     fn destroy(self: *DeviceAddressBindingTracker, allocator: std.mem.Allocator) void {
         for (self.bindings.items) |binding| {
@@ -252,7 +287,7 @@ fn debugCallbackValidation(message_severity: vk.DebugUtilsMessageSeverityFlagsEX
     const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
     const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_bit_ext = true }).toInt();
 
-    const color: std.io.tty.Color = switch (message_severity.toInt()) {
+    const color: std.Io.Terminal.Color = switch (message_severity.toInt()) {
         verbose_severity => .dim,
         info_severity => .green,
         warning_severity => .yellow,
@@ -261,20 +296,19 @@ fn debugCallbackValidation(message_severity: vk.DebugUtilsMessageSeverityFlagsEX
     };
 
     var buffer: [1024]u8 = undefined;
-    var out_stream = std.fs.File.stderr().writer(&buffer);
-    const writer = &out_stream.interface;
-    const tty_config = std.io.tty.detectConfig(std.fs.File.stderr());
+    const stderr_lock = std.debug.lockStderr(&buffer);
+    defer std.debug.unlockStderr();
+    const writer = &stderr_lock.file_writer.interface;
 
-    tty_config.setColor(writer, color) catch {};
+    const terminal = stderr_lock.terminal();
+    terminal.setColor(color) catch {};
     writer.print("{s}\n", .{ data.p_message.? }) catch @panic("unable to write validation error to stderr");
-    tty_config.setColor(writer, .reset) catch {};
+    terminal.setColor(.reset) catch {};
 
     // write stack trace for validation error
     switch (@import("build_options").vk_validation) {
         .print => {
-            if (std.debug.getSelfDebugInfo()) |debug_info| {
-                writeMinimalStacktrace(@returnAddress(), debug_info, writer, tty_config) catch @panic("unable to write validation error stack trace to stderr");
-            } else |_| {}
+            writeMinimalStacktrace(@returnAddress(), terminal);
         },
         .panic => {
             writer.flush() catch @panic("unable to flush writer");
@@ -485,9 +519,10 @@ pub fn destroy(self: Self, allocator: std.mem.Allocator) void {
 }
 
 pub fn handleDeviceLost(self: Self, transient: std.mem.Allocator) !void {
-    var buffer: [64]u8 = undefined;
-    const stderr = std.debug.lockStderrWriter(&buffer);
-    defer std.debug.unlockStderrWriter();
+    var buffer: [1024]u8 = undefined;
+    const stderr_lock = std.debug.lockStderr(&buffer);
+    defer std.debug.unlockStderr();
+    const stderr = &stderr_lock.file_writer.interface;
 
     try stderr.writeAll("Device lost detected.\n");
 
@@ -559,10 +594,7 @@ pub fn handleDeviceLost(self: Self, transient: std.mem.Allocator) !void {
 
             var file_name_buffer: [32]u8 = undefined;
             const file_name = std.fmt.bufPrint(&file_name_buffer, "gpu_dump_{x}.bin", .{ hash }) catch unreachable;
-            const file = try std.fs.cwd().createFile(file_name, .{});
-            defer file.close();
-
-            try file.writeAll(vendor_binary);
+            try std.Io.Dir.cwd().writeFile(std.Options.debug_io, .{ .sub_path = file_name, .data = vendor_binary });
             try stderr.print("Wrote vendor binary to {s}\n", .{file_name});
         } else {
             try stderr.writeAll("Vendor binary unvailable");

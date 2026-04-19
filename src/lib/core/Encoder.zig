@@ -104,7 +104,7 @@ pub fn submit(self: Self, queue: VulkanContext.Queue, sync: struct {
         .p_signal_semaphore_infos = sync.signal_semaphore_infos.ptr,
     };
 
-    try queue.submit2(1, (&submit_info)[0..1], sync.fence);
+    try queue.submit2((&submit_info)[0..1], sync.fence);
 }
 
 pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
@@ -139,7 +139,7 @@ pub fn initializeImage(self: Self, comptime T: type, src_data: core.mem.BufferSl
 
 // buffers must have appropriate flags
 pub fn copyBuffer(self: Self, src: vk.Buffer, dst: vk.Buffer, regions: []const vk.BufferCopy) void {
-    self.buffer.copyBuffer(src, dst, @intCast(regions.len), regions.ptr);
+    self.buffer.copyBuffer(src, dst, regions);
 }
 
 // size in number of data to duplicate, not bytes
@@ -162,7 +162,7 @@ pub fn clearColorImage(self: Self, dst: vk.Image, color: vk.ClearColorValue) voi
 
 pub fn buildAccelerationStructures(self: Self, infos: []const vk.AccelerationStructureBuildGeometryInfoKHR, build_range_infos: []const [*]const vk.AccelerationStructureBuildRangeInfoKHR) void {
     std.debug.assert(infos.len == build_range_infos.len);
-    self.buffer.buildAccelerationStructuresKHR(@intCast(infos.len), infos.ptr, build_range_infos.ptr);
+    self.buffer.buildAccelerationStructuresKHR(infos, build_range_infos);
 }
 
 pub fn copyImageToBuffer(self: Self, src: vk.Image, extent: vk.Extent2D, dst: vk.Buffer) void {
@@ -187,7 +187,7 @@ pub fn copyImageToBuffer(self: Self, src: vk.Image, extent: vk.Extent2D, dst: vk
             .depth = 1,
         },
     };
-    self.buffer.copyImageToBuffer(src, .general, dst, 1, (&copy)[0..1]);
+    self.buffer.copyImageToBuffer(src, .general, dst, (&copy)[0..1]);
 }
 
 pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, dst: vk.Image, extent: vk.Extent2D) void {
@@ -212,7 +212,7 @@ pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, 
             .depth = 1,
         },
     };
-    self.buffer.copyBufferToImage(src, dst, .general, 1, (&copy)[0..1]);
+    self.buffer.copyBufferToImage(src, dst, .general, (&copy)[0..1]);
 }
 
 // meant to be same as vk.ImageMemoryBarrier2 but sane defaults

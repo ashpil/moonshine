@@ -10,7 +10,7 @@ const tracy = @import("../tracy.zig");
 
 const vk_map_memory_minimum_guaranteed_alignment = 64; // https://docs.vulkan.org/spec/latest/chapters/limits.html#limits-minmax may as well commuincate this to the compiler
 
-fn heapName(properties: vk.MemoryPropertyFlags, writer: *std.io.Writer) !void {
+fn heapName(properties: vk.MemoryPropertyFlags, writer: *std.Io.Writer) !void {
     var first = true;
     inline for (comptime std.meta.fieldNames(vk.MemoryPropertyFlags)) |name| {
         if (name[0] == '_') continue;
@@ -33,7 +33,7 @@ fn heapName(properties: vk.MemoryPropertyFlags, writer: *std.io.Writer) !void {
 
 fn heapNameSize(properties: vk.MemoryPropertyFlags) usize {
     var trash_buffer: [64]u8 = undefined;
-    var dw: std.io.Writer.Discarding = .init(&trash_buffer);
+    var dw: std.Io.Writer.Discarding = .init(&trash_buffer);
     heapName(properties, &dw.writer) catch |err| switch (err) {
         error.WriteFailed => unreachable,
     };
@@ -43,7 +43,7 @@ fn heapNameSize(properties: vk.MemoryPropertyFlags) usize {
 pub fn comptimeHeapName(comptime properties: vk.MemoryPropertyFlags) *const [heapNameSize(properties):0]u8 {
     comptime {
         var buf: [heapNameSize(properties):0]u8 = undefined;
-        var w: std.io.Writer = .fixed(&buf);
+        var w: std.Io.Writer = .fixed(&buf);
         heapName(properties, &w) catch unreachable;
         buf[buf.len] = 0;
         const final = buf;
@@ -143,7 +143,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
                     .size = src.asBytes().len,
                 };
 
-                encoder.buffer.copyBuffer(src.handle, self.handle, 1, (&region)[0..1]);
+                encoder.buffer.copyBuffer(src.handle, self.handle, (&region)[0..1]);
             }
         } else struct {};
 

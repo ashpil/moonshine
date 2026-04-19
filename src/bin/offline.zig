@@ -23,21 +23,22 @@ const Config = struct {
     spp: u32,
     extent: vk.Extent2D,
 
-    fn fromCli(allocator: std.mem.Allocator) !Config {
-        const args = try std.process.argsAlloc(allocator);
-        defer std.process.argsFree(allocator, args);
-        if (args.len < 4) return error.BadArgs;
+    fn fromCli(allocator: std.mem.Allocator, args: std.process.Args) !Config {
+        var args_iter = try args.iterateAllocator(allocator);
+        defer args_iter.deinit();
 
-        const in_filepath = args[1];
+        _ = args_iter.next().?;
+
+        const in_filepath = args_iter.next().?;
         if (!std.mem.eql(u8, std.fs.path.extension(in_filepath), ".glb") and !std.mem.eql(u8, std.fs.path.extension(in_filepath), ".gltf")) return error.OnlySupportsGltfInput;
 
-        const skybox_filepath = args[2];
+        const skybox_filepath = args_iter.next().?;
         if (!std.mem.eql(u8, std.fs.path.extension(skybox_filepath), ".exr")) return error.OnlySupportsExrSkybox;
 
-        const out_filepath = args[3];
+        const out_filepath = args_iter.next().?;
         if (!std.mem.eql(u8, std.fs.path.extension(out_filepath), ".exr")) return error.OnlySupportsExrOutput;
 
-        const spp = if (args.len > 4) try std.fmt.parseInt(u32, args[4], 10) else 16;
+        const spp = try std.fmt.parseInt(u32, args_iter.next().?, 10);
 
         return Config {
             .in_filepath = try allocator.dupe(u8, in_filepath),
@@ -56,65 +57,72 @@ const Config = struct {
 };
 
 const IntervalLogger = struct {
-    last_time: std.time.Instant,
+    last_time: std.Io.Timestamp,
 
-    fn start() !IntervalLogger {
+    fn start(io: std.Io) IntervalLogger {
         return IntervalLogger {
-            .last_time = try std.time.Instant.now(),
+            .last_time = std.Io.Timestamp.now(io, .real),
         };
     }
 
-    fn log(self: *IntervalLogger, state: []const u8) !void {
-        const new_time = try std.time.Instant.now();
-        const elapsed = new_time.since(self.last_time);
+    fn log(self: *IntervalLogger, io: std.Io, state: []const u8) !void {
+        const new_time = std.Io.Timestamp.now(io, .real);
+        const elapsed: u96 = @intCast(self.last_time.durationTo(new_time).toNanoseconds());
         const ms = elapsed / std.time.ns_per_ms;
         const s = ms / std.time.ms_per_s;
         const ms_remainder = ms % std.time.ms_per_s;
 
-        var out_stream = std.fs.File.stdout().writer(&.{});
+        var out_stream = std.Io.File.stdout().writer(io, &.{});
         const writer = &out_stream.interface;
         try writer.print("{}.{:0>3} seconds to {s}\n", .{ s, ms_remainder, state });
+        try writer.flush();
 
         self.last_time = new_time;
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init.Minimal) !void {
     var gpa = engine.Allocator.init();
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    var io = std.Io.Threaded.init(allocator, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+    });
+    defer io.deinit();
+
     const context = try VulkanContext.create(allocator, "offline", engine.hrtsystem.vulkan_requirements);
     defer context.destroy(allocator);
 
-    run(allocator, context) catch |err| {
+    run(allocator, io.io(), init.args, context) catch |err| {
         if (err == error.DeviceLost) try context.handleDeviceLost(allocator);
         return err;
     };
 }
 
-fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
-    var logger = try IntervalLogger.start();
+fn run(allocator: std.mem.Allocator, io: std.Io, args: std.process.Args, context: VulkanContext) !void {
+    var logger = IntervalLogger.start(io);
 
-    const config = try Config.fromCli(allocator);
+    const config = try Config.fromCli(allocator, args);
     defer config.destroy(allocator);
 
     var encoder = try Encoder.create(&context, "main");
     defer encoder.destroy(&context);
 
-    try logger.log("set up initial state");
+    try logger.log(io, "set up initial state");
 
     try encoder.begin();
-    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Chromaticities.bt709);
+    var scene = try Scene.fromGltfExr(&context, allocator, io, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Chromaticities.bt709);
     defer scene.destroy(&context, allocator);
     try encoder.submitAndIdleUntilDone(&context);
 
-    try logger.log("load world");
+    try logger.log(io, "load world");
 
-    var pipeline = try Pipeline.create(&context, allocator, .{}, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
+    var pipeline = try Pipeline.create(&context, .{}, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer pipeline.destroy(&context);
 
-    try logger.log("create pipeline");
+    try logger.log(io, "create pipeline");
 
     const output_buffer = try core.mem.DownloadBuffer([4]f32).create(&context, scene.camera.sensors.items[0].extent.width * scene.camera.sensors.items[0].extent.height, "output");
     defer output_buffer.destroy(&context);
@@ -178,10 +186,10 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext) !void {
         try encoder.submitAndIdleUntilDone(&context);
     }
 
-    try logger.log("render");
+    try logger.log(io, "render");
 
     // now done with GPU stuff/all rendering; can write from output buffer to exr
-    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.mapped, .extent = scene.camera.sensors.items[0].extent }, allocator, config.out_filepath);
+    try exr.helpers.Rgba2D.save(exr.helpers.Rgba2D { .ptr = output_buffer.mapped, .extent = scene.camera.sensors.items[0].extent }, allocator, io, config.out_filepath);
 
-    try logger.log("write exr");
+    try logger.log(io, "write exr");
 }

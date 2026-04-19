@@ -152,7 +152,7 @@ fn icosphere(order: usize, allocator: std.mem.Allocator, encoder: *Encoder, reve
         }
 
         fn subdivide(self: *Self) std.mem.Allocator.Error!void {
-            var next_triangles = std.ArrayListUnmanaged(U32x3) {};
+            var next_triangles = std.ArrayListUnmanaged(U32x3).empty;
             for (self.triangles.items) |triangle| {
                 const a = try self.get_midpoint(triangle.element(0), triangle.element(1));
                 const b = try self.get_midpoint(triangle.element(1), triangle.element(2));
@@ -347,7 +347,7 @@ test "white sphere on white background is white" {
     }, try allocator.dupeZ(u8, ""));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
-    var background = try Background.create(&tc.vc, allocator);
+    var background = try Background.create(&tc.vc);
     var white = [4]f32 {1, 1, 1, 1};
     const image = Rgba2D {
         .ptr = @ptrCast(&white),
@@ -367,7 +367,7 @@ test "white sphere on white background is white" {
 
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
+    var pipeline = try Pipeline.create(&tc.vc, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
     }, .{ scene.background.equal_area_sampler}, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
@@ -377,7 +377,7 @@ test "white sphere on white background is white" {
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
-    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
+    const other_pipeline = try pipeline.recreate(&tc.vc, .{
         .path_tracing_env_samples_per_bounce = 1,
         .path_tracing_mesh_samples_per_bounce = 0,
     });
@@ -449,7 +449,7 @@ test "white volume on white background is white" {
     }, try allocator.dupeZ(u8, ""));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
-    var background = try Background.create(&tc.vc, allocator);
+    var background = try Background.create(&tc.vc);
     var white = [4]f32 {1, 1, 1, 1};
     const image = Rgba2D {
         .ptr = @ptrCast(&white),
@@ -469,7 +469,7 @@ test "white volume on white background is white" {
 
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
+    var pipeline = try Pipeline.create(&tc.vc, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 0,
         .volume_path_tracing_mesh_samples_per_bounce = 0,
@@ -480,7 +480,7 @@ test "white volume on white background is white" {
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with env sampling
-    const other_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
+    const other_pipeline = try pipeline.recreate(&tc.vc, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 1,
         .volume_path_tracing_mesh_samples_per_bounce = 0,
@@ -554,7 +554,7 @@ test "inside illuminating sphere is white" {
     }, try allocator.dupeZ(u8, ""));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
-    var background = try Background.create(&tc.vc, allocator);
+    var background = try Background.create(&tc.vc);
     var black = [4]f32 {0, 0, 0, 1};
     const image = Rgba2D {
         .ptr = @ptrCast(&black),
@@ -574,7 +574,7 @@ test "inside illuminating sphere is white" {
 
     try tc.encoder.submitAndIdleUntilDone(&tc.vc);
 
-    var pipeline = try Pipeline.create(&tc.vc, allocator, .{
+    var pipeline = try Pipeline.create(&tc.vc, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 0,
     }, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
@@ -584,7 +584,7 @@ test "inside illuminating sphere is white" {
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with mesh sampling
-    const mesh_sampling_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
+    const mesh_sampling_pipeline = try pipeline.recreate(&tc.vc, .{
         .path_tracing_env_samples_per_bounce = 0,
         .path_tracing_mesh_samples_per_bounce = 1,
     });
@@ -594,7 +594,7 @@ test "inside illuminating sphere is white" {
     try assertWhiteFurnaceImage(tc.output_buffer.hostSlice());
 
     // do that again but with non-absorbing volume
-    const volume_pipeline = try pipeline.recreate(&tc.vc, allocator, .{
+    const volume_pipeline = try pipeline.recreate(&tc.vc, .{
         .integrator = .volume_path_tracing,
         .volume_path_tracing_env_samples_per_bounce = 0,
         .volume_path_tracing_mesh_samples_per_bounce = 1,

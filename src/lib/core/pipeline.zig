@@ -12,31 +12,28 @@ const descriptor = core.descriptor;
 
 const ShaderSource = @import("shader_source");
 
-pub fn createShaderModule(vc: *const VulkanContext, shader_source: ShaderSource, allocator: std.mem.Allocator) !vk.ShaderModule {
-    var to_free: []const u8 = undefined;
-    defer if (build_options.shader_source_type == .load) allocator.free(to_free);
-
+pub fn createShaderModule(vc: *const VulkanContext, shader_source: ShaderSource) !vk.ShaderModule {
     const code = switch (build_options.shader_source_type) {
         .embed => shader_source.code,
         .load => @as([]const u32, @ptrCast(@alignCast(blk: {
-            var compile_process = std.process.Child.init(shader_source.command, allocator);
-            compile_process.stdout_behavior = .Pipe;
-            try compile_process.spawn();
-            const stdout = blk_inner: {
-                var poller = std.io.poll(allocator, enum { stdout }, .{ .stdout = compile_process.stdout.? });
-                defer poller.deinit();
-
-                while (try poller.poll()) {}
-
-                break :blk_inner try poller.toOwnedSlice(.stdout);
-            };
-            to_free = stdout;
-
-            const term = try compile_process.wait();
-            if (term == .Exited and term.Exited != 0) return error.ShaderCompileFail;
-            break :blk stdout;
+            // TODO: make this use zig hot reload capabilities, to avoid IO/allocation hiding hacks
+            var threaded_io = std.Io.Threaded.init_single_threaded;
+            threaded_io.allocator = std.heap.c_allocator;
+            const raw_environ: [*:null]const ?[*:0]const u8 = @ptrCast(std.c.environ);
+            var env_count: usize = 0;
+            while (raw_environ[env_count] != null) env_count += 1;
+            threaded_io.environ.process_environ.block = .{ .slice = raw_environ[0..env_count :null] };
+            threaded_io.environ_initialized = false;
+            const compile_process = try std.process.run(std.heap.c_allocator, threaded_io.io(), .{ .argv = shader_source.command });
+            std.heap.c_allocator.free(compile_process.stderr);
+            if (compile_process.term != .exited or compile_process.term.exited != 0) {
+                std.heap.c_allocator.free(compile_process.stdout);
+                return error.ShaderCompileFail;
+            }
+            break :blk compile_process.stdout;
         }))),
     };
+    defer if (build_options.shader_source_type == .load) std.heap.c_allocator.free(@as([]const align(1)u8, @alignCast(std.mem.sliceAsBytes(code))));
     const module = try vc.device.createShaderModule(&.{
         .code_size = code.len * @sizeOf(u32),
         .p_code = code.ptr,
@@ -254,7 +251,7 @@ pub fn Pipeline(comptime options: struct {
         pub const PushConstants = options.PushConstants;
         pub const PushSetBindings = options.PushSetBindings;
 
-        pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator, constants: SpecConstants, samplers: [Bindings.sampler_count]vk.Sampler, additional_descriptor_layouts: [options.additional_descriptor_layout_count]vk.DescriptorSetLayout) !Self {
+        pub fn create(vc: *const VulkanContext, constants: SpecConstants, samplers: [Bindings.sampler_count]vk.Sampler, additional_descriptor_layouts: [options.additional_descriptor_layout_count]vk.DescriptorSetLayout) !Self {
             var bindings = try Bindings.create(vc, samplers, additional_descriptor_layouts);
             errdefer bindings.destroy(vc);
 
@@ -263,14 +260,14 @@ pub fn Pipeline(comptime options: struct {
                 .handle = undefined,
             };
 
-            _ = try self.recreate(vc, allocator, constants);
+            _ = try self.recreate(vc, constants);
 
             return self;
         }
 
         // returns old handle which must be cleaned up
-        pub fn recreate(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, constants: SpecConstants) !vk.Pipeline {
-            const module = try createShaderModule(vc, options.shader_source, allocator);
+        pub fn recreate(self: *Self, vc: *const VulkanContext, constants: SpecConstants) !vk.Pipeline {
+            const module = try createShaderModule(vc, options.shader_source);
             defer vc.device.destroyShaderModule(module, null);
 
             var stage = vk.PipelineShaderStageCreateInfo {
@@ -306,7 +303,7 @@ pub fn Pipeline(comptime options: struct {
             };
 
             const old_handle = self.handle;
-            _ = try vc.device.createComputePipelines(.null_handle, 1, (&create_info)[0..1], null, (&self.handle)[0..1]);
+            _ = try vc.device.createComputePipelines(.null_handle, (&create_info)[0..1], null, @as(*[1]vk.Pipeline, (&self.handle)[0..1]));
             errdefer vc.device.destroyPipeline(self.handle, null);
             try core.vk_helpers.setDebugName(vc.device, self.handle, options.shader_source.name);
 
@@ -361,7 +358,7 @@ pub fn Pipeline(comptime options: struct {
 
         pub const recordBindAdditionalDescriptorSets = if (options.additional_descriptor_layout_count != 0) struct {
             pub fn recordBindAdditionalDescriptorSets(self: *const Self, command_buffer: VulkanContext.CommandBuffer, sets: [options.additional_descriptor_layout_count]vk.DescriptorSet) void {
-                command_buffer.bindDescriptorSets(.compute, self.bindings.layout, 1, sets.len, &sets, 0, undefined);
+                command_buffer.bindDescriptorSets(.compute, self.bindings.layout, 1, &sets, &.{});
             }
         }.recordBindAdditionalDescriptorSets else struct {};
 
@@ -375,7 +372,7 @@ pub fn Pipeline(comptime options: struct {
         pub const recordPushDescriptors = if (@sizeOf(options.PushSetBindings) != 0) struct {
             pub fn recordPushDescriptors(self: *const Self, command_buffer: VulkanContext.CommandBuffer, bindings: options.PushSetBindings) void {
                 const writes = pushDescriptorDataToWriteDescriptor(options.PushSetBindings, bindings);
-                command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, @intCast(writes.len), writes.ptr);
+                command_buffer.pushDescriptorSetKHR(.compute, self.bindings.layout, 0, writes);
             }
         }.recordPushDescriptors else struct {};
     };

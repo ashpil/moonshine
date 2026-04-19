@@ -26,7 +26,7 @@ const Destruction = struct {
 };
 
 // TODO: this should be an SoA type of thing like list((tag, list(union)))
-queue: std.ArrayListUnmanaged(Destruction) = .{},
+queue: std.ArrayListUnmanaged(Destruction) = .empty,
 
 const Self = @This();
 

@@ -1,6 +1,7 @@
 # zig build artifacts
 .zig-cache/
 zig-out/
+zig-pkg/
 
 # Any testing asset files
 **.exr

@@ -65,18 +65,19 @@ const Config = struct {
     skybox_filepath: []const u8, // must be exr
     extent: vk.Extent2D,
 
-    fn fromCli(allocator: std.mem.Allocator) !Config {
-        const args = try std.process.argsAlloc(allocator);
-        defer std.process.argsFree(allocator, args);
-        if (args.len != 3) return error.BadArgs;
+    fn fromCli(allocator: std.mem.Allocator, args: std.process.Args) !Config {
+        var args_iter = try args.iterateAllocator(allocator);
+        defer args_iter.deinit();
 
-        const in_filepath = args[1];
+        _ = args_iter.next().?;
+
+        const in_filepath = args_iter.next().?;
         if (!std.mem.eql(u8, std.fs.path.extension(in_filepath), ".glb") and !std.mem.eql(u8, std.fs.path.extension(in_filepath), ".gltf")) return error.OnlySupportsGltfInput;
 
-        const skybox_filepath = args[2];
+        const skybox_filepath = args_iter.next().?;
         if (!std.mem.eql(u8, std.fs.path.extension(skybox_filepath), ".exr")) return error.OnlySupportsExrSkybox;
 
-        return Config{
+        return Config {
             .in_filepath = try allocator.dupe(u8, in_filepath),
             .skybox_filepath = try allocator.dupe(u8, skybox_filepath),
             .extent = vk.Extent2D{ .width = 1600, .height = 900 }, // TODO: cli
@@ -107,12 +108,18 @@ const PostProcessPipeline = core.pipeline.Pipeline(.{
 });
 
 
-pub fn main() !void {
+pub fn main(init: std.process.Init.Minimal) !void {
     var gpa = engine.Allocator.init();
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const config = try Config.fromCli(allocator);
+    var io = std.Io.Threaded.init(allocator, .{
+        .argv0 = .init(init.args),
+        .environ = init.environ,
+    });
+    defer io.deinit();
+
+    const config = try Config.fromCli(allocator, init.args);
     defer config.destroy(allocator);
 
     const window = try Window.create(config.extent.width, config.extent.height, "online");
@@ -121,13 +128,13 @@ pub fn main() !void {
     const context, const supports_swapchain_color_spaces = try createVulkanContext(allocator, window);
     defer context.destroy(allocator);
 
-    run(allocator, context, config, window, supports_swapchain_color_spaces) catch |err| {
+    run(allocator, io.io(), context, config, window, supports_swapchain_color_spaces) catch |err| {
         if (err == error.DeviceLost) try context.handleDeviceLost(allocator);
         return err;
     };
 }
 
-fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, window: Window, supports_swapchain_color_spaces: bool) !void {
+fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config: Config, window: Window, supports_swapchain_color_spaces: bool) !void {
     var display = try Display.create(&context, window, supports_swapchain_color_spaces, allocator);
     defer display.destroy(&context, allocator);
 
@@ -140,20 +147,20 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
     std.log.info("Set up initial state!", .{});
 
     try encoder.begin();
-    var scene = try Scene.fromGltfExr(&context, allocator, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
+    var scene = try Scene.fromGltfExr(&context, allocator, io, &encoder, config.in_filepath, config.skybox_filepath, config.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
     defer scene.destroy(&context, allocator);
     try encoder.submitAndIdleUntilDone(&context);
 
     std.log.info("Loaded scene!", .{});
 
-    var object_picker = try ObjectPicker.create(&context, allocator);
+    var object_picker = try ObjectPicker.create(&context);
     defer object_picker.destroy(&context);
 
     var spec_constants = RenderPipeline.SpecConstants {};
-    var render_pipeline = try RenderPipeline.create(&context, allocator, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
+    var render_pipeline = try RenderPipeline.create(&context, spec_constants, .{ scene.background.equal_area_sampler }, .{ scene.world.materials.textures.descriptor_layout.handle, scene.world.constant_spectra.descriptor_layout.handle });
     defer render_pipeline.destroy(&context);
 
-    var post_process_pipeline = try PostProcessPipeline.create(&context, allocator, .{}, .{}, .{});
+    var post_process_pipeline = try PostProcessPipeline.create(&context, .{}, .{}, .{});
     defer post_process_pipeline.destroy(&context);
 
     const gui_format = .r8g8b8a8_unorm;
@@ -288,17 +295,18 @@ fn run(allocator: std.mem.Allocator, context: VulkanContext, config: Config, win
                 const last_rebuild_failed = rebuild_error;
                 if (last_rebuild_failed) imgui.pushStyleColor(.text, F32x4.new(.{1.0, 0.0, 0.0, 1}));
                 if (imgui.button(rebuild_label, imgui.Vec2{ .x = imgui.getContentRegionAvail().element(0), .y = 0.0 })) {
-                    const start = try std.time.Instant.now();
+                    const start = std.Io.Timestamp.now(io, .real);
                     rebuild_error = false;
-                    if (render_pipeline.recreate(&context, allocator, spec_constants)) |old_pipeline| {
+                    if (render_pipeline.recreate(&context, spec_constants)) |old_pipeline| {
                         try frame_encoder.attachResource(old_pipeline);
                         scene.camera.sensors.items[active_sensor].clear();
                     } else |err| if (err == error.ShaderCompileFail) {
                         rebuild_error = true;
                     } else return err;
                     if (!rebuild_error) {
-                        const elapsed = (try std.time.Instant.now()).since(start) / std.time.ns_per_ms;
-                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed});
+                        const end = std.Io.Timestamp.now(io, .real);
+                        const elapsed: u96 = @intCast(start.durationTo(end).toNanoseconds());
+                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed / std.time.ns_per_ms});
                     } else {
                         rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
                     }

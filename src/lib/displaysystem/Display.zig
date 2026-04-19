@@ -168,7 +168,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
 
     // wait for next frame to ensure CPU is not too far ahead of GPU
     var next_frame = &self.frames[self.frame_index];
-    _ = try vc.device.waitForFences(1, (&next_frame.fence)[0..1], .true, std.math.maxInt(u64));
+    _ = try vc.device.waitForFences((&next_frame.fence)[0..1], .true, std.math.maxInt(u64));
 
     // collect metrics if enabled
     if (metrics) {
@@ -226,7 +226,7 @@ const Frame = struct {
 
     // frame must not be in use
     fn reset(self: *Frame, vc: *const VulkanContext) !void {
-        try vc.device.resetFences(1, (&self.fence)[0..1]);
+        try vc.device.resetFences((&self.fence)[0..1]);
 
         if (metrics) {
             vc.device.resetQueryPool(self.query_pool, 0, 2);

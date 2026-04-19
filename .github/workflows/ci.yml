@@ -29,6 +29,12 @@ jobs:
     - name: Setup Zig
       uses: mlugg/setup-zig@v2
 
+    # Workaround for https://codeberg.org/ziglang/zig/issues/31964
+    - name: Create zig cache tmp dir
+      run: |
+        test "$(zig version)" = "0.16.0"
+        mkdir -p "$(zig env | grep '\.global_cache_dir' | sed 's/.*= "\(.*\)".*/\1/')/tmp"
+
     - name: Type check
       run: zig build check
 
@@ -53,6 +59,12 @@ jobs:
 
     - name: Setup Zig
       uses: mlugg/setup-zig@v2
+
+    # Workaround for https://codeberg.org/ziglang/zig/issues/31964
+    - name: Create zig cache tmp dir
+      run: |
+        if ((zig version) -ne "0.16.0") { exit 1 }
+        New-Item -ItemType Directory -Force -Path "$(((zig env | Select-String 'global_cache_dir') -split '"')[1])\tmp"
 
     - name: Type check
       run: zig build check

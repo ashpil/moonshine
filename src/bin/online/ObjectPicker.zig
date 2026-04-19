@@ -63,11 +63,11 @@ pipeline: Pipeline,
 encoder: Encoder,
 ready_fence: vk.Fence,
 
-pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext) !Self {
     const buffer = try core.mem.Buffer(Intersection, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }).create(vc, 1, "object picker");
     errdefer buffer.destroy(vc);
 
-    var pipeline = try Pipeline.create(vc, allocator, .{}, .{}, .{});
+    var pipeline = try Pipeline.create(vc, .{}, .{}, .{});
     errdefer pipeline.destroy(vc);
 
     var encoder = try Encoder.create(vc, "object picker");
@@ -107,8 +107,8 @@ pub fn getClickedObject(self: *Self, vc: *const VulkanContext, accel: vk.Acceler
     // end
     try self.encoder.submit(vc.queue, .{ .fence = self.ready_fence });
 
-    _ = try vc.device.waitForFences(1, (&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
-    try vc.device.resetFences(1, (&self.ready_fence)[0..1]);
+    _ = try vc.device.waitForFences((&self.ready_fence)[0..1], .true, std.math.maxInt(u64));
+    try vc.device.resetFences((&self.ready_fence)[0..1]);
     try vc.device.resetCommandPool(self.encoder.pool, .{});
 
     return self.buffer.hostSlice()[0].toClickedObject();

@@ -134,7 +134,7 @@ pub const helpers = struct {
             return slice;
         }
 
-        pub fn save(self: Rgba2D, allocator: std.mem.Allocator, out_filename: []const u8) !void {
+        pub fn save(self: Rgba2D, allocator: std.mem.Allocator, io: std.Io, filepath: []const u8) !void {
             const channel_count = 3;
 
             var header: Header = undefined;
@@ -202,11 +202,11 @@ pub const helpers = struct {
             var data: [*c]u8 = undefined;
             const file_size = try saveEXRImageToMemory(&image, &header, &data);
             defer std.c.free(data);
-            try std.fs.cwd().writeFile(.{ .sub_path = out_filename, .data = data[0..file_size]});
+            try std.Io.Dir.cwd().writeFile(io, .{ .sub_path = filepath, .data = data[0..file_size] });
         }
 
-        pub fn load(allocator: std.mem.Allocator, filename: []const u8) !Rgba2D {
-            const file_content = try std.fs.cwd().readFileAlloc(allocator, filename, std.math.maxInt(usize));
+        pub fn load(allocator: std.mem.Allocator, io: std.Io, filepath: []const u8) !Rgba2D {
+            const file_content = try std.Io.Dir.cwd().readFileAlloc(io, filepath, allocator, .unlimited);
             defer allocator.free(file_content);
 
             var out_rgba: [*c]f32 = undefined;

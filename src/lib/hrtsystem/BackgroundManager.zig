@@ -43,7 +43,7 @@ const FoldPipeline = engine.core.pipeline.Pipeline(.{
     }
 });
 
-pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
+pub fn create(vc: *const VulkanContext) !Self {
     const equal_area_sampler = try vc.device.createSampler(&.{
         .flags = .{},
         .mag_filter = .linear,
@@ -84,14 +84,14 @@ pub fn create(vc: *const VulkanContext, allocator: std.mem.Allocator) !Self {
     }, null);
     errdefer vc.device.destroySampler(equirectangular_sampler, null);
 
-    var equirectangular_to_equal_area_pipeline = try EquirectangularToEqualAreaPipeline.create(vc, allocator, .{}, .{ equirectangular_sampler }, .{});
+    var equirectangular_to_equal_area_pipeline = try EquirectangularToEqualAreaPipeline.create(vc, .{}, .{ equirectangular_sampler }, .{});
     errdefer equirectangular_to_equal_area_pipeline.destroy(vc);
 
-    var fold_pipeline = try FoldPipeline.create(vc, allocator, .{}, .{}, .{});
+    var fold_pipeline = try FoldPipeline.create(vc, .{}, .{}, .{});
     errdefer fold_pipeline.destroy(vc);
 
     return Self {
-        .backgrounds = .{},
+        .backgrounds = .empty,
         .equal_area_sampler = equal_area_sampler,
         .equirectangular_sampler = equirectangular_sampler,
         .equirectangular_to_equal_area_pipeline = equirectangular_to_equal_area_pipeline,

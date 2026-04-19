@@ -85,7 +85,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
 
     encoder.initializeImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent);
 
-    vc.device.updateDescriptorSets(1, (&vk.WriteDescriptorSet {
+    vc.device.updateDescriptorSets((&vk.WriteDescriptorSet {
         .dst_set = descriptor_set,
         .dst_binding = dst_binding,
         .dst_array_element = 0,
@@ -98,7 +98,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
         })[0..1],
         .p_buffer_info = undefined,
         .p_texel_buffer_view = undefined,
-    })[0..1], 0, null);
+    })[0..1], &.{});
 
     return image;
 }

@@ -23,7 +23,7 @@ const F32x2 = vector.Vec2(f32);
 const F32x3 = vector.Vec3(f32);
 const Mat4x3 = vector.Mat4x3(f32);
 
-const Allocator = std.heap.GeneralPurposeAllocator(.{});
+const Allocator = std.heap.DebugAllocator(.{});
 
 comptime {
     _ = HdMoonshine;
@@ -78,7 +78,7 @@ pub const HdMoonshine = struct {
 
     // as a temporary hack, while the resource system is not yet streamlined,
     // force it to all be singlethreaded
-    mutex: std.Thread.Mutex,
+    // mutex: std.Thread.Mutex,
 
     material_updates: std.AutoArrayHashMapUnmanaged(MaterialManager.Handle, MaterialUpdate),
 
@@ -129,26 +129,26 @@ pub const HdMoonshine = struct {
         self.camera = Camera {};
         errdefer self.camera.destroy(&self.vc, self.allocator.allocator());
 
-        self.background = Background.create(&self.vc, self.allocator.allocator()) catch return null;
+        self.background = Background.create(&self.vc) catch return null;
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         _ = self.background.addDefaultBackground(&self.vc, self.allocator.allocator(), &self.encoder) catch return null;
 
-        self.pipeline = Pipeline.create(&self.vc, self.allocator.allocator(), pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_spectra.descriptor_layout.handle }) catch return null;
+        self.pipeline = Pipeline.create(&self.vc, pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_spectra.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
 
-        self.output_buffers = .{};
-        self.mutex = .{};
+        self.output_buffers = .empty;
+        // self.mutex = .{};
         self.material_updates = .{};
-        self.power_updates = .{};
-        self.instance_to_mesh = .{};
+        self.power_updates = .empty;
+        self.instance_to_mesh = .empty;
         self.need_instance_update = false;
 
         return self;
     }
 
     pub export fn HdMoonshineRender(self: *HdMoonshine, sensor: Camera.SensorHandle, camera: Camera.CameraHandle) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         self.encoder.begin() catch return false;
 
         // update instance transforms
@@ -450,40 +450,40 @@ pub const HdMoonshine = struct {
     // }
 
     pub export fn HdMoonshineSetMaterialNormal(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
         if (!result.found_existing) result.value_ptr.* = .{};
         result.value_ptr.normal = image;
     }
 
     pub export fn HdMoonshineSetMaterialEmissive(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
         if (!result.found_existing) result.value_ptr.* = .{};
         result.value_ptr.emissive = image;
     }
 
     pub export fn HdMoonshineSetMaterialColor(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
         if (!result.found_existing) result.value_ptr.* = .{};
         result.value_ptr.color = image;
     }
 
     pub export fn HdMoonshineSetMaterialMetalness(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
         if (!result.found_existing) result.value_ptr.* = .{};
         result.value_ptr.metalness = image;
     }
 
     pub export fn HdMoonshineSetMaterialRoughness(self: *HdMoonshine, material: MaterialManager.Handle, image: TextureManager.Handle) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const result = self.material_updates.getOrPut(self.allocator.allocator(), material) catch unreachable; // TODO: error handling
         if (!result.found_existing) result.value_ptr.* = .{};
         result.value_ptr.roughness = image;
@@ -524,16 +524,16 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineSetInstanceVisibility(self: *HdMoonshine, handle: Accel.Handle, visible: bool) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         self.world.accel.instances_host.hostSlice()[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
         self.need_instance_update = true;
         self.camera.clearAllSensors();
     }
 
     pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat4x3) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         const old_transform: Mat4x3 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
         if (!std.math.approxEqRel(f32, @abs(old_transform.truncateCol().determinant()), @abs(new_transform.truncateCol().determinant()), 0.001)) {
             // should tell us if this matrix was scaled
@@ -550,8 +550,8 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         self.output_buffers.append(self.allocator.allocator(), core.mem.DownloadBuffer([4]f32).create(&self.vc, extent.width * extent.height, "output") catch unreachable) catch unreachable;
         return self.camera.appendSensor(&self.vc, self.allocator.allocator(), extent, engine.color.Chromaticities.bt709) catch unreachable; // TODO: error handling
     }
@@ -561,14 +561,14 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineCreateLens(self: *HdMoonshine, info: Camera.Camera) Camera.CameraHandle {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         return self.camera.appendCamera(self.allocator.allocator(), info, self.allocator.allocator().dupeZ(u8, "") catch unreachable) catch unreachable; // TODO: error handling
     }
 
     pub export fn HdMoonshineSetLens(self: *HdMoonshine, handle: Camera.CameraHandle, info: Camera.Camera) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        // self.mutex.lock();
+        // defer self.mutex.unlock();
         self.camera.cameras.items[handle][1] = info;
 
         // technically only need to clear sensors associated with this lens

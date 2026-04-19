@@ -32,15 +32,15 @@ global_volume: Material.Volume = .{},
 // glTF doesn't correspond very well to the internal data structures here so this is very inefficient
 // also very inefficient because it's written very inefficiently, can remove a lot of copying, but that's a problem for another time
 // inspection bool specifies whether some buffers should be created with the `transfer_src_flag` for inspection
-pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, gltf_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, chromaticities: engine.color.Chromaticities) !Self {
+pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.Io, encoder: *Encoder, gltf_filepath: []const u8, skybox_filepath: []const u8, extent: vk.Extent2D, chromaticities: engine.color.Chromaticities) !Self {
     var gltf = Gltf.init(allocator);
     defer gltf.deinit();
 
-    const buffer = try std.fs.cwd().readFileAllocOptions(
-        allocator,
+    const buffer = try std.Io.Dir.cwd().readFileAllocOptions(
+        io,
         gltf_filepath,
-        std.math.maxInt(usize),
-        null,
+        allocator,
+        .unlimited,
         .@"4",
         null
     );
@@ -98,13 +98,13 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, encod
         }
     }
 
-    var world = try World.fromGltf(vc, allocator, encoder, gltf, std.fs.path.dirname(gltf_filepath));
+    var world = try World.fromGltf(vc, allocator, io, encoder, gltf, std.fs.path.dirname(gltf_filepath));
     errdefer world.destroy(vc, allocator);
 
-    var background = try Background.create(vc, allocator);
+    var background = try Background.create(vc);
     errdefer background.destroy(vc, allocator);
     {
-        const skybox_image = try exr.helpers.Rgba2D.load(allocator, skybox_filepath);
+        const skybox_image = try exr.helpers.Rgba2D.load(allocator, io, skybox_filepath);
         defer allocator.free(skybox_image.asSlice());
         _ = try background.addBackground(vc, allocator, encoder, skybox_image, Mat3.fromRows(.{
             // glTF assets have +Y as up, but our environment maps have +Z as up. swap the two.

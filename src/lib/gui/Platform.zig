@@ -125,7 +125,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
         };
         const dynamic_states = [_]vk.DynamicState{ .viewport, .scissor };
         var pipeline: vk.Pipeline = undefined;
-        _ = try vc.device.createGraphicsPipelines(.null_handle, 1, (&vk.GraphicsPipelineCreateInfo{
+        _ = try vc.device.createGraphicsPipelines(.null_handle, (&vk.GraphicsPipelineCreateInfo{
             .stage_count = shader_stage_create_info.len,
             .p_stages = &shader_stage_create_info,
             .p_vertex_input_state = &vk.PipelineVertexInputStateCreateInfo{
@@ -318,9 +318,9 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
         })[0..1],
     });
     command_buffer.bindPipeline(.graphics, self.pipeline);
-    command_buffer.bindVertexBuffers(0, 1, (&vertex_buffer.handle)[0..1], (&@as(vk.DeviceSize, 0))[0..1]);
+    command_buffer.bindVertexBuffers(0, (&vertex_buffer.handle)[0..1], (&@as(vk.DeviceSize, 0))[0..1]);
     command_buffer.bindIndexBuffer(index_buffer.handle, 0, .uint16);
-    command_buffer.setViewport(0, 1, (&vk.Viewport{
+    command_buffer.setViewport(0, (&vk.Viewport{
         .x = 0,
         .y = 0,
         .width = @floatFromInt(extent.width),
@@ -339,14 +339,14 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
         };
         command_buffer.pushConstants(self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(f32) * 4, &std.mem.toBytes(.{ scale, translate }));
     }
-    command_buffer.bindDescriptorSets(.graphics, self.pipeline_layout, 0, 1, (&self.font_image_set)[0..1], 0, undefined);
+    command_buffer.bindDescriptorSets(.graphics, self.pipeline_layout, 0, (&self.font_image_set)[0..1], &.{});
 
     var global_idx_offset: u32 = 0;
     var global_vtx_offset: u32 = 0;
     for (draw_data.CmdLists.Data[0..@intCast(draw_data.CmdListsCount)]) |cmd_list| {
         for (cmd_list.*.CmdBuffer.Data[0..@intCast(cmd_list.*.CmdBuffer.Size)]) |cmd| {
             if (cmd.UserCallback) |_| @panic("todo");
-            command_buffer.setScissor(0, 1, (&vk.Rect2D{
+            command_buffer.setScissor(0, (&vk.Rect2D{
                 .offset = vk.Offset2D {
                     .x = @intFromFloat(cmd.ClipRect.x),
                     .y = @intFromFloat(cmd.ClipRect.y),
