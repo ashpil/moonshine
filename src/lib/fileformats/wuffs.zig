@@ -22,9 +22,15 @@ fn toWuffsSlice(comptime T: type, slice: []T) ToWuffsSliceType(T) {
     return f(slice.ptr, slice.len);
 }
 
-fn statusToError(status: c.wuffs_base__status) !void {
+pub const Error = error {
+    Wuffs,
+    Incomplete,
+    NotImage,
+} || std.mem.Allocator.Error;
+
+fn statusToError(status: c.wuffs_base__status) Error!void {
     // TODO: make this actually useful
-    if (!c.wuffs_base__status__is_ok(&status)) return error.WuffsError;
+    if (!c.wuffs_base__status__is_ok(&status)) return error.Wuffs;
 }
 
 const FourCC = enum(u32) {
@@ -131,12 +137,12 @@ const DecodableImageFileFormat = enum {
     webp,
 };
 
-fn guessFourCC(slice: []const u8) !FourCC {
+fn guessFourCC(slice: []const u8) Error!FourCC {
     const res = c.wuffs_base__magic_number_guess_fourcc(toWuffsSlice(u8, @constCast(slice)), true);
     if (res == -1) return error.Incomplete else return @enumFromInt(res);
 }
 
-fn createDecoder(format: DecodableImageFileFormat, allocator: std.mem.Allocator) !*c.wuffs_base__image_decoder {
+fn createDecoder(format: DecodableImageFileFormat, allocator: std.mem.Allocator) Error!*c.wuffs_base__image_decoder {
     inline for (comptime std.meta.tags(DecodableImageFileFormat)) |tag| {
         if (tag == format) {
             const size = @field(c, "sizeof__wuffs_" ++  @tagName(tag) ++ "__decoder")();
@@ -162,7 +168,7 @@ fn destroyDecoder(format: DecodableImageFileFormat, allocator: std.mem.Allocator
     } else unreachable;
 }
 
-pub fn load(allocator: std.mem.Allocator, buffer: []const u8) !std.meta.Tuple(&.{[]const u8, u32, u32}) {
+pub fn load(allocator: std.mem.Allocator, buffer: []const u8) Error!std.meta.Tuple(&.{[]const u8, u32, u32}) {
     var src = c.wuffs_base__ptr_u8__reader(@constCast(buffer.ptr), buffer.len, true);
     const format = (try guessFourCC(buffer)).toDecodableImageFileFormat() orelse return error.NotImage;
 
