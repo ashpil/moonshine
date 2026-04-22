@@ -80,8 +80,7 @@ const Image = struct {
     }
 };
 
-// TODO: consider just uploading all textures upfront rather than as part of this function
-fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.Io, encoder: *Encoder, gltf: Gltf, gltf_directory: ?[]const u8, gltf_material: Gltf.Material, textures: *TextureManager) !Material.Parameters {
+fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.Io, encoder: *Encoder, gltf: Gltf, gltf_material: Gltf.Material, image_futures: []std.Io.Future(Image.LoadError!Image), textures: *TextureManager) !Material.Parameters {
     // stuff that is in every material
     var material = blk: {
         var material: Material.Parameters = undefined;
@@ -106,12 +105,9 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         }
 
         material.normal = if (gltf_material.normal_texture) |texture| normal: {
-            const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
-
             // this gives us rgb --> need to convert to rg
             // theoretically gltf spec claims these values should already be linear
-            const img = try Image.load(allocator, io, image, gltf_directory);
-            defer img.free(allocator);
+            const img = try image_futures[gltf.data.textures[texture.index].source.?].await(io);
 
             const rg = try encoder.uploadAllocator().alloc(U8x2, img.asSlice().len);
             for (rg, img.asSlice()) |*dst, src| {
@@ -127,10 +123,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
         };
 
         material.emissive = if (gltf_material.emissive_texture) |texture| emissive: {
-            const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
-
-            const img = try Image.load(allocator, io, image, gltf_directory);
-            defer img.free(allocator);
+            const img = try image_futures[gltf.data.textures[texture.index].source.?].await(io);
 
             const rgba = try encoder.uploadAllocator().alloc(U8x4, img.asSlice().len);
             for (rgba, img.asSlice()) |*dst, src| {
@@ -166,10 +159,7 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     }
 
     standard_pbr.color = if (gltf_material.metallic_roughness.base_color_texture) |texture| blk: {
-        const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
-
-        const img = try Image.load(allocator, io, image, gltf_directory);
-        defer img.free(allocator);
+        const img = try image_futures[gltf.data.textures[texture.index].source.?].await(io);
         const rgba = try encoder.uploadAllocator().alloc(U8x4, img.asSlice().len);
         for (rgba, img.asSlice()) |*dst, src| {
             dst.* = src.append(0);
@@ -187,12 +177,9 @@ fn gltfMaterialToMaterial(vc: *const VulkanContext, allocator: std.mem.Allocator
     };
 
     if (gltf_material.metallic_roughness.metallic_roughness_texture) |texture| {
-        const image = gltf.data.images[gltf.data.textures[texture.index].source.?];
-
         // this gives us rgb --> only need g (roughness) and b (metalness) channels
         // theoretically gltf spec claims these values should already be linear
-        const img = try Image.load(allocator, io, image, gltf_directory);
-        defer img.free(allocator);
+        const img = try image_futures[gltf.data.textures[texture.index].source.?].await(io);
 
         const metalness = try encoder.uploadAllocator().alloc(u8, img.asSlice().len);
         const roughness = try encoder.uploadAllocator().alloc(u8, img.asSlice().len);
@@ -246,14 +233,21 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.
         var materials = try MaterialManager.createEmpty(vc);
         errdefer materials.destroy(vc, allocator);
 
+        const image_futures = try allocator.alloc(std.Io.Future(Image.LoadError!Image), gltf.data.textures.len);
+        defer allocator.free(image_futures);
+        defer for (image_futures) |*future| if (future.cancel(io)) |img| img.free(allocator) else |_| {};
+
+        for (gltf.data.images, image_futures) |image, *future| {
+            future.* = io.async(Image.load, .{ allocator, io, image, gltf_directory });
+        }
         for (gltf.data.materials) |material| {
-            const mat = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, gltf_directory, material, &materials.textures);
+            const mat = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, material, image_futures, &materials.textures);
             _ = try materials.upload(vc, allocator, encoder, mat);
         }
 
-        const default_material = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, gltf_directory, Gltf.Material {
+        const default_material = try gltfMaterialToMaterial(vc, allocator, io, encoder, gltf, Gltf.Material {
             .name = "default",
-        }, &materials.textures);
+        }, image_futures, &materials.textures);
         _ = try materials.upload(vc, allocator, encoder, default_material);
 
         break :blk materials;
