@@ -617,12 +617,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
 
     const module = step.createModule();
 
-    const build_wayland = b.option(bool, "wayland", "Support Wayland on Linux. (default: true)") orelse true;
-    const build_x11 = b.option(bool, "x11", "Support X11 on Linux. (default: true)") orelse true;
-
-    if (!build_wayland and !build_x11) return error.NoSelectedLinuxDisplayServerProtocol;
-
-    if (target.result.os.tag == .linux and build_wayland) {
+    if (target.result.os.tag == .linux) {
         const wayland_include_path = generateWaylandHeaders(b, glfw.path(""));
         module.addIncludePath(wayland_include_path);
     }
@@ -657,14 +652,6 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
             source_path ++ "linux_joystick.c",
         };
 
-        const x11_sources = [_][]const u8 {
-            source_path ++ "x11_init.c",
-            source_path ++ "x11_monitor.c",
-            source_path ++ "x11_window.c",
-            source_path ++ "xkb_unicode.c",
-            source_path ++ "glx_context.c",
-        };
-
         const wayland_sources = [_][]const u8 {
             source_path ++ "wl_init.c",
             source_path ++ "wl_monitor.c",
@@ -686,8 +673,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
 
         if (target.result.os.tag == .linux) {
             try sources.appendSlice(&linux_sources);
-            if (build_wayland) try sources.appendSlice(&wayland_sources);
-            if (build_x11) try sources.appendSlice(&x11_sources);
+            try sources.appendSlice(&wayland_sources);
         } else if (target.result.os.tag == .windows) try sources.appendSlice(&windows_sources);
 
         break :blk sources.items;
@@ -697,8 +683,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
         var flags = std.array_list.Managed([]const u8).init(b.allocator);
 
         if (target.result.os.tag == .linux) {
-            if (build_wayland) try flags.append("-D_GLFW_WAYLAND");
-            if (build_x11) try flags.append("-D_GLFW_X11");
+            try flags.append("-D_GLFW_WAYLAND");
         } else if (target.result.os.tag == .windows) try flags.append("-D_GLFW_WIN32");
 
         break :blk flags.items;
@@ -712,8 +697,7 @@ fn makeGlfwModule(b: *std.Build, target: std.Build.ResolvedTarget) !*std.Build.M
     module.addIncludePath(glfw.path("include"));
 
     if (target.result.os.tag == .linux) {
-        if (build_wayland) module.linkSystemLibrary("wayland-client", .{});
-        if (build_x11) module.linkSystemLibrary("X11", .{});
+        module.linkSystemLibrary("wayland-client", .{});
     } else if (target.result.os.tag == .windows) module.linkSystemLibrary("gdi32", .{});
 
     return module;

@@ -32,9 +32,7 @@
 * zig (see version [in build.zig.zon](build.zig.zon))
 * DirectXShaderCompiler
 * For the online (real-time) renderer:
-  * For Linux (Ubuntu, similar on others):
-      * For Wayland: `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
-      * For X11: `libxcursor-dev` `libxrandr-dev` `libxinerama-dev` `libxi-dev`
+  * For Linux (Ubuntu, similar on others): `wayland-protocols` `libwayland-dev` `libxkbcommon-dev`
 #### Run
 * A GPU supporting Vulkan ray tracing
 

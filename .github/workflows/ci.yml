@@ -17,7 +17,6 @@ jobs:
         sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-noble.list https://packages.lunarg.com/vulkan/lunarg-vulkan-noble.list
         sudo apt-get update
         sudo apt-get install wayland-protocols libwayland-dev libxkbcommon-dev # Wayland
-        sudo apt-get install libxcursor-dev libxrandr-dev libxinerama-dev libxi-dev # X11
         sudo apt-get install vulkan-validationlayers mesa-vulkan-drivers # Vulkan
 
     - name: Install DirectXShaderCompiler
