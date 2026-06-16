@@ -24,8 +24,8 @@
             .hash = "N-V-__8AAGQvSgBolU0qEYD33XFbXfbRvGHiLnb7r3pm_00w",
         },
         .tinyexr = .{
-            .url = "https://github.com/syoyo/tinyexr/archive/4946b5d92e13bcc8102ac2c8efd129596a90bf75.tar.gz",
-            .hash = "N-V-__8AAIdisgHfRde7QqgG-w8z6G6NvLaRVTxUVM02cKjk",
+            .url = "https://github.com/syoyo/tinyexr/archive/refs/tags/v3.0.0.tar.gz",
+            .hash = "N-V-__8AAPP89QGdHMek-RJKtxDKUr8z9OQu9v1LTLYyXs_M",
         },
         .zgltf = .{
             .url = "https://github.com/kooparse/zgltf/archive/ec52d477db346af99d4cdced4e35e67e1670023f.tar.gz",

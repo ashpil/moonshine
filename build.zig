@@ -536,26 +536,48 @@ fn makeDCImguiModule(b: *std.Build, glfw: *std.Build.Module, target: std.Build.R
 
 fn makeTinyExrModule(b: *std.Build, target: std.Build.ResolvedTarget) *std.Build.Module {
     const tinyexr = b.dependency("tinyexr", .{});
-    const miniz_path = "deps/miniz/";
+    const zstd_path = "deps/zstd/";
 
     const step = b.addTranslateC(.{
-        .root_source_file = tinyexr.path("tinyexr.h"),
+        .root_source_file = tinyexr.path("include/exr.h"),
         .optimize = .ReleaseFast,
         .target = target,
     });
 
     const module = step.createModule();
-    module.link_libcpp = true;
-    module.sanitize_c = .off; // fails :( https://github.com/syoyo/tinyexr/issues/187
     module.addCSourceFiles(.{
         .root = tinyexr.path(""),
         .files = &.{
-            "tinyexr.cc",
-            miniz_path ++ "miniz.c",
+            "src/exr_attr.c",
+            "src/exr_b44.c",
+            "src/exr_codec.c",
+            "src/exr_core.c",
+            "src/exr_cpu.c",
+            "src/exr_deep.c",
+            "src/exr_deflate.c",
+            "src/exr_fpnge.c",
+            "src/exr_freestanding.c",
+            "src/exr_half.c",
+            "src/exr_jph.c",
+            "src/exr_jph_simd.c",
+            "src/exr_libdeflate.c",
+            "src/exr_mip.c",
+            "src/exr_piz.c",
+            "src/exr_pxr24.c",
+            "src/exr_reader.c",
+            "src/exr_rle.c",
+            "src/exr_simd_neon.c",
+            "src/exr_simd_x86.c",
+            "src/exr_stdio.c",
+            "src/exr_thread.c",
+            "src/exr_writer.c",
+            "src/exr_zip.c",
+            "src/exr_zstd.c",
+            zstd_path ++ "tinyexr_zstd.c",
         },
     });
-    module.addIncludePath(tinyexr.path(""));
-    module.addIncludePath(tinyexr.path(miniz_path));
+    module.addIncludePath(tinyexr.path("include/"));
+    module.addIncludePath(tinyexr.path(zstd_path));
 
     return module;
 }
