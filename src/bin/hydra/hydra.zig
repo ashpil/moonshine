@@ -391,7 +391,6 @@ pub const HdMoonshine = struct {
     //     defer self.mutex.unlock();
     //     const old_pipeline = self.pipeline.recreate(&self.vc, self.allocator.allocator(), &self.encoder, pipeline_settings) catch return false;
     //     self.vc.device.destroyPipeline(old_pipeline, null);
-    //     self.camera.clearAllSensors();
     //     return true;
     // }
 
@@ -518,7 +517,6 @@ pub const HdMoonshine = struct {
     //             }
     //         },
     //     };
-    //     self.camera.clearAllSensors();
     //     self.power_updates.append(self.allocator.allocator(), PowerUpdate {
     //         .instance = self.world.accel.instance_count,
     //         .mesh = mesh,
@@ -536,7 +534,6 @@ pub const HdMoonshine = struct {
         // defer self.mutex.unlock();
         self.world.accel.instances_host.hostSlice()[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
         self.need_instance_update = true;
-        self.camera.clearAllSensors();
     }
 
     pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat4x3) void {
@@ -554,7 +551,6 @@ pub const HdMoonshine = struct {
         }
         self.world.accel.instances_host.hostSlice()[handle].transform = @bitCast(new_transform);
         self.need_instance_update = true;
-        self.camera.clearAllSensors();
     }
 
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {
@@ -578,10 +574,6 @@ pub const HdMoonshine = struct {
         // self.mutex.lock();
         // defer self.mutex.unlock();
         self.camera.cameras.items[handle][1] = info;
-
-        // technically only need to clear sensors associated with this lens
-        // but no easy mechanism to do this currently
-        self.camera.clearAllSensors();
     }
 
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {

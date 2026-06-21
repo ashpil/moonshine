@@ -57,12 +57,6 @@ pub fn appendCamera(self: *Self, allocator: std.mem.Allocator, camera: Camera, n
     return @intCast(self.cameras.items.len - 1);
 }
 
-pub fn clearAllSensors(self: *Self) void {
-    for (self.sensors.items) |*sensor| {
-        sensor.clear();
-    }
-}
-
 pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator) void {
     for (self.sensors.items) |*sensor| {
         sensor.destroy(vc);
