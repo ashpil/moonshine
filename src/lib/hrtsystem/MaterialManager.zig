@@ -303,9 +303,7 @@ pub const TextureManager = struct {
 
     pub const Handle = u32;
 
-    pub fn upload(self: *TextureManager, vc: *const VulkanContext, comptime T: type, allocator: std.mem.Allocator, encoder: *Encoder, src: core.mem.BufferSlice(T), extent: vk.Extent2D, name: [:0]const u8) !TextureManager.Handle {
-        const format = comptime vk_helpers.typeToFormat(T);
-
+    pub fn upload(self: *TextureManager, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, src: core.mem.BufferSlice(u8), extent: vk.Extent2D, format: vk.Format, name: [:0]const u8) !TextureManager.Handle {
         // > If dstImage does not have either a depth/stencil format or a multi-planar format,
         // > then for each element of pRegions, bufferOffset must be a multiple of the texel block size
         // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/vkCmdCopyBufferToImage.html
@@ -317,7 +315,7 @@ pub const TextureManager = struct {
         const image = try Image.create(vc, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, false, name);
         try self.data.append(allocator, image);
 
-        encoder.initializeImage(T, src, image.handle, extent);
+        encoder.initializeImage(src, image.handle, extent);
 
         vc.device.updateDescriptorSets((&vk.WriteDescriptorSet {
             .dst_set = self.descriptor_set,

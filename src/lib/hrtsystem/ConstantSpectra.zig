@@ -83,7 +83,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
         datum_staging.* = @floatCast(datum * spectrum_scale);
     }
 
-    encoder.initializeImage(f32, encoder.upload_allocator.getBufferSlice(data_staging), image.handle, extent);
+    encoder.initializeImage(encoder.upload_allocator.getBufferSlice(data_staging).asBytes(), image.handle, extent);
 
     vc.device.updateDescriptorSets((&vk.WriteDescriptorSet {
         .dst_set = descriptor_set,

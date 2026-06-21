@@ -39,8 +39,8 @@ pub fn texelBlockSize(format: vk.Format) vk.DeviceSize {
     return switch (format) {
         .r8_unorm => 1,
         .r8g8_unorm => 2,
-        .r8g8b8a8_srgb, .r32_sfloat => 4,
-        .r32g32_sfloat => 8,
+        .r8g8b8a8_srgb, .r8g8b8a8_unorm, .r32_sfloat => 4,
+        .r32g32_sfloat, .r16g16b16a16_sfloat  => 8,
         .r32g32b32a32_sfloat => 16,
         else => unreachable, // TODO
     };

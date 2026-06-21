@@ -207,7 +207,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
 
         const img_data = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)];
         const staging_data = try encoder.uploadAllocator().dupe(u8, img_data);
-        encoder.initializeImage(u8, encoder.upload_allocator.getBufferSlice(staging_data), image.handle, tex_data[1]);
+        encoder.initializeImage(encoder.upload_allocator.getBufferSlice(staging_data), image.handle, tex_data[1]);
         break :blk image;
     };
 

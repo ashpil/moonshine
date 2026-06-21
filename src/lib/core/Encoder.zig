@@ -114,7 +114,7 @@ pub fn submitAndIdleUntilDone(self: *Self, vc: *const VulkanContext) !void {
     self.clearResources(vc);
 }
 
-pub fn initializeImage(self: Self, comptime T: type, src_data: core.mem.BufferSlice(T), dst_image: vk.Image, dst_image_extent: vk.Extent2D) void {
+pub fn initializeImage(self: Self, src_data: core.mem.BufferSlice(u8), dst_image: vk.Image, dst_image_extent: vk.Extent2D) void {
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
