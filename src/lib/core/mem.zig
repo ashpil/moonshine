@@ -169,6 +169,15 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
         pub fn isNull(self: Self) bool {
             return self.handle == .null_handle;
         }
+
+        pub fn asBytes(self: Self) Buffer(u8, memory_properties, usage) {
+            return Buffer(u8, memory_properties, usage) {
+                .handle = self.handle,
+                .memory = self.memory,
+                .mapped = if (host_visible) @ptrCast(self.mapped) else {},
+                .len = @sizeOf(T) * self.len,
+            };
+        }
     };
 }
 

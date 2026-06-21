@@ -530,27 +530,33 @@ pub const HdMoonshine = struct {
     }
 
     pub export fn HdMoonshineSetInstanceVisibility(self: *HdMoonshine, handle: Accel.Handle, visible: bool) void {
+        _ = handle;
+        _ = visible;
+        _ = self;
         // self.mutex.lock();
         // defer self.mutex.unlock();
-        self.world.accel.instances_host.hostSlice()[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
-        self.need_instance_update = true;
+        //self.world.accel.instances_host.hostSlice()[handle].instance_custom_index_and_mask.mask = if (visible) 0xFF else 0x00;
+        //self.need_instance_update = true;
     }
 
     pub export fn HdMoonshineSetInstanceTransform(self: *HdMoonshine, handle: Accel.Handle, new_transform: Mat4x3) void {
+        _ = self;
+        _ = handle;
+        _ = new_transform;
         // self.mutex.lock();
         // defer self.mutex.unlock();
-        const old_transform: Mat4x3 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
-        if (!std.math.approxEqRel(f32, @abs(old_transform.truncateCol().determinant()), @abs(new_transform.truncateCol().determinant()), 0.001)) {
-            // should tell us if this matrix was scaled
-            // though may run into precision issues and rotation might seem like a scale
-            // TODO: this could theoretically slip away if an object is veeeerrry slowly scaled
-            self.power_updates.append(self.allocator.allocator(), PowerUpdate {
-                .instance = handle,
-                .mesh = self.instance_to_mesh.items[handle],
-            }) catch unreachable;
-        }
-        self.world.accel.instances_host.hostSlice()[handle].transform = @bitCast(new_transform);
-        self.need_instance_update = true;
+        //const old_transform: Mat4x3 = @bitCast(self.world.accel.instances_host.hostSlice()[handle].transform);
+        //if (!std.math.approxEqRel(f32, @abs(old_transform.truncateCol().determinant()), @abs(new_transform.truncateCol().determinant()), 0.001)) {
+        //    // should tell us if this matrix was scaled
+        //    // though may run into precision issues and rotation might seem like a scale
+        //    // TODO: this could theoretically slip away if an object is veeeerrry slowly scaled
+        //    self.power_updates.append(self.allocator.allocator(), PowerUpdate {
+        //        .instance = handle,
+        //        .mesh = self.instance_to_mesh.items[handle],
+        //    }) catch unreachable;
+        //}
+        //self.world.accel.instances_host.hostSlice()[handle].transform = @bitCast(new_transform);
+        //self.need_instance_update = true;
     }
 
     pub export fn HdMoonshineCreateSensor(self: *HdMoonshine, extent: vk.Extent2D) Camera.SensorHandle {

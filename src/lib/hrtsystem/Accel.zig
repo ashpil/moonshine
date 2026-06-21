@@ -61,16 +61,14 @@ instance_power_fold_pipeline: InstancePowerFoldPipeline,
 instance_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 instance_count: u32 = 0,
-instances_device: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
-instances_host: core.mem.UploadBuffer(vk.AccelerationStructureInstanceKHR),
+instances: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
 instances_address: vk.DeviceAddress,
 
-// keep track of inverse transform -- non-inverse we can get from instances_device
+// keep track of inverse transform -- non-inverse we can get from instances
 // transforms provided by shader only in hit/intersection shaders but we need them
 // in raygen
 // ray queries provide them in any shader which would be a benefit of using them
-world_to_instance_device: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
-world_to_instance_host: core.mem.UploadBuffer(Mat4x3),
+world_to_instance: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR = .null_handle,
@@ -97,26 +95,20 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
     const instance_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, instance_powers_element_count, "instance powers");
     errdefer instance_powers.destroy(vc);
 
-    const instances_device = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }).create(vc, max_instances, "instances");
-    errdefer instances_device.destroy(vc);
-    const instances_host = try core.mem.UploadBuffer(vk.AccelerationStructureInstanceKHR).create(vc, max_instances, "instances");
-    errdefer instances_host.destroy(vc);
-    const instances_address = instances_device.getAddress(vc);
+    const instances = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }).create(vc, max_instances, "instances");
+    errdefer instances.destroy(vc);
+    const instances_address = instances.getAddress(vc);
 
-    const world_to_instance_device = try core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_instances, "world to instances");
-    errdefer world_to_instance_device.destroy(vc);
-    const world_to_instance_host = try core.mem.UploadBuffer(Mat4x3).create(vc, max_instances, "world to instances");
-    errdefer world_to_instance_host.destroy(vc);
+    const world_to_instance = try core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_instances, "world to instances");
+    errdefer world_to_instance.destroy(vc);
 
     return Self {
         .instance_power_pipeline = instance_power_pipeline,
         .instance_power_fold_pipeline = instance_power_fold_pipeline,
         .instance_powers = instance_powers,
-        .instances_device = instances_device,
-        .instances_host = instances_host,
+        .instances = instances,
         .instances_address = instances_address,
-        .world_to_instance_device = world_to_instance_device,
-        .world_to_instance_host = world_to_instance_host,
+        .world_to_instance = world_to_instance,
     };
 }
 
@@ -144,14 +136,13 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
             }),
         };
 
-        self.instances_host.hostSlice()[self.instance_count] = vk_instance;
-        self.instances_device.uploadFrom(encoder, self.instance_count, self.instances_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
+        self.instances.updateFrom(encoder, self.instance_count, &.{ vk_instance });
     }
 
     // upload world_to_instance matrix
     {
-        self.world_to_instance_host.hostSlice()[self.instance_count] = instance.transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
-        self.world_to_instance_device.uploadFrom(encoder, self.instance_count, self.world_to_instance_host.deviceSlice().slice(self.instance_count, self.instance_count + 1));
+        const transform = instance.transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
+        self.world_to_instance.updateFrom(encoder, self.instance_count, &.{ transform });
     }
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
@@ -160,14 +151,14 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
             .src_access_mask = .{ .memory_write_bit = true },
             .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .dst_access_mask = .{ .memory_read_bit = true },
-            .buffer = self.instances_device.handle,
+            .buffer = self.instances.handle,
         },
         Encoder.BufferBarrier {
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .memory_write_bit = true },
             .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
             .dst_access_mask = .{ .memory_read_bit = true, .shader_read_bit = true },
-            .buffer = self.world_to_instance_device.handle,
+            .buffer = self.world_to_instance.handle,
         },
         Encoder.BufferBarrier {
             .src_stage_mask = .{ .all_transfer_bit = true },
@@ -237,8 +228,8 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 
         self.instance_power_pipeline.recordBindPipeline(encoder.buffer);
         self.instance_power_pipeline.recordPushDescriptors(encoder.buffer, .{
-            .instances = self.instances_device.deviceSlice(),
-            .world_to_instances = self.world_to_instance_device.deviceSlice(),
+            .instances = self.instances.deviceSlice(),
+            .world_to_instances = self.world_to_instance.deviceSlice(),
             .models = model_manager.models_device.deviceSlice(),
             .dst_power = self.instance_powers.deviceSlice(),
         });
@@ -278,20 +269,23 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 
 // probably bad idea if you're changing many
 // must recordRebuild to see changes
-pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, instance_idx: u32, transform: Mat4x3, thin: bool, priority: u4, visible: bool) void {
-    self.instances_host.hostSlice()[instance_idx].instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
-    self.instances_host.hostSlice()[instance_idx].transform = @bitCast(transform);
-    self.world_to_instance_host.hostSlice()[instance_idx] = @bitCast(transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow());
-    self.instances_device.uploadFrom(encoder, instance_idx, self.instances_host.deviceSlice().slice(instance_idx, instance_idx + 1));
-    self.world_to_instance_device.uploadFrom(encoder, instance_idx, self.world_to_instance_host.deviceSlice().slice(instance_idx, instance_idx + 1));
+pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, handle: Handle, instance: vk.AccelerationStructureInstanceKHR) void {
+    self.instances.updateFrom(encoder, handle, &.{ instance });
+
+    {
+        const transform: Mat4x3 = @bitCast(instance.transform);
+        const inverse = transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
+        self.world_to_instance.updateFrom(encoder, handle, &.{ inverse });
+    }
+
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
         .{
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
             .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
-            .buffer = self.instances_device.handle,
-            .offset = instance_idx * @sizeOf(vk.AccelerationStructureInstanceKHR),
+            .buffer = self.instances.handle,
+            .offset = handle * @sizeOf(vk.AccelerationStructureInstanceKHR),
             .size = @sizeOf(vk.AccelerationStructureInstanceKHR),
         },
         .{
@@ -299,9 +293,9 @@ pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, inst
             .src_access_mask = .{ .transfer_write_bit = true },
             .dst_stage_mask = .{ .compute_shader_bit = true },
             .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .buffer = self.world_to_instance_device.handle,
-            .offset = instance_idx * @sizeOf(vk.TransformMatrixKHR),
-            .size = @sizeOf(vk.TransformMatrixKHR),
+            .buffer = self.world_to_instance.handle,
+            .offset = handle * @sizeOf(Mat4x3),
+            .size = @sizeOf(Mat4x3),
         },
     });
 }
@@ -359,10 +353,8 @@ pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
-    self.instances_device.destroy(vc);
-    self.instances_host.destroy(vc);
-    self.world_to_instance_device.destroy(vc);
-    self.world_to_instance_host.destroy(vc);
+    self.instances.destroy(vc);
+    self.world_to_instance.destroy(vc);
 
     self.instance_powers.destroy(vc);
 

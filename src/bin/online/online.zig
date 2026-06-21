@@ -327,7 +327,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                     try imgui.textFmt("Instance index: {d}", .{object.instance_index});
                     try imgui.textFmt("Geometry index: {d}", .{object.geometry_index});
                     // TODO: all of the copying below should be done once, on object pick
-                    const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances_device.handle, object.instance_index);
+                    const instance = try sync_copier.copyBufferItem(&context, vk.AccelerationStructureInstanceKHR, scene.world.accel.instances.handle, object.instance_index);
                     const model = try sync_copier.copyBufferItem(&context, ModelManager.Model.Device, scene.world.models.models_device.handle, instance.instance_custom_index_and_mask.instance_custom_index);
                     const accel_geometry_index = model.geometry_offset + object.geometry_index;
                     var geometry = try sync_copier.copyBufferItem(&context, ModelManager.Geometry.Device, scene.world.models.geometries_device.handle, accel_geometry_index);
@@ -379,7 +379,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                         imgui.pushItemWidth(imgui.getFontSize() * -6);
                         changed = imgui.dragMatrix(F32x4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                         if (changed) {
-                            scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, transform, thin, @intCast(priority), visible);
+                            var updated_instance = instance;
+                            updated_instance.transform = @bitCast(transform);
+                            updated_instance.instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
+                            scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, updated_instance);
                             try scene.world.accel.recordRebuild(frame_encoder.buffer);
                             scene.camera.sensors.items[active_sensor].clear();
                         }

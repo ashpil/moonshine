@@ -125,8 +125,8 @@ pub fn pushDescriptors(self: *const Self, camera: u32, sensor: u32, background: 
     _ = camera;
     return engine.hrtsystem.pipeline.Render.PushSetBindings {
         .tlas = self.world.accel.tlas_handle,
-        .instances = self.world.accel.instances_device.deviceSlice(),
-        .world_to_instances = self.world.accel.world_to_instance_device.deviceSlice(),
+        .instances = self.world.accel.instances.deviceSlice(),
+        .world_to_instances = self.world.accel.world_to_instance.deviceSlice(),
         .meshes = self.world.meshes.device.deviceSlice(),
         .geometries = self.world.models.geometries_device.deviceSlice(),
         .models = self.world.models.models_device.deviceSlice(),
