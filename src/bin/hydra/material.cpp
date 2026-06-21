@@ -22,6 +22,9 @@ TF_DEFINE_PRIVATE_TOKENS(_tokens,
     (metallic)
     (ior)
     (useSpecularWorkflow)
+    (opacity)
+    (opacityThreshold)
+    (opacityMode)
     (sourceColorSpace)
     (raw)
     (sRGB)
@@ -127,18 +130,35 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::st
             .width = static_cast<uint32_t>(spec.width),
             .height = static_cast<uint32_t>(spec.height),
         };
-        return HdMoonshineCreateRawTexture(msne, data.get(), extent, msne_format.value(), (debug_name + " texture").c_str());
+        return HdMoonshineCreateTexture(msne, data.get(), extent, msne_format.value(), (debug_name + " texture").c_str());
     } else if (value.IsHolding<GfVec3f>()) {
         GfVec3f vec = value.Get<GfVec3f>();
         if (dst == _tokens->normal) {
             vec = (vec + GfVec3f(1)) / 2; // convert to [0-1]
-            return HdMoonshineCreateSolidTexture2(msne, F32x2 { .x = vec[0], .y = vec[1] }, (debug_name + " f32x2").c_str());
+            float val[] = { vec[0], vec[1] };
+            uint8_t* bytes = reinterpret_cast<uint8_t*>(&val);
+            Extent2D extent = Extent2D {
+                .width = 1,
+                .height = 1,
+            };
+            return HdMoonshineCreateTexture(msne, bytes, extent, TextureFormat::f32x2, (debug_name + " float").c_str());
         } else {
-            return HdMoonshineCreateSolidTexture3(msne, F32x3 { .x = vec[0], .y = vec[1], .z = vec[2] }, (debug_name + " f32x3").c_str());
+            float val[] = { vec[0], vec[1], vec[2], 1.0 };
+            uint8_t* bytes = reinterpret_cast<uint8_t*>(&val);
+            Extent2D extent = Extent2D {
+                .width = 1,
+                .height = 1,
+            };
+            return HdMoonshineCreateTexture(msne, bytes, extent, TextureFormat::f32x4, (debug_name + " float").c_str());
         }
     } else if (value.IsHolding<float>()) {
         float val = value.Get<float>();
-        return HdMoonshineCreateSolidTexture1(msne, val, (debug_name + " float").c_str());
+        uint8_t* bytes = reinterpret_cast<uint8_t*>(&val);
+        Extent2D extent = Extent2D {
+            .width = 1,
+            .height = 1,
+        };
+        return HdMoonshineCreateTexture(msne, bytes, extent, TextureFormat::f32x1, (debug_name + " float").c_str());
     } else {
         TF_CODING_ERROR("unknown value type %s", value.GetTypeName().c_str());
         return std::nullopt;
@@ -151,8 +171,11 @@ bool SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfT
         HdMoonshineSetMaterialIOR(msne, handle, ior);
         return true;
     } else {
-        // silently fail on unsupported
-        if (name == _tokens->useSpecularWorkflow) {
+        // silently skip unsupported
+        if (name == _tokens->useSpecularWorkflow ||
+            name == _tokens->opacity ||
+            name == _tokens->opacityThreshold ||
+            name == _tokens->opacityMode) {
             return true;
         }
 
@@ -252,6 +275,7 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
     if (!HdChangeTracker::IsClean(*dirtyBits)) {
         TF_CODING_ERROR("Dirty bits %s of %s were ignored!", HdChangeTracker::StringifyDirtyBits(*dirtyBits).c_str(), id.GetText());
     }
+    *dirtyBits = HdChangeTracker::Clean;
 }
 
 PXR_NAMESPACE_CLOSE_SCOPE

@@ -46,6 +46,9 @@ HdCommandDescriptors HdMoonshineRenderDelegate::GetCommandDescriptors() const {
 bool HdMoonshineRenderDelegate::InvokeCommand(const TfToken &command, const HdCommandArgs &args) {
     if (command == _tokens->rebuildPipeline) {
         HdMoonshineRebuildPipeline(_moonshine);
+        // the new pipeline produces different samples; bump the version so the render pass clears
+        // accumulation on its next execute
+        _pipelineVersion++;
         return true;
     } else {
         TF_CODING_ERROR("Unknown command %s!", command.GetText());
@@ -55,8 +58,35 @@ bool HdMoonshineRenderDelegate::InvokeCommand(const TfToken &command, const HdCo
 
 void HdMoonshineRenderDelegate::_Initialize() {
     _moonshine = HdMoonshineCreate();
+    if (!_moonshine) {
+        TF_FATAL_ERROR("HdMoonshineCreate() failed; Moonshine render delegate could not be initialized");
+    }
     _resourceRegistry = std::make_shared<HdResourceRegistry>();
     _renderParam = std::make_unique<HdMoonshineRenderParam>(_moonshine);
+
+    _settingDescriptors.push_back({ "Samples To Convergence",
+        HdRenderSettingsTokens->convergedSamplesPerPixel,
+        VtValue(0) });
+    _PopulateDefaultSettings(_settingDescriptors);
+}
+
+void HdMoonshineRenderDelegate::SetRenderSetting(TfToken const& key, VtValue const& value) {
+    // an authored sample count wins permanently -- never seed a mode default over it
+    if (key == HdRenderSettingsTokens->convergedSamplesPerPixel) {
+        _convergedSamplesAuthored = true;
+    }
+
+    HdRenderDelegate::SetRenderSetting(key, value);
+
+    if (key == HdRenderSettingsTokens->enableInteractive && !_convergedSamplesAuthored) {
+        const bool interactive = value.IsHolding<bool>() ? value.UncheckedGet<bool>() : true;
+        HdRenderDelegate::SetRenderSetting(HdRenderSettingsTokens->convergedSamplesPerPixel,
+            VtValue(interactive ? 0 : kDefaultSamplesToConvergence));
+    }
+}
+
+HdRenderSettingDescriptorList HdMoonshineRenderDelegate::GetRenderSettingDescriptors() const {
+    return _settingDescriptors;
 }
 
 HdMoonshineRenderDelegate::~HdMoonshineRenderDelegate() {
@@ -165,7 +195,7 @@ HdRenderParam* HdMoonshineRenderDelegate::GetRenderParam() const {
 
 HdAovDescriptor HdMoonshineRenderDelegate::GetDefaultAovDescriptor(TfToken const& name) const {
     if (name == HdAovTokens->color) {
-        return HdAovDescriptor(HdFormatFloat32Vec3, false, VtValue(GfVec4f(0.0f)));
+        return HdAovDescriptor(HdFormatFloat32Vec4, false, VtValue(GfVec4f(0.0f)));
     } else {
         return HdAovDescriptor();
     }

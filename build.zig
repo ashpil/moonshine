@@ -159,15 +159,16 @@ pub fn build(b: *std.Build) !void {
             }),
         });
         lib.root_module.addCSourceFiles(.{
+           .root = b.path("src/bin/hydra"),
            .files = &.{
-                "hydra/rendererPlugin.cpp",
-                "hydra/renderDelegate.cpp",
-                "hydra/renderPass.cpp",
-                "hydra/renderBuffer.cpp",
-                "hydra/mesh.cpp",
-                "hydra/camera.cpp",
-                "hydra/instancer.cpp",
-                "hydra/material.cpp",
+                "rendererPlugin.cpp",
+                "renderDelegate.cpp",
+                "renderPass.cpp",
+                "renderBuffer.cpp",
+                "mesh.cpp",
+                "camera.cpp",
+                "instancer.cpp",
+                "material.cpp",
             },
             .flags = &.{
                 "-DTBB_USE_DEBUG=0",
@@ -175,25 +176,8 @@ pub fn build(b: *std.Build) !void {
             }
         });
         lib.root_module.linkLibrary(zig_lib);
-
-        // options
-        const usd_dir = b.option([]const u8, "usd-path", "Where your USD SDK is installed.") orelse "../USD";
-        const tbb_dir = b.option([]const u8, "tbb-path", "Where your TBB is installed.");
-        const usd_monolithic = b.option(bool, "usd-monolithic", "Whether USD was built monolithically.") orelse false;
-
-        // link against usd produced libraries
-        lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "lib/" }) });
-        if (usd_monolithic) {
-            lib.root_module.linkSystemLibrary("usd_ms", .{});
-        } else {
-            lib.root_module.linkSystemLibrary("usd_hd", .{});
-            lib.root_module.linkSystemLibrary("usd_sdr", .{});
-            lib.root_module.linkSystemLibrary("usd_hio", .{});
-        }
-
-        // include headers necessary for usd
-        lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ usd_dir, "include/" }) });
-        if (tbb_dir) |dir| lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ dir, "include/" }) });
+        lib.root_module.linkSystemLibrary("usd_ms", .{});
+        lib.root_module.link_libcpp = false;
 
         // might need python headers if USD built with python support
         {
@@ -214,15 +198,12 @@ pub fn build(b: *std.Build) !void {
             // need stdlibc++ include directories
             // i've had to do some arcane magic to figure out what to do here,
             // and i'm not even convinced it'll work on any system other than mine
-            var first = true;
             var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
             while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
-                if (first) {
-                    lib.root_module.addIncludePath(.{ .cwd_relative = include_dir[1..] });
-                } else {
-                    lib.root_module.addSystemIncludePath(.{ .cwd_relative = include_dir[1..] });
+                const dir = include_dir[1..];
+                if (std.mem.indexOf(u8, dir, "/include/c++") != null) {
+                    lib.root_module.addIncludePath(.{ .cwd_relative = dir });
                 }
-                first = false;
             };
         }
 

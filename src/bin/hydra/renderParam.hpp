@@ -10,11 +10,20 @@ class HdMoonshineRenderParam final : public HdRenderParam
 {
 public:
     HdMoonshineRenderParam(HdMoonshine* moonshine) : _moonshine(moonshine) {
-        _black3 = HdMoonshineCreateSolidTexture3(_moonshine, F32x3 { .x = 0.0f, .y = 0.0f, .z = 0.0f }, "black3");
-        _black1 = HdMoonshineCreateSolidTexture1(_moonshine, 0.0, "black1");
-        _upNormal = HdMoonshineCreateSolidTexture2(_moonshine, F32x2 { .x = 0.5f, .y = 0.5f }, "up normal");
-        _grey3 = HdMoonshineCreateSolidTexture3(_moonshine, F32x3 { .x = 0.5f, .y = 0.5f, .z = 0.5f }, "grey3");
-        _white1 = HdMoonshineCreateSolidTexture1(_moonshine, 1.0, "white1");
+        Extent2D extent = Extent2D {
+            .width = 1,
+            .height = 1,
+        };
+
+        uint8_t black[] = { 0, 0, 0, 255 };
+        uint8_t grey[] = { 128, 128, 128, 255 };
+        uint8_t white[] = { 255, 255, 255, 255 };
+
+        _black3 = HdMoonshineCreateTexture(_moonshine, black, extent, TextureFormat::u8x4, "black3");
+        _black1 = HdMoonshineCreateTexture(_moonshine, black, extent, TextureFormat::u8x1, "black1");
+        _upNormal = HdMoonshineCreateTexture(_moonshine, grey, extent, TextureFormat::u8x2, "up normal");
+        _grey3 = HdMoonshineCreateTexture(_moonshine, grey, extent, TextureFormat::u8x4, "grey3");
+        _white1 = HdMoonshineCreateTexture(_moonshine, white, extent, TextureFormat::u8x1, "white1");
         _defaultMaterial = HdMoonshineCreateMaterial(_moonshine, Material {
             .normal = _upNormal,
             .emissive = _black3,

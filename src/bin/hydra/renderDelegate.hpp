@@ -12,6 +12,8 @@
 
 PXR_NAMESPACE_OPEN_SCOPE
 
+inline constexpr int kDefaultSamplesToConvergence = 16;
+
 class HdMoonshineRenderDelegate final : public HdRenderDelegate
 {
 public:
@@ -50,11 +52,22 @@ public:
     HdRenderParam *GetRenderParam() const override;
 
     HdAovDescriptor GetDefaultAovDescriptor(TfToken const& name) const override;
+
+    HdRenderSettingDescriptorList GetRenderSettingDescriptors() const override;
+
+    void SetRenderSetting(TfToken const& key, VtValue const& value) override;
+
     HdMoonshine* _moonshine;
+
+    unsigned int _pipelineVersion = 0;
 private:
     static const TfTokenVector SUPPORTED_RPRIM_TYPES;
     static const TfTokenVector SUPPORTED_SPRIM_TYPES;
     static const TfTokenVector SUPPORTED_BPRIM_TYPES;
+
+    HdRenderSettingDescriptorList _settingDescriptors;
+
+    bool _convergedSamplesAuthored = false;
 
     void _Initialize();
 

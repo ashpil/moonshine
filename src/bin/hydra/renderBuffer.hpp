@@ -33,12 +33,15 @@ public:
     }
 
     bool IsConverged() const override {
-        return false;
+        return _targetSamples != 0 &&
+            HdMoonshineGetSensorSampleCount(_renderDelegate->_moonshine, _sensor) >= _targetSamples;
     }
 
     void Resolve() override;
 
     SensorHandle _sensor;
+    // convergence target (samples-per-pixel) set by the render pass each _Execute; 0 = unbounded
+    unsigned int _targetSamples = 0;
 private:
     void _Deallocate() override;
 

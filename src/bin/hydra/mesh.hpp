@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <optional>
 
 #include <pxr/pxr.h>
 #include <pxr/imaging/hd/mesh.h>

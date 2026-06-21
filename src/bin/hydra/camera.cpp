@@ -15,27 +15,29 @@ void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* rend
     HdCamera::Sync(sceneDelegate, renderParam, dirtyBits);
     HdMoonshine* msne = static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine;
 
-    GfMatrix4f transform = GfMatrix4f(GetTransform());
-    GfVec3f origin = transform.Transform(GfVec3f(0.0, 0.0, 0.0));
-    GfVec3f forward = transform.TransformDir(GfVec3f(0.0, 0.0, -1.0));
-    GfVec3f up = transform.TransformDir(GfVec3f(0.0, -1.0, 0.0)); // insert negation here as we want to flip resultant image
+    static const GfMatrix4f usdCameraToMoonshineCamera(
+        0,  0, -1, 0,   // moonshine X = -USD Z
+        1,  0,  0, 0,   // moonshine Y =  USD X
+        0,  1,  0, 0,   // moonshine Z =  USD Y (flips image to USD's bottom-up origin)
+        0,  0,  0, 1);  // origin passthrough
+    GfMatrix4f transform = usdCameraToMoonshineCamera * GfMatrix4f(GetTransform());
 
-    forward.Normalize();
-    up.Normalize();
+    const Mat4x3 matrix = Mat4x3 {
+        .x = F32x4 { .x = transform[0][0], .y = transform[1][0], .z = transform[2][0], .w = transform[3][0] },
+        .y = F32x4 { .x = transform[0][1], .y = transform[1][1], .z = transform[2][1], .w = transform[3][1] },
+        .z = F32x4 { .x = transform[0][2], .y = transform[1][2], .z = transform[2][2], .w = transform[3][2] },
+    };
 
-    Lens lens = Lens {
-        .origin = F32x3 { .x = origin[0], .y = origin[1], .z = origin[2] },
-        .forward = F32x3 { .x = forward[0], .y = forward[1], .z = forward[2] },
-        .up = F32x3 { .x = up[0], .y = up[1], .z = up[2] },
+    ThinLens camera = ThinLens {
         .vfov = 2.0f * std::atan(GetVerticalAperture() / (2.0f * GetFocalLength())),
         .aperture = 0,
         .focus_distance = 1,
     };
 
     if (_handle == -1) {
-        _handle = HdMoonshineCreateLens(msne, lens);
+        _handle = HdMoonshineCreateCamera(msne, camera, matrix, "camera");
     } else {
-        HdMoonshineSetLens(msne, _handle, lens);
+        HdMoonshineSetCamera(msne, _handle, camera, matrix);
     }
 }
 

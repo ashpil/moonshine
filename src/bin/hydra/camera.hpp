@@ -14,7 +14,7 @@ public:
 
     void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) override;
 
-    LensHandle _handle = -1;
+    CameraHandle _handle = -1;
 protected:
     HdMoonshineCamera(const HdMoonshineCamera&) = delete;
     HdMoonshineCamera &operator =(const HdMoonshineCamera&) = delete;
