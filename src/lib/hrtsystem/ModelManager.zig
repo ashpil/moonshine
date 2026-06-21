@@ -451,28 +451,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocat
     self.geometries_host.deinit(allocator);
 }
 
-// probably bad idea if you're changing many
-// TODO: probably no reason to have an abstraction for this here, should just be done properly at point of use
-pub fn recordUpdateSingleMaterial(self: Self, command_buffer: VulkanContext.CommandBuffer, geometry_idx: u32, new_material: MaterialManager.Handle) void {
-    const offset = @sizeOf(Geometry.Device) * geometry_idx + @offsetOf(Geometry.Device, "material");
-    const size = @sizeOf(u32);
-    command_buffer.updateBuffer(self.geometries_device.handle, offset, size, &new_material);
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .buffer_memory_barrier_count = 1,
-        .p_buffer_memory_barriers = (&vk.BufferMemoryBarrier2 {
-            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
-            .buffer = self.geometries_device.handle,
-            .offset = offset,
-            .size = size,
-        })[0..1],
-    });
-}
-
 fn getBuildSizesInfo(vc: *const VulkanContext, geometry_info: *const vk.AccelerationStructureBuildGeometryInfoKHR, max_primitive_count: [*]const u32) vk.AccelerationStructureBuildSizesInfoKHR {
     var size_info: vk.AccelerationStructureBuildSizesInfoKHR = undefined;
     size_info.s_type = .acceleration_structure_build_sizes_info_khr;

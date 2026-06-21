@@ -110,39 +110,14 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
 }
 
 pub const Handle = u32;
+
 pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager, instance: Instance) !Handle {
     std.debug.assert(self.instance_count < max_instances);
 
-    // upload instance
-    {
-        const vk_instance = vk.AccelerationStructureInstanceKHR {
-            .transform = vk.TransformMatrixKHR {
-                .matrix = @bitCast(instance.transform),
-            },
-            .instance_custom_index_and_mask = .{
-                .instance_custom_index = instance.model,
-                .mask = if (instance.visible) if (instance.thin) 0b10000000 else @as(u8, 1) << @intCast(instance.priority - 1) else 0x00,
-            },
-            .instance_shader_binding_table_record_offset_and_flags = .{
-                .instance_shader_binding_table_record_offset = 0,
-                .flags = 0,
-            },
-            .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
-                .acceleration_structure = model_manager.models_host.items(.blas_handle)[instance.model],
-            }),
-        };
-
-        self.instances.updateFrom(encoder, self.instance_count, &.{ vk_instance });
-    }
-
-    // upload world_to_instance matrix
-    {
-        const transform = instance.transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
-        self.world_to_instance.updateFrom(encoder, self.instance_count, &.{ transform });
-    }
-
+    const handle: Handle = @intCast(self.instance_count);
+    self.recordSetInstance(vc, encoder, model_manager, handle, instance);
     self.instance_count += 1;
-    return @intCast(self.instance_count - 1);
+    return handle;
 }
 
 // actually builds the composite acceleration structures from all instances. must be called for instance changes to take effect
@@ -272,11 +247,26 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
 }
 
 // updates a single instance's data in place. must call build afterwards for the change to take effect.
-pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, handle: Handle, instance: vk.AccelerationStructureInstanceKHR) void {
-    self.instances.updateFrom(encoder, handle, &.{ instance });
+pub fn recordSetInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager, handle: Handle, instance: Instance) void {
+    const vk_instance = vk.AccelerationStructureInstanceKHR {
+        .transform = vk.TransformMatrixKHR {
+            .matrix = @bitCast(instance.transform),
+        },
+        .instance_custom_index_and_mask = .{
+            .instance_custom_index = instance.model,
+            .mask = if (instance.visible) if (instance.thin) 0b10000000 else @as(u8, 1) << @intCast(instance.priority - 1) else 0x00,
+        },
+        .instance_shader_binding_table_record_offset_and_flags = .{
+            .instance_shader_binding_table_record_offset = 0,
+            .flags = 0,
+        },
+        .acceleration_structure_reference = vc.device.getAccelerationStructureDeviceAddressKHR(&.{
+            .acceleration_structure = model_manager.models_host.items(.blas_handle)[instance.model],
+        }),
+    };
+    self.instances.updateFrom(encoder, handle, &.{ vk_instance });
 
-    const transform: Mat4x3 = @bitCast(instance.transform);
-    const inverse = transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
+    const inverse = instance.transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
     self.world_to_instance.updateFrom(encoder, handle, &.{ inverse });
 }
 

@@ -334,7 +334,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                     var material = try sync_copier.copyBufferItem(&context, MaterialManager.Material.Device, scene.world.materials.materials.handle, geometry.material);
                     try imgui.textFmt("Mesh index: {d}", .{geometry.mesh});
                     if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
-                        scene.world.models.recordUpdateSingleMaterial(frame_encoder.buffer, accel_geometry_index, geometry.material);
+                        scene.world.models.geometries_device.updateFrom(frame_encoder, accel_geometry_index, &.{ geometry });
+                        frame_encoder.barrier(&.{}, &.{ .{
+                            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                            .src_access_mask = .{ .transfer_write_bit = true },
+                            .dst_stage_mask = .{ .compute_shader_bit = true },
+                            .dst_access_mask = .{ .shader_storage_read_bit = true },
+                            .buffer = scene.world.models.geometries_device.handle,
+                        } });
                         scene.camera.sensors.items[active_sensor].clear();
                     }
                     imgui.separatorText("mesh");
@@ -350,7 +357,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                         changed = imgui.dragScalar(u32, "emissive", &material.emissive, 1, 0, std.math.maxInt(u32)) or changed;
                         changed = exposeToImguiRecursive(MaterialManager.Volume, &material.volume, "volume") or changed;
                         if (changed) {
-                            scene.world.materials.recordUpdateSingleMaterial(frame_encoder.buffer, geometry.material, material);
+                            scene.world.materials.materials.updateFrom(frame_encoder, geometry.material, &.{ material });
+                            frame_encoder.barrier(&.{}, &.{ .{
+                                .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                                .src_access_mask = .{ .transfer_write_bit = true },
+                                .dst_stage_mask = .{ .compute_shader_bit = true },
+                                .dst_access_mask = .{ .shader_storage_read_bit = true },
+                                .buffer = scene.world.materials.materials.handle,
+                            } });
                             scene.camera.sensors.items[active_sensor].clear();
                         }
                     }
@@ -360,7 +374,15 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                             const variant_idx: u32 = @intCast((material.addr - @field(scene.world.materials.variant_buffers, enum_field.name).addr) / @sizeOf(VariantType));
                             var material_variant = try sync_copier.copyBufferItem(&context, VariantType, @field(scene.world.materials.variant_buffers, enum_field.name).buffer.handle, variant_idx);
                             if (exposeToImguiRecursive(VariantType, &material_variant, @tagName(material.type))) {
-                                scene.world.materials.recordUpdateSingleVariant(VariantType, frame_encoder.buffer, variant_idx, material_variant);
+                                const variant_buffer = @field(scene.world.materials.variant_buffers, enum_field.name).buffer;
+                                variant_buffer.updateFrom(frame_encoder, variant_idx, &.{ material_variant });
+                                frame_encoder.barrier(&.{}, &.{ .{
+                                    .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
+                                    .src_access_mask = .{ .transfer_write_bit = true },
+                                    .dst_stage_mask = .{ .compute_shader_bit = true },
+                                    .dst_access_mask = .{ .shader_storage_read_bit = true },
+                                    .buffer = variant_buffer.handle,
+                                } });
                                 scene.camera.sensors.items[active_sensor].clear();
                             }
                         }
@@ -379,10 +401,14 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                         imgui.pushItemWidth(imgui.getFontSize() * -6);
                         changed = imgui.dragMatrix(F32x4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                         if (changed) {
-                            var updated_instance = instance;
-                            updated_instance.transform = @bitCast(transform);
-                            updated_instance.instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
-                            scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, updated_instance);
+                            const updated_instance = Accel.Instance {
+                                .transform = @bitCast(transform),
+                                .visible = visible,
+                                .thin = thin,
+                                .priority = @intCast(priority),
+                                .model = instance.instance_custom_index_and_mask.instance_custom_index,
+                            };
+                            scene.world.accel.recordSetInstance(&context, frame_encoder, scene.world.models, object.instance_index, updated_instance);
                             try scene.world.accel.build(&context, frame_encoder, scene.world.models);
                             scene.camera.sensors.items[active_sensor].clear();
                         }
