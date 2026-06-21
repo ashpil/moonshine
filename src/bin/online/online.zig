@@ -383,7 +383,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                             updated_instance.transform = @bitCast(transform);
                             updated_instance.instance_custom_index_and_mask.mask = if (visible) if (thin) 0b10000000 else @as(u8, 1) << @intCast(priority - 1) else 0x00;
                             scene.world.accel.recordUpdateSingleInstanceProperties(frame_encoder, object.instance_index, updated_instance);
-                            try scene.world.accel.recordRebuild(frame_encoder.buffer);
+                            try scene.world.accel.build(&context, frame_encoder, scene.world.models);
                             scene.camera.sensors.items[active_sensor].clear();
                         }
                     }

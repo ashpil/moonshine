@@ -420,6 +420,8 @@ pub fn fromGltf(vc: *const VulkanContext, allocator: std.mem.Allocator, io: std.
         }
     }
 
+    try accel.build(vc, encoder, models);
+
     return Self {
         .materials = materials,
         .meshes = meshes,

@@ -74,9 +74,6 @@ world_to_instance: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, 
 tlas_handle: vk.AccelerationStructureKHR = .null_handle,
 tlas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }) = .{},
 
-tlas_update_scratch_buffer: core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
-tlas_update_scratch_address: vk.DeviceAddress = 0,
-
 const Self = @This();
 
 // TODO: resizable buffers
@@ -112,7 +109,6 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
     };
 }
 
-// accel must not be in use
 pub const Handle = u32;
 pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager, instance: Instance) !Handle {
     std.debug.assert(self.instance_count < max_instances);
@@ -145,12 +141,18 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         self.world_to_instance.updateFrom(encoder, self.instance_count, &.{ transform });
     }
 
+    self.instance_count += 1;
+    return @intCast(self.instance_count - 1);
+}
+
+// actually builds the composite acceleration structures from all instances. must be called for instance changes to take effect
+pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager) !void {
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
         Encoder.BufferBarrier {
             .src_stage_mask = .{ .copy_bit = true },
             .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-            .dst_access_mask = .{ .memory_read_bit = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
+            .dst_access_mask = .{ .memory_read_bit = true, .shader_read_bit = true },
             .buffer = self.instances.handle,
         },
         Encoder.BufferBarrier {
@@ -169,12 +171,10 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         },
     });
 
-    self.instance_count += 1;
-
     // update TLAS
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
         .type = .top_level_khr,
-        .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
+        .flags = .{ .prefer_fast_trace_bit_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
         .p_geometries = (&vk.AccelerationStructureGeometryKHR {
@@ -197,10 +197,10 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
     const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.build_scratch_size, "tlas scratch buffer");
     try encoder.attachResource(scratch_buffer);
 
-    try encoder.attachResource(self.tlas_buffer); // might still be used if this function was called in a loop. TODO: do not needlessly rebuild TLAS in this situation
+    try encoder.attachResource(self.tlas_buffer);
     self.tlas_buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }).create(vc, size_info.acceleration_structure_size, "tlas buffer");
 
-    try encoder.attachResource(self.tlas_handle); // might still be used if this function was called in a loop. TODO: do not needlessly rebuild TLAS in this situation
+    try encoder.attachResource(self.tlas_handle);
     geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
         .buffer = self.tlas_buffer.handle,
         .offset = 0,
@@ -210,10 +210,6 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
     self.tlas_handle = geometry_info.dst_acceleration_structure;
 
     geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
-
-    self.tlas_update_scratch_buffer.destroy(vc);
-    self.tlas_update_scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.update_scratch_size, "tlas update scratch buffer");
-    self.tlas_update_scratch_address = self.tlas_update_scratch_buffer.getAddress(vc);
 
     encoder.buildAccelerationStructures(&.{ geometry_info }, &[_][*]const vk.AccelerationStructureBuildRangeInfoKHR{ (&vk.AccelerationStructureBuildRangeInfoKHR {
         .primitive_count = @intCast(self.instance_count),
@@ -264,92 +260,24 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
         }
     }
 
-    return @intCast(self.instance_count - 1);
+    encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
+        .memory_barrier_count = 1,
+        .p_memory_barriers = (&vk.MemoryBarrier2 {
+            .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
+            .src_access_mask = .{ .acceleration_structure_write_bit_khr = true, .shader_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader_bit = true },
+            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_read_bit = true },
+        })[0..1],
+    });
 }
 
-// probably bad idea if you're changing many
-// must recordRebuild to see changes
+// updates a single instance's data in place. must call build afterwards for the change to take effect.
 pub fn recordUpdateSingleInstanceProperties(self: *Self, encoder: *Encoder, handle: Handle, instance: vk.AccelerationStructureInstanceKHR) void {
     self.instances.updateFrom(encoder, handle, &.{ instance });
 
-    {
-        const transform: Mat4x3 = @bitCast(instance.transform);
-        const inverse = transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
-        self.world_to_instance.updateFrom(encoder, handle, &.{ inverse });
-    }
-
-    encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
-        .{
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_storage_read_bit = true },
-            .buffer = self.instances.handle,
-            .offset = handle * @sizeOf(vk.AccelerationStructureInstanceKHR),
-            .size = @sizeOf(vk.AccelerationStructureInstanceKHR),
-        },
-        .{
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_storage_read_bit = true },
-            .buffer = self.world_to_instance.handle,
-            .offset = handle * @sizeOf(Mat4x3),
-            .size = @sizeOf(Mat4x3),
-        },
-    });
-}
-
-pub fn recordRebuild(self: *Self, command_buffer: VulkanContext.CommandBuffer) !void {
-    const geometry = vk.AccelerationStructureGeometryKHR {
-        .geometry_type = .instances_khr,
-        .flags = .{ .opaque_bit_khr = true },
-        .geometry = .{
-            .instances = .{
-                .array_of_pointers = .false,
-                .data = .{
-                    .device_address = self.instances_address,
-                }
-            }
-        },
-    };
-
-    var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
-        .type = .top_level_khr,
-        .flags = .{ .prefer_fast_trace_bit_khr = true, .allow_update_bit_khr = true },
-        .mode = .update_khr,
-        .src_acceleration_structure = self.tlas_handle,
-        .dst_acceleration_structure = self.tlas_handle,
-        .geometry_count = 1,
-        .p_geometries = (&geometry)[0..1],
-        .scratch_data = .{
-            .device_address = self.tlas_update_scratch_address,
-        },
-    };
-
-    const build_info = vk.AccelerationStructureBuildRangeInfoKHR {
-        .primitive_count = self.instance_count,
-        .first_vertex = 0,
-        .primitive_offset = 0,
-        .transform_offset = 0,
-    };
-
-    const build_info_ref = @as([*]const vk.AccelerationStructureBuildRangeInfoKHR, (&build_info)[0..1]);
-
-    command_buffer.buildAccelerationStructuresKHR((&geometry_info)[0..1], (&build_info_ref)[0..1]);
-
-    const barriers = [_]vk.MemoryBarrier2 {
-        .{
-            .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true },
-            .src_access_mask = .{ .acceleration_structure_write_bit_khr = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
-        }
-    };
-    command_buffer.pipelineBarrier2(&vk.DependencyInfo {
-        .memory_barrier_count = barriers.len,
-        .p_memory_barriers = &barriers,
-    });
+    const transform: Mat4x3 = @bitCast(instance.transform);
+    const inverse = transform.appendRow(.new(.{0, 0, 0, 1})).inverse().truncateRow();
+    self.world_to_instance.updateFrom(encoder, handle, &.{ inverse });
 }
 
 pub fn destroy(self: *Self, vc: *const VulkanContext) void {
@@ -360,8 +288,6 @@ pub fn destroy(self: *Self, vc: *const VulkanContext) void {
 
     self.instance_power_pipeline.destroy(vc);
     self.instance_power_fold_pipeline.destroy(vc);
-
-    self.tlas_update_scratch_buffer.destroy(vc);
 
     vc.device.destroyAccelerationStructureKHR(self.tlas_handle, null);
     self.tlas_buffer.destroy(vc);

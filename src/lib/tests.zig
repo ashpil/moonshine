@@ -335,6 +335,7 @@ test "white sphere on white background is white" {
             .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
+        try world.accel.build(&tc.vc, &tc.encoder, world.models);
     }
 
     var camera = Camera {};
@@ -437,6 +438,7 @@ test "white volume on white background is white" {
             .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
+        try world.accel.build(&tc.vc, &tc.encoder, world.models);
     }
 
     var camera = Camera {};
@@ -542,6 +544,7 @@ test "inside illuminating sphere is white" {
             .transform = Mat4.identity.truncateRow(),
             .model = model,
         });
+        try world.accel.build(&tc.vc, &tc.encoder, world.models);
     }
 
     var camera = Camera {};
