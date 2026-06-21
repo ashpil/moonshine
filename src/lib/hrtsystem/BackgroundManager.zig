@@ -99,18 +99,6 @@ pub fn create(vc: *const VulkanContext) !Self {
     };
 }
 
-pub fn addDefaultBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder) !Handle {
-    var color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
-    const rgba = Rgba2D {
-        .ptr = @ptrCast(&color),
-        .extent = .{
-            .width = 1,
-            .height = 1,
-        }
-    };
-    return try self.addBackground(vc, allocator, encoder, rgba, Mat3.identity, "default white");
-}
-
 // this should probably be a parameter, or should infer proper value for this
 //
 // the equal area map size will be the biggest power of two greater than
