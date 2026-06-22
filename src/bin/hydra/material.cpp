@@ -78,7 +78,13 @@ void rgbToRgba(std::unique_ptr<uint8_t[]>& data, size_t pixel_count, size_t src_
 
 std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::string const& swizzle, TfToken colorSpace, TfToken dst, std::string const& debug_name) {
     if (value.IsHolding<SdfAssetPath>()) {
-        auto image = HioImage::OpenForReading(value.Get<SdfAssetPath>().GetResolvedPath());
+        HioImage::SourceColorSpace srcColorSpace = HioImage::Auto;
+        if (colorSpace == _tokens->sRGB) {
+            srcColorSpace = HioImage::SRGB;
+        } else if (colorSpace == _tokens->raw) {
+            srcColorSpace = HioImage::Raw;
+        }
+        auto image = HioImage::OpenForReading(value.Get<SdfAssetPath>().GetResolvedPath(), 0, 0, srcColorSpace);
         auto format = image->GetFormat();
 
         HioImage::StorageSpec spec;
@@ -120,7 +126,6 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::st
             }
         }
 
-        format = HioGetFormat(HioGetComponentCount(format), HioGetHioType(format), colorSpace == _tokens->sRGB);
         std::optional<TextureFormat> msne_format = usdFormatToMsneFormat(format);
         if (!msne_format) {
             TF_CODING_ERROR("unknown format %u", format);
@@ -252,7 +257,11 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
                 TfToken sdrRole(upstreamSdr->GetRole());
                 if (sdrRole == SdrNodeRole->Texture) {
                     const std::string swizzle = upstreamSdr->GetShaderOutput(con.upstreamOutputName)->GetImplementationName();
-                    TfToken colorSpace = upstreamNode.parameters.find(_tokens->sourceColorSpace)->second.Get<TfToken>();
+                    TfToken colorSpace;
+                    auto const& colorSpaceIt = upstreamNode.parameters.find(_tokens->sourceColorSpace);
+                    if (colorSpaceIt != upstreamNode.parameters.end() && colorSpaceIt->second.IsHolding<TfToken>()) {
+                        colorSpace = colorSpaceIt->second.UncheckedGet<TfToken>();
+                    }
                     TfToken fileProperty = upstreamSdr->GetAssetIdentifierInputNames()[0];
                     VtValue value = upstreamNode.parameters.find(fileProperty)->second;
                     SetTextureBasedOnValueAndName(msne, _handle, inputName, value, swizzle, colorSpace, id.GetString());
