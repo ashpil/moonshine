@@ -5,6 +5,7 @@ const Gltf = @import("zgltf").Gltf;
 const engine = @import("../engine.zig");
 
 const core = engine.core;
+const vk_helpers = engine.core.vk_helpers;
 const VulkanContext = core.VulkanContext;
 const Encoder = core.Encoder;
 
@@ -106,7 +107,9 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, io: s
     {
         const skybox_image = try exr.helpers.Rgba2D.load(allocator, io, skybox_filepath);
         defer allocator.free(skybox_image.asSlice());
-        _ = try background.addBackground(vc, allocator, encoder, skybox_image, Mat3.fromRows(.{
+        const rgba = try encoder.uploadAllocator().alignedAlloc([4]f32, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(.r32g32b32a32_sfloat)), skybox_image.asSlice().len);
+        @memcpy(rgba, skybox_image.asSlice());
+        _ = try background.addBackground(vc, allocator, encoder, encoder.upload_allocator.getBufferSlice(rgba).asBytes(), skybox_image.extent, .r32g32b32a32_sfloat, Mat3.fromRows(.{
             // glTF assets have +Y as up, but our environment maps have +Z as up. swap the two.
             .new(.{ 1, 0, 0}),
             .new(.{ 0, 0, 1}),

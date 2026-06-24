@@ -349,15 +349,9 @@ test "white sphere on white background is white" {
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);
-    var white = [4]f32 {1, 1, 1, 1};
-    const image = Rgba2D {
-        .ptr = @ptrCast(&white),
-        .extent = .{
-            .width = 1,
-            .height = 1,
-        }
-    };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "white");
+    const constant: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4))), @sizeOf(F32x4)));
+    constant.* = F32x4.splat(1);
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(constant).asBytes(), vk.Extent2D { .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "white");
 
     var scene = Scene {
         .world = world,
@@ -452,15 +446,10 @@ test "white volume on white background is white" {
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);
-    var white = [4]f32 {1, 1, 1, 1};
-    const image = Rgba2D {
-        .ptr = @ptrCast(&white),
-        .extent = .{
-            .width = 1,
-            .height = 1,
-        }
-    };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "white");
+    const constant: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4))), @sizeOf(F32x4)));
+    constant.* = F32x4.splat(1);
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(constant).asBytes(), vk.Extent2D { .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "white");
+
 
     var scene = Scene {
         .world = world,
@@ -558,15 +547,9 @@ test "inside illuminating sphere is white" {
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);
-    var black = [4]f32 {0, 0, 0, 1};
-    const image = Rgba2D {
-        .ptr = @ptrCast(&black),
-        .extent = .{
-            .width = 1,
-            .height = 1,
-        }
-    };
-    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, image, Mat3.identity, "black");
+    const constant: *F32x4 = @ptrCast(try tc.encoder.uploadAllocator().alignedAlloc(u8, std.mem.Alignment.fromByteUnits(vk_helpers.texelBlockSize(vk_helpers.typeToFormat(F32x4))), @sizeOf(F32x4)));
+    constant.* = F32x4.splat(0);
+    _ = try background.addBackground(&tc.vc, allocator, &tc.encoder, tc.encoder.upload_allocator.getBufferSlice(constant).asBytes(), vk.Extent2D { .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "black");
 
     var scene = Scene {
         .world = world,

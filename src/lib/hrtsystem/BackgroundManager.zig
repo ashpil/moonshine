@@ -2,6 +2,7 @@ const std = @import("std");
 const vk = @import("vulkan");
 
 const engine = @import("../engine.zig");
+const BufferSlice = engine.core.mem.BufferSlice;
 const VulkanContext = engine.core.VulkanContext;
 const Encoder = engine.core.Encoder;
 const Image = engine.core.Image;
@@ -107,25 +108,20 @@ const maximum_equal_area_map_size = 16384;
 const shader_local_size = 8; // must be kept in sync with shader -- looks like HLSL doesn't support setting this via spec constants
 
 pub const Handle = u32;
-// color_image should be equirectangular, which is converted to equal area.
+// input image should be equirectangular, which is converted to equal area.
 //
 // in "Parameterization-Independent Importance Sampling of Environment Maps",
 // the author retains the original environment map for illumination,
 // only using equal area for importance sampling.
 // I tried that here but it seems to produce noisier results for e.g., sunny skies
 // compared to just keeping everything in the same parameterization.
-pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, color_image: Rgba2D, transform: Mat3, name: []const u8) !Handle {
-    const equirectangular_extent = color_image.extent;
-
+pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, equirectangular_image_host: BufferSlice(u8), equirectangular_extent: vk.Extent2D, equirectangular_format: vk.Format, transform: Mat3, name: []const u8) !Handle {
     const texture_name_equirectangular = try std.fmt.allocPrintSentinel(allocator, "background {s} equirectangular", .{ name }, 0);
     defer allocator.free(texture_name_equirectangular);
-    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, false, texture_name_equirectangular);
+    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, equirectangular_format, false, texture_name_equirectangular);
     try encoder.attachResource(equirectangular_image);
 
-    const equirectangular_image_host = try encoder.uploadAllocator().alignedAlloc([4]f32, std.mem.Alignment.fromByteUnits(engine.core.vk_helpers.texelBlockSize(.r32g32b32a32_sfloat)), color_image.asSlice().len);
-    @memcpy(equirectangular_image_host, color_image.asSlice());
-
-    const equal_area_map_size: u32 = @min(std.math.ceilPowerOfTwoAssert(u32, color_image.extent.width), maximum_equal_area_map_size);
+    const equal_area_map_size: u32 = @min(std.math.ceilPowerOfTwoAssert(u32, equirectangular_extent.width), maximum_equal_area_map_size);
     const equal_area_extent = vk.Extent2D { .width = equal_area_map_size, .height = equal_area_map_size };
 
     const texture_name_equal_area = try std.fmt.allocPrintSentinel(allocator, "background {s} equal area", .{ name }, 0);
@@ -179,8 +175,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
         },
     }, &.{});
 
-    const equirectangular_image_host_slice = encoder.upload_allocator.getBufferSlice(equirectangular_image_host);
-    encoder.copyBufferToImage(equirectangular_image_host_slice.handle, equirectangular_image_host_slice.offset, equirectangular_image.handle, equirectangular_extent);
+    encoder.copyBufferToImage(equirectangular_image_host.handle, equirectangular_image_host.offset, equirectangular_image.handle, equirectangular_extent);
 
     encoder.barrier(&[_]Encoder.ImageBarrier {
         .{

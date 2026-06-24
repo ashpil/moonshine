@@ -19,7 +19,6 @@ const MaterialManager = hrtsystem.MaterialManager;
 const TextureManager = MaterialManager.TextureManager;
 const Accel = hrtsystem.Accel;
 const Pipeline = hrtsystem.pipeline.Render;
-const Rgba2D = engine.fileformats.exr.helpers.Rgba2D;
 
 const vector = engine.vector;
 const F32x2 = vector.Vec2(f32);
@@ -140,12 +139,10 @@ pub const HdMoonshine = struct {
         self.background = Background.create(&self.vc) catch return null;
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
         // FIXME: support USD lights
-        var background_color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
-        const background_image = Rgba2D {
-            .ptr = @ptrCast(&background_color),
-            .extent = .{ .width = 1, .height = 1 },
-        };
-        _ = self.background.addBackground(&self.vc, self.allocator.allocator(), &self.encoder, background_image, Mat3.identity, "default") catch return null;
+        const background_color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
+        const background_staging = self.encoder.uploadAllocator().alignedAlloc(u8, .fromByteUnits(16), @sizeOf(@TypeOf(background_color))) catch return null;
+        @memcpy(background_staging, std.mem.asBytes(&background_color));
+        _ = self.background.addBackground(&self.vc, self.allocator.allocator(), &self.encoder, self.encoder.upload_allocator.getBufferSlice(background_staging).asBytes(), .{ .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "default") catch return null;
 
         self.pipeline = Pipeline.create(&self.vc, pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_spectra.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
