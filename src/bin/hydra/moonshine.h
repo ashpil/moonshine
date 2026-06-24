@@ -34,6 +34,10 @@ typedef struct Mat4x3 {
     F32x4 x, y, z;
 } Mat4x3;
 
+typedef struct Mat3 {
+    F32x3 x, y, z;
+} Mat3;
+
 typedef struct Extent2D {
     uint32_t width;
     uint32_t height;
@@ -88,3 +92,4 @@ extern "C" void HdMoonshineClearSensor(HdMoonshine*, SensorHandle);
 extern "C" uint32_t HdMoonshineGetSensorSampleCount(const HdMoonshine*, SensorHandle);
 extern "C" CameraHandle HdMoonshineCreateCamera(HdMoonshine*, ThinLens, Mat4x3, const char*);
 extern "C" void HdMoonshineSetCamera(HdMoonshine*, CameraHandle, ThinLens, Mat4x3);
+extern "C" void HdMoonshineSetEnvMap(HdMoonshine*, const uint8_t*, Extent2D, TextureFormat, Mat3);

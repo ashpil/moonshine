@@ -9,6 +9,7 @@
 #include "camera.hpp"
 #include "instancer.hpp"
 #include "material.hpp"
+#include "light.hpp"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -24,6 +25,7 @@ const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_SPRIM_TYPES = {
     HdPrimTypeTokens->camera,
     HdPrimTypeTokens->extComputation,
     HdPrimTypeTokens->material,
+    HdPrimTypeTokens->domeLight,
 };
 
 const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_BPRIM_TYPES = {
@@ -136,6 +138,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath c
         return new HdExtComputation(sprimId);
     } else if (typeId == HdPrimTypeTokens->material) {
         return new HdMoonshineMaterial(sprimId, *_renderParam);
+    } else if (typeId == HdPrimTypeTokens->domeLight) {
+        return new HdMoonshineDomeLight(sprimId);
     } else {
         TF_CODING_ERROR("Unknown Sprim type %s", typeId.GetText());
         return nullptr;
@@ -149,6 +153,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
         return new HdExtComputation(SdfPath::EmptyPath());
     } else if (typeId == HdPrimTypeTokens->material) {
         return new HdMoonshineMaterial(SdfPath::EmptyPath(), *_renderParam);
+    } else if (typeId == HdPrimTypeTokens->domeLight) {
+        return new HdMoonshineDomeLight(SdfPath::EmptyPath());
     } else {
         TF_CODING_ERROR("Unknown fallback Sprim type %s", typeId.GetText());
         return nullptr;

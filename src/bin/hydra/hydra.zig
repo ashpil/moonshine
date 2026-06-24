@@ -103,8 +103,10 @@ pub const HdMoonshine = struct {
 
     frame_index: u32,
 
+    current_background: Background.Handle,
+
     const pipeline_settings = Pipeline.SpecConstants {
-        .path_tracing_env_samples_per_bounce = 0,
+        .path_tracing_env_samples_per_bounce = 1,
         .path_tracing_mesh_samples_per_bounce = 1,
     };
 
@@ -138,11 +140,10 @@ pub const HdMoonshine = struct {
 
         self.background = Background.create(&self.vc) catch return null;
         errdefer self.background.destroy(&self.vc, self.allocator.allocator());
-        // FIXME: support USD lights
-        const background_color = [4]f32 { 1.0, 1.0, 1.0, 1.0 };
+        const background_color = [4]f32 { 0.0, 0.0, 0.0, 1.0 };
         const background_staging = self.encoder.uploadAllocator().alignedAlloc(u8, .fromByteUnits(16), @sizeOf(@TypeOf(background_color))) catch return null;
         @memcpy(background_staging, std.mem.asBytes(&background_color));
-        _ = self.background.addBackground(&self.vc, self.allocator.allocator(), &self.encoder, self.encoder.upload_allocator.getBufferSlice(background_staging).asBytes(), .{ .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "default") catch return null;
+        self.current_background = self.background.addBackground(&self.vc, self.allocator.allocator(), &self.encoder, self.encoder.upload_allocator.getBufferSlice(background_staging).asBytes(), .{ .width = 1, .height = 1 }, .r32g32b32a32_sfloat, Mat3.identity, "default") catch return null;
 
         self.pipeline = Pipeline.create(&self.vc, pipeline_settings, .{ self.background.equal_area_sampler }, .{ self.world.materials.textures.descriptor_layout.handle, self.world.constant_spectra.descriptor_layout.handle }) catch return null;
         errdefer self.pipeline.destroy(&self.vc);
@@ -213,10 +214,10 @@ pub const HdMoonshine = struct {
         // bind our stuff
         self.pipeline.recordBindPipeline(self.encoder.buffer);
         self.pipeline.recordBindAdditionalDescriptorSets(self.encoder.buffer, .{ self.world.materials.textures.descriptor_set, self.world.constant_spectra.descriptor_set });
-        self.pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(camera, sensor, 0));
+        self.pipeline.recordPushDescriptors(self.encoder.buffer, scene.pushDescriptors(camera, sensor, self.current_background));
 
         // push our stuff
-        self.pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(camera, sensor, 0, self.frame_index));
+        self.pipeline.recordPushConstants(self.encoder.buffer, scene.pushConstants(camera, sensor, self.current_background, self.frame_index));
 
         // trace our stuff
         self.pipeline.recordDispatchThreads2D(self.encoder.buffer, self.camera.sensors.items[sensor].extent);
@@ -433,7 +434,21 @@ pub const HdMoonshine = struct {
         };
     }
 
+    pub export fn HdMoonshineSetEnvMap(self: *HdMoonshine, data: [*]const u8, extent: vk.Extent2D, format: TextureFormat, transform: Mat3) void {
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
+
+        const typed_data = data[0..extent.width * extent.height * format.pixelSizeInBytes()];
+        const staging = self.encoder.uploadAllocator().alignedAlloc(u8, .fromByteUnits(16), typed_data.len) catch @panic("internal error"); // TODO: error recovery
+        @memcpy(staging, typed_data);
+
+        self.encoder.attachResource(self.background.backgrounds.pop().?.image) catch @panic("internal error"); // TODO: error recovery
+        self.current_background = self.background.addBackground(&self.vc, self.allocator.allocator(), &self.encoder, self.encoder.upload_allocator.getBufferSlice(staging).asBytes(), extent, format.toVk(), transform, "dome") catch @panic("internal error"); // TODO: error recovery
+    }
+
     pub export fn HdMoonshineDestroy(self: *HdMoonshine) void {
+        self.encoder.submitAndIdleUntilDone(&self.vc) catch {};
+
         for (self.output_buffers.items) |output_buffer| {
             output_buffer.destroy(&self.vc);
         }

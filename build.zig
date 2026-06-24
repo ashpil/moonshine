@@ -169,6 +169,7 @@ pub fn build(b: *std.Build) !void {
                 "camera.cpp",
                 "instancer.cpp",
                 "material.cpp",
+                "light.cpp",
             },
             .flags = &.{
                 "-DTBB_USE_DEBUG=0",
