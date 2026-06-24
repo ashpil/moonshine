@@ -33,7 +33,7 @@ struct PushConsts {
     row_major float3x3 XYZToDstChromaticities;
     uint sampleCount;
     ChromaticVolume globalVolume;
-    float3x3 backgroundToWorld;
+    row_major float3x3 backgroundToWorld;
     uint seed;
 };
 [[vk::push_constant]] PushConsts pushConsts;
