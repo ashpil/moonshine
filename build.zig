@@ -124,8 +124,9 @@ pub fn build(b: *std.Build) !void {
         break :blk exe;
     });
 
-    // hydra shared lib
-    if (target.result.os.tag == .linux) {
+    // hydra shared lib. in general here if you have all the deps in the standard systems paths, things should just work,
+    // but if you have them elsewhere, you'll have to specify them explicitly via the usd-path, tbb-path, and python-path build options.
+    {
         var engine_options = default_engine_options;
         engine_options.window = false;
         engine_options.gui = false;
@@ -148,16 +149,37 @@ pub fn build(b: *std.Build) !void {
                 .link_libc = true,
             }),
         });
+        zig_lib.bundle_compiler_rt = true; // delegate may be linked with a different target than the engine, so we must ensure the engine is self-contained
         try compiles.append(zig_lib);
+
+        // delegate must use same ABI as USD, which on Windows is MSVC
+        const delegate_target = if (target.result.os.tag == .windows)
+            b.resolveTargetQuery(.{ .cpu_arch = target.result.cpu.arch, .os_tag = .windows, .abi = .msvc })
+        else target;
 
         const lib = b.addLibrary(.{
             .linkage = .dynamic,
             .name = "hdMoonshine",
             .root_module = b.createModule(.{
-                .target = target,
+                .target = delegate_target,
                 .optimize = optimize,
             }),
         });
+
+        var flags = std.array_list.Managed([]const u8).init(b.allocator);
+        const base_flags = [_][]const u8{
+            "-std=c++17",
+            "-DTBB_USE_DEBUG=0",
+        };
+        const unix_flags = [_][]const u8{
+            "-DARCH_HAS_GNU_STL_EXTENSIONS",
+        };
+        const windows_flags = [_][]const u8{
+            "-D__TBB_NO_IMPLICIT_LINKAGE", // we don't need any tbb symbols ourselves, so with this we can avoid telling the linker where the tbb libs are
+        };
+        try flags.appendSlice(&base_flags);
+        if (target.result.os.tag != .windows) try flags.appendSlice(&unix_flags);
+        if (target.result.os.tag == .windows) try flags.appendSlice(&windows_flags);
         lib.root_module.addCSourceFiles(.{
            .root = b.path("src/bin/hydra"),
            .files = &.{
@@ -171,17 +193,45 @@ pub fn build(b: *std.Build) !void {
                 "material.cpp",
                 "light.cpp",
             },
-            .flags = &.{
-                "-DTBB_USE_DEBUG=0",
-                "-DARCH_HAS_GNU_STL_EXTENSIONS",
-            }
+            .flags = flags.items,
         });
         lib.root_module.linkLibrary(zig_lib);
-        lib.root_module.linkSystemLibrary("usd_ms", .{});
-        lib.root_module.link_libcpp = false;
 
-        // might need python headers if USD built with python support
-        {
+        if (target.result.os.tag == .windows and target.result.abi == .gnu) {
+            // the gnu-built engine references ntdll APIs the msvc link doesn't provide, so we must link them manually
+            lib.root_module.linkSystemLibrary("ntdll", .{});
+            const ntdll_def = b.addWriteFiles().add("ntdll_extra.def",
+                \\LIBRARY ntdll.dll
+                \\EXPORTS
+                \\LdrRegisterDllNotification
+                \\LdrUnregisterDllNotification
+            );
+            const dlltool = b.addSystemCommand(&.{ b.graph.zig_exe, "dlltool", "-m", "i386:x86-64", "-d" });
+            dlltool.addFileArg(ntdll_def);
+            dlltool.addArg("-l");
+            lib.root_module.addObjectFile(dlltool.addOutputFileArg("ntdll_extra.lib"));
+        }
+
+        const usd_root = b.option([]const u8, "usd-path", "Path to the USD install root");
+        if (usd_root) |root| {
+            lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ root, "include" }) });
+            lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ root, "lib" }) });
+        }
+        lib.root_module.linkSystemLibrary("usd_ms", .{ .preferred_link_mode = .static });
+
+        const tbb_root = b.option([]const u8, "tbb-path", "Path to the TBB install root");
+        if (tbb_root) |root| {
+            lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ root, "include" }) });
+        }
+
+        const python_root = b.option([]const u8, "python-path", "Path to the Python install root");
+        if (python_root) |root| {
+            lib.root_module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ root, "include" }) });
+            if (target.result.os.tag == .windows) {
+                // this must be known at link time on windows
+                lib.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ root, "libs" }) });
+            }
+        } else {
             var out_code: u8 = undefined;
             const paths =  b.runAllowFail(&.{ "python3-config", "--includes" }, &out_code, .inherit) catch b.runAllowFail(&.{ "python-config", "--includes" }, &out_code, .inherit) catch "";
             if (paths.len != 0) {
@@ -192,7 +242,7 @@ pub fn build(b: *std.Build) !void {
 
         // deal with the fact that USD is not (supposed to be) compiled with clang
         // make nicer once https://github.com/ziglang/zig/issues/3936
-        {
+        if (target.result.os.tag == .linux) {
             // link against stdlibc++
             lib.root_module.addObjectFile(.{ .cwd_relative = std.mem.trim(u8, b.run(&.{ "g++", "-print-file-name=libstdc++.so" }), &std.ascii.whitespace) });
 
@@ -210,34 +260,39 @@ pub fn build(b: *std.Build) !void {
 
         const step = b.step("hydra", "Build hydra delegate");
 
-        const install = b.addInstallArtifact(lib, .{ .dest_sub_path = "hdMoonshine.so" });
+        const lib_filename = if (target.result.os.tag == .windows) "hdMoonshine.dll" else "hdMoonshine.so";
+        const install = b.addInstallArtifact(lib, .{
+            .dest_dir = .{ .override = .lib }, // put next to plugInfo.json
+            .dest_sub_path = lib_filename,
+        });
         step.dependOn(&install.step);
 
-        const write_pluginfo_json = b.addWriteFiles();
-        const pluginfo_file = write_pluginfo_json.add("plugInfo.json",
-            \\{
+        const pluginfo_content = b.fmt(
+            \\{{
             \\    "Plugins": [
-            \\        {
-            \\            "Info": {
-            \\                "Types": {
-            \\                    "HdMoonshinePlugin": {
+            \\        {{
+            \\            "Info": {{
+            \\                "Types": {{
+            \\                    "HdMoonshinePlugin": {{
             \\                        "bases": [
             \\                            "HdRendererPlugin"
             \\                        ],
             \\                        "displayName": "Moonshine",
             \\                        "priority": 1
-            \\                    }
-            \\                }
-            \\            },
-            \\            "LibraryPath": "hdMoonshine.so",
+            \\                    }}
+            \\                }}
+            \\            }},
+            \\            "LibraryPath": "{s}",
             \\            "Name": "HdMoonshine",
             \\            "ResourcePath": ".",
             \\            "Root": ".",
             \\            "Type": "library"
-            \\        }
+            \\        }}
             \\    ]
-            \\}
-        );
+            \\}}
+        , .{lib_filename});
+
+        const pluginfo_file = b.addWriteFiles().add("plugInfo.json", pluginfo_content);
         const install_pluginfo_json = b.addInstallLibFile(pluginfo_file, "plugInfo.json");
         step.dependOn(&install_pluginfo_json.step);
     }
