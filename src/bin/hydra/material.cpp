@@ -84,7 +84,12 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::st
         } else if (colorSpace == _tokens->raw) {
             srcColorSpace = HioImage::Raw;
         }
-        auto image = HioImage::OpenForReading(value.Get<SdfAssetPath>().GetResolvedPath(), 0, 0, srcColorSpace);
+        const SdfAssetPath asset = value.Get<SdfAssetPath>();
+        auto image = HioImage::OpenForReading(asset.GetResolvedPath(), 0, 0, srcColorSpace);
+        if (!image) {
+            TF_CODING_ERROR("could not open texture '%s' (resolved '%s')", asset.GetAssetPath().c_str(), asset.GetResolvedPath().c_str());
+            return std::nullopt;
+        }
         auto format = image->GetFormat();
 
         HioImage::StorageSpec spec;
