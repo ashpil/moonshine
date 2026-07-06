@@ -253,7 +253,7 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
 
         SdrRegistry& shaderReg = SdrRegistry::GetInstance();
         SdrShaderNodeConstPtr const sdrNode = shaderReg.GetShaderNodeByIdentifier(node.nodeTypeId);
-        for (TfToken const& inputName : sdrNode->GetInputNames()) {
+        for (TfToken const& inputName : sdrNode->GetShaderInputNames()) {
             auto const& conIt = node.inputConnections.find(inputName);
             auto const& paramIt = node.parameters.find(inputName);
             if (conIt != node.inputConnections.end()) {
@@ -275,7 +275,7 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
                     VtValue value = upstreamNode.parameters.find(fileProperty)->second;
                     SetTextureBasedOnValueAndName(msne, _handle, inputName, value, swizzle, colorSpace, id.GetString());
                 } else {
-                    TF_CODING_ERROR("%s unknown connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().c_str());
+                    TF_CODING_ERROR("%s unknown connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().GetText());
                 }
             } else if (paramIt != node.parameters.end()) {
                 VtValue value = paramIt->second;

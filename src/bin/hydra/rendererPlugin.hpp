@@ -12,7 +12,7 @@ public:
     HdRenderDelegate* CreateRenderDelegate() override;
     HdRenderDelegate* CreateRenderDelegate(HdRenderSettingsMap const& settingsMap) override;
     void DeleteRenderDelegate(HdRenderDelegate *renderDelegate) override;
-    bool IsSupported(bool gpuEnabled) const override;
+    bool IsSupported(HdRendererCreateArgs const& rendererCreateArgs, std::string* reasonWhyNot = nullptr) const override;
 private:
     HdMoonshinePlugin(const HdMoonshinePlugin&) = delete;
     HdMoonshinePlugin &operator =(const HdMoonshinePlugin&) = delete;
