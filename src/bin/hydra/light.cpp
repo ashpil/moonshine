@@ -10,6 +10,7 @@
 #include <pxr/base/gf/half.h>
 #include <pxr/base/gf/matrix3d.h>
 #include <pxr/base/gf/matrix4d.h>
+#include <pxr/base/gf/matrix4f.h>
 
 #include <cmath>
 #include <vector>
@@ -180,6 +181,92 @@ void HdMoonshineDomeLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* r
     }
 
     *dirtyBits = HdChangeTracker::Clean;
+}
+
+HdMoonshineRectLight::HdMoonshineRectLight(SdfPath const& id, HdMoonshineRenderParam& renderParam) : HdLight(id) {
+    // black diffuse body; emission is set during Sync
+    _material = HdMoonshineCreateMaterial(renderParam._moonshine, Material {
+        .normal = renderParam._upNormal,
+        .emissive = renderParam._black3,
+        .color = renderParam._black3,
+        .metalness = renderParam._black1,
+        .roughness = renderParam._white1,
+        .ior = 1.5,
+    });
+}
+
+HdDirtyBits HdMoonshineRectLight::GetInitialDirtyBitsMask() const {
+    return HdLight::AllDirty;
+}
+
+void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits) {
+    HdMoonshineRenderParam* renderParam = static_cast<HdMoonshineRenderParam*>(hdRenderParam);
+    HdMoonshine* msne = renderParam->_moonshine;
+    SdfPath const& id = GetId();
+
+    const float intensity = sceneDelegate->GetLightParamValue(id, HdLightTokens->intensity).GetWithDefault(1.0f);
+    const float exposure = sceneDelegate->GetLightParamValue(id, HdLightTokens->exposure).GetWithDefault(0.0f);
+    const GfVec3f color = sceneDelegate->GetLightParamValue(id, HdLightTokens->color).GetWithDefault(GfVec3f(1.0f));
+    const float width = sceneDelegate->GetLightParamValue(id, HdLightTokens->width).GetWithDefault(1.0f);
+    const float height = sceneDelegate->GetLightParamValue(id, HdLightTokens->height).GetWithDefault(1.0f);
+    const bool normalize = sceneDelegate->GetLightParamValue(id, HdLightTokens->normalize).GetWithDefault(false);
+
+    const VtValue textureValue = sceneDelegate->GetLightParamValue(id, HdLightTokens->textureFile);
+    if (textureValue.IsHolding<SdfAssetPath>() && !textureValue.UncheckedGet<SdfAssetPath>().GetAssetPath().empty()) {
+        TF_WARN("rect light %s: textureFile is not supported, using constant color", id.GetText());
+    }
+
+    const GfMatrix4f xform = GfMatrix4f(sceneDelegate->GetTransform(id));
+
+    float scale = intensity * std::exp2(exposure);
+    // normalize divides by the light's world-space surface area,
+    // including any scaling from the transform stack
+    if (normalize) {
+        const GfVec3f worldX = xform.TransformDir(GfVec3f::XAxis());
+        const GfVec3f worldY = xform.TransformDir(GfVec3f::YAxis());
+        const float worldArea = width * height * GfCross(worldX, worldY).GetLength();
+        if (worldArea > 0) {
+            scale /= worldArea;
+        }
+    }
+    const GfVec3f radiance = color * scale;
+
+    if (radiance != _radiance) {
+        F32x4 texel = F32x4 { .x = radiance[0], .y = radiance[1], .z = radiance[2], .w = 1.0f };
+        const Extent2D extent = Extent2D { .width = 1, .height = 1 };
+        const ImageHandle texture = HdMoonshineCreateTexture(msne, reinterpret_cast<uint8_t*>(&texel), extent, TextureFormat::f32x4, (id.GetString() + " emission").c_str());
+        HdMoonshineSetMaterialEmissive(msne, _material, texture);
+        _radiance = radiance;
+    }
+
+    // rect light is a unit quad; bake authored width/height in as scale
+    GfMatrix4f scaleMat;
+    scaleMat.SetScale(GfVec3f(width, height, 1.0f));
+    const GfMatrix4f transform = scaleMat * xform;
+    const Mat4x3 matrix = Mat4x3 {
+        .x = F32x4 { .x = transform[0][0], .y = transform[1][0], .z = transform[2][0], .w = transform[3][0] },
+        .y = F32x4 { .x = transform[0][1], .y = transform[1][1], .z = transform[2][1], .w = transform[3][1] },
+        .z = F32x4 { .x = transform[0][2], .y = transform[1][2], .z = transform[2][2], .w = transform[3][2] },
+    };
+
+    const bool visible = sceneDelegate->GetVisible(id);
+
+    // always touch the instance: this marks instances dirty, which also rebuilds the
+    // light power hierarchy so emission changes actually take effect
+    if (_instance) {
+        HdMoonshineSetInstance(msne, *_instance, matrix, visible);
+    } else {
+        _instance = HdMoonshineCreateInstance(msne, matrix, renderParam->_unitQuad, _material, visible);
+    }
+
+    *dirtyBits = HdChangeTracker::Clean;
+}
+
+void HdMoonshineRectLight::Finalize(HdRenderParam* renderParam) {
+    if (_instance) {
+        HdMoonshineDestroyInstance(static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine, *_instance);
+        _instance.reset();
+    }
 }
 
 void HdMoonshineDomeLight::Finalize(HdRenderParam* renderParam) {

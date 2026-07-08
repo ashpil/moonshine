@@ -32,6 +32,17 @@ public:
             .roughness = _white1,
             .ior = 1.5,
         });
+
+        // unit quad centered at origin in the XY plane, facing -Z
+        const F32x3 quadPositions[] = {
+            { -0.5, -0.5, 0 }, { -0.5, 0.5, 0 }, { 0.5, -0.5, 0 },
+            { -0.5,  0.5, 0 }, {  0.5, 0.5, 0 }, { 0.5, -0.5, 0 },
+        };
+        const F32x3 quadNormals[] = {
+            { 0, 0, -1 }, { 0, 0, -1 }, { 0, 0, -1 },
+            { 0, 0, -1 }, { 0, 0, -1 }, { 0, 0, -1 },
+        };
+        _unitQuad = HdMoonshineCreateMesh(_moonshine, quadPositions, quadNormals, nullptr, 6);
     }
 
     HdMoonshine* _moonshine;
@@ -43,6 +54,7 @@ public:
     ImageHandle _grey3;
     ImageHandle _white1;
     MaterialHandle _defaultMaterial;
+    MeshHandle _unitQuad;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE

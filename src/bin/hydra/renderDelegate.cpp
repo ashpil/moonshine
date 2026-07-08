@@ -26,6 +26,7 @@ const TfTokenVector HdMoonshineRenderDelegate::SUPPORTED_SPRIM_TYPES = {
     HdPrimTypeTokens->extComputation,
     HdPrimTypeTokens->material,
     HdPrimTypeTokens->domeLight,
+    HdPrimTypeTokens->rectLight,
     HdPrimTypeTokens->distantLight,
 };
 
@@ -141,6 +142,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath c
         return new HdMoonshineMaterial(sprimId, *_renderParam);
     } else if (typeId == HdPrimTypeTokens->domeLight) {
         return new HdMoonshineDomeLight(sprimId);
+    } else if (typeId == HdPrimTypeTokens->rectLight) {
+        return new HdMoonshineRectLight(sprimId, *_renderParam);
     } else {
         // we pretend to support distant lights, otherwise usdview will refuse to add a default dome light
         if (typeId != HdPrimTypeTokens->distantLight) {
@@ -159,6 +162,8 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
         return new HdMoonshineMaterial(SdfPath::EmptyPath(), *_renderParam);
     } else if (typeId == HdPrimTypeTokens->domeLight) {
         return new HdMoonshineDomeLight(SdfPath::EmptyPath());
+    } else if (typeId == HdPrimTypeTokens->rectLight) {
+        return new HdMoonshineRectLight(SdfPath::EmptyPath(), *_renderParam);
     } else {
         // we pretend to support distant lights, otherwise usdview will refuse to add a default dome light
         if (typeId != HdPrimTypeTokens->distantLight) {
