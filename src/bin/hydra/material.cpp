@@ -180,6 +180,10 @@ std::optional<ImageHandle> makeTexture(HdMoonshine* msne, VtValue value, std::st
 }
 
 bool SetTextureBasedOnValueAndName(HdMoonshine* msne, MaterialHandle handle, TfToken name, VtValue value, std::string const& swizzle, TfToken colorSpace, std::string const& debug_name) {
+    if (value.IsEmpty()) {
+        TF_WARN("no value for %s %s; leaving default", debug_name.c_str(), name.GetText());
+        return true;
+    }
     if (name == _tokens->ior) {
         float ior = value.Get<float>();
         HdMoonshineSetMaterialIOR(msne, handle, ior);
@@ -225,66 +229,63 @@ void HdMoonshineMaterial::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hd
     if (*dirtyBits & DirtyBits::DirtyParams) {
         const VtValue& resource = sceneDelegate->GetMaterialResource(id);
 
-        if (!resource.IsHolding<HdMaterialNetworkMap>())
-        {
-            TF_CODING_ERROR("Unknown resource type of %s!", id.GetText());
-            return;
-        }
+        if (resource.IsHolding<HdMaterialNetworkMap>()) {
+            const HdMaterialNetwork2& network = HdConvertToHdMaterialNetwork2(resource.UncheckedGet<HdMaterialNetworkMap>());
 
-        const HdMaterialNetwork2& network = HdConvertToHdMaterialNetwork2(resource.UncheckedGet<HdMaterialNetworkMap>());
+            // find node connecting to surface output
+            auto const& terminalConnIt = network.terminals.find(HdMaterialTerminalTokens->surface);
+            if (terminalConnIt != network.terminals.end()) {
+                HdMaterialConnection2 const& connection = terminalConnIt->second;
+                SdfPath const& terminalPath = connection.upstreamNode;
+                auto const& terminalIt = network.nodes.find(terminalPath);
+                const auto& node = terminalIt->second;
 
-        // find node connecting to surface output
-        auto const& terminalConnIt = network.terminals.find(HdMaterialTerminalTokens->surface);
-        if (terminalConnIt == network.terminals.end()) {
-            TF_CODING_ERROR("did not find suface connection for %s", id.GetText());
-            return;
-        }
+                // parse UsdPreviewSurface
+                if (node.nodeTypeId == _tokens->UsdPreviewSurface) {
+                    SdrRegistry& shaderReg = SdrRegistry::GetInstance();
+                    SdrShaderNodeConstPtr const sdrNode = shaderReg.GetShaderNodeByIdentifier(node.nodeTypeId);
+                    for (TfToken const& inputName : sdrNode->GetShaderInputNames()) {
+                        auto const& conIt = node.inputConnections.find(inputName);
+                        auto const& paramIt = node.parameters.find(inputName);
+                        if (conIt != node.inputConnections.end()) {
+                            HdMaterialConnection2 const& con = conIt->second.front();
 
-        HdMaterialConnection2 const& connection = terminalConnIt->second;
-        SdfPath const& terminalPath = connection.upstreamNode;
-        auto const& terminalIt = network.nodes.find(terminalPath);
-        const auto& node = terminalIt->second;
+                            auto const& upIt = network.nodes.find(con.upstreamNode);
+                            HdMaterialNode2 const& upstreamNode = upIt->second;
+                            SdrShaderNodeConstPtr upstreamSdr = shaderReg.GetShaderNodeByIdentifier(upstreamNode.nodeTypeId);
 
-        // parse UsdPreviewSurface
-        if (node.nodeTypeId != _tokens->UsdPreviewSurface) {
-            TF_CODING_ERROR("don't know what to do with node %s in %s", node.nodeTypeId.GetText(), id.GetText());
-            return;
-        }
-
-        SdrRegistry& shaderReg = SdrRegistry::GetInstance();
-        SdrShaderNodeConstPtr const sdrNode = shaderReg.GetShaderNodeByIdentifier(node.nodeTypeId);
-        for (TfToken const& inputName : sdrNode->GetShaderInputNames()) {
-            auto const& conIt = node.inputConnections.find(inputName);
-            auto const& paramIt = node.parameters.find(inputName);
-            if (conIt != node.inputConnections.end()) {
-                HdMaterialConnection2 const& con = conIt->second.front();
-
-                auto const& upIt = network.nodes.find(con.upstreamNode);
-                HdMaterialNode2 const& upstreamNode = upIt->second;
-                SdrShaderNodeConstPtr upstreamSdr = shaderReg.GetShaderNodeByIdentifier(upstreamNode.nodeTypeId);
-
-                TfToken sdrRole(upstreamSdr->GetRole());
-                if (sdrRole == SdrNodeRole->Texture) {
-                    const std::string swizzle = upstreamSdr->GetShaderOutput(con.upstreamOutputName)->GetImplementationName();
-                    TfToken colorSpace;
-                    auto const& colorSpaceIt = upstreamNode.parameters.find(_tokens->sourceColorSpace);
-                    if (colorSpaceIt != upstreamNode.parameters.end() && colorSpaceIt->second.IsHolding<TfToken>()) {
-                        colorSpace = colorSpaceIt->second.UncheckedGet<TfToken>();
+                            TfToken sdrRole(upstreamSdr->GetRole());
+                            if (sdrRole == SdrNodeRole->Texture) {
+                                const std::string swizzle = upstreamSdr->GetShaderOutput(con.upstreamOutputName)->GetImplementationName();
+                                TfToken colorSpace;
+                                auto const& colorSpaceIt = upstreamNode.parameters.find(_tokens->sourceColorSpace);
+                                if (colorSpaceIt != upstreamNode.parameters.end() && colorSpaceIt->second.IsHolding<TfToken>()) {
+                                    colorSpace = colorSpaceIt->second.UncheckedGet<TfToken>();
+                                }
+                                TfToken fileProperty = upstreamSdr->GetAssetIdentifierInputNames()[0];
+                                auto const& fileIt = upstreamNode.parameters.find(fileProperty);
+                                VtValue value = fileIt != upstreamNode.parameters.end() ? fileIt->second : VtValue();
+                                SetTextureBasedOnValueAndName(msne, _handle, inputName, value, swizzle, colorSpace, id.GetString());
+                            } else {
+                                TF_CODING_ERROR("%s unknown connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().GetText());
+                            }
+                        } else if (paramIt != node.parameters.end() && !paramIt->second.IsEmpty()) {
+                            VtValue value = paramIt->second;
+                            SetTextureBasedOnValueAndName(msne, _handle, inputName, value, "", _tokens->raw, id.GetString() + " parameter");
+                        } else {
+                            SdrShaderPropertyConstPtr const& input = sdrNode->GetShaderInput(inputName);
+                            VtValue value = input->GetDefaultValue();
+                            SetTextureBasedOnValueAndName(msne, _handle, inputName, value, "", _tokens->raw, id.GetString() + " default");
+                        }
                     }
-                    TfToken fileProperty = upstreamSdr->GetAssetIdentifierInputNames()[0];
-                    VtValue value = upstreamNode.parameters.find(fileProperty)->second;
-                    SetTextureBasedOnValueAndName(msne, _handle, inputName, value, swizzle, colorSpace, id.GetString());
                 } else {
-                    TF_CODING_ERROR("%s unknown connection %s: %s", id.GetText(), inputName.GetText(), upstreamSdr->GetRole().GetText());
+                    TF_WARN("don't know what to do with node %s in %s; using default material", node.nodeTypeId.GetText(), id.GetText());
                 }
-            } else if (paramIt != node.parameters.end()) {
-                VtValue value = paramIt->second;
-                SetTextureBasedOnValueAndName(msne, _handle, inputName, value, "", _tokens->raw, id.GetString() + " parameter");
             } else {
-                SdrShaderPropertyConstPtr const& input = sdrNode->GetShaderInput(inputName);
-                VtValue value = input->GetDefaultValue();
-                SetTextureBasedOnValueAndName(msne, _handle, inputName, value, "", _tokens->raw, id.GetString() + " default");
+                TF_WARN("no surface network for %s; using default material", id.GetText());
             }
+        } else {
+            TF_WARN("unknown material resource type of %s; using default material", id.GetText());
         }
 
         *dirtyBits = *dirtyBits & ~DirtyBits::DirtyParams;
