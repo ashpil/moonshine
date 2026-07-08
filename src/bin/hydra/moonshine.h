@@ -49,6 +49,22 @@ typedef struct ThinLens {
     float focus_distance;
 } ThinLens;
 
+typedef struct Orthographic {
+    float vscale;
+} Orthographic;
+
+typedef enum CameraModel : uint32_t {
+    CameraModelThinLens = 0,
+    CameraModelOrthographic = 1,
+} CameraModel;
+
+typedef struct Camera {
+    Mat4x3 transform;
+    CameraModel model;
+    ThinLens thin_lens;
+    Orthographic orthographic;
+} Camera;
+
 typedef struct Material {
     ImageHandle normal;
     ImageHandle emissive;
@@ -90,6 +106,6 @@ extern "C" SensorHandle HdMoonshineCreateSensor(HdMoonshine*, Extent2D);
 extern "C" float* HdMoonshineGetSensorData(const HdMoonshine*, SensorHandle);
 extern "C" void HdMoonshineClearSensor(HdMoonshine*, SensorHandle);
 extern "C" uint32_t HdMoonshineGetSensorSampleCount(const HdMoonshine*, SensorHandle);
-extern "C" CameraHandle HdMoonshineCreateCamera(HdMoonshine*, ThinLens, Mat4x3, const char*);
-extern "C" void HdMoonshineSetCamera(HdMoonshine*, CameraHandle, ThinLens, Mat4x3);
+extern "C" CameraHandle HdMoonshineCreateCamera(HdMoonshine*, Camera, const char*);
+extern "C" void HdMoonshineSetCamera(HdMoonshine*, CameraHandle, Camera);
 extern "C" void HdMoonshineSetEnvMap(HdMoonshine*, const uint8_t*, Extent2D, TextureFormat, Mat3);

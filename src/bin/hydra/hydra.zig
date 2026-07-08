@@ -414,24 +414,16 @@ pub const HdMoonshine = struct {
         return self.camera.sensors.items[sensor].sample_count;
     }
 
-    pub export fn HdMoonshineCreateCamera(self: *HdMoonshine, thin_lens: Camera.ThinLens, transform: Mat4x3, name: [*:0]const u8) Camera.CameraHandle {
+    pub export fn HdMoonshineCreateCamera(self: *HdMoonshine, camera: Camera.Camera, name: [*:0]const u8) Camera.CameraHandle {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        return self.camera.appendCamera(self.allocator.allocator(), Camera.Camera {
-            .transform = transform,
-            .model = .thin_lens,
-            .thin_lens = thin_lens,
-        }, self.allocator.allocator().dupeZ(u8, std.mem.span(name)) catch @panic("internal error")) catch @panic("internal error"); // TODO: error recovery
+        return self.camera.appendCamera(self.allocator.allocator(), camera, self.allocator.allocator().dupeZ(u8, std.mem.span(name)) catch @panic("internal error")) catch @panic("internal error"); // TODO: error recovery
     }
 
-    pub export fn HdMoonshineSetCamera(self: *HdMoonshine, handle: Camera.CameraHandle, thin_lens: Camera.ThinLens, transform: Mat4x3) void {
+    pub export fn HdMoonshineSetCamera(self: *HdMoonshine, handle: Camera.CameraHandle, camera: Camera.Camera) void {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        self.camera.cameras.items[handle][1] = Camera.Camera {
-            .transform = transform,
-            .model = .thin_lens,
-            .thin_lens = thin_lens,
-        };
+        self.camera.cameras.items[handle][1] = camera;
     }
 
     pub export fn HdMoonshineSetEnvMap(self: *HdMoonshine, data: [*]const u8, extent: vk.Extent2D, format: TextureFormat, transform: Mat3) void {

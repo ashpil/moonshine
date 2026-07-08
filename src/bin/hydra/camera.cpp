@@ -28,16 +28,23 @@ void HdMoonshineCamera::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* rend
         .z = F32x4 { .x = transform[0][2], .y = transform[1][2], .z = transform[2][2], .w = transform[3][2] },
     };
 
-    ThinLens camera = ThinLens {
-        .vfov = 2.0f * std::atan(GetVerticalAperture() / (2.0f * GetFocalLength())),
-        .aperture = 0,
-        .focus_distance = 1,
+    Camera camera = Camera {
+        .transform = matrix,
+        .model = (GetProjection() == HdCamera::Orthographic) ? CameraModelOrthographic : CameraModelThinLens,
+        .thin_lens = ThinLens {
+            .vfov = 2.0f * std::atan(GetVerticalAperture() / (2.0f * GetFocalLength())),
+            .aperture = 0,
+            .focus_distance = 1,
+        },
+        .orthographic = ::Orthographic {
+            .vscale = GetVerticalAperture() / 2.0f,
+        },
     };
 
     if (_handle == -1) {
-        _handle = HdMoonshineCreateCamera(msne, camera, matrix, "camera");
+        _handle = HdMoonshineCreateCamera(msne, camera, "camera");
     } else {
-        HdMoonshineSetCamera(msne, _handle, camera, matrix);
+        HdMoonshineSetCamera(msne, _handle, camera);
     }
 }
 
