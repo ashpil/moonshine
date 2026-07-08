@@ -86,8 +86,15 @@ VtArray<T> HdMoonshineMesh::ComputePrimvar(HdSceneDelegate* sceneDelegate, VtVec
 
             HdVtBufferSource buffer(primvarName, boxedPrimvar);
             VtValue res;
-            meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), typeToHdType<T>(), &res);
-            primvar = res.Get<VtArray<T>>();
+            const HdMeshComputationResult result = meshUtil.ComputeTriangulatedFaceVaryingPrimvar(buffer.GetData(), buffer.GetNumElements(), typeToHdType<T>(), &res);
+            if (result == HdMeshComputationResult::Success) {
+                primvar = res.Get<VtArray<T>>();
+            } else if (result == HdMeshComputationResult::Unchanged) {
+                // mesh was already triangulated; res is left unwritten and the source is usable as-is
+                primvar = boxedPrimvar.UncheckedGet<VtArray<T>>();
+            } else {
+                TF_WARN("failed to triangulate %s primvar of %s", primvarName.GetText(), GetId().GetText());
+            }
         } else if (interpolation == HdInterpolationVertex) {
             VtArray<T> indexedPrimvar = boxedPrimvar.Get<VtArray<T>>();
             for (const auto index : indices) {
