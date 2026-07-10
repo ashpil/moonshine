@@ -147,11 +147,10 @@ HdSprim* HdMoonshineRenderDelegate::CreateSprim(TfToken const& typeId, SdfPath c
         return new HdMoonshineRectLight(sprimId, *_renderParam);
     } else if (typeId == HdPrimTypeTokens->diskLight) {
         return new HdMoonshineDiskLight(sprimId, *_renderParam);
+    } else if (typeId == HdPrimTypeTokens->distantLight) {
+        return new HdMoonshineDistantLight(sprimId);
     } else {
-        // we pretend to support distant lights, otherwise usdview will refuse to add a default dome light
-        if (typeId != HdPrimTypeTokens->distantLight) {
-            TF_CODING_ERROR("Unknown Sprim type %s", typeId.GetText());
-        }
+        TF_CODING_ERROR("Unknown Sprim type %s", typeId.GetText());
         return nullptr;
     }
 }
@@ -169,11 +168,10 @@ HdSprim* HdMoonshineRenderDelegate::CreateFallbackSprim(TfToken const& typeId) {
         return new HdMoonshineRectLight(SdfPath::EmptyPath(), *_renderParam);
     } else if (typeId == HdPrimTypeTokens->diskLight) {
         return new HdMoonshineDiskLight(SdfPath::EmptyPath(), *_renderParam);
+    } else if (typeId == HdPrimTypeTokens->distantLight) {
+        return new HdMoonshineDistantLight(SdfPath::EmptyPath());
     } else {
-        // we pretend to support distant lights, otherwise usdview will refuse to add a default dome light
-        if (typeId != HdPrimTypeTokens->distantLight) {
-            TF_CODING_ERROR("Unknown fallback Sprim type %s", typeId.GetText());
-        }
+        TF_CODING_ERROR("Unknown fallback Sprim type %s", typeId.GetText());
         return nullptr;
     }
 }

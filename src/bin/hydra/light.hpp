@@ -70,4 +70,23 @@ protected:
     Shape ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const override;
 };
 
+// does nothing. we have fake support for this because usdview will not offer its default
+// dome light unless distant light support is claimed, and we want the default dome light
+class HdMoonshineDistantLight final : public HdLight {
+public:
+    HdMoonshineDistantLight(SdfPath const& id) : HdLight(id) {}
+    ~HdMoonshineDistantLight() override = default;
+
+    void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) override {
+        *dirtyBits = HdLight::Clean;
+    }
+
+    HdDirtyBits GetInitialDirtyBitsMask() const override {
+        return HdLight::AllDirty;
+    }
+protected:
+    HdMoonshineDistantLight(const HdMoonshineDistantLight&) = delete;
+    HdMoonshineDistantLight &operator =(const HdMoonshineDistantLight&) = delete;
+};
+
 PXR_NAMESPACE_CLOSE_SCOPE
