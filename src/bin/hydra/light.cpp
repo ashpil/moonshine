@@ -183,7 +183,7 @@ void HdMoonshineDomeLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* r
     *dirtyBits = HdChangeTracker::Clean;
 }
 
-HdMoonshineRectLight::HdMoonshineRectLight(SdfPath const& id, HdMoonshineRenderParam& renderParam) : HdLight(id) {
+HdMoonshineAreaLight::HdMoonshineAreaLight(SdfPath const& id, HdMoonshineRenderParam& renderParam) : HdLight(id) {
     // black diffuse body; emission is set during Sync
     _material = HdMoonshineCreateMaterial(renderParam._moonshine, Material {
         .normal = renderParam._upNormal,
@@ -195,11 +195,11 @@ HdMoonshineRectLight::HdMoonshineRectLight(SdfPath const& id, HdMoonshineRenderP
     });
 }
 
-HdDirtyBits HdMoonshineRectLight::GetInitialDirtyBitsMask() const {
+HdDirtyBits HdMoonshineAreaLight::GetInitialDirtyBitsMask() const {
     return HdLight::AllDirty;
 }
 
-void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits) {
+void HdMoonshineAreaLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* hdRenderParam, HdDirtyBits* dirtyBits) {
     HdMoonshineRenderParam* renderParam = static_cast<HdMoonshineRenderParam*>(hdRenderParam);
     HdMoonshine* msne = renderParam->_moonshine;
     SdfPath const& id = GetId();
@@ -207,14 +207,9 @@ void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* h
     const float intensity = sceneDelegate->GetLightParamValue(id, HdLightTokens->intensity).GetWithDefault(1.0f);
     const float exposure = sceneDelegate->GetLightParamValue(id, HdLightTokens->exposure).GetWithDefault(0.0f);
     const GfVec3f color = sceneDelegate->GetLightParamValue(id, HdLightTokens->color).GetWithDefault(GfVec3f(1.0f));
-    const float width = sceneDelegate->GetLightParamValue(id, HdLightTokens->width).GetWithDefault(1.0f);
-    const float height = sceneDelegate->GetLightParamValue(id, HdLightTokens->height).GetWithDefault(1.0f);
     const bool normalize = sceneDelegate->GetLightParamValue(id, HdLightTokens->normalize).GetWithDefault(false);
 
-    const VtValue textureValue = sceneDelegate->GetLightParamValue(id, HdLightTokens->textureFile);
-    if (textureValue.IsHolding<SdfAssetPath>() && !textureValue.UncheckedGet<SdfAssetPath>().GetAssetPath().empty()) {
-        TF_WARN("rect light %s: textureFile is not supported, using constant color", id.GetText());
-    }
+    const Shape shape = ComputeShape(sceneDelegate, *renderParam);
 
     const GfMatrix4f xform = GfMatrix4f(sceneDelegate->GetTransform(id));
 
@@ -224,7 +219,7 @@ void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* h
     if (normalize) {
         const GfVec3f worldX = xform.TransformDir(GfVec3f::XAxis());
         const GfVec3f worldY = xform.TransformDir(GfVec3f::YAxis());
-        const float worldArea = width * height * GfCross(worldX, worldY).GetLength();
+        const float worldArea = shape.area * GfCross(worldX, worldY).GetLength();
         if (worldArea > 0) {
             scale /= worldArea;
         }
@@ -239,9 +234,9 @@ void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* h
         _radiance = radiance;
     }
 
-    // rect light is a unit quad; bake authored width/height in as scale
+    // the shared meshes are unit-sized; bake the authored dimensions in as scale
     GfMatrix4f scaleMat;
-    scaleMat.SetScale(GfVec3f(width, height, 1.0f));
+    scaleMat.SetScale(GfVec3f(shape.size[0], shape.size[1], 1.0f));
     const GfMatrix4f transform = scaleMat * xform;
     const Mat4x3 matrix = Mat4x3 {
         .x = F32x4 { .x = transform[0][0], .y = transform[1][0], .z = transform[2][0], .w = transform[3][0] },
@@ -256,17 +251,35 @@ void HdMoonshineRectLight::Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* h
     if (_instance) {
         HdMoonshineSetInstance(msne, *_instance, matrix, visible);
     } else {
-        _instance = HdMoonshineCreateInstance(msne, matrix, renderParam->_unitQuad, _material, visible);
+        _instance = HdMoonshineCreateInstance(msne, matrix, shape.mesh, _material, visible);
     }
 
     *dirtyBits = HdChangeTracker::Clean;
 }
 
-void HdMoonshineRectLight::Finalize(HdRenderParam* renderParam) {
+void HdMoonshineAreaLight::Finalize(HdRenderParam* renderParam) {
     if (_instance) {
         HdMoonshineDestroyInstance(static_cast<HdMoonshineRenderParam*>(renderParam)->_moonshine, *_instance);
         _instance.reset();
     }
+}
+
+HdMoonshineAreaLight::Shape HdMoonshineRectLight::ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const {
+    SdfPath const& id = GetId();
+    const float width = sceneDelegate->GetLightParamValue(id, HdLightTokens->width).GetWithDefault(1.0f);
+    const float height = sceneDelegate->GetLightParamValue(id, HdLightTokens->height).GetWithDefault(1.0f);
+
+    const VtValue textureValue = sceneDelegate->GetLightParamValue(id, HdLightTokens->textureFile);
+    if (textureValue.IsHolding<SdfAssetPath>() && !textureValue.UncheckedGet<SdfAssetPath>().GetAssetPath().empty()) {
+        TF_WARN("rect light %s: textureFile is not supported, using constant color", id.GetText());
+    }
+
+    return Shape { .mesh = renderParam._unitQuad, .size = GfVec2f(width, height), .area = width * height };
+}
+
+HdMoonshineAreaLight::Shape HdMoonshineDiskLight::ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const {
+    const float radius = sceneDelegate->GetLightParamValue(GetId(), HdLightTokens->radius).GetWithDefault(0.5f);
+    return Shape { .mesh = renderParam._unitDisk, .size = GfVec2f(radius, radius), .area = (float)M_PI * radius * radius };
 }
 
 void HdMoonshineDomeLight::Finalize(HdRenderParam* renderParam) {

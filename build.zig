@@ -170,6 +170,7 @@ pub fn build(b: *std.Build) !void {
         const base_flags = [_][]const u8{
             "-std=c++17",
             "-DTBB_USE_DEBUG=0",
+            "-D_USE_MATH_DEFINES",
         };
         const unix_flags = [_][]const u8{
             "-DARCH_HAS_GNU_STL_EXTENSIONS",

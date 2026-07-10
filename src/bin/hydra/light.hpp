@@ -5,6 +5,7 @@
 
 #include "pxr/pxr.h"
 #include "pxr/imaging/hd/light.h"
+#include "pxr/base/gf/vec2f.h"
 #include "pxr/base/gf/vec3f.h"
 
 #include <optional>
@@ -26,11 +27,11 @@ protected:
     HdMoonshineDomeLight &operator =(const HdMoonshineDomeLight&) = delete;
 };
 
-// implemented as an emissive quad instance
-class HdMoonshineRectLight final : public HdLight {
+// implemented as an emissive mesh instance
+class HdMoonshineAreaLight : public HdLight {
 public:
-    HdMoonshineRectLight(SdfPath const& id, HdMoonshineRenderParam& renderParam);
-    ~HdMoonshineRectLight() override = default;
+    HdMoonshineAreaLight(SdfPath const& id, HdMoonshineRenderParam& renderParam);
+    ~HdMoonshineAreaLight() override = default;
 
     void Sync(HdSceneDelegate* sceneDelegate, HdRenderParam* renderParam, HdDirtyBits* dirtyBits) override;
 
@@ -38,12 +39,35 @@ public:
 
     void Finalize(HdRenderParam* renderParam) override;
 protected:
-    HdMoonshineRectLight(const HdMoonshineRectLight&) = delete;
-    HdMoonshineRectLight &operator =(const HdMoonshineRectLight&) = delete;
+    HdMoonshineAreaLight(const HdMoonshineAreaLight&) = delete;
+    HdMoonshineAreaLight &operator =(const HdMoonshineAreaLight&) = delete;
+
+    struct Shape {
+        MeshHandle mesh;
+        GfVec2f size; // local XY scale baked into the instance transform
+        float area;   // local surface area, for normalize
+    };
+    virtual Shape ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const = 0;
 private:
     MaterialHandle _material;
     std::optional<InstanceHandle> _instance;
     GfVec3f _radiance = GfVec3f(0.0f); // matches the initial black emissive
+};
+
+// unit quad scaled by width/height
+class HdMoonshineRectLight final : public HdMoonshineAreaLight {
+public:
+    using HdMoonshineAreaLight::HdMoonshineAreaLight;
+protected:
+    Shape ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const override;
+};
+
+// unit-radius disk scaled by radius
+class HdMoonshineDiskLight final : public HdMoonshineAreaLight {
+public:
+    using HdMoonshineAreaLight::HdMoonshineAreaLight;
+protected:
+    Shape ComputeShape(HdSceneDelegate* sceneDelegate, HdMoonshineRenderParam& renderParam) const override;
 };
 
 PXR_NAMESPACE_CLOSE_SCOPE
