@@ -750,8 +750,8 @@ const PhysicalDevice = struct {
             &.{
                 .queue_create_info_count = queue_create_info.len,
                 .p_queue_create_infos = &queue_create_info,
-                .enabled_layer_count = if (validate) validation_layers.len else 0,
-                .pp_enabled_layer_names = if (validate) &validation_layers else undefined,
+                .enabled_layer_count = 0,
+                .pp_enabled_layer_names = null,
                 .enabled_extension_count = @as(u32, @intCast(all_extensions.len)),
                 .pp_enabled_extension_names = all_extensions.ptr,
                 .p_enabled_features = &.{
