@@ -38,14 +38,14 @@ pub const Camera = extern struct {
 };
 
 sensors: std.ArrayListUnmanaged(Sensor) = .empty,
-cameras: std.ArrayListUnmanaged(std.meta.Tuple(&.{[:0]const u8, Camera })) = .empty,
+cameras: std.ArrayListUnmanaged(struct { [:0]const u8, Camera }) = .empty,
 
 const Self = @This();
 
 pub const SensorHandle = u32;
 pub fn appendSensor(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, extent: vk.Extent2D, chromaticities: engine.color.Chromaticities) !SensorHandle {
     var buf: [32]u8 = undefined;
-    const name = try std.fmt.bufPrintZ(&buf, "render {}", .{self.sensors.items.len});
+    const name = try std.fmt.bufPrintSentinel(&buf, "render {}", .{self.sensors.items.len}, 0);
 
     try self.sensors.append(allocator, try Sensor.create(vc, extent, chromaticities, name));
     return @intCast(self.sensors.items.len - 1);

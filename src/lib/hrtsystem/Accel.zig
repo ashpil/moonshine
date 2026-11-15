@@ -250,7 +250,7 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
 pub fn recordSetInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager, handle: Handle, instance: Instance) void {
     const vk_instance = vk.AccelerationStructureInstanceKHR {
         .transform = vk.TransformMatrixKHR {
-            .matrix = @bitCast(instance.transform),
+            .matrix = instance.transform.storage,
         },
         .instance_custom_index_and_mask = .{
             .instance_custom_index = instance.model,

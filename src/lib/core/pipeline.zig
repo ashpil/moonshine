@@ -152,7 +152,7 @@ pub inline fn pushDescriptorDataToWriteDescriptor(BindingsType: type, bindings: 
                 .p_buffer_info = undefined,
                 .p_texel_buffer_view = undefined,
             },
-            else => @compileError("unknown descriptor type " ++ @tagName(binding.descriptor_type)), // TODO
+            else => @compileError("unknown descriptor type " ++ @tagName(descriptor_type)), // TODO
         };
     }
 

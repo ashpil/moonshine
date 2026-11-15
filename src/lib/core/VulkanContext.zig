@@ -369,7 +369,7 @@ pub const MemoryTypes = struct {
         return self;
     }
 
-    pub fn find(self: MemoryTypes, type_filter: u32, required_properties: vk.MemoryPropertyFlags) !std.meta.Int(.unsigned, vk.MAX_MEMORY_TYPES) {
+    pub fn find(self: MemoryTypes, type_filter: u32, required_properties: vk.MemoryPropertyFlags) !@Int(.unsigned, vk.MAX_MEMORY_TYPES) {
         return for (self.slice(), 0..) |avalable_properties, i| {
             if (type_filter & (@as(u32, 1) << @intCast(i)) != 0 and avalable_properties.contains(required_properties)) {
                 break @intCast(i);

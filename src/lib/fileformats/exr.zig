@@ -85,7 +85,7 @@ pub const helpers = struct {
                 b_plane[i] = pixel[2];
             }
 
-            const name_pad = [_]u8{0} ** (c.EXR_MAX_NAME - 1);
+            const name_pad: [c.EXR_MAX_NAME - 1]u8 = @splat(0);
             var channels = [channel_count]c.exr_channel {
                 .{ .name = [_]u8{'B'} ++ name_pad, .pixel_type = c.EXR_PIXEL_FLOAT, .x_sampling = 1, .y_sampling = 1, .p_linear = 0 },
                 .{ .name = [_]u8{'G'} ++ name_pad, .pixel_type = c.EXR_PIXEL_FLOAT, .x_sampling = 1, .y_sampling = 1, .p_linear = 0 },

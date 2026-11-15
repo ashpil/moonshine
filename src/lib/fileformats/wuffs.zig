@@ -168,7 +168,7 @@ fn destroyDecoder(format: DecodableImageFileFormat, allocator: std.mem.Allocator
     } else unreachable;
 }
 
-pub fn load(allocator: std.mem.Allocator, buffer: []const u8) Error!std.meta.Tuple(&.{[]const u8, u32, u32}) {
+pub fn load(allocator: std.mem.Allocator, buffer: []const u8) Error!struct { []const u8, u32, u32 } {
     var src = c.wuffs_base__ptr_u8__reader(@constCast(buffer.ptr), buffer.len, true);
     const format = (try guessFourCC(buffer)).toDecodableImageFileFormat() orelse return error.NotImage;
 

@@ -51,7 +51,7 @@ pub fn comptimeHeapName(comptime properties: vk.MemoryPropertyFlags) *const [hea
     }
 }
 
-fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, comptime properties: vk.MemoryPropertyFlags, name: [:0]const u8) !std.meta.Tuple(&.{ vk.Buffer, vk.DeviceMemory }) {
+fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.BufferUsageFlags, comptime properties: vk.MemoryPropertyFlags, name: [:0]const u8) !struct { vk.Buffer, vk.DeviceMemory } {
     const buffer = try vc.device.createBuffer(&.{
             .size = size,
             .usage = usage,
@@ -235,7 +235,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
     return struct {
         const Self = @This();
 
-        const MemoryTypeIndex = std.meta.Int(.unsigned, vk.MAX_MEMORY_TYPES);
+        const MemoryTypeIndex = @Int(.unsigned, vk.MAX_MEMORY_TYPES);
         const Metadata = struct {
             // technically the pointer here is entirely redundant as it basically points to itself
             // but std.Treap doesn't let me make use of this
@@ -339,7 +339,7 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
                 const alignment_fmt = "{x:0>" ++ std.fmt.comptimePrint("{}", .{ alignment_hex_print_size }) ++ "}";
                 const suffix = ")";
                 var buf: [prefix.len + usize_hex_print_size + infix.len + alignment_hex_print_size + suffix.len + 1]u8 = undefined;
-                break :blk std.fmt.bufPrintZ(&buf, prefix ++ len_fmt ++ infix ++ alignment_fmt ++ suffix, .{ len, required_alignment }) catch unreachable;
+                break :blk std.fmt.bufPrintSentinel(&buf, prefix ++ len_fmt ++ infix ++ alignment_fmt ++ suffix, .{ len, required_alignment }, 0) catch unreachable;
             };
             vk_helpers.setDebugName(self.device, memory, debug_name) catch |err| std.debug.panic("{}", .{ err });
 

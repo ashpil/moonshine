@@ -45,7 +45,7 @@ const F64x2x2 = vector.Mat2(f64);
 
 const vk = @import("vulkan");
 
-fn createVulkanContext(allocator: std.mem.Allocator, window: Window) !std.meta.Tuple(&.{ VulkanContext, bool }) {
+fn createVulkanContext(allocator: std.mem.Allocator, window: Window) !struct { VulkanContext, bool } {
     const base_requirements = comptime hrtsystem.vulkan_requirements.merge(displaysystem.vulkan_requirements);
     const needed_instance_extensions = window.getRequiredInstanceExtensions();
     const wanted_instance_extensions = [_][*:0]const u8 { vk.extensions.ext_swapchain_colorspace.name };
@@ -182,7 +182,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
     var max_sample_count: u32 = 0; // unlimited
     var navigation_speed: f32 = 10;
     var rebuild_label_buffer: [20]u8 = undefined;
-    var rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild", .{});
+    var rebuild_label: [:0]const u8 = "Rebuild";
     var rebuild_error = false;
     var has_clicked = false;
     var current_clicked_object: ?ObjectPicker.ClickedObject = null;
@@ -306,9 +306,9 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                     if (!rebuild_error) {
                         const end = std.Io.Timestamp.now(io, .real);
                         const elapsed: u96 = @intCast(start.durationTo(end).toNanoseconds());
-                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed / std.time.ns_per_ms});
+                        rebuild_label = try std.fmt.bufPrintSentinel(&rebuild_label_buffer, "Rebuild ({d}ms)", .{elapsed / std.time.ns_per_ms}, 0);
                     } else {
-                        rebuild_label = try std.fmt.bufPrintZ(&rebuild_label_buffer, "Rebuild (error)", .{});
+                        rebuild_label = "Rebuild (error)";
                     }
                 }
                 if (last_rebuild_failed) imgui.popStyleColor();
@@ -397,12 +397,12 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                         if (thin) imgui.beginDisabled();
                         changed = imgui.dragScalar(u8, "Priority", &priority, 1, 1, 7) or changed;
                         if (thin) imgui.endDisabled();
-                        var transform: F32x4x3 = @bitCast(instance.transform);
+                        var transform = F32x4x3 { .storage = instance.transform.matrix };
                         imgui.pushItemWidth(imgui.getFontSize() * -6);
                         changed = imgui.dragMatrix(F32x4x3, "Transform", &transform, 0.1, -std.math.inf(f32), std.math.inf(f32)) or changed;
                         if (changed) {
                             const updated_instance = Accel.Instance {
-                                .transform = @bitCast(transform),
+                                .transform = transform,
                                 .visible = visible,
                                 .thin = thin,
                                 .priority = @intCast(priority),
@@ -676,7 +676,8 @@ fn drawChromaticityDiagram(chromaticities: engine.color.Chromaticities) void {
         const rgb_u8 = rgb_scaled.intFromFloat(u8).append(255);
 
         const xy = color.XYZToxyY(point).truncate();
-        imgui.primWriteVtx(draw_list, xy_to_view.mul(xy.append(1)).truncate().floatCast(f32), @bitCast(imgui.getIO().Fonts.*.TexUvWhitePixel), rgb_u8);
+        const white_uv = imgui.getIO().Fonts.*.TexUvWhitePixel;
+        imgui.primWriteVtx(draw_list, xy_to_view.mul(xy.append(1)).truncate().floatCast(f32), F32x2.new(.{ white_uv.x, white_uv.y }), rgb_u8);
     }
 
     imgui.addTriangle(draw_list,

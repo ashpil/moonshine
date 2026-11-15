@@ -80,27 +80,35 @@ pub fn getWindowDrawList() *c.ImDrawList {
 }
 
 pub fn getCursorScreenPos() F32x2 {
-    return @bitCast(c.ImGui_GetCursorScreenPos());
+    const pos = c.ImGui_GetCursorScreenPos();
+    return F32x2.new(.{ pos.x, pos.y });
 }
 
 pub fn setCursorScreenPos(pos: F32x2) void {
-    return c.ImGui_SetCursorScreenPos(@bitCast(pos));
+    return c.ImGui_SetCursorScreenPos(.{ .x = pos.element(0), .y = pos.element(1) });
 }
 
 pub fn addPolyline(draw_list: *c.ImDrawList, points: []const F32x2, color: U8x4) void {
-    c.ImDrawList_AddPolyline(draw_list, @ptrCast(points.ptr), @intCast(points.len), @bitCast(color), 0, 1.0);
+    c.ImDrawList_AddPolyline(draw_list, @ptrCast(points.ptr), @intCast(points.len), @bitCast(color.toArray()), 0, 1.0);
 }
 
 pub fn addTriangle(draw_list: *c.ImDrawList, p1: F32x2, p2: F32x2, p3: F32x2, color: U8x4) void {
-    c.ImDrawList_AddTriangle(draw_list, @bitCast(p1), @bitCast(p2), @bitCast(p3), @bitCast(color), 1.0);
+    c.ImDrawList_AddTriangle(
+        draw_list,
+        .{ .x = p1.element(0), .y = p1.element(1) },
+        .{ .x = p2.element(0), .y = p2.element(1) },
+        .{ .x = p3.element(0), .y = p3.element(1) },
+        @bitCast(color.toArray()),
+        1.0,
+    );
 }
 
 pub fn addCircle(draw_list: *c.ImDrawList, center: F32x2, radius: f32, color: U8x4) void {
-    c.ImDrawList_AddCircle(draw_list, @bitCast(center), radius, @bitCast(color), 0, 1.0);
+    c.ImDrawList_AddCircle(draw_list, .{ .x = center.element(0), .y = center.element(1) }, radius, @bitCast(color.toArray()), 0, 1.0);
 }
 
 pub fn addRect(draw_list: *c.ImDrawList, min: F32x2, max: F32x2, color: U8x4, rounding: f32, flags: c.ImDrawFlags, thickness: f32) void {
-    c.ImDrawList_AddRect(draw_list, @bitCast(min), @bitCast(max), @bitCast(color), rounding, flags, thickness);
+    c.ImDrawList_AddRect(draw_list, .{ .x = min.element(0), .y = min.element(1) }, .{ .x = max.element(0), .y = max.element(1) }, @bitCast(color.toArray()), rounding, flags, thickness);
 }
 
 pub fn primReserve(draw_list: *c.ImDrawList, idx_count: usize, vtx_count: usize) void {
@@ -108,7 +116,7 @@ pub fn primReserve(draw_list: *c.ImDrawList, idx_count: usize, vtx_count: usize)
 }
 
 pub fn primWriteVtx(draw_list: *c.ImDrawList, pos: F32x2, uv: F32x2, col: U8x4) void {
-    c.ImDrawList_PrimWriteVtx(draw_list, @bitCast(pos), @bitCast(uv), @bitCast(col));
+    c.ImDrawList_PrimWriteVtx(draw_list, .{ .x = pos.element(0), .y = pos.element(1) }, .{ .x = uv.element(0), .y = uv.element(1) }, @bitCast(col.toArray()));
 }
 
 pub fn primWriteIdx(draw_list: *c.ImDrawList, idx: c.ImDrawIdx) void {
@@ -121,7 +129,7 @@ pub fn text(msg: [*:0]const u8) void {
 
 pub fn textFmt(comptime fmt: []const u8, args: anytype) !void {
     var buf: [256]u8 = undefined;
-    const str = try std.fmt.bufPrintZ(&buf, fmt, args);
+    const str = try std.fmt.bufPrintSentinel(&buf, fmt, args, 0);
     c.ImGui_TextUnformatted(str, null);
 }
 
@@ -234,7 +242,7 @@ pub fn getStyle() *c.ImGuiStyle {
 }
 
 pub fn pushStyleColor(idx: Col, color: vector.Vec4(f32)) void {
-    c.ImGui_PushStyleColorImVec4(@intFromEnum(idx), @bitCast(color));
+    c.ImGui_PushStyleColorImVec4(@intFromEnum(idx), .{ .x = color.element(0), .y = color.element(1), .z = color.element(2), .w = color.element(3) });
 }
 
 pub fn popStyleColor() void {
@@ -383,7 +391,8 @@ pub const MouseButton = enum(c_int) {
     middle = c.ImGuiMouseButton_Middle,
 };
 pub fn getMouseDragDelta(mouse_button: MouseButton) F32x2 {
-    return @bitCast(c.ImGui_GetMouseDragDelta(@intFromEnum(mouse_button), -1));
+    const delta = c.ImGui_GetMouseDragDelta(@intFromEnum(mouse_button), -1);
+    return F32x2.new(.{ delta.x, delta.y });
 }
 
 pub fn resetMouseDragDelta(mouse_button: MouseButton) void {
@@ -403,7 +412,8 @@ pub fn isMouseReleased(mouse_button: MouseButton) bool {
 }
 
 pub fn getMousePos() F32x2 {
-    return @bitCast(c.ImGui_GetMousePos());
+    const pos = c.ImGui_GetMousePos();
+    return F32x2.new(.{ pos.x, pos.y });
 }
 
 pub fn getFontSize() f32 {
@@ -451,7 +461,8 @@ pub fn setItemTooltip(str: [*:0]const u8) void {
 }
 
 pub fn getContentRegionAvail() F32x2 {
-    return @bitCast(c.ImGui_GetContentRegionAvail());
+    const avail = c.ImGui_GetContentRegionAvail();
+    return F32x2.new(.{ avail.x, avail.y });
 }
 
 pub fn sameLine() void {
@@ -470,7 +481,7 @@ pub fn end() void {
     c.ImGui_End();
 }
 
-pub fn getTexDataAsAlpha8(self: *FontAtlas) std.meta.Tuple(&.{ [*]const u8, vk.Extent2D }) {
+pub fn getTexDataAsAlpha8(self: *FontAtlas) struct { [*]const u8, vk.Extent2D } {
     var width: c_int = undefined;
     var height: c_int = undefined;
     var out_pixels: [*c]u8 = undefined;

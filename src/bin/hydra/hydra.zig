@@ -417,7 +417,7 @@ pub const HdMoonshine = struct {
     pub export fn HdMoonshineCreateCamera(self: *HdMoonshine, camera: Camera.Camera, name: [*:0]const u8) Camera.CameraHandle {
         self.mutex.lockUncancelable(self.io);
         defer self.mutex.unlock(self.io);
-        return self.camera.appendCamera(self.allocator.allocator(), camera, self.allocator.allocator().dupeZ(u8, std.mem.span(name)) catch @panic("internal error")) catch @panic("internal error"); // TODO: error recovery
+        return self.camera.appendCamera(self.allocator.allocator(), camera, self.allocator.allocator().dupeSentinel(u8, std.mem.span(name), 0) catch @panic("internal error")) catch @panic("internal error"); // TODO: error recovery
     }
 
     pub export fn HdMoonshineSetCamera(self: *HdMoonshine, handle: Camera.CameraHandle, camera: Camera.Camera) void {

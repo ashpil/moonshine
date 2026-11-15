@@ -250,7 +250,11 @@ pub fn build(b: *std.Build) !void {
             // need stdlibc++ include directories
             // i've had to do some arcane magic to figure out what to do here,
             // and i'm not even convinced it'll work on any system other than mine
-            var iter = std.mem.splitScalar(u8, runAllowFailStderr(b, &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" }) catch "", '\n');
+            const result = try std.process.run(b.allocator, b.graph.io, .{
+                .argv = &.{ "g++", "-E", "-Wp,-v", "-xc++", "/dev/null" },
+                .environ_map = &b.graph.environ_map,
+            });
+            var iter = std.mem.splitScalar(u8, result.stderr, '\n');
             while (iter.next()) |include_dir| if (include_dir.len > 0 and include_dir[0] == ' ') {
                 const dir = include_dir[1..];
                 if (std.mem.indexOf(u8, dir, "/include/c++") != null) {
@@ -325,41 +329,6 @@ pub fn build(b: *std.Build) !void {
     const check_step = b.step("check", "Type check all");
     for (compiles.items) |compile| {
         check_step.dependOn(&compile.step);
-    }
-}
-
-fn runAllowFailStderr(self: *std.Build, argv: []const []const u8) ![]u8 {
-    std.debug.assert(argv.len != 0);
-
-    const graph = self.graph;
-    const io = graph.io;
-
-    const max_output_size = 400 * 1024;
-    try std.Build.Step.handleVerbose2(self, .inherit, &graph.environ_map, argv);
-
-    var child = try std.process.spawn(io, .{
-        .argv = argv,
-        .environ_map = &graph.environ_map,
-        .stdin = .ignore,
-        .stdout = .ignore,
-        .stderr = .pipe,
-    });
-
-    var stderr_reader = child.stderr.?.readerStreaming(io, &.{});
-    const stderr = stderr_reader.interface.allocRemaining(self.allocator, .limited(max_output_size)) catch {
-        return error.ReadFailure;
-    };
-    errdefer self.allocator.free(stderr);
-
-    const term = try child.wait(io);
-    switch (term) {
-        .exited => |code| {
-            if (code != 0) {
-                return error.ExitCodeFailure;
-            }
-            return stderr;
-        },
-        .signal, .stopped, .unknown => return error.ProcessTerminated,
     }
 }
 

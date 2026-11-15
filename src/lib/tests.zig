@@ -345,7 +345,7 @@ test "white sphere on white background is white" {
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 4.0,
         },
-    }, try allocator.dupeZ(u8, ""));
+    }, try allocator.dupeSentinel(u8, "", 0));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);
@@ -442,7 +442,7 @@ test "white volume on white background is white" {
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 4.0,
         },
-    }, try allocator.dupeZ(u8, ""));
+    }, try allocator.dupeSentinel(u8, "", 0));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);
@@ -543,7 +543,7 @@ test "inside illuminating sphere is white" {
         .thin_lens = Camera.ThinLens {
             .vfov = std.math.pi / 3.0,
         },
-    }, try allocator.dupeZ(u8, ""));
+    }, try allocator.dupeSentinel(u8, "", 0));
     _ = try camera.appendSensor(&tc.vc, allocator, extent, tests_color_space);
 
     var background = try Background.create(&tc.vc);

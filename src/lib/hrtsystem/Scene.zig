@@ -81,7 +81,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, io: s
                     .orthographic = Camera.Orthographic {
                         .vscale = if (gltf_camera.type == .orthographic) gltf_camera.type.orthographic.ymag else 1,
                     },
-                }, try allocator.dupeZ(u8, gltf_camera.name orelse "<unnamed>"));
+                }, try allocator.dupeSentinel(u8, gltf_camera.name orelse "<unnamed>", 0));
             }
         }
 
@@ -95,7 +95,7 @@ pub fn fromGltfExr(vc: *const VulkanContext, allocator: std.mem.Allocator, io: s
             });
             _ = try camera.appendCamera(allocator, Camera.Camera {
                 .transform = transform.mul(msne_camera_to_gltf_camera).truncateRow(),
-            }, try allocator.dupeZ(u8, "default"));
+            }, try allocator.dupeSentinel(u8, "default", 0));
         }
     }
 

@@ -357,7 +357,7 @@ pub fn Matrix(comptime T: type, comptime c: comptime_int, comptime r: comptime_i
         pub const intFromFloat = math.intFromFloat;
 
         const square = if (col_count == row_count) struct {
-            pub const identity = Self.diagonal(.{ 1 } ** col_count);
+            pub const identity = Self.diagonal(@splat(1));
 
             pub fn diagonal(values: [col_count]ComponentType) Self {
                 var out: Self = Self.splat(0);
