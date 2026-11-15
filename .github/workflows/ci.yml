@@ -21,8 +21,8 @@ jobs:
 
     - name: Install DirectXShaderCompiler
       run: |
-        curl https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/linux_dxc_2024_07_31.x86_64.tar.gz -L | tar -zx
-        echo "$PWD/bin" >> $GITHUB_PATH
+        curl https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2607/linux_dxc_2026_07_29.x86_x64.tar.gz -L | tar -zx
+        echo "$PWD/linux_dxc_2026_07_29.x86_x64/bin" >> $GITHUB_PATH
 
     - name: Setup Zig
       uses: mlugg/setup-zig@v2
@@ -51,7 +51,7 @@ jobs:
 
     - name: Install DirectXShaderCompiler
       run: |
-        Invoke-WebRequest -uri "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2407/dxc_2024_07_31.zip" -Method "GET" -OutFile dxc.zip
+        Invoke-WebRequest -uri "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2607/dxc_2026_07_29.zip" -Method "GET" -OutFile dxc.zip
         Expand-Archive dxc.zip
         Add-Content $env:GITHUB_PATH ";.\dxc\bin\x86"
 
