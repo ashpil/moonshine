@@ -830,6 +830,7 @@ const Shader = struct {
         "-spirv",
         "-fspv-target-env=vulkan1.3",
         "-fvk-use-scalar-layout",
+        "-Gis",
         "-Wall",
         "-Wshorten-64-to-32",
         "-Wfloat-conversion",
