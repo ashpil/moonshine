@@ -123,10 +123,18 @@ struct TriangleLight: Light {
         const float2 barycentrics = squareToTriangle(rand);
         const SurfacePoint surface = tri.surfacePoint(barycentrics, toWorld, toLocal);
 
+        const float3 dirWs = normalize(surface.position - positionWs);
+        const float3 offsetSurfacePosition = surface.position - faceForward(surface.triangleFrame.n, dirWs) * surface.spawnOffset;
+
         LightSample lightSample;
-        lightSample.dirWs = normalize(surface.position - positionWs);
-        lightSample.distance = distance(surface.position, positionWs) - surface.spawnOffset / abs(dot(lightSample.dirWs, surface.triangleFrame.n));
-        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, lightSample.dirWs, surface.triangleFrame.n) * areaPdf();
+
+        // these get the offset segment as they are used for the ray query
+        // FIXME: ideally we'd do this some other way, as these are used by the caller for non-ray query use cases too
+        lightSample.dirWs = normalize(offsetSurfacePosition - positionWs);
+        lightSample.distance = distance(offsetSurfacePosition, positionWs);
+
+        // these get the true segment
+        lightSample.eval.pdf = areaMeasureToSolidAngleMeasure(surface.position, positionWs, dirWs, surface.triangleFrame.n) * areaPdf();
         lightSample.eval.radiance = material.getEmissive(λ, surface.texcoord) / lightSample.eval.pdf;
 
         return lightSample;
