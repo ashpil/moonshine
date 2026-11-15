@@ -14,6 +14,7 @@ struct Reservoir {
     }
 
     void update(const Candidate newCandidate, const float newWeight, inout float rand) {
+        if (newWeight == 0) return; // avoid 0 / 0 below when weightSum is 0
         weightSum += newWeight;
         if (coinFlipRemap(newWeight / weightSum, rand)) {
             selected = newCandidate;
