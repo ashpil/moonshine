@@ -58,21 +58,21 @@ const InstancePowerFoldPipeline = engine.core.pipeline.Pipeline(.{ .shader_sourc
 
 instance_power_pipeline: InstancePowerPipeline,
 instance_power_fold_pipeline: InstancePowerFoldPipeline,
-instance_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+instance_powers: core.mem.DeviceBuffer(F32x3, .{ .storage_buffer = true, .transfer_dst = true }),
 
 instance_count: u32 = 0,
-instances: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }),
+instances: core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true, .storage_buffer = true }),
 instances_address: vk.DeviceAddress,
 
 // keep track of inverse transform -- non-inverse we can get from instances
 // transforms provided by shader only in hit/intersection shaders but we need them
 // in raygen
 // ray queries provide them in any shader which would be a benefit of using them
-world_to_instance: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+world_to_instance: core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer = true, .transfer_dst = true }),
 
 // tlas stuff
 tlas_handle: vk.AccelerationStructureKHR = .null_handle,
-tlas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }) = .{},
+tlas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_khr = true, .shader_device_address = true }) = .{},
 
 const Self = @This();
 
@@ -89,14 +89,14 @@ pub fn createEmpty(vc: *const VulkanContext) !Self {
     std.debug.assert(max_instances % 2 == 0);
     const instance_powers_level_count = comptime std.math.log2(max_instances) + 1;
     const instance_powers_element_count = std.math.pow(u32, 2, instance_powers_level_count) - 1;
-    const instance_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, instance_powers_element_count, "instance powers");
+    const instance_powers = try core.mem.DeviceBuffer(F32x3, .{ .storage_buffer = true, .transfer_dst = true }).create(vc, instance_powers_element_count, "instance powers");
     errdefer instance_powers.destroy(vc);
 
-    const instances = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true, .storage_buffer_bit = true }).create(vc, max_instances, "instances");
+    const instances = try core.mem.DeviceBuffer(vk.AccelerationStructureInstanceKHR, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true, .storage_buffer = true }).create(vc, max_instances, "instances");
     errdefer instances.destroy(vc);
     const instances_address = instances.getAddress(vc);
 
-    const world_to_instance = try core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_instances, "world to instances");
+    const world_to_instance = try core.mem.DeviceBuffer(Mat4x3, .{ .storage_buffer = true, .transfer_dst = true }).create(vc, max_instances, "world to instances");
     errdefer world_to_instance.destroy(vc);
 
     return Self {
@@ -124,24 +124,24 @@ pub fn uploadInstance(self: *Self, vc: *const VulkanContext, encoder: *Encoder, 
 pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_manager: ModelManager) !void {
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier {
         Encoder.BufferBarrier {
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
-            .dst_access_mask = .{ .memory_read_bit = true, .shader_read_bit = true },
+            .src_stage_mask = .{ .copy = true },
+            .src_access_mask = .{ .memory_write = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_khr = true, .compute_shader = true },
+            .dst_access_mask = .{ .memory_read = true, .shader_read = true },
             .buffer = self.instances.handle,
         },
         Encoder.BufferBarrier {
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
-            .dst_access_mask = .{ .memory_read_bit = true, .shader_read_bit = true },
+            .src_stage_mask = .{ .copy = true },
+            .src_access_mask = .{ .memory_write = true },
+            .dst_stage_mask = .{ .acceleration_structure_build_khr = true, .compute_shader = true },
+            .dst_access_mask = .{ .memory_read = true, .shader_read = true },
             .buffer = self.world_to_instance.handle,
         },
         Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_transfer_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage_mask = .{ .all_transfer = true },
+            .src_access_mask = .{ .memory_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_read = true },
             .buffer = model_manager.models_device.handle,
         },
     });
@@ -149,12 +149,12 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
     // update TLAS
     var geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
         .type = .top_level_khr,
-        .flags = .{ .prefer_fast_trace_bit_khr = true },
+        .flags = .{ .prefer_fast_trace_khr = true },
         .mode = .build_khr,
         .geometry_count = 1,
         .p_geometries = (&vk.AccelerationStructureGeometryKHR {
             .geometry_type = .instances_khr,
-            .flags = .{ .opaque_bit_khr = true },
+            .flags = .{ .opaque_khr = true },
             .geometry = .{
                 .instances = .{
                     .array_of_pointers = .false,
@@ -169,11 +169,11 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
 
     const size_info = getBuildSizesInfo(vc, &geometry_info, (&self.instance_count)[0..1]);
 
-    const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.build_scratch_size, "tlas scratch buffer");
+    const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer = true, .shader_device_address = true }).create(vc, size_info.build_scratch_size, "tlas scratch buffer");
     try encoder.attachResource(scratch_buffer);
 
     try encoder.attachResource(self.tlas_buffer);
-    self.tlas_buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }).create(vc, size_info.acceleration_structure_size, "tlas buffer");
+    self.tlas_buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_khr = true, .shader_device_address = true }).create(vc, size_info.acceleration_structure_size, "tlas buffer");
 
     try encoder.attachResource(self.tlas_handle);
     geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
@@ -215,10 +215,10 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
             const src_level: u32 = @intCast(instance_powers_level_count - src_level_rev);
             encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
                 Encoder.BufferBarrier {
-                    .src_stage_mask = .{ .compute_shader_bit = true },
-                    .src_access_mask = .{ .shader_write_bit = true },
-                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                    .dst_access_mask = .{ .shader_read_bit = true },
+                    .src_stage_mask = .{ .compute_shader = true },
+                    .src_access_mask = .{ .shader_write = true },
+                    .dst_stage_mask = .{ .compute_shader = true },
+                    .dst_access_mask = .{ .shader_read = true },
                     .buffer = self.instance_powers.handle,
                 },
             });
@@ -238,10 +238,10 @@ pub fn build(self: *Self, vc: *const VulkanContext, encoder: *Encoder, model_man
     encoder.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .memory_barrier_count = 1,
         .p_memory_barriers = (&vk.MemoryBarrier2 {
-            .src_stage_mask = .{ .acceleration_structure_build_bit_khr = true, .compute_shader_bit = true },
-            .src_access_mask = .{ .acceleration_structure_write_bit_khr = true, .shader_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true, .shader_read_bit = true },
+            .src_stage_mask = .{ .acceleration_structure_build_khr = true, .compute_shader = true },
+            .src_access_mask = .{ .acceleration_structure_write_khr = true, .shader_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .acceleration_structure_read_khr = true, .shader_read = true },
         })[0..1],
     });
 }

@@ -26,10 +26,16 @@ pub fn setDebugName(device: VulkanContext.Device, object: anytype, name: [*:0]co
     // for other types of debugging/profiling
     const want_debug_names = build_options.vk_validation != .ignore;
 
-    if ((comptime want_debug_names) and object != .null_handle) {
+    const handle: u64 = switch (@typeInfo(@TypeOf(object))) {
+        .pointer => @intFromPtr(object),
+        .@"enum" => if (object == .null_handle) return else @intFromEnum(object),
+        else => @compileError(@typeName(@TypeOf(object)) ++ "is not a vulkan handle, but must be"),
+    };
+
+    if (comptime want_debug_names) {
         try device.setDebugUtilsObjectNameEXT(&.{
             .object_type = comptime typeToObjectType(@TypeOf(object)),
-            .object_handle = @intFromEnum(object),
+            .object_handle = handle,
             .p_object_name = name,
         });
     }

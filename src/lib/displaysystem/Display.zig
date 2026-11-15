@@ -119,7 +119,7 @@ pub fn startFrame(self: *Self, vc: *const VulkanContext) !*Encoder {
 
     try frame.encoder.begin();
 
-    if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .top_of_pipe_bit = true }, frame.query_pool, 0);
+    if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .top_of_pipe = true }, frame.query_pool, 0);
 
     return &frame.encoder;
 }
@@ -140,14 +140,14 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     const result = blk: {
         const frame = self.frames[self.frame_index];
 
-        if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .bottom_of_pipe_bit = true }, frame.query_pool, 1);
+        if (metrics) frame.encoder.buffer.writeTimestamp2(.{ .bottom_of_pipe = true }, frame.query_pool, 1);
 
         try frame.encoder.submit(vc.queue, .{
             .wait_semaphore_infos = &[_]vk.SemaphoreSubmitInfoKHR {
                 .{
                     .semaphore = frame.image_acquired,
                     .value = 0,
-                    .stage_mask = .{ .color_attachment_output_bit = true },
+                    .stage_mask = .{ .color_attachment_output = true },
                     .device_index = 0,
                 }
             },
@@ -155,7 +155,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
                 .{
                     .semaphore = frame.command_completed,
                     .value = 0,
-                    .stage_mask =  .{ .color_attachment_output_bit = true },
+                    .stage_mask =  .{ .color_attachment_output = true },
                     .device_index = 0,
                 }
             },
@@ -173,7 +173,7 @@ pub fn endFrame(self: *Self, vc: *const VulkanContext) !vk.Result {
     // collect metrics if enabled
     if (metrics) {
         var timestamps: [2]u64 = undefined;
-        const query_result = try vc.device.getQueryPoolResults(next_frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64_bit" = true });
+        const query_result = try vc.device.getQueryPoolResults(next_frame.query_pool, 0, 2, 2 * @sizeOf(u64), &timestamps, @sizeOf(u64), .{.@"64" = true });
         self.last_frame_time_ns = if (query_result == .success) @as(f64, @floatFromInt(timestamps[1] - timestamps[0])) * self.timestamp_period else std.math.nan(f64);
     }
 
@@ -200,7 +200,7 @@ const Frame = struct {
         errdefer vc.device.destroySemaphore(command_completed, null);
 
         const fence = try vc.device.createFence(&.{
-            .flags = if (fence_initially_signaled) .{ .signaled_bit = true } else .{},
+            .flags = if (fence_initially_signaled) .{ .signaled = true } else .{},
         }, null);
 
         var encoder = try Encoder.create(vc, name);

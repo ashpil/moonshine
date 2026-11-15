@@ -79,7 +79,7 @@ fn createPushDescriptorBindings(comptime Bindings: type, comptime stage_flags: v
             .descriptor_type = descriptor_type,
             .descriptor_count = 1,
             .stage_flags = stage_flags,
-            .binding_flags = if (@typeInfo(field.type) == .optional) .{ .partially_bound_bit = true } else .{},
+            .binding_flags = if (@typeInfo(field.type) == .optional) .{ .partially_bound = true } else .{},
         };
     }
 
@@ -185,7 +185,7 @@ pub fn PipelineBindings(
     if (@typeInfo(PushConstants).@"struct".layout == .auto) @compileError("push constant struct layout is auto but must not be");
 
     const push_set_bindings = createPushDescriptorBindings(PushSetBindings, stages);
-    const PushSetLayout = descriptor.DescriptorLayout(&push_set_bindings, .{ .push_descriptor_bit = true }, 1, name ++ " push descriptor");
+    const PushSetLayout = descriptor.DescriptorLayout(&push_set_bindings, .{ .push_descriptor = true }, 1, name ++ " push descriptor");
 
     return struct {
         push_set_layout: PushSetLayout,
@@ -245,7 +245,7 @@ pub fn Pipeline(comptime options: struct {
 
         const Self = @This();
 
-        const Bindings = PipelineBindings(options.shader_source.name, .{ .compute_bit = true }, options.PushConstants, options.PushSetBindings, options.additional_descriptor_layout_count);
+        const Bindings = PipelineBindings(options.shader_source.name, .{ .compute = true }, options.PushConstants, options.PushSetBindings, options.additional_descriptor_layout_count);
 
         pub const SpecConstants = options.SpecConstants;
         pub const PushConstants = options.PushConstants;
@@ -273,7 +273,7 @@ pub fn Pipeline(comptime options: struct {
             var stage = vk.PipelineShaderStageCreateInfo {
                 .module = module,
                 .p_name = "main",
-                .stage = .{ .compute_bit = true },
+                .stage = .{ .compute = true },
             };
 
             if (@sizeOf(SpecConstants) != 0) {
@@ -365,7 +365,7 @@ pub fn Pipeline(comptime options: struct {
         pub const recordPushConstants = if (@sizeOf(options.PushConstants) != 0) struct {
             pub fn recordPushConstants(self: *const Self, command_buffer: VulkanContext.CommandBuffer, constants: options.PushConstants) void {
                 const bytes = std.mem.asBytes(&constants);
-                command_buffer.pushConstants(self.bindings.layout, .{ .compute_bit = true }, 0, bytes.len, bytes);
+                command_buffer.pushConstants(self.bindings.layout, .{ .compute = true }, 0, bytes.len, bytes);
             }
         }.recordPushConstants else struct {};
 

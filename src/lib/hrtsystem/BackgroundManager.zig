@@ -118,7 +118,7 @@ pub const Handle = u32;
 pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocator, encoder: *Encoder, equirectangular_image_host: BufferSlice(u8), equirectangular_extent: vk.Extent2D, equirectangular_format: vk.Format, transform: Mat3, name: []const u8) !Handle {
     const texture_name_equirectangular = try std.fmt.allocPrintSentinel(allocator, "background {s} equirectangular", .{ name }, 0);
     defer allocator.free(texture_name_equirectangular);
-    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, equirectangular_format, false, texture_name_equirectangular);
+    const equirectangular_image = try Image.create(vc, equirectangular_extent, .{ .transfer_dst = true, .sampled = true }, equirectangular_format, false, texture_name_equirectangular);
     try encoder.attachResource(equirectangular_image);
 
     const equal_area_map_size: u32 = @min(std.math.ceilPowerOfTwoAssert(u32, equirectangular_extent.width), maximum_equal_area_map_size);
@@ -126,7 +126,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
 
     const texture_name_equal_area = try std.fmt.allocPrintSentinel(allocator, "background {s} equal area", .{ name }, 0);
     defer allocator.free(texture_name_equal_area);
-    const equal_area_image = try Image.create(vc, equal_area_extent, .{ .storage_bit = true, .sampled_bit = true }, .r32g32b32a32_sfloat, true, texture_name_equal_area);
+    const equal_area_image = try Image.create(vc, equal_area_extent, .{ .storage = true, .sampled = true }, .r32g32b32a32_sfloat, true, texture_name_equal_area);
     errdefer equal_area_image.destroy(vc);
 
     const actual_mip_count = std.math.log2(equal_area_map_size) + 1;
@@ -146,7 +146,7 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
                 .a = .identity,
             },
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .base_mip_level = @intCast(level_index),
                 .level_count = 1,
                 .base_array_layer = 0,
@@ -160,15 +160,15 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
     // copy equirectangular image to device
     encoder.barrier(&[_]Encoder.ImageBarrier {
         .{
-            .dst_stage_mask = .{ .copy_bit = true },
-            .dst_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .copy = true },
+            .dst_access_mask = .{ .transfer_write = true },
             .old_layout = .undefined,
             .new_layout = .general,
             .image = equirectangular_image.handle,
         },
         .{
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_write_bit = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_write = true },
             .old_layout = .undefined,
             .new_layout = .general,
             .image = equal_area_image.handle,
@@ -179,10 +179,10 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
 
     encoder.barrier(&[_]Encoder.ImageBarrier {
         .{
-            .src_stage_mask = .{ .copy_bit = true },
-            .src_access_mask = .{ .transfer_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage_mask = .{ .copy = true },
+            .src_access_mask = .{ .transfer_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_read = true },
             .image = equirectangular_image.handle,
         },
     }, &.{});
@@ -200,10 +200,10 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
     for (1..mip_views.items.len) |dst_mip_level| {
         encoder.barrier(&[_]Encoder.ImageBarrier {
             .{
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_write_bit = true },
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_read_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_write = true },
+                .dst_stage_mask = .{ .compute_shader = true },
+                .dst_access_mask = .{ .shader_read = true },
                 .image = equal_area_image.handle,
                 .base_mip_level = @intCast(dst_mip_level - 1),
                 .level_count = 1,
@@ -219,10 +219,10 @@ pub fn addBackground(self: *Self, vc: *const VulkanContext, allocator: std.mem.A
     }
     encoder.barrier(&[_]Encoder.ImageBarrier {
         .{
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = .{ .shader_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage_mask = .{ .compute_shader = true },
+            .src_access_mask = .{ .shader_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_read = true },
             .image = equal_area_image.handle,
             .base_mip_level = @intCast(mip_views.items.len - 1),
             .level_count = 1,

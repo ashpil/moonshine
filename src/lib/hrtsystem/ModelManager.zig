@@ -17,8 +17,8 @@ const Mat3 = vector.Mat3(f32);
 pub const Model = struct {
     const Host = struct {
         blas_handle: vk.AccelerationStructureKHR,
-        blas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }),
-        geometry_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
+        blas_buffer: core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_khr = true, .shader_device_address = true }),
+        geometry_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer = true, .shader_device_address = true }) = .{},
     };
 
     pub const Device = extern struct {
@@ -38,7 +38,7 @@ pub const Geometry = struct {
     pub const Host = struct {
         mesh: MeshManager.Handle,
         material: MaterialManager.Handle,
-        triangle_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }) = .{},
+        triangle_powers: core.mem.DeviceBuffer(Mat3, .{ .storage_buffer = true, .shader_device_address = true }) = .{},
     };
 
     pub const Device = extern struct {
@@ -101,10 +101,10 @@ power_fold_pipeline: PowerFoldPipeline,
 // use offset + geometry index here to get geometry
 // TODO: should separate out geometries to GeometryManager so they can be instanced
 geometries_host: std.MultiArrayList(Geometry.Host) = .{},
-geometries_device: core.mem.DeviceBuffer(Geometry.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
+geometries_device: core.mem.DeviceBuffer(Geometry.Device, .{ .storage_buffer = true, .transfer_dst = true }) = .{},
 
 models_host: std.MultiArrayList(Model.Host) = .{},
-models_device: core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }) = .{},
+models_device: core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer = true, .transfer_dst = true }) = .{},
 
 pub const Handle = u24;
 
@@ -142,34 +142,34 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     for (geometries) |geometry| {
         const base_barriers = [_]Encoder.BufferBarrier{
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .all_commands_bit = true },
-                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .dst_stage_mask = .{ .all_commands_bit = true },
-                .dst_access_mask = .{ .memory_read_bit = true },
+                .src_stage_mask = .{ .all_commands = true },
+                .src_access_mask = .{ .memory_write = true, .memory_read = true },
+                .dst_stage_mask = .{ .all_commands = true },
+                .dst_access_mask = .{ .memory_read = true },
                 .buffer = mesh_manager.host.items(.position_buffer)[geometry.mesh].handle,
             },
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .all_commands_bit = true },
-                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .dst_stage_mask = .{ .all_commands_bit = true },
-                .dst_access_mask = .{ .memory_read_bit = true },
+                .src_stage_mask = .{ .all_commands = true },
+                .src_access_mask = .{ .memory_write = true, .memory_read = true },
+                .dst_stage_mask = .{ .all_commands = true },
+                .dst_access_mask = .{ .memory_read = true },
                 .buffer = mesh_manager.device.handle,
             },
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .all_commands_bit = true },
-                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .dst_stage_mask = .{ .all_commands_bit = true },
-                .dst_access_mask = .{ .memory_read_bit = true },
+                .src_stage_mask = .{ .all_commands = true },
+                .src_access_mask = .{ .memory_write = true, .memory_read = true },
+                .dst_stage_mask = .{ .all_commands = true },
+                .dst_access_mask = .{ .memory_read = true },
                 .buffer = material_manager.materials.handle,
             },
         };
 
         encoder.barrier(&.{}, if (mesh_manager.host.items(.index_count)[geometry.mesh] == 0) &base_barriers else &(base_barriers ++ [1]Encoder.BufferBarrier{
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .all_commands_bit = true },
-                .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-                .dst_stage_mask = .{ .all_commands_bit = true },
-                .dst_access_mask = .{ .memory_read_bit = true },
+                .src_stage_mask = .{ .all_commands = true },
+                .src_access_mask = .{ .memory_write = true, .memory_read = true },
+                .dst_stage_mask = .{ .all_commands = true },
+                .dst_access_mask = .{ .memory_read = true },
                 .buffer = mesh_manager.host.items(.index_buffer)[geometry.mesh].handle,
             },
         }));
@@ -193,7 +193,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
         vk_geometry.* = vk.AccelerationStructureGeometryKHR {
             .geometry_type = .triangles_khr,
-            .flags = .{ .opaque_bit_khr = true },
+            .flags = .{ .opaque_khr = true },
             .geometry = .{
                 .triangles = .{
                     .vertex_format = .r32g32b32_sfloat,
@@ -218,7 +218,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             .material = geometry.material,
             .mesh = geometry.mesh,
             // TODO: should be able to avoid allocating this for meshes that are nowhere emissive
-            .triangle_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, triangle_powers_size, "triangle powers"),
+            .triangle_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer = true, .shader_device_address = true }).create(vc, triangle_powers_size, "triangle powers"),
         };
         errdefer host.triangle_powers.destroy(vc);
         self.geometries_host.appendAssumeCapacity(host);
@@ -249,7 +249,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     var build_geometry_info = vk.AccelerationStructureBuildGeometryInfoKHR {
         .type = .bottom_level_khr,
-        .flags = .{ .prefer_fast_trace_bit_khr = true },
+        .flags = .{ .prefer_fast_trace_khr = true },
         .mode = .build_khr,
         .geometry_count = @intCast(vk_geometries.len),
         .p_geometries = vk_geometries.ptr,
@@ -258,11 +258,11 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     const size_info = getBuildSizesInfo(vc, &build_geometry_info, primitive_counts.ptr);
 
-    const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, size_info.build_scratch_size, "blas scratch buffer");
+    const scratch_buffer = try core.mem.DeviceBuffer(u8, .{ .storage_buffer = true, .shader_device_address = true }).create(vc, size_info.build_scratch_size, "blas scratch buffer");
     try encoder.attachResource(scratch_buffer); // TODO: share scratch buffers
     build_geometry_info.scratch_data.device_address = scratch_buffer.getAddress(vc);
 
-    const blas_buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_bit_khr = true, .shader_device_address_bit = true }).create(vc, size_info.acceleration_structure_size, "blas buffer");
+    const blas_buffer = try core.mem.DeviceBuffer(u8, .{ .acceleration_structure_storage_khr = true, .shader_device_address = true }).create(vc, size_info.acceleration_structure_size, "blas buffer");
     errdefer blas_buffer.destroy(vc);
 
     build_geometry_info.dst_acceleration_structure = try vc.device.createAccelerationStructureKHR(&.{
@@ -294,10 +294,10 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
             if (src_level < geometry_level_count) {
                 encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
                     Encoder.BufferBarrier {
-                        .src_stage_mask = .{ .compute_shader_bit = true },
-                        .src_access_mask = .{ .shader_write_bit = true },
-                        .dst_stage_mask = .{ .compute_shader_bit = true },
-                        .dst_access_mask = .{ .shader_read_bit = true, .shader_write_bit = true },
+                        .src_stage_mask = .{ .compute_shader = true },
+                        .src_access_mask = .{ .shader_write = true },
+                        .dst_stage_mask = .{ .compute_shader = true },
+                        .dst_access_mask = .{ .shader_read = true, .shader_write = true },
                         .buffer = geometry.triangle_powers.handle,
                     },
                 });
@@ -322,7 +322,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         }
     }
 
-    if (self.geometries_device.isNull()) self.geometries_device = try core.mem.DeviceBuffer(Geometry.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_geometries, "geometries");
+    if (self.geometries_device.isNull()) self.geometries_device = try core.mem.DeviceBuffer(Geometry.Device, .{ .storage_buffer = true, .transfer_dst = true }).create(vc, max_geometries, "geometries");
     for (geometries, 0..) |parameters, i| {
         const geometry = self.geometries_host.get(self.geometries_host.len - geometries.len + i);
         const device = Geometry.Device {
@@ -336,10 +336,10 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
         Encoder.BufferBarrier {
-            .src_stage_mask = .{ .all_transfer_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage_mask = .{ .all_transfer = true },
+            .src_access_mask = .{ .memory_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_read = true },
             .buffer = self.geometries_device.handle,
         },
     });
@@ -352,7 +352,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         .blas_handle = build_geometry_info.dst_acceleration_structure,
         .blas_buffer = blas_buffer,
         // TODO: should be able to avoid allocating this for models that are nowhere emissive
-        .geometry_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer_bit = true, .shader_device_address_bit = true }).create(vc, geometry_powers_size, "geometry powers"),
+        .geometry_powers = try core.mem.DeviceBuffer(Mat3, .{ .storage_buffer = true, .shader_device_address = true }).create(vc, geometry_powers_size, "geometry powers"),
     };
 
     {
@@ -372,10 +372,10 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     if (geometry_powers_last_level_size > 1) {
         encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_write_bit = true },
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_read_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_write = true },
+                .dst_stage_mask = .{ .compute_shader = true },
+                .dst_access_mask = .{ .shader_read = true },
                 .buffer = self.geometries_device.handle,
             },
         });
@@ -385,10 +385,10 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         const src_level: u32 = @intCast(geometry_powers_level_count - src_level_rev);
         encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
             Encoder.BufferBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_write_bit = true },
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_read_bit = true, .shader_write_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_write = true },
+                .dst_stage_mask = .{ .compute_shader = true },
+                .dst_access_mask = .{ .shader_read = true, .shader_write = true },
                 .buffer = model.geometry_powers.handle,
             },
         });
@@ -406,15 +406,15 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
 
     encoder.barrier(&.{}, &[_]Encoder.BufferBarrier{
         Encoder.BufferBarrier {
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = .{ .shader_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_read_bit = true },
+            .src_stage_mask = .{ .compute_shader = true },
+            .src_access_mask = .{ .shader_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_read = true },
             .buffer = model.geometry_powers.handle,
         },
     });
 
-    if (self.models_device.isNull()) self.models_device = try core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_models, "models");
+    if (self.models_device.isNull()) self.models_device = try core.mem.DeviceBuffer(Model.Device, .{ .storage_buffer = true, .transfer_dst = true }).create(vc, max_models, "models");
     self.models_device.updateFrom(encoder, self.models_host.len, &.{
         Model.Device {
             .geometry_offset = @intCast(self.geometries_host.len - geometries.len),

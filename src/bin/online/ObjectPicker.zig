@@ -57,14 +57,14 @@ pub const Pipeline = core.pipeline.Pipeline(.{
     },
 });
 
-buffer: core.mem.Buffer(Intersection, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }),
+buffer: core.mem.Buffer(Intersection, .{ .host_visible = true, .host_coherent = true }, .{ .storage_buffer = true }),
 pipeline: Pipeline,
 
 encoder: Encoder,
 ready_fence: vk.Fence,
 
 pub fn create(vc: *const VulkanContext) !Self {
-    const buffer = try core.mem.Buffer(Intersection, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .storage_buffer_bit = true }).create(vc, 1, "object picker");
+    const buffer = try core.mem.Buffer(Intersection, .{ .host_visible = true, .host_coherent = true }, .{ .storage_buffer = true }).create(vc, 1, "object picker");
     errdefer buffer.destroy(vc);
 
     var pipeline = try Pipeline.create(vc, .{}, .{}, .{});

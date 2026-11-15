@@ -15,7 +15,7 @@ handle: vk.Image,
 view: vk.ImageView,
 memory: vk.DeviceMemory,
 
-const memory_properties = vk.MemoryPropertyFlags { .device_local_bit = true };
+const memory_properties = vk.MemoryPropertyFlags { .device_local = true };
 
 pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageFlags, format: vk.Format, with_mips: bool, name: [:0]const u8) !Self {
     const extent = vk.Extent3D {
@@ -30,7 +30,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
         .extent = extent,
         .mip_levels = if (with_mips) std.math.log2(@max(extent.width, extent.height, extent.depth)) + 1 else 1,
         .array_layers = 1,
-        .samples = .{ .@"1_bit" = true },
+        .samples = .{ .@"1" = true },
         .tiling = .optimal,
         .usage = usage,
         .sharing_mode = .exclusive,
@@ -66,7 +66,7 @@ pub fn create(vc: *const VulkanContext, size: vk.Extent2D, usage: vk.ImageUsageF
             .a = .identity,
         },
         .subresource_range = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .base_mip_level = 0,
             .level_count = vk.REMAINING_MIP_LEVELS,
             .base_array_layer = 0,

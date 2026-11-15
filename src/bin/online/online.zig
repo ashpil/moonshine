@@ -164,7 +164,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
     defer post_process_pipeline.destroy(&context);
 
     const gui_format = .r8g8b8a8_unorm;
-    var gui_image = try Image.create(&context, window.getExtent(), .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+    var gui_image = try Image.create(&context, window.getExtent(), .{ .color_attachment = true, .sampled = true, }, gui_format, false, "gui image");
     defer gui_image.destroy(&context);
 
     try encoder.begin();
@@ -200,7 +200,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                 gui_image.destroy(&context);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
-                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment = true, .sampled = true, }, gui_format, false, "gui image");
                 break :blk try display.startFrame(&context); // don't recreate on second failure
             },
             else => return err,
@@ -336,10 +336,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                     if (imgui.inputScalar(u32, "Material index", &geometry.material, null, null) and geometry.material < scene.world.materials.material_count) {
                         scene.world.models.geometries_device.updateFrom(frame_encoder, accel_geometry_index, &.{ geometry });
                         frame_encoder.barrier(&.{}, &.{ .{
-                            .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-                            .src_access_mask = .{ .transfer_write_bit = true },
-                            .dst_stage_mask = .{ .compute_shader_bit = true },
-                            .dst_access_mask = .{ .shader_storage_read_bit = true },
+                            .src_stage_mask = .{ .clear = true }, // cmdUpdateBuffer seems to be clear for some reason
+                            .src_access_mask = .{ .transfer_write = true },
+                            .dst_stage_mask = .{ .compute_shader = true },
+                            .dst_access_mask = .{ .shader_storage_read = true },
                             .buffer = scene.world.models.geometries_device.handle,
                         } });
                         scene.camera.sensors.items[active_sensor].clear();
@@ -359,10 +359,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                         if (changed) {
                             scene.world.materials.materials.updateFrom(frame_encoder, geometry.material, &.{ material });
                             frame_encoder.barrier(&.{}, &.{ .{
-                                .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-                                .src_access_mask = .{ .transfer_write_bit = true },
-                                .dst_stage_mask = .{ .compute_shader_bit = true },
-                                .dst_access_mask = .{ .shader_storage_read_bit = true },
+                                .src_stage_mask = .{ .clear = true }, // cmdUpdateBuffer seems to be clear for some reason
+                                .src_access_mask = .{ .transfer_write = true },
+                                .dst_stage_mask = .{ .compute_shader = true },
+                                .dst_access_mask = .{ .shader_storage_read = true },
                                 .buffer = scene.world.materials.materials.handle,
                             } });
                             scene.camera.sensors.items[active_sensor].clear();
@@ -377,10 +377,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                                 const variant_buffer = @field(scene.world.materials.variant_buffers, enum_field.name).buffer;
                                 variant_buffer.updateFrom(frame_encoder, variant_idx, &.{ material_variant });
                                 frame_encoder.barrier(&.{}, &.{ .{
-                                    .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-                                    .src_access_mask = .{ .transfer_write_bit = true },
-                                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                                    .dst_access_mask = .{ .shader_storage_read_bit = true },
+                                    .src_stage_mask = .{ .clear = true }, // cmdUpdateBuffer seems to be clear for some reason
+                                    .src_access_mask = .{ .transfer_write = true },
+                                    .dst_stage_mask = .{ .compute_shader = true },
+                                    .dst_access_mask = .{ .shader_storage_read = true },
                                     .buffer = variant_buffer.handle,
                                 } });
                                 scene.camera.sensors.items[active_sensor].clear();
@@ -487,10 +487,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
         if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) {
             frame_encoder.barrier(&[_]Encoder.ImageBarrier {
                 Encoder.ImageBarrier {
-                    .src_stage_mask = .{ .compute_shader_bit = true },
-                    .src_access_mask = .{ .shader_sampled_read_bit = true },
-                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                    .dst_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                    .src_stage_mask = .{ .compute_shader = true },
+                    .src_access_mask = .{ .shader_sampled_read = true },
+                    .dst_stage_mask = .{ .compute_shader = true },
+                    .dst_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write = true } else .{ .shader_storage_write = true, .shader_storage_read = true },
                     .old_layout = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .undefined else .general,
                     .new_layout = .general,
                     .image = scene.camera.sensors.items[active_sensor].image.handle,
@@ -506,10 +506,10 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
         // render gui into gui image
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_sampled_read_bit = true },
-                .dst_stage_mask = .{ .color_attachment_output_bit = true },
-                .dst_access_mask = .{ .color_attachment_write_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_sampled_read = true },
+                .dst_stage_mask = .{ .color_attachment_output = true },
+                .dst_access_mask = .{ .color_attachment_write = true },
                 .old_layout = .undefined,
                 .new_layout = .general,
                 .image = gui_image.handle,
@@ -519,26 +519,26 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
 
         // post process rendered image and composite overlay onto swap image
         const swap_barrier = Encoder.ImageBarrier {
-            .src_stage_mask = .{ .color_attachment_output_bit = true },
-            .src_access_mask = .{ .color_attachment_read_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_storage_write_bit = true },
+            .src_stage_mask = .{ .color_attachment_output = true },
+            .src_access_mask = .{ .color_attachment_read = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_storage_write = true },
             .old_layout = .undefined,
             .new_layout = .general,
             .image = display.currentImage().handle,
         };
         const sensor_barrier = Encoder.ImageBarrier {
-            .src_stage_mask = .{ .compute_shader_bit = true },
-            .src_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_storage_read_bit = true },
+            .src_stage_mask = .{ .compute_shader = true },
+            .src_access_mask = if (scene.camera.sensors.items[active_sensor].sample_count == 0) .{ .shader_storage_write = true } else .{ .shader_storage_write = true, .shader_storage_read = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_storage_read = true },
             .image = scene.camera.sensors.items[active_sensor].image.handle,
         };
         const gui_barrier = Encoder.ImageBarrier {
-            .src_stage_mask = .{ .color_attachment_output_bit = true },
-            .src_access_mask = .{ .color_attachment_write_bit = true },
-            .dst_stage_mask = .{ .compute_shader_bit = true },
-            .dst_access_mask = .{ .shader_sampled_read_bit = true },
+            .src_stage_mask = .{ .color_attachment_output = true },
+            .src_access_mask = .{ .color_attachment_write = true },
+            .dst_stage_mask = .{ .compute_shader = true },
+            .dst_access_mask = .{ .shader_sampled_read = true },
             .image = gui_image.handle,
         };
         frame_encoder.barrier(if (max_sample_count == 0 or scene.camera.sensors.items[active_sensor].sample_count < max_sample_count) &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier, sensor_barrier } else &[_]Encoder.ImageBarrier { swap_barrier, gui_barrier }, &.{});
@@ -561,9 +561,9 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
         // transition swapchain back to present mode
         frame_encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_storage_write_bit = true },
-                .dst_stage_mask = .{ .color_attachment_output_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_storage_write = true },
+                .dst_stage_mask = .{ .color_attachment_output = true },
                 .dst_access_mask = .{},
                 .old_layout = .general,
                 .new_layout = .present_src_khr,
@@ -582,7 +582,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
                 try frame_encoder.attachResource(gui_image);
                 scene.camera.sensors.items.len -= 1;
                 active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
-                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+                gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment = true, .sampled = true, }, gui_format, false, "gui image");
             }
         } else |err| if (err == error.OutOfDateKHR) {
             // presentation failed, can destroy resources immediately
@@ -591,7 +591,7 @@ fn run(allocator: std.mem.Allocator, io: std.Io, context: VulkanContext, config:
             gui_image.destroy(&context);
             scene.camera.sensors.items.len -= 1;
             active_sensor = try scene.camera.appendSensor(&context, allocator, display.swapchain.extent, engine.color.Chromaticities.fromVkColorspace(display.swapchain.color_space));
-            gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment_bit = true, .sampled_bit = true, }, gui_format, false, "gui image");
+            gui_image = try Image.create(&context, display.swapchain.extent, .{ .color_attachment = true, .sampled = true, }, gui_format, false, "gui image");
         } else return err;
 
         window.pollEvents();

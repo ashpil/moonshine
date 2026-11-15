@@ -164,17 +164,17 @@ pub const HdMoonshine = struct {
         if (self.materials_dirty) {
             self.encoder.barrier(&.{}, &.{
                 .{
-                    .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-                    .src_access_mask = .{ .transfer_write_bit = true },
-                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                    .dst_access_mask = .{ .shader_storage_read_bit = true },
+                    .src_stage_mask = .{ .clear = true }, // cmdUpdateBuffer seems to be clear for some reason
+                    .src_access_mask = .{ .transfer_write = true },
+                    .dst_stage_mask = .{ .compute_shader = true },
+                    .dst_access_mask = .{ .shader_storage_read = true },
                     .buffer = self.world.materials.materials.handle,
                 },
                 .{
-                    .src_stage_mask = .{ .clear_bit = true }, // cmdUpdateBuffer seems to be clear for some reason
-                    .src_access_mask = .{ .transfer_write_bit = true },
-                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                    .dst_access_mask = .{ .shader_storage_read_bit = true },
+                    .src_stage_mask = .{ .clear = true }, // cmdUpdateBuffer seems to be clear for some reason
+                    .src_access_mask = .{ .transfer_write = true },
+                    .dst_stage_mask = .{ .compute_shader = true },
+                    .dst_access_mask = .{ .shader_storage_read = true },
                     .buffer = self.world.materials.variant_buffers.standard_pbr.buffer.handle,
                 },
             });
@@ -193,18 +193,18 @@ pub const HdMoonshine = struct {
             .memory_barrier_count = 1,
             .p_memory_barriers = &[1]vk.MemoryBarrier2 {
                 .{
-                    .src_stage_mask = .{ .compute_shader_bit = true },
-                    .src_access_mask = .{ .shader_write_bit = true },
-                    .dst_stage_mask = .{ .compute_shader_bit = true },
-                    .dst_access_mask = .{ .acceleration_structure_read_bit_khr = true },
+                    .src_stage_mask = .{ .compute_shader = true },
+                    .src_access_mask = .{ .shader_write = true },
+                    .dst_stage_mask = .{ .compute_shader = true },
+                    .dst_access_mask = .{ .acceleration_structure_read_khr = true },
                 }
             },
         });
 
         self.encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = if (self.camera.sensors.items[sensor].sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                .dst_stage_mask = .{ .compute_shader = true },
+                .dst_access_mask = if (self.camera.sensors.items[sensor].sample_count == 0) .{ .shader_storage_write = true } else .{ .shader_storage_write = true, .shader_storage_read = true },
                 .old_layout = if (self.camera.sensors.items[sensor].sample_count == 0) .undefined else .general,
                 .new_layout = .general,
                 .image = self.camera.sensors.items[sensor].image.handle,
@@ -225,10 +225,10 @@ pub const HdMoonshine = struct {
         // copy our stuff
         self.encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                .dst_stage_mask = .{ .copy_bit = true },
-                .dst_access_mask = .{ .transfer_read_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_storage_write = true, .shader_storage_read = true },
+                .dst_stage_mask = .{ .copy = true },
+                .dst_access_mask = .{ .transfer_read = true },
                 .image = self.camera.sensors.items[sensor].image.handle,
             }
         }, &.{});

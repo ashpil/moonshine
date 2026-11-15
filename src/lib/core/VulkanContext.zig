@@ -84,8 +84,8 @@ const Base = struct {
         defer allocator.free(required_extensions);
 
         const debug_messenger_create_info = vk.DebugUtilsMessengerCreateInfoEXT {
-            .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true},
-            .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
+            .message_severity = .{ .warning_ext = true, .error_ext = true},
+            .message_type = .{ .general_ext = true, .validation_ext = true, .performance_ext = true },
             .pfn_user_callback = debugCallbackValidation,
         };
 
@@ -282,10 +282,10 @@ const DebugCallbackUserData = struct {
 
 fn debugCallbackValidation(message_severity: vk.DebugUtilsMessageSeverityFlagsEXT, _: vk.DebugUtilsMessageTypeFlagsEXT, callback_data: ?*const vk.DebugUtilsMessengerCallbackDataEXT, _: ?*anyopaque) callconv(.c) vk.Bool32 {
     const data = callback_data.?.*;
-    const verbose_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .verbose_bit_ext = true }).toInt();
-    const info_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .info_bit_ext = true }).toInt();
-    const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_bit_ext = true }).toInt();
-    const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_bit_ext = true }).toInt();
+    const verbose_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .verbose_ext = true }).toInt();
+    const info_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .info_ext = true }).toInt();
+    const warning_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .warning_ext = true }).toInt();
+    const error_severity = comptime (vk.DebugUtilsMessageSeverityFlagsEXT{ .error_ext = true }).toInt();
 
     const color: std.Io.Terminal.Color = switch (message_severity.toInt()) {
         verbose_severity => .dim,
@@ -333,7 +333,7 @@ fn debugCallbackDeviceAddressBinding(_: vk.DebugUtilsMessageSeverityFlagsEXT, _:
             .base = device_address_binding_callback_data.base_address,
             .size = device_address_binding_callback_data.size,
         },
-        .internal = device_address_binding_callback_data.flags.contains(.{ .internal_object_bit_ext = true }),
+        .internal = device_address_binding_callback_data.flags.contains(.{ .internal_object_ext = true }),
         .object_type = object.object_type,
         .object_name = if (object.p_object_name) |name| user_data.allocator.dupe(u8, std.mem.span(name)) catch @panic("OOM") else null,
         .type = switch (device_address_binding_callback_data.binding_type) {
@@ -386,8 +386,8 @@ const BindingReport = struct {
         const user_data = try DebugCallbackUserData.create(allocator);
         errdefer user_data.destroy();
         const messenger = try instance.createDebugUtilsMessengerEXT(&.{
-            .message_severity = .{ .info_bit_ext = true, .warning_bit_ext = true, .error_bit_ext = true },
-            .message_type = .{ .device_address_binding_bit_ext = true },
+            .message_severity = .{ .info_ext = true, .warning_ext = true, .error_ext = true },
+            .message_type = .{ .device_address_binding_ext = true },
             .pfn_user_callback = debugCallbackDeviceAddressBinding,
             .p_user_data = user_data,
         }, null);
@@ -467,8 +467,8 @@ pub fn create(allocator: std.mem.Allocator, app_name: [*:0]const u8, requirement
     errdefer instance.destroyInstance(null);
 
     const debug_messenger = if (validate) try instance.createDebugUtilsMessengerEXT(&.{
-        .message_severity = .{ .warning_bit_ext = true, .error_bit_ext = true },
-        .message_type = .{ .general_bit_ext = true, .validation_bit_ext = true, .performance_bit_ext = true },
+        .message_severity = .{ .warning_ext = true, .error_ext = true },
+        .message_type = .{ .general_ext = true, .validation_ext = true, .performance_ext = true },
         .pfn_user_callback = debugCallbackValidation,
     }, null) else undefined;
     errdefer if (validate) instance.destroyDebugUtilsMessengerEXT(debug_messenger, null);
@@ -618,8 +618,8 @@ const PhysicalDevice = struct {
         var picked_family: ?u32 = null;
         for (families, 0..) |family, i| {
             const index: u32 = @intCast(i);
-            if (family.queue_flags.compute_bit and
-                family.queue_flags.graphics_bit and
+            if (family.queue_flags.compute and
+                family.queue_flags.graphics and
                 queueFamilyAcceptable(instance.handle, device, index)) picked_family = index;
         }
 

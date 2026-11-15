@@ -18,12 +18,7 @@ fn heapName(properties: vk.MemoryPropertyFlags, writer: *std.Io.Writer) !void {
             if (!first) {
                 try writer.writeByte('|');
             }
-            const bit = "_bit";
-            const bit_idx = std.mem.lastIndexOf(u8, name, bit).?;
-            for (name[0..bit_idx]) |c| {
-                try writer.writeByte(std.ascii.toUpper(c));
-            }
-            for (name[bit_idx + bit.len..]) |c| {
+            for (name) |c| {
                 try writer.writeByte(std.ascii.toUpper(c));
             }
             first = false;
@@ -65,9 +60,9 @@ fn createRawBuffer(vc: *const VulkanContext, size: vk.DeviceSize, usage: vk.Buff
     const allocate_info = vk.MemoryAllocateInfo {
         .allocation_size = mem_requirements.size,
         .memory_type_index = try vc.memory_types.find(mem_requirements.memory_type_bits, properties),
-        .p_next = if (usage.contains(.{ .shader_device_address_bit = true })) &vk.MemoryAllocateFlagsInfo {
+        .p_next = if (usage.contains(.{ .shader_device_address = true })) &vk.MemoryAllocateFlagsInfo {
             .device_mask = 0,
-            .flags = .{ .device_address_bit = true },
+            .flags = .{ .device_address = true },
         } else null,
     };
 
@@ -85,7 +80,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
     const type_info = @typeInfo(T);
     if (type_info == .@"struct" and type_info.@"struct".layout == .auto) @compileError("Struct layout of " ++ @typeName(T) ++ " must be specified explicitly, but is not");
 
-    const host_visible = memory_properties.contains(.{ .host_visible_bit = true });
+    const host_visible = memory_properties.contains(.{ .host_visible = true });
 
     return struct {
         handle: vk.Buffer = .null_handle,
@@ -122,7 +117,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             }
         }
 
-        pub const getAddress = if (usage.contains(.{ .shader_device_address_bit = true })) struct {
+        pub const getAddress = if (usage.contains(.{ .shader_device_address = true })) struct {
             pub fn getAddress(self: Self, vc: *const VulkanContext) vk.DeviceAddress {
                 return if (self.handle == .null_handle) 0 else vc.device.getBufferDeviceAddress(&.{
                     .buffer = self.handle,
@@ -130,7 +125,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
             }
         }.getAddress else struct {};
 
-        const transfer = if (usage.contains(.{ .transfer_dst_bit = true })) struct {
+        const transfer = if (usage.contains(.{ .transfer_dst = true })) struct {
             pub fn updateFrom(self: Self, encoder: *Encoder, dst_offset: vk.DeviceSize, src: []const T) void {
                 const bytes = std.mem.sliceAsBytes(src);
                 encoder.buffer.updateBuffer(self.handle, dst_offset * @sizeOf(T), bytes.len, src.ptr);
@@ -150,7 +145,7 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
         pub const updateFrom = transfer.updateFrom;
         pub const uploadFrom = transfer.uploadFrom;
 
-        pub const deviceSlice = if (usage.contains(.{ .transfer_src_bit = true }) or usage.contains(.{ .storage_buffer_bit = true })) struct {
+        pub const deviceSlice = if (usage.contains(.{ .transfer_src = true }) or usage.contains(.{ .storage_buffer = true })) struct {
             pub fn deviceSlice(self: Self) BufferSlice(T) {
                 return BufferSlice(T) {
                     .handle = self.handle,
@@ -182,15 +177,15 @@ pub fn Buffer(comptime T: type, comptime memory_properties: vk.MemoryPropertyFla
 }
 
 pub fn UploadBuffer(comptime T: type) type {
-    return Buffer(T, vk.MemoryPropertyFlags { .host_visible_bit = true, .host_coherent_bit = true }, vk.BufferUsageFlags { .transfer_src_bit = true });
+    return Buffer(T, vk.MemoryPropertyFlags { .host_visible = true, .host_coherent = true }, vk.BufferUsageFlags { .transfer_src = true });
 }
 
 pub fn DownloadBuffer(comptime T: type) type {
-    return Buffer(T, vk.MemoryPropertyFlags { .host_visible_bit = true, .host_coherent_bit = true, .host_cached_bit = true }, vk.BufferUsageFlags { .transfer_dst_bit = true });
+    return Buffer(T, vk.MemoryPropertyFlags { .host_visible = true, .host_coherent = true, .host_cached = true }, vk.BufferUsageFlags { .transfer_dst = true });
 }
 
 pub fn DeviceBuffer(comptime T: type, comptime usage: vk.BufferUsageFlags) type {
-    return Buffer(T, vk.MemoryPropertyFlags { .device_local_bit = true }, usage);
+    return Buffer(T, vk.MemoryPropertyFlags { .device_local = true }, usage);
 }
 
 pub fn BufferSlice(comptime T: type) type {
@@ -230,7 +225,7 @@ fn sliceContainsPtr(container: []const u8, ptr: [*]const u8) bool {
 }
 
 pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFlags, comptime usage: vk.BufferUsageFlags) type {
-    if (comptime !memory_properties.contains(.{ .host_visible_bit = true})) @compileError("HostVisiblePageAllocator must only be used to allocate host visible memory");
+    if (comptime !memory_properties.contains(.{ .host_visible = true})) @compileError("HostVisiblePageAllocator must only be used to allocate host visible memory");
 
     return struct {
         const Self = @This();
@@ -411,5 +406,5 @@ pub fn HostVisiblePageAllocator(comptime memory_properties: vk.MemoryPropertyFla
     };
 }
 
-pub const UploadPageAllocator = HostVisiblePageAllocator(vk.MemoryPropertyFlags { .host_visible_bit = true, .host_coherent_bit = true }, vk.BufferUsageFlags { .transfer_src_bit = true });
-pub const DownloadPageAllocator = HostVisiblePageAllocator(vk.MemoryPropertyFlags { .host_visible_bit = true, .host_coherent_bit = true, .host_cached_bit = true }, vk.BufferUsageFlags { .transfer_dst_bit = true });
+pub const UploadPageAllocator = HostVisiblePageAllocator(vk.MemoryPropertyFlags { .host_visible = true, .host_coherent = true }, vk.BufferUsageFlags { .transfer_src = true });
+pub const DownloadPageAllocator = HostVisiblePageAllocator(vk.MemoryPropertyFlags { .host_visible = true, .host_coherent = true, .host_cached = true }, vk.BufferUsageFlags { .transfer_dst = true });

@@ -138,7 +138,7 @@ fn StructFromTaggedUnion(comptime Union: type, comptime InnerFn: fn(type) type) 
 
 fn VariantBuffer(comptime T: type) type {
     return struct {
-        buffer: core.mem.DeviceBuffer(T, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }) = .{},
+        buffer: core.mem.DeviceBuffer(T, .{ .shader_device_address = true, .transfer_dst = true }) = .{},
         addr: vk.DeviceAddress = 0,
         len: vk.DeviceSize = 0,
     };
@@ -148,7 +148,7 @@ const VariantBuffers = StructFromTaggedUnion(PolymorphicBSDF, VariantBuffer);
 
 material_count: u32,
 textures: TextureManager,
-materials: core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }),
+materials: core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer = true, .transfer_dst = true }),
 
 variant_buffers: VariantBuffers,
 
@@ -179,7 +179,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                 if (variant_buffer.buffer.isNull()) {
                     const buffer_name = try std.fmt.allocPrintSentinel(allocator, "material {s} {s}", .{ parameters.name, field.name }, 0);
                     defer allocator.free(buffer_name);
-                    variant_buffer.buffer = try core.mem.DeviceBuffer(field.type, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, buffer_name);
+                    variant_buffer.buffer = try core.mem.DeviceBuffer(field.type, .{ .shader_device_address = true, .transfer_dst = true }).create(vc, max_materials, buffer_name);
                     variant_buffer.addr = variant_buffer.buffer.getAddress(vc);
                 }
                 variant_buffer.buffer.updateFrom(encoder, variant_buffer.len, &.{ @field(parameters.bsdf, field.name) });
@@ -193,7 +193,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
                 .type = std.meta.activeTag(parameters.bsdf),
                 .addr = if (@sizeOf(field.type) != 0) @field(self.variant_buffers, field.name).addr + (@field(self.variant_buffers, field.name).len - 1) * @sizeOf(field.type) else 0,
             };
-            if (self.materials.isNull()) self.materials = try core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer_bit = true, .transfer_dst_bit = true }).create(vc, max_materials, "materials");
+            if (self.materials.isNull()) self.materials = try core.mem.DeviceBuffer(Material.Device, .{ .storage_buffer = true, .transfer_dst = true }).create(vc, max_materials, "materials");
             self.materials.updateFrom(encoder, self.material_count, &.{ material });
         }
     }
@@ -218,13 +218,13 @@ pub const TextureManager = struct {
         .{
             .descriptor_type = .sampled_image,
             .descriptor_count = max_descriptors,
-            .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
-            .binding_flags = .{ .partially_bound_bit = true, .update_unused_while_pending_bit = true },
+            .stage_flags = .{ .raygen_khr = true, .compute = true },
+            .binding_flags = .{ .partially_bound = true, .update_unused_while_pending = true },
         },
         .{
             .descriptor_type = .sampler,
             .descriptor_count = 1,
-            .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+            .stage_flags = .{ .raygen_khr = true, .compute = true },
         }
     }, .{}, 1, "Textures");
 
@@ -264,7 +264,7 @@ pub const TextureManager = struct {
         const texture_index: TextureManager.Handle = @intCast(self.data.len);
         std.debug.assert(texture_index < max_descriptors);
 
-        const image = try Image.create(vc, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, format, false, name);
+        const image = try Image.create(vc, extent, .{ .transfer_dst = true, .sampled = true }, format, false, name);
         try self.data.append(allocator, image);
 
         encoder.initializeImage(src, image.handle, extent);

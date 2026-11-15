@@ -22,7 +22,7 @@ pub fn create(vc: *const VulkanContext, name: [*:0]const u8) !Self {
     const pool = try vc.device.createCommandPool(&.{
         .queue_family_index = vc.physical_device.queue_family_index,
         .flags = .{
-            .transient_bit = true,
+            .transient = true,
         },
     }, null);
     errdefer vc.device.destroyCommandPool(pool, null);
@@ -79,7 +79,7 @@ pub fn clearResources(self: *Self, vc: *const VulkanContext) void {
 pub fn begin(self: Self) !void {
     try self.buffer.beginCommandBuffer(&.{
         .flags = .{
-            .one_time_submit_bit = true,
+            .one_time_submit = true,
         },
     });
 }
@@ -118,15 +118,15 @@ pub fn initializeImage(self: Self, src_data: core.mem.BufferSlice(u8), dst_image
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .image_memory_barrier_count = 1,
         .p_image_memory_barriers = (&vk.ImageMemoryBarrier2 {
-            .dst_stage_mask = .{ .copy_bit = true },
-            .dst_access_mask = .{ .transfer_write_bit = true },
+            .dst_stage_mask = .{ .copy = true },
+            .dst_access_mask = .{ .transfer_write = true },
             .old_layout = .undefined,
             .new_layout = .general,
             .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
             .image = dst_image,
             .subresource_range = .{
-                .aspect_mask = .{ .color_bit = true },
+                .aspect_mask = .{ .color = true },
                 .base_mip_level = 0,
                 .level_count = 1,
                 .base_array_layer = 0,
@@ -151,7 +151,7 @@ pub fn fillBuffer(self: Self, dst: vk.Buffer, size: vk.DeviceSize, data: anytype
 pub fn clearColorImage(self: Self, dst: vk.Image, color: vk.ClearColorValue) void {
     self.buffer.clearColorImage(dst, .general, &color, 1, &[1]vk.ImageSubresourceRange{
         .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .base_mip_level = 0,
             .level_count = vk.REMAINING_MIP_LEVELS,
             .base_array_layer = 0,
@@ -171,7 +171,7 @@ pub fn copyImageToBuffer(self: Self, src: vk.Image, extent: vk.Extent2D, dst: vk
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_subresource = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .mip_level = 0,
             .base_array_layer = 0,
             .layer_count = 1,
@@ -196,7 +196,7 @@ pub fn copyBufferToImage(self: Self, src: vk.Buffer, src_offset: vk.DeviceSize, 
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_subresource = .{
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .mip_level = 0,
             .base_array_layer = 0,
             .layer_count = 1,
@@ -232,7 +232,7 @@ pub const ImageBarrier = extern struct {
     dst_queue_family_index: u32 = vk.QUEUE_FAMILY_IGNORED,
     image: vk.Image,
 
-    aspect_mask: vk.ImageAspectFlags = .{ .color_bit = true },
+    aspect_mask: vk.ImageAspectFlags = .{ .color = true },
     base_mip_level: u32 = 0,
     level_count: u32 = vk.REMAINING_MIP_LEVELS,
     base_array_layer: u32 = 0,
@@ -272,10 +272,10 @@ pub fn global_barrier(self: Self) void {
     self.buffer.pipelineBarrier2(&vk.DependencyInfo {
         .memory_barrier_count = 1,
         .p_memory_barriers = (&vk.MemoryBarrier2 {
-            .src_stage_mask = .{ .all_commands_bit = true },
-            .src_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
-            .dst_stage_mask = .{ .all_commands_bit = true },
-            .dst_access_mask = .{ .memory_write_bit = true, .memory_read_bit = true },
+            .src_stage_mask = .{ .all_commands = true },
+            .src_access_mask = .{ .memory_write = true, .memory_read = true },
+            .dst_stage_mask = .{ .all_commands = true },
+            .dst_access_mask = .{ .memory_write = true, .memory_read = true },
         })[0..1]
     });
 }

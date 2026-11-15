@@ -64,7 +64,7 @@ pub fn copyImagePixel(self: *Self, vc: *const VulkanContext, comptime PixelType:
         .buffer_row_length = 0,
         .buffer_image_height = 0,
         .image_subresource = vk.ImageSubresourceLayers {
-            .aspect_mask = .{ .color_bit = true },
+            .aspect_mask = .{ .color = true },
             .mip_level = 0,
             .base_array_layer = 0,
             .layer_count = 1,

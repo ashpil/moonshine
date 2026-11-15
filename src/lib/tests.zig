@@ -59,8 +59,8 @@ const TestingContext = struct {
         // prepare our stuff
         self.encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .dst_stage_mask = .{ .compute_shader_bit = true },
-                .dst_access_mask = .{ .shader_storage_write_bit = true },
+                .dst_stage_mask = .{ .compute_shader = true },
+                .dst_access_mask = .{ .shader_storage_write = true },
                 .old_layout = .undefined,
                 .new_layout = .general,
                 .image = scene.camera.sensors.items[0].image.handle,
@@ -83,10 +83,10 @@ const TestingContext = struct {
             if (sample_count != spp - 1) {
                 self.encoder.barrier(&[_]Encoder.ImageBarrier {
                     Encoder.ImageBarrier {
-                        .src_stage_mask = .{ .compute_shader_bit = true },
-                        .src_access_mask = if (sample_count == 0) .{ .shader_storage_write_bit = true } else .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                        .dst_stage_mask = .{ .compute_shader_bit = true },
-                        .dst_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
+                        .src_stage_mask = .{ .compute_shader = true },
+                        .src_access_mask = if (sample_count == 0) .{ .shader_storage_write = true } else .{ .shader_storage_write = true, .shader_storage_read = true },
+                        .dst_stage_mask = .{ .compute_shader = true },
+                        .dst_access_mask = .{ .shader_storage_write = true, .shader_storage_read = true },
                         .image = scene.camera.sensors.items[0].image.handle,
                     },
                 }, &.{});
@@ -97,10 +97,10 @@ const TestingContext = struct {
         // copy our stuff
         self.encoder.barrier(&[_]Encoder.ImageBarrier {
             Encoder.ImageBarrier {
-                .src_stage_mask = .{ .compute_shader_bit = true },
-                .src_access_mask = .{ .shader_storage_write_bit = true, .shader_storage_read_bit = true },
-                .dst_stage_mask = .{ .copy_bit = true },
-                .dst_access_mask = .{ .transfer_read_bit = true },
+                .src_stage_mask = .{ .compute_shader = true },
+                .src_access_mask = .{ .shader_storage_write = true, .shader_storage_read = true },
+                .dst_stage_mask = .{ .copy = true },
+                .dst_access_mask = .{ .transfer_read = true },
                 .image = scene.camera.sensors.items[0].image.handle,
             }
         }, &.{});

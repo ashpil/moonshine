@@ -19,42 +19,42 @@ pub const DescriptorLayout = core.descriptor.DescriptorLayout(&.{
     .{
         .descriptor_type = .sampler,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
     .{
         .descriptor_type = .sampled_image,
         .descriptor_count = 1,
-        .stage_flags = .{ .raygen_bit_khr = true, .compute_bit = true },
+        .stage_flags = .{ .raygen_khr = true, .compute = true },
     },
 }, .{}, 1, "Constant Spectra");
 
@@ -76,7 +76,7 @@ fn createSpectrumImage(vc: *const VulkanContext, encoder: *Encoder, descriptor_s
         .width = @intCast(spectrum.data.len),
         .height = 1,
     };
-    const image = try Image.create(vc, extent, .{ .transfer_dst_bit = true, .sampled_bit = true }, .r32_sfloat, false, name);
+    const image = try Image.create(vc, extent, .{ .transfer_dst = true, .sampled = true }, .r32_sfloat, false, name);
 
     const data_staging = try encoder.uploadAllocator().alloc(f32, spectrum.data.len);
     for (data_staging, spectrum.data) |*datum_staging, datum| {

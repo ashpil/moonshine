@@ -24,8 +24,8 @@ const Window = @import("../Window.zig");
 const frames_in_flight = Display.frames_in_flight;
 const Self = @This();
 
-const VertexBuffer = core.mem.Buffer(imgui.DrawVert, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .vertex_buffer_bit =  true });
-const IndexBuffer = core.mem.Buffer(imgui.DrawIdx, .{ .host_visible_bit = true, .host_coherent_bit = true }, .{ .index_buffer_bit =  true });
+const VertexBuffer = core.mem.Buffer(imgui.DrawVert, .{ .host_visible = true, .host_coherent = true }, .{ .vertex_buffer =  true });
+const IndexBuffer = core.mem.Buffer(imgui.DrawIdx, .{ .host_visible = true, .host_coherent = true }, .{ .index_buffer =  true });
 
 descriptor_set_layout: GuiDescriptorLayout,
 pipeline_layout: vk.PipelineLayout,
@@ -71,7 +71,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
         .p_set_layouts = (&descriptor_set_layout.handle)[0..1],
         .push_constant_range_count = 1,
         .p_push_constant_ranges = (&vk.PushConstantRange{
-            .stage_flags = .{ .vertex_bit = true },
+            .stage_flags = .{ .vertex = true },
             .offset = 0,
             .size = @sizeOf(f32) * 4,
         })[0..1],
@@ -94,12 +94,12 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
         const shader_stage_create_info = [_]vk.PipelineShaderStageCreateInfo{
             .{
                 .module = vert_module,
-                .stage = .{ .vertex_bit = true },
+                .stage = .{ .vertex = true },
                 .p_name = "main",
             },
             .{
                 .module = frag_module,
-                .stage = .{ .fragment_bit = true },
+                .stage = .{ .fragment = true },
                 .p_name = "main",
             },
         };
@@ -169,7 +169,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
                     .src_alpha_blend_factor = .one,
                     .dst_alpha_blend_factor = .one_minus_src_alpha,
                     .alpha_blend_op = .add,
-                    .color_write_mask = .{ .r_bit = true, .g_bit = true, .b_bit = true, .a_bit = true },
+                    .color_write_mask = .{ .r = true, .g = true, .b = true, .a = true },
                 })[0..1],
                 .blend_constants = .{ 0.0, 0.0, 0.0, 0.0 },
             },
@@ -178,7 +178,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
                 .p_dynamic_states = &dynamic_states,
             },
             .p_multisample_state = &vk.PipelineMultisampleStateCreateInfo {
-                .rasterization_samples = .{ .@"1_bit" = true },
+                .rasterization_samples = .{ .@"1" = true },
                 .min_sample_shading = 1.0,
                 .sample_shading_enable = .false,
                 .alpha_to_coverage_enable = .false,
@@ -202,7 +202,7 @@ pub fn create(vc: *const VulkanContext, format: vk.Format, window: Window, encod
 
     const font_image = blk: {
         const tex_data = imgui.getTexDataAsAlpha8(imgui.getIO().Fonts);
-        const image = try Image.create(vc, tex_data[1], .{ .transfer_dst_bit = true, .sampled_bit = true }, .r8_unorm, false, "imgui font");
+        const image = try Image.create(vc, tex_data[1], .{ .transfer_dst = true, .sampled = true }, .r8_unorm, false, "imgui font");
         errdefer image.destroy(vc);
 
         const img_data = tex_data[0][0 .. tex_data[1].width * tex_data[1].height * @sizeOf(u8)];
@@ -337,7 +337,7 @@ pub fn endFrame(self: *Self, command_buffer: VulkanContext.CommandBuffer, extent
             -1.0 - draw_data.DisplayPos.x * scale[0],
             -1.0 - draw_data.DisplayPos.y * scale[1],
         };
-        command_buffer.pushConstants(self.pipeline_layout, .{ .vertex_bit = true }, 0, @sizeOf(f32) * 4, &std.mem.toBytes(.{ scale, translate }));
+        command_buffer.pushConstants(self.pipeline_layout, .{ .vertex = true }, 0, @sizeOf(f32) * 4, &std.mem.toBytes(.{ scale, translate }));
     }
     command_buffer.bindDescriptorSets(.graphics, self.pipeline_layout, 0, (&self.font_image_set)[0..1], &.{});
 
@@ -368,7 +368,7 @@ pub const GuiDescriptorLayout = DescriptorLayout(&.{
     .{
         .descriptor_type = .combined_image_sampler,
         .descriptor_count = 1,
-        .stage_flags = .{ .fragment_bit = true },
+        .stage_flags = .{ .fragment = true },
         .binding_flags = .{},
     },
 }, .{}, 1, "Gui");

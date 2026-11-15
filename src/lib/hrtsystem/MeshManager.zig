@@ -25,13 +25,13 @@ pub const Mesh = struct {
     };
 
     pub const Host = struct {
-        position_buffer: core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }),
-        texcoord_buffer: core.mem.DeviceBuffer(F32x2, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }),
-        normal_buffer: core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }),
+        position_buffer: core.mem.DeviceBuffer(F32x3, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true }),
+        texcoord_buffer: core.mem.DeviceBuffer(F32x2, .{ .shader_device_address = true, .transfer_dst = true }),
+        normal_buffer: core.mem.DeviceBuffer(F32x3, .{ .shader_device_address = true, .transfer_dst = true }),
 
         vertex_count: u32,
 
-        index_buffer: core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }),
+        index_buffer: core.mem.DeviceBuffer(U32x3, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true }),
         index_count: u32,
 
         pub fn triangleCount(self: @This()) u32 {
@@ -51,7 +51,7 @@ pub const Mesh = struct {
 };
 
 host: std.MultiArrayList(Mesh.Host) = .{},
-device: core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }) = .{},
+device: core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst = true, .storage_buffer = true }) = .{},
 
 const Self = @This();
 
@@ -65,7 +65,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
     const position_buffer = blk: {
         const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} positions", .{ parameters.name }, 0);
         defer allocator.free(buffer_name);
-        const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }).create(vc, parameters.positions.len, buffer_name);
+        const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true }).create(vc, parameters.positions.len, buffer_name);
         gpu_buffer.uploadFrom(encoder, 0, parameters.positions);
 
         break :blk gpu_buffer;
@@ -76,11 +76,11 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         if (parameters.texcoords) |texcoords| {
             const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} texcoords", .{ parameters.name }, 0);
             defer allocator.free(buffer_name);
-            const gpu_buffer = try core.mem.DeviceBuffer(F32x2, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, texcoords.len, buffer_name);
+            const gpu_buffer = try core.mem.DeviceBuffer(F32x2, .{ .shader_device_address = true, .transfer_dst = true }).create(vc, texcoords.len, buffer_name);
             gpu_buffer.uploadFrom(encoder, 0, texcoords);
             break :blk gpu_buffer;
         } else {
-            break :blk core.mem.DeviceBuffer(F32x2, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }) {};
+            break :blk core.mem.DeviceBuffer(F32x2, .{ .shader_device_address = true, .transfer_dst = true }) {};
         }
     };
     errdefer texcoord_buffer.destroy(vc);
@@ -89,11 +89,11 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         if (parameters.normals) |normals| {
             const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} normals", .{ parameters.name }, 0);
             defer allocator.free(buffer_name);
-            const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }).create(vc, normals.len, buffer_name);
+            const gpu_buffer = try core.mem.DeviceBuffer(F32x3, .{ .shader_device_address = true, .transfer_dst = true }).create(vc, normals.len, buffer_name);
             gpu_buffer.uploadFrom(encoder, 0, normals);
             break :blk gpu_buffer;
         } else {
-            break :blk core.mem.DeviceBuffer(F32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true }) {};
+            break :blk core.mem.DeviceBuffer(F32x3, .{ .shader_device_address = true, .transfer_dst = true }) {};
         }
     };
     errdefer normal_buffer.destroy(vc);
@@ -102,11 +102,11 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         if (parameters.indices) |indices| {
             const buffer_name = try std.fmt.allocPrintSentinel(allocator, "mesh {s} indices", .{ parameters.name }, 0);
             defer allocator.free(buffer_name);
-            const gpu_buffer = try core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }).create(vc, indices.len, buffer_name);
+            const gpu_buffer = try core.mem.DeviceBuffer(U32x3, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true }).create(vc, indices.len, buffer_name);
             gpu_buffer.uploadFrom(encoder, 0, indices);
             break :blk gpu_buffer;
         } else {
-            break :blk core.mem.DeviceBuffer(U32x3, .{ .shader_device_address_bit = true, .transfer_dst_bit = true, .acceleration_structure_build_input_read_only_bit_khr = true }) {};
+            break :blk core.mem.DeviceBuffer(U32x3, .{ .shader_device_address = true, .transfer_dst = true, .acceleration_structure_build_input_read_only_khr = true }) {};
         }
     };
     errdefer index_buffer.destroy(vc);
@@ -132,7 +132,7 @@ pub fn upload(self: *Self, vc: *const VulkanContext, allocator: std.mem.Allocato
         .triangle_count = host.triangleCount(),
     };
 
-    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst_bit = true, .storage_buffer_bit = true }).create(vc, max_meshes, "meshes");
+    if (self.device.isNull()) self.device = try core.mem.DeviceBuffer(Mesh.Device, .{ .transfer_dst = true, .storage_buffer = true }).create(vc, max_meshes, "meshes");
     self.device.updateFrom(encoder, self.host.len, &.{ device });
 
     try self.host.append(allocator, host);
