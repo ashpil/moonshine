@@ -830,7 +830,11 @@ const Shader = struct {
         "-spirv",
         "-fspv-target-env=vulkan1.3",
         "-fvk-use-scalar-layout",
-        "-Ges", // strict mode
+        "-Wall",
+        "-Wshorten-64-to-32",
+        "-Wfloat-conversion",
+        "-Wno-unneeded-internal-declaration", // false positives since we compile entrypoints independently
+        "-Wno-unused-const-variable", // false positives since we compile entrypoints independently
         "-WX", // treat warnings as errors
     };
 

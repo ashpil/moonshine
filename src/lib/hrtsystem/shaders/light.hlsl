@@ -50,7 +50,7 @@ struct EnvMap : Light {
 
     LightSample sample(float λ, float3 positionWs, float2 rand) {
         const uint size = textureDimensions(texture).x;
-        const uint mipCount = log2(size) + 1;
+        const uint mipCount = firstbithigh(size) + 1;
 
         uint2 idx = uint2(0, 0);
         for (uint level = mipCount; level-- > 0;) {
@@ -80,7 +80,7 @@ struct EnvMap : Light {
     // pdf is with respect to solid angle (no trace)
     LightEvaluation evaluate(float λ, float3 dirWs) {
         const uint size = textureDimensions(texture).x;
-        const uint mipCount = log2(size) + 1;
+        const uint mipCount = firstbithigh(size) + 1;
         const float integral = Spectrum::sampleReflectance(λ, texture.Load(uint3(0, 0, mipCount - 1)));
 
         if (integral == 0) return LightEvaluation::empty();
@@ -162,7 +162,7 @@ struct GeometryLight : Light {
         const Mesh mesh = world.meshes[geometry.meshIndex];
         const Material material = world.materials[geometry.materialIndex];
 
-        const uint levelCount = log2IntCeil(uint(mesh.triangleCount)) + 1;
+        const uint levelCount = log2IntCeil((uint)mesh.triangleCount) + 1;
 
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
 
@@ -195,7 +195,7 @@ struct GeometryLight : Light {
     float selectionPdf(float λ, uint triangleIndex) {
         if (integral(λ) == 0.0) return 0.0; // no lights
         const uint64_t triangleCount = world.meshes[geometry.meshIndex].triangleCount;
-        const uint levelOffset = uint(geometry.trianglePowersSize - (triangleCount > 1 ? (triangleCount + (triangleCount % 2)) : 1));
+        const uint levelOffset = (uint)(geometry.trianglePowersSize - (triangleCount > 1 ? (triangleCount + (triangleCount % 2)) : 1));
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
         const float3x3 power = vk::RawBufferLoad<float3x3>(geometry.trianglePowersAddress + sizeof(float3x3) * (levelOffset + triangleIndex));
         return Spectrum::sampleReflectance(λ, float3(
@@ -270,7 +270,7 @@ struct ModelLight : Light {
 
     float selectionPdf(float λ, uint geometryIndex) {
         if (integral(λ) == 0.0) return 0.0; // no lights
-        const uint levelOffset = uint(model.geometryPowersSize - (model.geometryCount > 1 ? (model.geometryCount + (model.geometryCount % 2)) : 1));
+        const uint levelOffset = (uint)(model.geometryPowersSize - (model.geometryCount > 1 ? (model.geometryCount + (model.geometryCount % 2)) : 1));
         const float3x3 cofactor = abs(transpose((float3x3)toLocal) * determinant((float3x3)toWorld));
         const float3x3 power = vk::RawBufferLoad<float3x3>(model.geometryPowersAddress + sizeof(float3x3) * (levelOffset + geometryIndex));
         return Spectrum::sampleReflectance(λ, float3(
