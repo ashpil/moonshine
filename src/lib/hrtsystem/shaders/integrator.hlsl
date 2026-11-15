@@ -60,7 +60,7 @@ float estimateDirectVolumetric(World world, RaytracingAccelerationStructure acce
 
             Ray ray = {positionWs + faceForward(triangleNormalDirWs, lightSample.dirWs) * spawnOffset, lightSample.dirWs};
             float throughput = 1;
-            float spawnPrecisionOffset = spawnOffset / abs(dot(lightSample.dirWs, triangleNormalDirWs));
+            float spawnPrecisionOffset = all(triangleNormalDirWs == 0) ? 0 : spawnOffset / abs(dot(lightSample.dirWs, triangleNormalDirWs));
             float remainingDistance = lightSample.distance;
             const bool transmission = !thin && sign(dot(lightSample.dirWs, triangleNormalDirWs)) != sign(dot(outgoingDirWs, triangleNormalDirWs));
             if (transmission) volumeTracker.cross();

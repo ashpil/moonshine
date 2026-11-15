@@ -48,7 +48,13 @@ struct Homogeneous : Medium {
     // TODO: doesn't sampling proportionally to σ_s (rather than σ_t) make more sense?
     // as the border case where σ_s == 0 should mean there is no scattering
     float sample(float rand) {
-        return -log(1 - rand) / σ_t();
+        if (σ_t() == 0) {
+            // tiebreaker for rand == 0 and σ_t == 0 which would be nan otherwise.
+            // σ_t == 0 wins, that is, a fully transparent medium does not scatter
+            return 1.#INF;
+        } else {
+            return -log(1 - rand) / σ_t();
+        }
     }
 };
 

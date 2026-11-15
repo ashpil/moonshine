@@ -109,13 +109,14 @@ float2 squareToEqualAreaSphereInverse(float3 dir) {
 }
 
 // selects true with probability p (false otherwise),
-// remapping rand back into (0..1)
+// remapping rand back into [0..1)
 bool coinFlipRemap(float p, inout float rand) {
     if (rand < p) {
         rand /= p;
         return true;
     } else {
-        rand = (rand - p) / (1.0 - p);
+        // same as (rand - p) / (1 - p) but under IEEE is guaranteed to be under 1
+        rand = 1.0 - (1.0 - rand) / (1.0 - p);
         return false;
     }
 }
