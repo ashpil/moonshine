@@ -108,15 +108,16 @@ float2 squareToEqualAreaSphereInverse(float3 dir) {
 	return (uv + float2(1.0, 1.0)) / 2.0;
 }
 
-// selects true with probability p (false otherwise),
-// remapping rand back into [0..1)
+// selects true with probability p (false otherwise), remapping rand back into [0..1)
+// FIXME: this relies on either correctly-rounded division (slow) or clamps (sad).
+// should refactor callers to not use this pattern and delete this.
 bool coinFlipRemap(float p, inout float rand) {
     if (rand < p) {
-        rand /= p;
+        rand = correctlyRoundedDivide(rand, p);
         return true;
     } else {
-        // same as (rand - p) / (1 - p) but under IEEE is guaranteed to be under 1
-        rand = 1.0 - (1.0 - rand) / (1.0 - p);
+        // same as (rand - p) / (1 - p) but is guaranteed to be under 1
+        rand = 1.0 - correctlyRoundedDivide(1.0 - rand, 1.0 - p);
         return false;
     }
 }

@@ -4,6 +4,40 @@ static const float PI = 3.14159265;
 static const float EPSILON = 0.000000119;
 static const uint MAX_UINT = 0xFFFFFFFF;
 
+// a / b correctly rounded when a, b are finite normal floats, otherwise, same as raw vulkan a / b.
+// FIXME: this relies on FMA which is not guaranteed. should use guaranteed fma once dxc supports it.
+float correctlyRoundedDivide(const float a, const float b) {
+    const uint ua = asuint(a);
+    const uint ub = asuint(b);
+
+    // work on mantissas in [1, 2) so all intermediates stay comfortably normal
+    const float ma = asfloat(0x3F800000 | (ua & 0x7FFFFF));
+    const float mb = asfloat(0x3F800000 | (ub & 0x7FFFFF));
+
+    // approximate, then one refinement step gets within 1 ULP
+    const float y = 1.0 / mb;
+    float q = ma * y;
+    q = mad(mad(-mb, q, ma), y, q);
+
+    // exact lies between q and its neighbor on the side of r = mb * (exact - q),
+    // so both are faithful, both remainders are exact, and the smaller one is the nearer float
+    // a quotient of floats is never exactly a midpoint, so no ties here
+    const float r = mad(-mb, q, ma);
+    const float neighbor = asfloat(r > 0 ? asuint(q) + 1 : asuint(q) - 1);
+    if (abs(mad(-mb, neighbor, ma)) < abs(r)) q = neighbor;
+
+    // biased exponents of a, b, and the result (q in (0.5, 2) contributes 126 or 127)
+    const uint ea = (ua >> 23) & 0xFF;
+    const uint eb = (ub >> 23) & 0xFF;
+    const uint e = ea + ((asuint(q) >> 23) & 0xFF) - eb;
+
+    // only valid when a, b, and the result are all finite normals, i.e. biased exponents in [1, 254]
+    // (as unsigned, e - 1 < 254 checks both bounds since negatives wrap high)
+    if (ea - 1 >= 254 || eb - 1 >= 254 || e - 1 >= 254) return a / b;
+
+    return asfloat(((ua ^ ub) & 0x80000000) | (e << 23) | (asuint(q) & 0x7FFFFF));
+}
+
 float3 vectorToColor(float3 v) {
     return (v + 1.0) / 2.0;
 }
